@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "294766590074",
+    "project_id": "store-connect-app",
+    "storage_bucket": "store-connect-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:294766590074:android:82c38b9f3a34123dafe3c3",
+        "android_client_info": {
+          "package_name": "com.rodrigocostadev.store_connect.store_connect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3glXnB8XDm1IUFfKUGmaNcULnUZF_hrM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
