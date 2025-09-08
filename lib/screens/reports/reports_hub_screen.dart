@@ -1,5 +1,10 @@
+// lib/screens/reports/reports_hub_screen.dart
+
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:store_connect/screens/reports/sales_by_period_screen.dart'; // Vamos criar este arquivo a seguir
+import 'package:store_connect/screens/reports/low_stock_report_screen.dart';
+
+import 'accounts_receivable_screen.dart';
 
 class ReportsHubScreen extends StatelessWidget {
   final String storeId;
@@ -9,35 +14,53 @@ class ReportsHubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        // Usamos um StreamBuilder para buscar o nome da loja
-        title: StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('stores').doc(storeId).snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting || !snapshot.hasData || !snapshot.data!.exists) {
-              return const Text('Relatórios');
-            }
-            final storeData = snapshot.data!.data() as Map<String, dynamic>;
-            final storeName = storeData['storeName'] ?? 'Sua Loja';
-            // Exibe "Relatórios - Nome da Loja"
-            return Text('Relatórios - $storeName');
-          },
-        ),
+        title: const Text('Análises e Relatórios'),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Aqui ficará a lista de relatórios disponíveis.',
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '(ID da Loja: $storeId)',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
+      body: ListView(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.calendar_today, color: Colors.blue),
+            title: const Text('Vendas por Período'),
+            subtitle: const Text('Veja o total de vendas em um intervalo de datas.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => SalesByPeriodScreen(storeId: storeId),
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.warning_amber, color: Colors.red),
+            title: const Text('Produtos com Estoque Baixo'),
+            subtitle: const Text('Liste todos os produtos que precisam de reposição.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => LowStockReportScreen(storeId: storeId),
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.people, color: Colors.orange),
+            title: const Text('Contas a Receber (Fiado)'),
+            subtitle: const Text('Veja o saldo devedor de cada cliente.'),
+            trailing: const Icon(Icons.chevron_right),
+            // MODIFICADO: Adicionada a navegação
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => AccountsReceivableScreen(storeId: storeId),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

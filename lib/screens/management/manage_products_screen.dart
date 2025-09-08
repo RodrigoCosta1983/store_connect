@@ -1,3 +1,5 @@
+// lib/screens/management/manage_products_screen.dart
+
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
@@ -20,7 +22,7 @@ class _ProductDialogState extends State<_ProductDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
-  final _quantityController = TextEditingController();
+  final _quantidadeController = TextEditingController();
   final _minimumStockController = TextEditingController();
   var _isLoading = false;
 
@@ -37,8 +39,7 @@ class _ProductDialogState extends State<_ProductDialog> {
       final productData = widget.product!.data() as Map<String, dynamic>;
       _nameController.text = productData['name'];
       _priceController.text = productData['price'].toString();
-      // CORRIGIDO: Lendo o campo 'quantidade' para carregar os dados para edição.
-      _quantityController.text = (productData['quantidade'] ?? 0).toString();
+      _quantidadeController.text = (productData['quantidade'] ?? 0).toString();
       _minimumStockController.text = (productData['minimumStock'] ?? 0).toString();
       if (productData.containsKey('imageUrl')) {
         _existingImageUrl = productData['imageUrl'];
@@ -50,7 +51,7 @@ class _ProductDialogState extends State<_ProductDialog> {
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
-    _quantityController.dispose();
+    _quantidadeController.dispose();
     _minimumStockController.dispose();
     super.dispose();
   }
@@ -75,7 +76,7 @@ class _ProductDialogState extends State<_ProductDialog> {
 
     final String name = _nameController.text;
     final double price = double.parse(_priceController.text.replaceAll(',', '.'));
-    final int quantity = int.tryParse(_quantityController.text) ?? 0;
+    final int quantidade = int.tryParse(_quantidadeController.text) ?? 0;
     final int minimumStock = int.tryParse(_minimumStockController.text) ?? 0;
     String imageUrl = _existingImageUrl ?? '';
 
@@ -94,7 +95,7 @@ class _ProductDialogState extends State<_ProductDialog> {
         'name': name,
         'name_lowercase': name.toLowerCase(),
         'price': price,
-        'quantidade': quantity, // CORRIGIDO: Salvando o estoque com o nome do campo 'quantidade'.
+        'quantidade': quantidade,
         'minimumStock': minimumStock,
         'imageUrl': imageUrl,
       };
@@ -160,7 +161,7 @@ class _ProductDialogState extends State<_ProductDialog> {
                 },
               ),
               TextFormField(
-                controller: _quantityController,
+                controller: _quantidadeController,
                 decoration: const InputDecoration(labelText: 'Quantidade em Estoque'),
                 keyboardType: TextInputType.number,
                 validator: (value) {
@@ -254,10 +255,9 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
               final productData = productDoc.data() as Map<String, dynamic>;
               final imageUrl = productData['imageUrl'] as String?;
 
-              // CORRIGIDO: Lendo o campo 'quantidade' para exibir na lista.
-              final quantity = productData['quantidade'] as int? ?? 0;
+              final quantidade = productData['quantidade'] as int? ?? 0;
               final minimumStock = productData['minimumStock'] as int? ?? 0;
-              final bool needsRestock = quantity <= minimumStock;
+              final bool needsRestock = quantidade <= minimumStock;
 
               return Card(
                 color: needsRestock ? Colors.red.withOpacity(0.1) : null,
@@ -271,7 +271,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                   ),
                   title: Text(productData['name'] ?? ''),
                   subtitle: Text(
-                    'Preço: R\$ ${productData['price']?.toStringAsFixed(2) ?? '0.00'} | Estoque: $quantity (Mín: $minimumStock)',
+                    'Preço: R\$ ${productData['price']?.toStringAsFixed(2) ?? '0.00'} | Estoque: $quantidade (Mín: $minimumStock)',
                     style: TextStyle(color: needsRestock ? Colors.red.shade900 : null),
                   ),
                   trailing: Row(

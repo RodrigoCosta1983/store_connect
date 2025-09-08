@@ -5,11 +5,11 @@ import 'package:store_connect/models/cart_item_model.dart';
 
 class SaleOrder {
   final String id;
-  final double totalAmount; // 'amount'
+  final double totalAmount;
   final List<CartItem> products;
-  final DateTime createdAt; // 'date'
+  final DateTime createdAt;
   final String? customerId;
-  final String? customerName; // Parte de 'customer'
+  final String? customerName;
   final bool isPaid;
   final String paymentMethod;
   final DateTime? dueDate;
@@ -35,14 +35,14 @@ class SaleOrder {
 
     return SaleOrder(
       id: doc.id,
-      totalAmount: (data['totalAmount'] as num).toDouble(),
+      totalAmount: (data['totalAmount'] as num? ?? 0).toDouble(),
       products: loadedProducts,
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      // CORRIGIDO: Adicionada a verificação de nulo para createdAt
+      createdAt: (data['createdAt'] as Timestamp? ?? Timestamp.now()).toDate(),
       customerId: data['customerId'],
       customerName: data['customerName'],
       isPaid: data['isPaid'] ?? false,
       paymentMethod: data['paymentMethod'] ?? 'Não informado',
-      // Converte o Timestamp de dueDate apenas se ele não for nulo
       dueDate: data['dueDate'] != null ? (data['dueDate'] as Timestamp).toDate() : null,
     );
   }
