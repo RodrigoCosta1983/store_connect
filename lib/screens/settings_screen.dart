@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:store_connect/screens/profile/profile_screen.dart';
-
+import 'package:provider/provider.dart'; // NOVO: Importe o Provider
+import 'package:store_connect/providers/theme_provider.dart';
 class SettingsScreen extends StatefulWidget {
   final String storeId;
   const SettingsScreen({super.key, required this.storeId});
@@ -105,8 +106,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showThemeDialog() {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Escolher Tema'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<ThemeMode>(
+              title: const Text('Claro'),
+              value: ThemeMode.light,
+              groupValue: themeProvider.themeMode,
+              onChanged: (value) {
+                if (value != null) themeProvider.setTheme(value);
+                Navigator.of(ctx).pop();
+              },
+            ),
+            RadioListTile<ThemeMode>(
+              title: const Text('Escuro'),
+              value: ThemeMode.dark,
+              groupValue: themeProvider.themeMode,
+              onChanged: (value) {
+                if (value != null) themeProvider.setTheme(value);
+                Navigator.of(ctx).pop();
+              },
+            ),
+            RadioListTile<ThemeMode>(
+              title: const Text('Padrão do Sistema'),
+              value: ThemeMode.system,
+              groupValue: themeProvider.themeMode,
+              onChanged: (value) {
+                if (value != null) themeProvider.setTheme(value);
+                Navigator.of(ctx).pop();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // NOVO: Pega a instância do ThemeProvider para exibir o nome do tema atual
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    String currentThemeName;
+    switch(themeProvider.themeMode) {
+      case ThemeMode.light:
+        currentThemeName = 'Claro';
+        break;
+      case ThemeMode.dark:
+        currentThemeName = 'Escuro';
+        break;
+      case ThemeMode.system:
+        currentThemeName = 'Padrão do Sistema';
+        break;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Configurações'),
@@ -128,6 +186,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
             },
           ),
+          const Divider(),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text('Aparência', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+          ListTile(
+            title: const Text('Tema do Aplicativo'),
+            subtitle: Text(currentThemeName),
+            trailing: const Icon(Icons.palette),
+            onTap: _showThemeDialog,
+          ),
+
           const Divider(),
 
           // Seção de Vendas

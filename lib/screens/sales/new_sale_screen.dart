@@ -243,7 +243,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               opacity: isDarkMode ? 0.4 : 0.15,
               child: Image.asset(
                 isDarkMode
-                    ? 'assets/backgrounds/background_light.png'
+                    ? 'assets/images/background_light.png'
                     : 'assets/images/background_dark.jpg',
                 fit: BoxFit.cover,
               ),

@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:store_connect/widgets/KpiCard.dart';
 
+import '../widgets/dynamic_background.dart';
+
 class DashboardScreen extends StatefulWidget {
   final String storeId;
   const DashboardScreen({super.key, required this.storeId});
@@ -52,12 +54,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // 2. Busca produtos com estoque baixo (exemplo: <= 5 unidades)
       // Primeiro, busca o valor do limite do documento da loja
       final storeDoc = await storeRef.get();
-      final lowStockThreshold = (storeDoc.data()?['lowStockThreshold'] as int? ?? 5); // Usa 5 como padrão
+      final lowStockThreshold = (storeDoc
+          .data()?['lowStockThreshold'] as int? ?? 5); // Usa 5 como padrão
 
       // Agora, usa o valor dinâmico na busca
       final lowStockSnapshot = await storeRef
           .collection('products')
-          .where('quantidade', isLessThanOrEqualTo: lowStockThreshold) // <-- Valor dinâmico
+          .where('quantidade',
+          isLessThanOrEqualTo: lowStockThreshold) // <-- Valor dinâmico
           .get();
 
       // 3. Busca o total de vendas "fiado" (não pagas)
@@ -80,12 +84,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _totalFiado = totalFiado;
         });
       }
-
     } catch (e) {
       print('Erro ao buscar dados do dashboard: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Erro ao carregar dados do dashboard.'), backgroundColor: Colors.red),
+          const SnackBar(content: Text('Erro ao carregar dados do dashboard.'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -93,66 +97,80 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // lib/screens/dashboard_screen.dart -> dentro da classe _DashboardScreenState
+
   @override
   Widget build(BuildContext context) {
-    // Calcula o ticket médio, evitando divisão por zero
-    final double ticketMedio = _salesCountToday > 0 ? _totalSalesToday / _salesCountToday : 0;
-    final formatCurrency = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    final double ticketMedio = _salesCountToday > 0 ? _totalSalesToday /
+        _salesCountToday : 0;
+    final formatCurrency = NumberFormat.currency(
+        locale: 'pt_BR', symbol: 'R\$');
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dashboard'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _fetchDashboardData, // Botão para atualizar os dados
+            onPressed: _fetchDashboardData,
             tooltip: 'Atualizar Dados',
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-        onRefresh: _fetchDashboardData,
-        child: GridView.count(
-          padding: const EdgeInsets.all(16),
-          crossAxisCount: 2, // 2 colunas
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 1.1, // Ajusta a proporção dos cards
-          children: [
-            KpiCard(
-              title: 'Vendas de Hoje',
-              value: formatCurrency.format(_totalSalesToday),
-              icon: Icons.point_of_sale,
-              color: Colors.green,
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          const DynamicBackground(),
+          SafeArea(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(
+              onRefresh: _fetchDashboardData,
+              child: GridView.count(
+                padding: const EdgeInsets.all(16),
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 1.1,
+                // Mantive o valor que funcionou para o layout
+                children: [
+                  KpiCard(
+                    title: 'Vendas de Hoje',
+                    value: formatCurrency.format(_totalSalesToday),
+                    icon: Icons.point_of_sale,
+                    color: Colors.green,
+                  ),
+                  KpiCard(
+                    title: 'Nº de Vendas (Hoje)',
+                    value: _salesCountToday.toString(),
+                    icon: Icons.receipt_long,
+                    color: Colors.blue,
+                  ),
+                  KpiCard(
+                    title: 'Ticket Médio (Hoje)',
+                    value: formatCurrency.format(ticketMedio),
+                    icon: Icons.price_check,
+                    color: Colors.purple,
+                  ),
+                  KpiCard(
+                    title: 'Total a Receber (Fiado)',
+                    value: formatCurrency.format(_totalFiado),
+                    icon: Icons.person_add_disabled,
+                    color: Colors.orange,
+                  ),
+                  KpiCard(
+                    title: 'Produtos c/ Estoque Baixo',
+                    value: _lowStockProductsCount.toString(),
+                    icon: Icons.warning_amber,
+                    color: Colors.red,
+                  ),
+                ],
+              ),
             ),
-            KpiCard(
-              title: 'Nº de Vendas (Hoje)',
-              value: _salesCountToday.toString(),
-              icon: Icons.receipt_long,
-              color: Colors.blue,
-            ),
-            KpiCard(
-              title: 'Ticket Médio (Hoje)',
-              value: formatCurrency.format(ticketMedio),
-              icon: Icons.price_check,
-              color: Colors.purple,
-            ),
-            KpiCard(
-              title: 'Total a Receber (Fiado)',
-              value: formatCurrency.format(_totalFiado),
-              icon: Icons.person_add_disabled,
-              color: Colors.orange,
-            ),
-            KpiCard(
-              title: 'Produtos c/ Estoque Baixo',
-              value: _lowStockProductsCount.toString(),
-              icon: Icons.warning_amber,
-              color: Colors.red,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
