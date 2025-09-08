@@ -3,6 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:store_connect/models/customer_model.dart';
 import 'package:intl/intl.dart';
 
+import '../../widgets/dynamic_background.dart';
+
+
 // O _CustomerDialog não precisa de alterações, mas precisa receber o storeId
 class _CustomerDialog extends StatefulWidget {
   final DocumentSnapshot? customer;
@@ -120,15 +123,11 @@ class _CustomerDialogState extends State<_CustomerDialog> {
   }
 }
 
+// --- Tela Principal de Gerenciamento de Clientes com Novo Design ---
 class ManageCustomersScreen extends StatefulWidget {
   final String storeId;
   final bool isSelectionMode;
-
-  const ManageCustomersScreen({
-    super.key,
-    required this.storeId,
-    this.isSelectionMode = false,
-  });
+  const ManageCustomersScreen({super.key, required this.storeId, this.isSelectionMode = false});
 
   @override
   State<ManageCustomersScreen> createState() => _ManageCustomersScreenState();
@@ -136,49 +135,27 @@ class ManageCustomersScreen extends StatefulWidget {
 
 class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
   final _searchController = TextEditingController();
-  // NOVO: Variáveis de estado para controlar a UI da busca
-  final _searchFocusNode = FocusNode();
-  bool _isSearching = false;
-  String _searchQuery = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text;
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    super.dispose();
-  }
 
   void _showCustomerDialog({DocumentSnapshot? customer}) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => _CustomerDialog(customer: customer, storeId: widget.storeId),
+      builder: (ctx) => _CustomerDialog(storeId: widget.storeId, customer: customer),
     );
   }
 
-  void _deleteCustomer(BuildContext context, String customerId, String customerName) {
+  void _deleteCustomer(String customerId) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmar Exclusão'),
-        content: Text('Tem certeza que deseja excluir "$customerName"?'),
+        content: const Text('Tem certeza que deseja excluir este cliente?'),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
-              FirebaseFirestore.instance
-                  .collection('stores').doc(widget.storeId)
-                  .collection('customers').doc(customerId).delete();
+              FirebaseFirestore.instance.collection('stores').doc(widget.storeId).collection('customers').doc(customerId).delete();
               Navigator.of(ctx).pop();
             },
             child: const Text('Excluir'),
@@ -188,129 +165,148 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
     );
   }
 
-  // NOVO: Função para construir a AppBar dinamicamente
-  AppBar _buildAppBar() {
-    if (_isSearching) {
-      // AppBar no modo de busca
-      return AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () {
-            setState(() {
-              _isSearching = false;
-              _searchController.clear();
-            });
-          },
-        ),
-        title: TextField(
-          controller: _searchController,
-          focusNode: _searchFocusNode,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Buscar cliente...',
-            border: InputBorder.none,
-          ),
-          style: const TextStyle(fontSize: 18),
-        ),
-      );
-    } else {
-      // AppBar no modo normal
-      return AppBar(
-        title: Text(widget.isSelectionMode ? 'Selecionar Cliente' : 'Gerenciar Clientes'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              setState(() {
-                _isSearching = true;
-              });
-            },
-          ),
-        ],
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    Query query = FirebaseFirestore.instance
-        .collection('stores').doc(widget.storeId)
-        .collection('customers');
-
-    if (_searchQuery.isNotEmpty) {
-      final searchQueryLower = _searchQuery.toLowerCase();
-      query = query
-          .where('name_lowercase', isGreaterThanOrEqualTo: searchQueryLower)
-          .where('name_lowercase', isLessThanOrEqualTo: '$searchQueryLower\uf8ff')
-          .orderBy('name_lowercase');
-    } else {
-      query = query.orderBy('name');
-    }
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: _buildAppBar(), // MODIFICADO: A AppBar agora é construída dinamicamente
-      // MODIFICADO: Adicionado o FloatingActionButton
-      floatingActionButton: widget.isSelectionMode
-          ? null // Oculta o botão de adicionar em modo de seleção
-          : FloatingActionButton(
-        onPressed: _showCustomerDialog,
-        tooltip: 'Adicionar Cliente',
+      extendBodyBehindAppBar: true,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showCustomerDialog(),
         child: const Icon(Icons.add),
+        tooltip: 'Adicionar Cliente',
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: query.snapshots(),
-        builder: (ctx, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final docs = snapshot.data?.docs ?? [];
-          if (docs.isEmpty) {
-            return Center(
-              child: Text(_searchQuery.isEmpty
-                  ? 'Nenhum cliente cadastrado.'
-                  : 'Nenhum cliente encontrado.'),
-            );
-          }
-          return ListView.builder(
-            itemCount: docs.length,
-            itemBuilder: (ctx, index) {
-              final customer = Customer.fromFirestore(docs[index]);
-              // --- LÓGICA PARA CONSTRUIR O SUBTÍTULO DINÂMICO ---
-              String subtitleText = customer.phone ?? 'Sem telefone';
-              if (customer.createdAt != null) {
-                // Formata a data para o padrão dd/MM/yyyy
-                final formattedDate = DateFormat('dd/MM/yyyy').format(customer.createdAt!);
-                if (subtitleText != 'Sem telefone') {
-                  subtitleText += ' - Cadastrado em: $formattedDate';
-                } else {
-                  subtitleText = 'Cadastrado em: $formattedDate';
-                }
-              }
-              return ListTile(
-                title: Text(customer.name),
-                subtitle: Text(subtitleText),
-                onTap: widget.isSelectionMode
-                    ? () => Navigator.of(context).pop(customer)
-                    : null,
-                trailing: widget.isSelectionMode
-                    ? null
-                    : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit),
-                      onPressed: () => _showCustomerDialog(customer: docs[index]),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _deleteCustomer(context, customer.id, customer.name),
-                    ),
-                  ],
+      body: Stack(
+        children: [
+          const DynamicBackground(),
+          // Usamos um Column para empilhar o cabeçalho e a lista
+          Column(
+            children: [
+              // --- CABEÇALHO CUSTOMIZADO ---
+              _buildCustomHeader(isDarkMode),
+
+              // --- LISTA DE CLIENTES ---
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('stores')
+                      .doc(widget.storeId)
+                      .collection('customers')
+                      .orderBy('name_lowercase')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return const Center(child: Text('Ocorreu um erro.'));
+                    }
+                    final allCustomers = snapshot.data?.docs ?? [];
+
+                    final filteredCustomers = allCustomers.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final name = (data['name_lowercase'] as String? ?? '').toLowerCase();
+                      final query = _searchController.text.toLowerCase();
+                      return name.contains(query);
+                    }).toList();
+
+                    if (filteredCustomers.isEmpty) {
+                      return Center(
+                        child: Text(
+                          _searchController.text.isEmpty
+                              ? 'Nenhum cliente cadastrado.'
+                              : 'Nenhum cliente encontrado.',
+                          style: TextStyle(color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700, fontSize: 16),
+                        ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 80), // Padding inferior para o FAB
+                      itemCount: filteredCustomers.length,
+                      itemBuilder: (ctx, index) {
+                        final customerDoc = filteredCustomers[index];
+                        final customer = Customer.fromFirestore(customerDoc);
+                        return _buildCustomerCard(customer, customerDoc);
+                      },
+                    );
+                  },
                 ),
-              );
-            },
-          );
-        },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget para o cabeçalho customizado
+  Widget _buildCustomHeader(bool isDarkMode) {
+    return Padding(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top, left: 8, right: 8, bottom: 16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                icon: Icon(Icons.arrow_back, color: isDarkMode ? Colors.white : Colors.black),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              Expanded(
+                child: Text(
+                  'Gerenciar Clientes',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black),
+                ),
+              ),
+              const SizedBox(width: 48), // Espaço para alinhar com o FAB
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Buscar por nome...',
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: Theme.of(context).cardColor.withOpacity(0.8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget para o card de cada cliente
+  Widget _buildCustomerCard(Customer customer, DocumentSnapshot customerDoc) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: CircleAvatar(
+          child: Text(customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?'),
+        ),
+        title: Text(customer.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(customer.phone ?? 'Sem telefone'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.edit, color: Theme.of(context).primaryColor),
+              onPressed: () => _showCustomerDialog(customer: customerDoc),
+            ),
+            IconButton(
+              icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
+              onPressed: () => _deleteCustomer(customer.id),
+            ),
+          ],
+        ),
       ),
     );
   }
