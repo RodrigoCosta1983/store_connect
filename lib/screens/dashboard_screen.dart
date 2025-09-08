@@ -50,9 +50,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       // 2. Busca produtos com estoque baixo (exemplo: <= 5 unidades)
+      // Primeiro, busca o valor do limite do documento da loja
+      final storeDoc = await storeRef.get();
+      final lowStockThreshold = (storeDoc.data()?['lowStockThreshold'] as int? ?? 5); // Usa 5 como padrão
+
+      // Agora, usa o valor dinâmico na busca
       final lowStockSnapshot = await storeRef
           .collection('products')
-          .where('quantidade', isLessThanOrEqualTo: 5)
+          .where('quantidade', isLessThanOrEqualTo: lowStockThreshold) // <-- Valor dinâmico
           .get();
 
       // 3. Busca o total de vendas "fiado" (não pagas)

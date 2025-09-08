@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:store_connect/screens/reports/sales_by_period_screen.dart'; // Vamos criar este arquivo a seguir
 import 'package:store_connect/screens/reports/low_stock_report_screen.dart';
 
+import 'abc_report_screen.dart';
 import 'accounts_receivable_screen.dart';
 
 class ReportsHubScreen extends StatelessWidget {
@@ -31,6 +32,22 @@ class ReportsHubScreen extends StatelessWidget {
               );
             },
           ),
+
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.show_chart, color: Colors.purple),
+            title: const Text('Análise ABC de Produtos'),
+            subtitle: const Text('Descubra seus produtos mais importantes.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (ctx) => AbcReportScreen(storeId: storeId),
+                ),
+              );
+            },
+          ),
+
           const Divider(),
           ListTile(
             leading: const Icon(Icons.warning_amber, color: Colors.red),
