@@ -1,17 +1,15 @@
+// lib/screens/management/manage_customers_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:store_connect/models/customer_model.dart';
-import 'package:intl/intl.dart';
+import 'package:store_connect/widgets/dynamic_background.dart';
 
-import '../../widgets/dynamic_background.dart';
-
-
-// O _CustomerDialog não precisa de alterações, mas precisa receber o storeId
+// --- Diálogo de Adicionar/Editar Cliente (sem alterações) ---
 class _CustomerDialog extends StatefulWidget {
-  final DocumentSnapshot? customer;
   final String storeId;
-
-  const _CustomerDialog({this.customer, required this.storeId});
+  final DocumentSnapshot? customer;
+  const _CustomerDialog({required this.storeId, this.customer});
 
   @override
   _CustomerDialogState createState() => _CustomerDialogState();
@@ -35,65 +33,39 @@ class _CustomerDialogState extends State<_CustomerDialog> {
     }
   }
 
-
-  // Dentro da classe _CustomerDialogState, em manage_customers_screen.dart
-
-  Future<void> _saveCustomer() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-
-    final collectionRef = FirebaseFirestore.instance
-        .collection('stores').doc(widget.storeId)
-        .collection('customers');
-
-    // --- CORREÇÃO: Adicionado o bloco try...catch...finally ---
-    try {
-      if (_isEditing) {
-        await collectionRef.doc(widget.customer!.id).update({
-          'name': _nameController.text,
-          'name_lowercase': _nameController.text.toLowerCase(),
-          'phone': _phoneController.text,
-        });
-      } else {
-        await collectionRef.add({
-          'name': _nameController.text,
-          'name_lowercase': _nameController.text.toLowerCase(),
-          'phone': _phoneController.text,
-          'createdAt': Timestamp.now(),
-        });
-      }
-
-      // Se chegou aqui, a operação foi um sucesso
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cliente salvo com sucesso!'), backgroundColor: Colors.green),
-        );
-      }
-    } catch (error) {
-      // Se ocorrer um erro, ele será capturado aqui e exibido
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao salvar: ${error.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      // Isso executa sempre, com ou sem erro
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveCustomer() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+
+    final collectionRef = FirebaseFirestore.instance.collection('stores').doc(widget.storeId).collection('customers');
+    final customerData = {
+      'name': _nameController.text,
+      'name_lowercase': _nameController.text.toLowerCase(),
+      'phone': _phoneController.text,
+    };
+
+    try {
+      if (_isEditing) {
+        await collectionRef.doc(widget.customer!.id).update(customerData);
+      } else {
+        await collectionRef.add({
+          ...customerData,
+          'createdAt': Timestamp.now(),
+        });
+      }
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -102,22 +74,30 @@ class _CustomerDialogState extends State<_CustomerDialog> {
       title: Text(_isEditing ? 'Editar Cliente' : 'Adicionar Cliente'),
       content: Form(
         key: _formKey,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextFormField(
-            controller: _nameController,
-            decoration: const InputDecoration(labelText: 'Nome'),
-            validator: (value) => value!.trim().isEmpty ? 'Insira um nome.' : null,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Nome do Cliente'),
+                validator: (value) => value!.trim().isEmpty ? 'Insira um nome.' : null,
+              ),
+              TextFormField(
+                controller: _phoneController,
+                decoration: const InputDecoration(labelText: 'Telefone (opcional)'),
+                keyboardType: TextInputType.phone,
+              ),
+            ],
           ),
-          TextFormField(
-            controller: _phoneController,
-            decoration: const InputDecoration(labelText: 'Telefone (opcional)'),
-            keyboardType: TextInputType.phone,
-          ),
-        ]),
+        ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
-        ElevatedButton(onPressed: _isLoading ? null : _saveCustomer, child: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Salvar')),
+        TextButton(onPressed: _isLoading ? null : () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _saveCustomer,
+          child: _isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Salvar'),
+        ),
       ],
     );
   }
@@ -127,7 +107,12 @@ class _CustomerDialogState extends State<_CustomerDialog> {
 class ManageCustomersScreen extends StatefulWidget {
   final String storeId;
   final bool isSelectionMode;
-  const ManageCustomersScreen({super.key, required this.storeId, this.isSelectionMode = false});
+
+  const ManageCustomersScreen({
+    super.key,
+    required this.storeId,
+    this.isSelectionMode = false,
+  });
 
   @override
   State<ManageCustomersScreen> createState() => _ManageCustomersScreenState();
@@ -171,7 +156,9 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: widget.isSelectionMode
+          ? null
+          : FloatingActionButton(
         onPressed: () => _showCustomerDialog(),
         child: const Icon(Icons.add),
         tooltip: 'Adicionar Cliente',
@@ -179,13 +166,9 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
       body: Stack(
         children: [
           const DynamicBackground(),
-          // Usamos um Column para empilhar o cabeçalho e a lista
           Column(
             children: [
-              // --- CABEÇALHO CUSTOMIZADO ---
               _buildCustomHeader(isDarkMode),
-
-              // --- LISTA DE CLIENTES ---
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
@@ -216,18 +199,18 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
                           _searchController.text.isEmpty
                               ? 'Nenhum cliente cadastrado.'
                               : 'Nenhum cliente encontrado.',
-                          style: TextStyle(color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700, fontSize: 16),
+                          style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 16),
                         ),
                       );
                     }
 
                     return ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 80), // Padding inferior para o FAB
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
                       itemCount: filteredCustomers.length,
                       itemBuilder: (ctx, index) {
                         final customerDoc = filteredCustomers[index];
                         final customer = Customer.fromFirestore(customerDoc);
-                        return _buildCustomerCard(customer, customerDoc);
+                        return _buildCustomerCard(customer, customerDoc, isDarkMode);
                       },
                     );
                   },
@@ -240,7 +223,6 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
     );
   }
 
-  // Widget para o cabeçalho customizado
   Widget _buildCustomHeader(bool isDarkMode) {
     return Padding(
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top, left: 8, right: 8, bottom: 16),
@@ -254,11 +236,18 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
               ),
               Expanded(
                 child: Text(
-                  'Gerenciar Clientes',
+                  widget.isSelectionMode ? 'Selecionar Cliente' : 'Gerenciar Clientes',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black),
                 ),
               ),
-              const SizedBox(width: 48), // Espaço para alinhar com o FAB
+              if (!widget.isSelectionMode)
+                const SizedBox(width: 48) // Espaço vazio para alinhar
+              else // Botão de "check" para confirmar seleção sem cliente
+                IconButton(
+                  icon: Icon(Icons.person_off, color: isDarkMode ? Colors.white : Colors.black),
+                  tooltip: 'Vender sem cliente',
+                  onPressed: () => Navigator.of(context).pop(null),
+                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -282,19 +271,25 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
     );
   }
 
-  // Widget para o card de cada cliente
-  Widget _buildCustomerCard(Customer customer, DocumentSnapshot customerDoc) {
+  Widget _buildCustomerCard(Customer customer, DocumentSnapshot customerDoc, bool isDarkMode) {
     return Card(
+      color: isDarkMode ? Colors.black.withOpacity(0.6) : Colors.white.withOpacity(0.8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         leading: CircleAvatar(
+          backgroundColor: Theme.of(context).primaryColor,
+          foregroundColor: Colors.white,
           child: Text(customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?'),
         ),
         title: Text(customer.name, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(customer.phone ?? 'Sem telefone'),
-        trailing: Row(
+        onTap: widget.isSelectionMode
+            ? () => Navigator.of(context).pop(customer)
+            : null,
+        trailing: widget.isSelectionMode
+            ? null
+            : Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(

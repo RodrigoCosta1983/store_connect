@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:store_connect/widgets/dynamic_background.dart'; // Importa o fundo dinâmico
+import 'package:store_connect/widgets/dynamic_background.dart';
 
 // --- Diálogo de Adicionar/Editar Produto (sem alterações) ---
 class _ProductDialog extends StatefulWidget {
@@ -154,7 +154,7 @@ class _ProductDialogState extends State<_ProductDialog> {
               TextFormField(
                 controller: _priceController,
                 decoration: const InputDecoration(labelText: 'Preço (ex: 10.50)'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Campo obrigatório.';
                   if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Número inválido.';
@@ -196,7 +196,7 @@ class _ProductDialogState extends State<_ProductDialog> {
   }
 }
 
-// --- Tela Principal de Gerenciamento de Produtos ---
+// --- Tela Principal de Gerenciamento de Produtos com Novo Design ---
 class ManageProductsScreen extends StatefulWidget {
   final String storeId;
   const ManageProductsScreen({super.key, required this.storeId});
@@ -239,98 +239,169 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Gerenciar Produtos'),
-
-      ),
       extendBodyBehindAppBar: true,
-      // MODIFICADO: O body agora é um Stack para o fundo dinâmico
-      body: Stack(
-        children: [
-          const DynamicBackground(),
-          SafeArea(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('stores')
-                  .doc(widget.storeId)
-                  .collection('products')
-                  .orderBy('name_lowercase')
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return const Center(child: Text('Ocorreu um erro ao carregar os produtos.'));
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('Nenhum produto cadastrado.'));
-                }
-
-                final products = snapshot.data!.docs;
-
-                // O ListView.builder agora está dentro do SafeArea
-                return ListView.builder(
-                  padding: const EdgeInsets.only(top: 8), // Pequeno ajuste de padding
-                  itemCount: products.length,
-                  itemBuilder: (ctx, index) {
-                    final productDoc = products[index];
-                    final productData = productDoc.data() as Map<String, dynamic>;
-                    final imageUrl = productData['imageUrl'] as String?;
-
-                    final quantidade = productData['quantidade'] as int? ?? 0;
-                    final minimumStock = productData['minimumStock'] as int? ?? 0;
-                    final bool needsRestock = quantidade <= minimumStock;
-
-                    return Card(
-                      color: needsRestock ? Colors.red.withOpacity(0.1) : null,
-                      margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 5), // Ajuste de margem
-                      elevation: 3,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          radius: 30,
-                          backgroundColor: Colors.grey.shade300,
-                          backgroundImage: (imageUrl != null && imageUrl.isNotEmpty) ? NetworkImage(imageUrl) : null,
-                          child: (imageUrl == null || imageUrl.isEmpty) ? const Icon(Icons.inventory_2, color: Colors.white) : null,
-                        ),
-                        title: Text(productData['name'] ?? ''),
-                        subtitle: Text(
-                          'Preço: R\$ ${productData['price']?.toStringAsFixed(2) ?? '0.00'} | Estoque: $quantidade (Mín: $minimumStock)',
-                          style: TextStyle(color: needsRestock ? Colors.red.shade900 : null),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (needsRestock)
-                              const Padding(
-                                padding: EdgeInsets.only(right: 8.0),
-                                child: Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                              ),
-                            IconButton(
-                              icon: Icon(Icons.edit, color: Theme.of(context).primaryColor),
-                              onPressed: () => _showProductDialog(product: productDoc),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
-                              onPressed: () => _deleteProduct(productDoc.id),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showProductDialog(),
         child: const Icon(Icons.add),
         tooltip: 'Adicionar Produto',
+      ),
+      body: Stack(
+        children: [
+          const DynamicBackground(),
+          SafeArea(
+            child: Column(
+              children: [
+                _buildCustomHeader(isDarkMode),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('stores')
+                        .doc(widget.storeId)
+                        .collection('products')
+                        .orderBy('name_lowercase')
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return const Center(child: Text('Ocorreu um erro.'));
+                      }
+                      final allProducts = snapshot.data?.docs ?? [];
+
+                      final filteredProducts = allProducts.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final name = (data['name_lowercase'] as String? ?? '').toLowerCase();
+                        final query = _searchController.text.toLowerCase();
+                        return name.contains(query);
+                      }).toList();
+
+                      if (filteredProducts.isEmpty) {
+                        return Center(
+                          child: Text(
+                            _searchController.text.isEmpty
+                                ? 'Nenhum produto cadastrado.'
+                                : 'Nenhum produto encontrado.',
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white70 : Colors.black54,
+                              fontSize: 16,
+                            ),
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
+                        itemCount: filteredProducts.length,
+                        itemBuilder: (ctx, index) {
+                          final productDoc = filteredProducts[index];
+                          final productData = productDoc.data() as Map<String, dynamic>;
+                          return _buildProductCard(productDoc, productData, isDarkMode);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomHeader(bool isDarkMode) {
+    final headerColor = isDarkMode ? Colors.white : Colors.black;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                icon: Icon(Icons.arrow_back, color: headerColor),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              Expanded(
+                child: Text('Gerenciar Produtos', style: TextStyle(color: headerColor, fontSize: 22, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 48),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() {}),
+            style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+            decoration: InputDecoration(
+              hintText: 'Buscar por nome...',
+              hintStyle: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54),
+              prefixIcon: Icon(Icons.search, color: isDarkMode ? Colors.white70 : Colors.black54),
+              filled: true,
+              fillColor: Theme.of(context).cardColor.withOpacity(isDarkMode ? 0.1 : 0.5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductCard(DocumentSnapshot productDoc, Map<String, dynamic> productData, bool isDarkMode) {
+    final imageUrl = productData['imageUrl'] as String?;
+    final quantidade = productData['quantidade'] as int? ?? 0;
+    final minimumStock = productData['minimumStock'] as int? ?? 0;
+    final bool needsRestock = quantidade <= minimumStock;
+
+    return Card(
+      color: isDarkMode ? Colors.black.withOpacity(0.6) : Colors.white.withOpacity(0.8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+        side: BorderSide(
+          color: needsRestock ? Colors.redAccent.withOpacity(0.8) : Colors.transparent,
+          width: 2,
+        ),
+      ),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        leading: CircleAvatar(
+          radius: 25,
+          backgroundColor: Colors.grey.shade700,
+          backgroundImage: (imageUrl != null && imageUrl.isNotEmpty) ? NetworkImage(imageUrl) : null,
+          child: (imageUrl == null || imageUrl.isEmpty) ? const Icon(Icons.inventory_2, color: Colors.white) : null,
+        ),
+        title: Text(productData['name'] ?? 'Sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(
+          'Em estoque: $quantidade (Mín: $minimumStock)',
+          style: TextStyle(
+            color: needsRestock ? Colors.amber.shade600 : Theme.of(context).textTheme.bodySmall?.color,
+            fontWeight: needsRestock ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (needsRestock)
+              const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.blueAccent),
+              onPressed: () => _showProductDialog(product: productDoc),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () => _deleteProduct(productDoc.id),
+            ),
+          ],
+        ),
       ),
     );
   }
