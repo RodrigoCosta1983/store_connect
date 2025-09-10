@@ -57,11 +57,11 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 
 | Tela de Venda | Dashboard | Perfil e Segurança |
 | :---: | :---: | :---: |
-| ![Tela de Venda](assets/images/README/Análise ABC.png) | ![Dashboard](URL_DA_SUA_IMAGEM_AQUI) | ![Perfil e Segurança](URL_DA_SUA_IMAGEM_AQUI) |
+| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Tela%20de%20Venda.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Dashboard.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Perfil%20e%20Seguran%C3%A7a.png"  width="200" height="400"> |
 
 | Análise ABC | Contas a Receber | Gerenciar Produtos |
 | :---: | :---: | :---: |
-| ![Análise ABC](URL_DA_SUA_IMAGEM_AQUI) | ![Contas a Receber](URL_DA_SUA_IMAGEM_AQUI) | ![Gerenciar Produtos](URL_DA_SUA_IMAGEM_AQUI) |
+| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/An%C3%A1lise%20ABC.png"  width="200" height="400">| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Contas%20a%20Receber.png"  width="200" height="400">  | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Gerenciar%20Produtos.png"  width="200" height="400">  |
 
 
 ## 🚀 Tecnologias Utilizadas
@@ -186,13 +186,13 @@ The application was built on a solid foundation, focusing on essential features 
 
 *(Instruction: To add your images here, upload them to your project's folder on GitHub and replace the `URL_FOR_YOUR_IMAGE_HERE` with the image link)*
 
-| Sale Screen | Dashboard | Profile & Security |
+| Tela de Venda | Dashboard | Perfil e Segurança |
 | :---: | :---: | :---: |
-| ![Sale Screen](URL_FOR_YOUR_IMAGE_HERE) | ![Dashboard](URL_FOR_YOUR_IMAGE_HERE) | ![Profile & Security](URL_FOR_YOUR_IMAGE_HERE) |
+| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Tela%20de%20Venda.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Dashboard.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Perfil%20e%20Seguran%C3%A7a.png"  width="200" height="400"> |
 
-| ABC Analysis | Accounts Receivable | Manage Products |
+| Análise ABC | Contas a Receber | Gerenciar Produtos |
 | :---: | :---: | :---: |
-| ![ABC Analysis](URL_FOR_YOUR_IMAGE_HERE) | ![Accounts Receivable](URL_FOR_YOUR_IMAGE_HERE) | ![Manage Products](URL_FOR_YOUR_IMAGE_HERE) |
+| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/An%C3%A1lise%20ABC.png"  width="200" height="400">| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Contas%20a%20Receber.png"  width="200" height="400">  | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Gerenciar%20Produtos.png"  width="200" height="400">  |
 
 
 ## 🚀 Tech Stack
