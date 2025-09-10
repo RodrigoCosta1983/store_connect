@@ -57,7 +57,7 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 
 | Tela de Venda | Dashboard | Perfil e Segurança |
 | :---: | :---: | :---: |
-| ![Tela de Venda](URL_DA_SUA_IMAGEM_AQUI) | ![Dashboard](URL_DA_SUA_IMAGEM_AQUI) | ![Perfil e Segurança](URL_DA_SUA_IMAGEM_AQUI) |
+| ![Tela de Venda](assets/images/README/Análise ABC.png) | ![Dashboard](URL_DA_SUA_IMAGEM_AQUI) | ![Perfil e Segurança](URL_DA_SUA_IMAGEM_AQUI) |
 
 | Análise ABC | Contas a Receber | Gerenciar Produtos |
 | :---: | :---: | :---: |
