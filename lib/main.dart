@@ -1,15 +1,15 @@
 import 'dart:async'; // Importe para usar StreamSubscription
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:store_connect/providers/cart_provider.dart';
 import 'package:store_connect/providers/sales_provider.dart';
 import 'package:store_connect/providers/cash_flow_provider.dart';
+import 'package:store_connect/providers/theme_provider.dart';
 import 'package:store_connect/screens/auth/auth_gate.dart';
 import 'package:store_connect/themes/app_theme.dart';
 import 'firebase_options.dart';
-import 'package:store_connect/providers/theme_provider.dart';
 
 // Chave global para acessar o estado do navegador de qualquer lugar
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -32,7 +32,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  // 'late' indica que vamos inicializar esta variável em initState
   late StreamSubscription<User?> _authSubscription;
 
   @override
@@ -63,19 +62,19 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (ctx) => ThemeProvider()),
         ChangeNotifierProvider(create: (ctx) => CartProvider()),
         ChangeNotifierProvider(create: (ctx) => SalesProvider()),
         ChangeNotifierProvider(create: (ctx) => CashFlowProvider()),
-        ChangeNotifierProvider(create: (ctx) => ThemeProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
+            navigatorKey: navigatorKey, // Atribui a chave global
             title: 'StoreConnect',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            // A variável 'themeProvider' agora existe e vem do Consumer
             themeMode: themeProvider.themeMode,
             home: const AuthGate(),
           );
