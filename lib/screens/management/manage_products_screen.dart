@@ -243,11 +243,6 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showProductDialog(),
-        child: const Icon(Icons.add),
-        tooltip: 'Adicionar Produto',
-      ),
       body: Stack(
         children: [
           const DynamicBackground(),
@@ -272,6 +267,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                       }
                       final allProducts = snapshot.data?.docs ?? [];
 
+                      // --- CORREÇÃO: A lógica de filtro agora está aqui ---
                       final filteredProducts = allProducts.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
                         final name = (data['name_lowercase'] as String? ?? '').toLowerCase();
@@ -310,6 +306,11 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showProductDialog(),
+        child: const Icon(Icons.add),
+        tooltip: 'Adicionar Produto',
+      ),
     );
   }
 
@@ -329,7 +330,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
               Expanded(
                 child: Text('Gerenciar Produtos', style: TextStyle(color: headerColor, fontSize: 22, fontWeight: FontWeight.bold)),
               ),
-              const SizedBox(width: 48),
+              const SizedBox(width: 48), // Espaço vazio para alinhar com o FAB
             ],
           ),
           const SizedBox(height: 8),

@@ -45,6 +45,8 @@ dependencies:
   package_info_plus: ^8.0.0
   url_launcher: ^6.2.5
   fl_chart: ^0.68.0
+  cloud_functions: ^5.6.2
+  mercado_pago_mobile_checkout: ^0.2.1
 
 
 
