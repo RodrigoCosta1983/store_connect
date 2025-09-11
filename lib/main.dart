@@ -10,6 +10,7 @@ import 'package:store_connect/providers/theme_provider.dart';
 import 'package:store_connect/screens/auth/auth_gate.dart';
 import 'package:store_connect/themes/app_theme.dart';
 import 'firebase_options.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 // Chave global para acessar o estado do navegador de qualquer lugar
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -21,6 +22,8 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
   }
+
+  Stripe.publishableKey = 'pk_test_51RtadZF7qAVyn13s6gJurceEqlBHWNNd4xJdGqklUGjHMDfq8vWc2XzSGU4XtDOqAgVnGQYX4hztddfrWErMECa400Gj0XeNnO';
   runApp(const MyApp());
 }
 
