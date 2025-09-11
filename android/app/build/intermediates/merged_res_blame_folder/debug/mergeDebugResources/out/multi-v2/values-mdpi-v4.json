@@ -1,0 +1,38 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.rodrigocostadev.store_connect.store_connect.app-mergeDebugResources-72:/values-mdpi-v4/values-mdpi-v4.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\rodri\\.gradle\\caches\\8.12\\transforms\\58996c6f2f1374da364c900efcbb8e29\\transformed\\jetified-carddrawer-2.18.0\\res\\values-mdpi-v4\\values-mdpi-v4.xml",
+                    "from": {
+                        "startLines": "2,3,4,5,6,7,8,9,10,11,12,13,14",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,116,171,227,280,338,420,501,559,614,670,727,800",
+                        "endColumns": "60,54,55,52,57,81,80,57,54,55,56,72,71",
+                        "endOffsets": "111,166,222,275,333,415,496,554,609,665,722,795,867"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\rodri\\.gradle\\caches\\8.12\\transforms\\703cdd8b720387c17aed3d324bf47b28\\transformed\\jetified-ui_legacy-9.2.1\\res\\values-mdpi-v4\\values-mdpi-v4.xml",
+                    "from": {
+                        "startLines": "2,6",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,195",
+                        "endLines": "5,9",
+                        "endColumns": "12,12",
+                        "endOffsets": "190,336"
+                    },
+                    "to": {
+                        "startLines": "15,19",
+                        "startColumns": "4,4",
+                        "startOffsets": "872,1012",
+                        "endLines": "18,22",
+                        "endColumns": "12,12",
+                        "endOffsets": "1007,1153"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,36 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.rodrigocostadev.store_connect.store_connect.app-mergeDebugResources-72:/values-v24/values-v24.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\rodri\\.gradle\\caches\\8.12\\transforms\\08abcf33713677228e1f09db4915d6ba\\transformed\\jetified-checkout-4.53.2\\res\\values-v24\\values-v24.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "77",
+                        "endOffsets": "128"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\rodri\\.gradle\\caches\\8.12\\transforms\\e309b646677ee271d69e507d982b8f21\\transformed\\appcompat-1.2.0\\res\\values-v24\\values-v24.xml",
+                    "from": {
+                        "startLines": "2,3",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,212",
+                        "endColumns": "156,134",
+                        "endOffsets": "207,342"
+                    },
+                    "to": {
+                        "startLines": "3,4",
+                        "startColumns": "4,4",
+                        "startOffsets": "133,290",
+                        "endColumns": "156,134",
+                        "endOffsets": "285,420"
+                    }
+                }
+            ]
+        }
+    ]
+}

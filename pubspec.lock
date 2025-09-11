@@ -440,14 +440,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.11.1"
-  mercado_pago_mobile_checkout:
+  mercado_pago_checkout:
     dependency: "direct main"
     description:
-      name: mercado_pago_mobile_checkout
-      sha256: d5fcf0330d27fe8db53a043d484e0fac9d31d38c67dd81ceda994fb89fb6806d
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.2.1"
+      path: "deps/mercado_pago_checkout"
+      relative: true
+    source: path
+    version: "0.0.5"
   meta:
     dependency: transitive
     description:
@@ -673,10 +672,10 @@ packages:
     dependency: transitive
     description:
       name: url_launcher_android
-      sha256: "69ee86740f2847b9a4ba6cffa74ed12ce500bbe2b07f3dc1e643439da60637b7"
+      sha256: "81777b08c498a292d93ff2feead633174c386291e35612f8da438d6e92c4447e"
       url: "https://pub.dev"
     source: hosted
-    version: "6.3.18"
+    version: "6.3.20"
   url_launcher_ios:
     dependency: transitive
     description:

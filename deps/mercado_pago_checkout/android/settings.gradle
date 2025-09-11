@@ -1,0 +1,2 @@
+include ':app'
+include ':mercado_pago_checkout'

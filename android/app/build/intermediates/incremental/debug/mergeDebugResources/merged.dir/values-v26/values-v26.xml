@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Andes"/>
+    <style name="Andes.Body"/>
+    <style name="Andes.Body.L">
+        <item name="android:textSize">@dimen/andes_body_font_size_l</item>
+        <item name="android:fontWeight">@dimen/andes_body_font_weight</item>
+    </style>
+    <style name="Andes.Body.M">
+        <item name="android:textSize">@dimen/andes_body_font_size_m</item>
+        <item name="android:fontWeight">@dimen/andes_body_font_weight</item>
+    </style>
+    <style name="Andes.Body.S">
+        <item name="android:textSize">@dimen/andes_body_font_size_s</item>
+        <item name="android:fontWeight">@dimen/andes_body_font_weight</item>
+    </style>
+    <style name="Andes.Body.XS">
+        <item name="android:textSize">@dimen/andes_body_font_size_xs</item>
+        <item name="android:fontWeight">@dimen/andes_body_font_weight</item>
+    </style>
+    <style name="Andes.Link">
+        <item name="android:textColor">@color/andes_text_color_link</item>
+    </style>
+    <style name="Andes.LinkInverted">
+
+    </style>
+    <style name="Andes.Title"/>
+    <style name="Andes.Title.L">
+        <item name="android:textSize">@dimen/andes_title_font_size_l</item>
+        <item name="android:fontWeight">@dimen/andes_title_font_weight</item>
+    </style>
+    <style name="Andes.Title.M">
+        <item name="android:textSize">@dimen/andes_title_font_size_m</item>
+        <item name="android:fontWeight">@dimen/andes_title_font_weight</item>
+    </style>
+    <style name="Andes.Title.S">
+        <item name="android:textSize">@dimen/andes_title_font_size_s</item>
+        <item name="android:fontWeight">@dimen/andes_title_font_weight</item>
+    </style>
+    <style name="Andes.Title.XL">
+        <item name="android:textSize">@dimen/andes_title_font_size_xl</item>
+        <item name="android:fontWeight">@dimen/andes_title_font_weight</item>
+    </style>
+    <style name="Andes.Title.XS">
+        <item name="android:textSize">@dimen/andes_title_font_size_xs</item>
+        <item name="android:fontWeight">@dimen/andes_title_font_weight</item>
+    </style>
+    <style name="Base.Theme.AppCompat" parent="Base.V26.Theme.AppCompat"/>
+    <style name="Base.Theme.AppCompat.Light" parent="Base.V26.Theme.AppCompat.Light"/>
+    <style name="Base.V26.Theme.AppCompat" parent="Base.V23.Theme.AppCompat">
+        
+        <item name="colorError">?android:attr/colorError</item>
+    </style>
+    <style name="Base.V26.Theme.AppCompat.Light" parent="Base.V23.Theme.AppCompat.Light">
+        
+        <item name="colorError">?android:attr/colorError</item>
+    </style>
+    <style name="Base.V26.Widget.AppCompat.Toolbar" parent="Base.V7.Widget.AppCompat.Toolbar">
+        <item name="android:touchscreenBlocksFocus">true</item>
+        <item name="android:keyboardNavigationCluster">true</item>
+    </style>
+    <style name="Base.Widget.AppCompat.Toolbar" parent="Base.V26.Widget.AppCompat.Toolbar"/>
+</resources>

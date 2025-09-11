@@ -1,0 +1,28 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.rodrigocostadev.store_connect.store_connect.app-mergeDebugResources-72:/values-v29/values-v29.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\rodri\\.gradle\\caches\\8.12\\transforms\\e9d05c4a357acede1c9586c0f2117006\\transformed\\jetified-ui-9.2.1\\res\\values-v29\\values-v29.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "100",
+                        "endLines": "40",
+                        "endColumns": "12",
+                        "endOffsets": "2092"
+                    },
+                    "to": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "100",
+                        "endLines": "40",
+                        "endColumns": "12",
+                        "endOffsets": "2024"
+                    }
+                }
+            ]
+        }
+    ]
+}

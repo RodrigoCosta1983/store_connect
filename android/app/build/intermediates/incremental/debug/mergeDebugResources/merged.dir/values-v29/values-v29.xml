@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:ns1="http://schemas.android.com/tools">
+    <style name="Theme.MLTheme" ns1:ignore="ResourceName" parent="@style/Theme.MLThemeLegacy">
+
+
+        <item name="android:textAppearance">@style/MLFont.Light</item>
+
+        <item name="android:buttonStyle">@style/Button.Action.Primary</item>
+        <item name="buttonStyle">@style/Button.Action.Primary</item>
+        <item name="buttonBarButtonStyle">@style/Button.Action.Primary</item>
+
+        <item name="colorAccent">@color/ui_components_android_color_accent</item>
+        <item name="colorPrimary">@color/ui_components_android_color_primary</item>
+        <item name="colorPrimaryDark">@color/ui_components_android_color_primary_dark</item>
+
+        <item name="android:colorAccent">@color/ui_components_android_color_accent</item>
+        <item name="android:colorPrimary">@color/ui_components_android_color_primary</item>
+        <item name="android:colorPrimaryDark">@color/ui_components_android_color_primary_dark</item>
+
+        
+        <item name="android:colorControlHighlight">@color/ui_ripple_mask</item>
+        <item name="colorControlHighlight">@color/ui_ripple_mask</item>
+
+        
+        <item name="android:dialogTheme">@style/Theme.AppCompat.Light.Dialog.Alert</item>
+        <item name="android:alertDialogTheme">@style/Theme.AppCompat.Light.Dialog.Alert</item>
+        <item name="dialogTheme">@style/Theme.AppCompat.Light.Dialog.Alert</item>
+        <item name="alertDialogTheme">@style/Theme.AppCompat.Light.Dialog.Alert</item>
+
+        <item name="android:actionModeBackground">@color/ui_components_actionModeBackground</item>
+        <item name="actionModeBackground">@color/ui_components_actionModeBackground</item>
+
+        
+        <item name="android:lineSpacingExtra">2dp</item>
+
+        <item name="ui_meliSpinnerStyle">@style/ui_meli_spinner</item>
+
+        <item name="android:windowLightStatusBar">true</item>
+
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

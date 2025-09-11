@@ -46,7 +46,9 @@ dependencies:
   url_launcher: ^6.2.5
   fl_chart: ^0.68.0
   cloud_functions: ^5.6.2
-  mercado_pago_mobile_checkout: ^0.2.1
+  mercado_pago_checkout:
+    path: deps/mercado_pago_checkout
+
 
 
 
@@ -60,6 +62,14 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+
+analyzer:
+  exclude:
+    - deps/**                      # ignora o plugin copiado
+    - '**/*.freezed.dart'          # arquivos gerados
+    - '**/*.g.dart'
+
+include: package:flutter_lints/flutter.yaml
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

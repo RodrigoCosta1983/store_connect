@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="px_circle_arrow_background">?android:colorBackground</color>
+    <style name="Base.TextAppearance.AppCompat.Widget.Button.Borderless.Colored" parent="android:TextAppearance.Material.Widget.Button.Borderless.Colored"/>
+    <style name="Base.TextAppearance.AppCompat.Widget.Button.Colored" parent="android:TextAppearance.Material.Widget.Button.Colored"/>
+</resources>

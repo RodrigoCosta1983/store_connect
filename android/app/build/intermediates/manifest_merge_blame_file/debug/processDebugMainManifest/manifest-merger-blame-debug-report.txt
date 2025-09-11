@@ -1,0 +1,858 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.rodrigocostadev.store_connect.store_connect"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="23"
+9        android:targetSdkVersion="35" />
+10    <!--
+11     Required to query activities that can process text, see:
+12         https://developer.android.com/training/package-visibility and
+13         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+14
+15         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin.
+16    -->
+17    <queries>
+17-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\main\AndroidManifest.xml:39:5-44:15
+18        <intent>
+18-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\main\AndroidManifest.xml:40:9-43:18
+19            <action android:name="android.intent.action.PROCESS_TEXT" />
+19-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\main\AndroidManifest.xml:41:13-72
+19-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\main\AndroidManifest.xml:41:21-70
+20
+21            <data android:mimeType="text/plain" />
+21-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\main\AndroidManifest.xml:42:13-50
+21-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\main\AndroidManifest.xml:42:19-48
+22        </intent>
+23    </queries>
+24
+25    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+25-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:9:5-81
+25-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:9:22-78
+26    <uses-permission android:name="android.permission.INTERNET" />
+26-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:10:5-67
+26-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:10:22-64
+27    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+27-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:11:5-79
+27-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:11:22-76
+28    <uses-permission
+28-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:12:5-14:36
+29        android:name="android.permission.VIBRATE"
+29-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:13:9-50
+30        android:required="false" />
+30-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:14:9-33
+31
+32    <uses-feature
+32-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:16:5-18:36
+33        android:name="android.hardware.location.gps"
+33-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:17:9-53
+34        android:required="false" />
+34-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:18:9-33
+35
+36    <uses-permission android:name="android.permission.WAKE_LOCK" /> <!-- Required by older versions of Google Play services to create IID tokens -->
+36-->[com.google.firebase:firebase-iid:21.1.0] C:\Users\rodri\.gradle\caches\8.12\transforms\431274cb2ce52ceb881c1250aeffbb83\transformed\jetified-firebase-iid-21.1.0\AndroidManifest.xml:24:5-68
+36-->[com.google.firebase:firebase-iid:21.1.0] C:\Users\rodri\.gradle\caches\8.12\transforms\431274cb2ce52ceb881c1250aeffbb83\transformed\jetified-firebase-iid-21.1.0\AndroidManifest.xml:24:22-65
+37    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
+37-->[com.google.firebase:firebase-iid:21.1.0] C:\Users\rodri\.gradle\caches\8.12\transforms\431274cb2ce52ceb881c1250aeffbb83\transformed\jetified-firebase-iid-21.1.0\AndroidManifest.xml:26:5-82
+37-->[com.google.firebase:firebase-iid:21.1.0] C:\Users\rodri\.gradle\caches\8.12\transforms\431274cb2ce52ceb881c1250aeffbb83\transformed\jetified-firebase-iid-21.1.0\AndroidManifest.xml:26:22-79
+38    <uses-permission android:name="com.google.android.providers.gsf.permission.READ_GSERVICES" />
+38-->[com.google.android.recaptcha:recaptcha:18.6.1] C:\Users\rodri\.gradle\caches\8.12\transforms\36cb95b2422773bab93c0ca578080b99\transformed\jetified-recaptcha-18.6.1\AndroidManifest.xml:9:5-98
+38-->[com.google.android.recaptcha:recaptcha:18.6.1] C:\Users\rodri\.gradle\caches\8.12\transforms\36cb95b2422773bab93c0ca578080b99\transformed\jetified-recaptcha-18.6.1\AndroidManifest.xml:9:22-95
+39
+40    <permission
+40-->[androidx.core:core:1.13.1] C:\Users\rodri\.gradle\caches\8.12\transforms\188ee60da581d9df6f6cc5316be6e78a\transformed\core-1.13.1\AndroidManifest.xml:22:5-24:47
+41        android:name="com.rodrigocostadev.store_connect.store_connect.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+41-->[androidx.core:core:1.13.1] C:\Users\rodri\.gradle\caches\8.12\transforms\188ee60da581d9df6f6cc5316be6e78a\transformed\core-1.13.1\AndroidManifest.xml:23:9-81
+42        android:protectionLevel="signature" />
+42-->[androidx.core:core:1.13.1] C:\Users\rodri\.gradle\caches\8.12\transforms\188ee60da581d9df6f6cc5316be6e78a\transformed\core-1.13.1\AndroidManifest.xml:24:9-44
+43
+44    <uses-permission android:name="com.rodrigocostadev.store_connect.store_connect.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+44-->[androidx.core:core:1.13.1] C:\Users\rodri\.gradle\caches\8.12\transforms\188ee60da581d9df6f6cc5316be6e78a\transformed\core-1.13.1\AndroidManifest.xml:26:5-97
+44-->[androidx.core:core:1.13.1] C:\Users\rodri\.gradle\caches\8.12\transforms\188ee60da581d9df6f6cc5316be6e78a\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
+45
+46    <application
+47        android:name="android.app.Application"
+47-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:6:9-42
+48        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+48-->[androidx.core:core:1.13.1] C:\Users\rodri\.gradle\caches\8.12\transforms\188ee60da581d9df6f6cc5316be6e78a\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
+49        android:debuggable="true"
+50        android:extractNativeLibs="false"
+51        android:icon="@mipmap/ic_launcher"
+51-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:7:9-43
+52        android:label="store_connect"
+52-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:5:9-38
+53        android:supportsRtl="true" >
+53-->[com.mercadolibre.android:ui:9.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\e9d05c4a357acede1c9586c0f2117006\transformed\jetified-ui-9.2.1\AndroidManifest.xml:9:18-44
+54        <activity
+54-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:8:9-24:20
+55            android:name="com.rodrigocostadev.store_connect.store_connect.MainActivity"
+55-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:9:13-41
+56            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+56-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:13:13-163
+57            android:exported="true"
+57-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:10:13-36
+58            android:hardwareAccelerated="true"
+58-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:14:13-47
+59            android:launchMode="singleTop"
+59-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:11:13-43
+60            android:taskAffinity=""
+60-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\main\AndroidManifest.xml:10:13-36
+61            android:theme="@style/LaunchTheme"
+61-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:12:13-47
+62            android:windowSoftInputMode="adjustResize" >
+62-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:15:13-55
+63            <meta-data
+63-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:16:13-19:19
+64                android:name="io.flutter.embedding.android.NormalTheme"
+64-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:17:17-72
+65                android:resource="@style/NormalTheme" />
+65-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:18:17-54
+66
+67            <intent-filter>
+67-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:20:13-23:29
+68                <action android:name="android.intent.action.MAIN" />
+68-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:21:17-68
+68-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:21:25-66
+69
+70                <category android:name="android.intent.category.LAUNCHER" />
+70-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:22:17-76
+70-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:22:27-74
+71            </intent-filter>
+72        </activity>
+73
+74        <meta-data
+74-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:25:9-27:33
+75            android:name="flutterEmbedding"
+75-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:26:13-44
+76            android:value="2" />
+76-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\debug\AndroidManifest.xml:27:13-30
+77
+78        <service
+78-->[:cloud_functions] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\cloud_functions-5.6.2\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:9-12:19
+79            android:name="com.google.firebase.components.ComponentDiscoveryService"
+79-->[:cloud_functions] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\cloud_functions-5.6.2\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:18-89
+80            android:directBootAware="true"
+80-->[com.google.firebase:firebase-common:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\c347d0e97720ba827fc8c34b0fc31a50\transformed\jetified-firebase-common-21.0.0\AndroidManifest.xml:32:13-43
+81            android:exported="false" >
+81-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:68:13-37
+82            <meta-data
+82-->[:cloud_functions] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\cloud_functions-5.6.2\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:13-11:85
+83                android:name="com.google.firebase.components:io.flutter.plugins.firebase.functions.FlutterFirebaseAppRegistrar"
+83-->[:cloud_functions] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\cloud_functions-5.6.2\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:17-128
+84                android:value="com.google.firebase.components.ComponentRegistrar" />
+84-->[:cloud_functions] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\cloud_functions-5.6.2\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:17-82
+85            <meta-data
+85-->[:firebase_auth] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_auth-5.7.0\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:13-11:85
+86                android:name="com.google.firebase.components:io.flutter.plugins.firebase.auth.FlutterFirebaseAuthRegistrar"
+86-->[:firebase_auth] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_auth-5.7.0\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:17-124
+87                android:value="com.google.firebase.components.ComponentRegistrar" />
+87-->[:firebase_auth] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_auth-5.7.0\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:17-82
+88            <meta-data
+88-->[:cloud_firestore] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\cloud_firestore-5.6.12\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:13-11:85
+89                android:name="com.google.firebase.components:io.flutter.plugins.firebase.firestore.FlutterFirebaseFirestoreRegistrar"
+89-->[:cloud_firestore] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\cloud_firestore-5.6.12\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:17-134
+90                android:value="com.google.firebase.components.ComponentRegistrar" />
+90-->[:cloud_firestore] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\cloud_firestore-5.6.12\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:17-82
+91            <meta-data
+91-->[:firebase_storage] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_storage-12.4.10\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:13-11:85
+92                android:name="com.google.firebase.components:io.flutter.plugins.firebase.storage.FlutterFirebaseAppRegistrar"
+92-->[:firebase_storage] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_storage-12.4.10\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:17-126
+93                android:value="com.google.firebase.components.ComponentRegistrar" />
+93-->[:firebase_storage] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_storage-12.4.10\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:17-82
+94            <meta-data
+94-->[:firebase_core] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_core-3.15.2\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:13-11:85
+95                android:name="com.google.firebase.components:io.flutter.plugins.firebase.core.FlutterFirebaseCoreRegistrar"
+95-->[:firebase_core] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_core-3.15.2\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:17-124
+96                android:value="com.google.firebase.components.ComponentRegistrar" />
+96-->[:firebase_core] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_core-3.15.2\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:17-82
+97            <meta-data
+97-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:69:13-71:85
+98                android:name="com.google.firebase.components:com.google.firebase.auth.FirebaseAuthRegistrar"
+98-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:70:17-109
+99                android:value="com.google.firebase.components.ComponentRegistrar" />
+99-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:71:17-82
+100            <meta-data
+100-->[com.google.firebase:firebase-firestore:25.1.4] C:\Users\rodri\.gradle\caches\8.12\transforms\8c5c5393963c63612a8adf5acc0e68cb\transformed\jetified-firebase-firestore-25.1.4\AndroidManifest.xml:17:13-19:85
+101                android:name="com.google.firebase.components:com.google.firebase.firestore.FirebaseFirestoreKtxRegistrar"
+101-->[com.google.firebase:firebase-firestore:25.1.4] C:\Users\rodri\.gradle\caches\8.12\transforms\8c5c5393963c63612a8adf5acc0e68cb\transformed\jetified-firebase-firestore-25.1.4\AndroidManifest.xml:18:17-122
+102                android:value="com.google.firebase.components.ComponentRegistrar" />
+102-->[com.google.firebase:firebase-firestore:25.1.4] C:\Users\rodri\.gradle\caches\8.12\transforms\8c5c5393963c63612a8adf5acc0e68cb\transformed\jetified-firebase-firestore-25.1.4\AndroidManifest.xml:19:17-82
+103            <meta-data
+103-->[com.google.firebase:firebase-firestore:25.1.4] C:\Users\rodri\.gradle\caches\8.12\transforms\8c5c5393963c63612a8adf5acc0e68cb\transformed\jetified-firebase-firestore-25.1.4\AndroidManifest.xml:20:13-22:85
+104                android:name="com.google.firebase.components:com.google.firebase.firestore.FirestoreRegistrar"
+104-->[com.google.firebase:firebase-firestore:25.1.4] C:\Users\rodri\.gradle\caches\8.12\transforms\8c5c5393963c63612a8adf5acc0e68cb\transformed\jetified-firebase-firestore-25.1.4\AndroidManifest.xml:21:17-111
+105                android:value="com.google.firebase.components.ComponentRegistrar" />
+105-->[com.google.firebase:firebase-firestore:25.1.4] C:\Users\rodri\.gradle\caches\8.12\transforms\8c5c5393963c63612a8adf5acc0e68cb\transformed\jetified-firebase-firestore-25.1.4\AndroidManifest.xml:22:17-82
+106            <meta-data
+106-->[com.google.firebase:firebase-functions:21.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\284deb33397d3a56919ba51e4457f913\transformed\jetified-firebase-functions-21.2.1\AndroidManifest.xml:15:13-17:85
+107                android:name="com.google.firebase.components:com.google.firebase.functions.FirebaseFunctionsKtxRegistrar"
+107-->[com.google.firebase:firebase-functions:21.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\284deb33397d3a56919ba51e4457f913\transformed\jetified-firebase-functions-21.2.1\AndroidManifest.xml:16:17-122
+108                android:value="com.google.firebase.components.ComponentRegistrar" />
+108-->[com.google.firebase:firebase-functions:21.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\284deb33397d3a56919ba51e4457f913\transformed\jetified-firebase-functions-21.2.1\AndroidManifest.xml:17:17-82
+109            <meta-data
+109-->[com.google.firebase:firebase-functions:21.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\284deb33397d3a56919ba51e4457f913\transformed\jetified-firebase-functions-21.2.1\AndroidManifest.xml:18:13-20:85
+110                android:name="com.google.firebase.components:com.google.firebase.functions.FunctionsRegistrar"
+110-->[com.google.firebase:firebase-functions:21.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\284deb33397d3a56919ba51e4457f913\transformed\jetified-firebase-functions-21.2.1\AndroidManifest.xml:19:17-111
+111                android:value="com.google.firebase.components.ComponentRegistrar" />
+111-->[com.google.firebase:firebase-functions:21.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\284deb33397d3a56919ba51e4457f913\transformed\jetified-firebase-functions-21.2.1\AndroidManifest.xml:20:17-82
+112            <meta-data
+112-->[com.google.firebase:firebase-storage:21.0.2] C:\Users\rodri\.gradle\caches\8.12\transforms\d2d362171fb0e98df9257e8dfd6b30b2\transformed\jetified-firebase-storage-21.0.2\AndroidManifest.xml:30:13-32:85
+113                android:name="com.google.firebase.components:com.google.firebase.storage.FirebaseStorageKtxRegistrar"
+113-->[com.google.firebase:firebase-storage:21.0.2] C:\Users\rodri\.gradle\caches\8.12\transforms\d2d362171fb0e98df9257e8dfd6b30b2\transformed\jetified-firebase-storage-21.0.2\AndroidManifest.xml:31:17-118
+114                android:value="com.google.firebase.components.ComponentRegistrar" />
+114-->[com.google.firebase:firebase-storage:21.0.2] C:\Users\rodri\.gradle\caches\8.12\transforms\d2d362171fb0e98df9257e8dfd6b30b2\transformed\jetified-firebase-storage-21.0.2\AndroidManifest.xml:32:17-82
+115            <meta-data
+115-->[com.google.firebase:firebase-storage:21.0.2] C:\Users\rodri\.gradle\caches\8.12\transforms\d2d362171fb0e98df9257e8dfd6b30b2\transformed\jetified-firebase-storage-21.0.2\AndroidManifest.xml:33:13-35:85
+116                android:name="com.google.firebase.components:com.google.firebase.storage.StorageRegistrar"
+116-->[com.google.firebase:firebase-storage:21.0.2] C:\Users\rodri\.gradle\caches\8.12\transforms\d2d362171fb0e98df9257e8dfd6b30b2\transformed\jetified-firebase-storage-21.0.2\AndroidManifest.xml:34:17-107
+117                android:value="com.google.firebase.components.ComponentRegistrar" />
+117-->[com.google.firebase:firebase-storage:21.0.2] C:\Users\rodri\.gradle\caches\8.12\transforms\d2d362171fb0e98df9257e8dfd6b30b2\transformed\jetified-firebase-storage-21.0.2\AndroidManifest.xml:35:17-82
+118            <meta-data
+118-->[com.google.firebase:firebase-appcheck:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\5543908b1f82684b891d47a1388f3781\transformed\jetified-firebase-appcheck-18.0.0\AndroidManifest.xml:25:13-27:85
+119                android:name="com.google.firebase.components:com.google.firebase.appcheck.FirebaseAppCheckKtxRegistrar"
+119-->[com.google.firebase:firebase-appcheck:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\5543908b1f82684b891d47a1388f3781\transformed\jetified-firebase-appcheck-18.0.0\AndroidManifest.xml:26:17-120
+120                android:value="com.google.firebase.components.ComponentRegistrar" />
+120-->[com.google.firebase:firebase-appcheck:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\5543908b1f82684b891d47a1388f3781\transformed\jetified-firebase-appcheck-18.0.0\AndroidManifest.xml:27:17-82
+121            <meta-data
+121-->[com.google.firebase:firebase-appcheck:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\5543908b1f82684b891d47a1388f3781\transformed\jetified-firebase-appcheck-18.0.0\AndroidManifest.xml:28:13-30:85
+122                android:name="com.google.firebase.components:com.google.firebase.appcheck.FirebaseAppCheckRegistrar"
+122-->[com.google.firebase:firebase-appcheck:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\5543908b1f82684b891d47a1388f3781\transformed\jetified-firebase-appcheck-18.0.0\AndroidManifest.xml:29:17-117
+123                android:value="com.google.firebase.components.ComponentRegistrar" />
+123-->[com.google.firebase:firebase-appcheck:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\5543908b1f82684b891d47a1388f3781\transformed\jetified-firebase-appcheck-18.0.0\AndroidManifest.xml:30:17-82
+124            <meta-data
+124-->[com.google.firebase:firebase-iid:21.1.0] C:\Users\rodri\.gradle\caches\8.12\transforms\431274cb2ce52ceb881c1250aeffbb83\transformed\jetified-firebase-iid-21.1.0\AndroidManifest.xml:32:13-34:85
+125                android:name="com.google.firebase.components:com.google.firebase.iid.Registrar"
+125-->[com.google.firebase:firebase-iid:21.1.0] C:\Users\rodri\.gradle\caches\8.12\transforms\431274cb2ce52ceb881c1250aeffbb83\transformed\jetified-firebase-iid-21.1.0\AndroidManifest.xml:33:17-96
+126                android:value="com.google.firebase.components.ComponentRegistrar" />
+126-->[com.google.firebase:firebase-iid:21.1.0] C:\Users\rodri\.gradle\caches\8.12\transforms\431274cb2ce52ceb881c1250aeffbb83\transformed\jetified-firebase-iid-21.1.0\AndroidManifest.xml:34:17-82
+127            <meta-data
+127-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\7a6745f55bf052db35aacfa9dba891d3\transformed\jetified-firebase-installations-18.0.0\AndroidManifest.xml:15:13-17:85
+128                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsKtxRegistrar"
+128-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\7a6745f55bf052db35aacfa9dba891d3\transformed\jetified-firebase-installations-18.0.0\AndroidManifest.xml:16:17-130
+129                android:value="com.google.firebase.components.ComponentRegistrar" />
+129-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\7a6745f55bf052db35aacfa9dba891d3\transformed\jetified-firebase-installations-18.0.0\AndroidManifest.xml:17:17-82
+130            <meta-data
+130-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\7a6745f55bf052db35aacfa9dba891d3\transformed\jetified-firebase-installations-18.0.0\AndroidManifest.xml:18:13-20:85
+131                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsRegistrar"
+131-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\7a6745f55bf052db35aacfa9dba891d3\transformed\jetified-firebase-installations-18.0.0\AndroidManifest.xml:19:17-127
+132                android:value="com.google.firebase.components.ComponentRegistrar" />
+132-->[com.google.firebase:firebase-installations:18.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\7a6745f55bf052db35aacfa9dba891d3\transformed\jetified-firebase-installations-18.0.0\AndroidManifest.xml:20:17-82
+133            <meta-data
+133-->[com.google.firebase:firebase-common-ktx:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\d97d67a430cb29fdb8119d96e87d2895\transformed\jetified-firebase-common-ktx-21.0.0\AndroidManifest.xml:12:13-14:85
+134                android:name="com.google.firebase.components:com.google.firebase.ktx.FirebaseCommonLegacyRegistrar"
+134-->[com.google.firebase:firebase-common-ktx:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\d97d67a430cb29fdb8119d96e87d2895\transformed\jetified-firebase-common-ktx-21.0.0\AndroidManifest.xml:13:17-116
+135                android:value="com.google.firebase.components.ComponentRegistrar" />
+135-->[com.google.firebase:firebase-common-ktx:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\d97d67a430cb29fdb8119d96e87d2895\transformed\jetified-firebase-common-ktx-21.0.0\AndroidManifest.xml:14:17-82
+136            <meta-data
+136-->[com.google.firebase:firebase-common:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\c347d0e97720ba827fc8c34b0fc31a50\transformed\jetified-firebase-common-21.0.0\AndroidManifest.xml:35:13-37:85
+137                android:name="com.google.firebase.components:com.google.firebase.FirebaseCommonKtxRegistrar"
+137-->[com.google.firebase:firebase-common:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\c347d0e97720ba827fc8c34b0fc31a50\transformed\jetified-firebase-common-21.0.0\AndroidManifest.xml:36:17-109
+138                android:value="com.google.firebase.components.ComponentRegistrar" />
+138-->[com.google.firebase:firebase-common:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\c347d0e97720ba827fc8c34b0fc31a50\transformed\jetified-firebase-common-21.0.0\AndroidManifest.xml:37:17-82
+139        </service>
+140
+141        <activity
+141-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:21:9-26:73
+142            android:name="com.mercadopago.android.px.internal.features.payment_methods.PaymentMethodsActivity"
+142-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:22:13-111
+143            android:exported="false"
+143-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:23:13-37
+144            android:label="@string/px_title_activity_payment_methods"
+144-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:24:13-70
+145            android:screenOrientation="sensorPortrait"
+145-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:25:13-55
+146            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+146-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:26:13-70
+147        <activity
+147-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:27:9-32:73
+148            android:name="com.mercadopago.android.px.internal.features.bank_deals.BankDealsActivity"
+148-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:28:13-101
+149            android:exported="false"
+149-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:29:13-37
+150            android:label="@string/px_title_activity_bank_deals"
+150-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:30:13-65
+151            android:screenOrientation="sensorPortrait"
+151-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:31:13-55
+152            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+152-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:32:13-70
+153        <activity
+153-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:33:9-38:73
+154            android:name="com.mercadopago.android.px.internal.features.TermsAndConditionsActivity"
+154-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:34:13-99
+155            android:exported="false"
+155-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:35:13-37
+156            android:label="@string/px_title_activity_terms_and_conditions"
+156-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:36:13-75
+157            android:screenOrientation="sensorPortrait"
+157-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:37:13-55
+158            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+158-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:38:13-70
+159        <activity
+159-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:39:9-69:20
+160            android:name="com.mercadopago.android.px.internal.features.checkout.CheckoutActivity"
+160-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:40:13-98
+161            android:exported="true"
+161-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:41:13-36
+162            android:label=""
+162-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:42:13-29
+163            android:launchMode="singleTask"
+163-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:43:13-44
+164            android:screenOrientation="sensorPortrait"
+164-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:44:13-55
+165            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar"
+165-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:45:13-70
+166            android:windowSoftInputMode="adjustResize" >
+166-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:46:13-55
+167            <intent-filter>
+167-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:47:13-57:29
+168                <action android:name="android.intent.action.VIEW" />
+168-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:48:17-69
+168-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:48:25-66
+169
+170                <category android:name="android.intent.category.DEFAULT" />
+170-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:50:17-76
+170-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:50:27-73
+171                <category android:name="android.intent.category.BROWSABLE" />
+171-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:51:17-78
+171-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:51:27-75
+172
+173                <data
+173-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\main\AndroidManifest.xml:42:13-50
+174                    android:host="px"
+175                    android:path="/one_tap"
+176                    android:scheme="mercadopago" />
+177            </intent-filter>
+178            <intent-filter>
+178-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:58:13-68:29
+179                <action android:name="android.intent.action.VIEW" />
+179-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:48:17-69
+179-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:48:25-66
+180
+181                <category android:name="android.intent.category.DEFAULT" />
+181-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:50:17-76
+181-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:50:27-73
+182                <category android:name="android.intent.category.BROWSABLE" />
+182-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:51:17-78
+182-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:51:27-75
+183
+184                <data
+184-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\main\AndroidManifest.xml:42:13-50
+185                    android:host="px"
+186                    android:path="/one_tap"
+187                    android:scheme="meli" />
+188            </intent-filter>
+189        </activity>
+190        <activity
+190-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:70:9-75:58
+191            android:name="com.mercadopago.android.px.internal.features.guessing_card.GuessingCardActivity"
+191-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:71:13-107
+192            android:exported="false"
+192-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:72:13-37
+193            android:screenOrientation="sensorPortrait"
+193-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:73:13-55
+194            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar"
+194-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:74:13-70
+195            android:windowSoftInputMode="adjustResize" />
+195-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:75:13-55
+196        <activity
+196-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:76:9-80:73
+197            android:name="com.mercadopago.android.px.internal.features.payment_vault.PaymentVaultActivity"
+197-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:77:13-107
+198            android:exported="false"
+198-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:78:13-37
+199            android:screenOrientation="sensorPortrait"
+199-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:79:13-55
+200            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+200-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:80:13-70
+201        <activity
+201-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:81:9-85:73
+202            android:name="com.mercadopago.android.px.internal.features.installments.InstallmentsActivity"
+202-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:82:13-106
+203            android:exported="false"
+203-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:83:13-37
+204            android:screenOrientation="sensorPortrait"
+204-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:84:13-55
+205            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+205-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:85:13-70
+206        <activity
+206-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:86:9-90:73
+207            android:name="com.mercadopago.android.px.internal.features.IssuersActivity"
+207-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:87:13-88
+208            android:exported="false"
+208-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:88:13-37
+209            android:screenOrientation="sensorPortrait"
+209-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:89:13-55
+210            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+210-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:90:13-70
+211        <activity
+211-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:91:9-95:73
+212            android:name="com.mercadopago.android.px.internal.features.cardvault.CardVaultActivity"
+212-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:92:13-100
+213            android:exported="false"
+213-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:93:13-37
+214            android:screenOrientation="sensorPortrait"
+214-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:94:13-55
+215            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+215-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:95:13-70
+216        <activity
+216-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:96:9-100:73
+217            android:name="com.mercadopago.android.px.internal.features.ErrorActivity"
+217-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:97:13-86
+218            android:exported="false"
+218-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:98:13-37
+219            android:screenOrientation="sensorPortrait"
+219-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:99:13-55
+220            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+220-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:100:13-70
+221        <activity
+221-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:101:9-106:73
+222            android:name="com.mercadopago.android.px.internal.features.payment_result.PaymentResultActivity"
+222-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:102:13-109
+223            android:exported="false"
+223-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:103:13-37
+224            android:label=""
+224-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:104:13-29
+225            android:screenOrientation="sensorPortrait"
+225-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:105:13-55
+226            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+226-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:106:13-70
+227        <activity
+227-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:107:9-113:58
+228            android:name="com.mercadopago.android.px.internal.features.SecurityCodeActivity"
+228-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:108:13-93
+229            android:exported="false"
+229-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:109:13-37
+230            android:label=""
+230-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:110:13-29
+231            android:screenOrientation="sensorPortrait"
+231-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:111:13-55
+232            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar"
+232-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:112:13-70
+233            android:windowSoftInputMode="stateVisible" />
+233-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:113:13-55
+234        <activity
+234-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:114:9-118:73
+235            android:name="com.mercadopago.android.px.internal.features.PaymentTypesActivity"
+235-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:115:13-93
+236            android:exported="false"
+236-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:116:13-37
+237            android:screenOrientation="sensorPortrait"
+237-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:117:13-55
+238            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+238-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:118:13-70
+239        <activity
+239-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:119:9-123:73
+240            android:name="com.mercadopago.android.px.internal.features.review_payment_methods.ReviewPaymentMethodsActivity"
+240-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:120:13-124
+241            android:exported="false"
+241-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:121:13-37
+242            android:screenOrientation="sensorPortrait"
+242-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:122:13-55
+243            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+243-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:123:13-70
+244        <activity
+244-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:124:9-128:73
+245            android:name="com.mercadopago.android.px.internal.features.payer_information.PayerInformationActivity"
+245-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:125:13-115
+246            android:exported="false"
+246-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:126:13-37
+247            android:screenOrientation="sensorPortrait"
+247-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:127:13-55
+248            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+248-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:128:13-70
+249        <activity
+249-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:129:9-133:73
+250            android:name="com.mercadopago.android.px.internal.features.plugins.PaymentProcessorActivity"
+250-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:130:13-105
+251            android:exported="false"
+251-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:131:13-37
+252            android:screenOrientation="sensorPortrait"
+252-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:132:13-55
+253            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+253-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:133:13-70
+254        <activity
+254-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:134:9-139:73
+255            android:name="com.mercadopago.android.px.internal.features.business_result.BusinessPaymentResultActivity"
+255-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:135:13-118
+256            android:exported="false"
+256-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:136:13-37
+257            android:label=""
+257-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:137:13-29
+258            android:screenOrientation="sensorPortrait"
+258-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:138:13-55
+259            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+259-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:139:13-70
+260        <activity
+260-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:140:9-144:73
+261            android:name="com.mercadopago.android.px.internal.features.review_and_confirm.ReviewAndConfirmActivity"
+261-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:141:13-116
+262            android:exported="false"
+262-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:142:13-37
+263            android:screenOrientation="sensorPortrait"
+263-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:143:13-55
+264            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+264-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:144:13-70
+265        <activity
+265-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:145:9-149:73
+266            android:name="com.mercadopago.android.px.internal.features.bank_deal_detail.BankDealDetailActivity"
+266-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:146:13-112
+267            android:exported="false"
+267-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:147:13-37
+268            android:screenOrientation="sensorPortrait"
+268-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:148:13-55
+269            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+269-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:149:13-70
+270        <activity
+270-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:150:9-154:62
+271            android:name="com.mercadopago.android.px.internal.features.guessing_card.card_association_result.CardAssociationResultSuccessActivity"
+271-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:151:13-147
+272            android:exported="false"
+272-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:152:13-37
+273            android:screenOrientation="sensorPortrait"
+273-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:153:13-55
+274            android:theme="@style/ToolbarTransparentTheme" />
+274-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:154:13-59
+275        <activity
+275-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:155:9-159:62
+276            android:name="com.mercadopago.android.px.internal.features.guessing_card.card_association_result.CardAssociationResultErrorActivity"
+276-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:156:13-145
+277            android:exported="false"
+277-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:157:13-37
+278            android:screenOrientation="sensorPortrait"
+278-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:158:13-55
+279            android:theme="@style/ToolbarTransparentTheme" />
+279-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:159:13-59
+280
+281        <provider
+281-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:161:9-164:40
+282            android:name="com.mercadopago.android.px.internal.di.PxCheckoutInitProvider"
+282-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:162:13-89
+283            android:authorities="com.rodrigocostadev.store_connect.store_connect.px.provider"
+283-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:163:13-63
+284            android:exported="false" />
+284-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:164:13-37
+285
+286        <activity
+286-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:29:9-46:20
+287            android:name="com.google.firebase.auth.internal.GenericIdpActivity"
+287-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:30:13-80
+288            android:excludeFromRecents="true"
+288-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:31:13-46
+289            android:exported="true"
+289-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:32:13-36
+290            android:launchMode="singleTask"
+290-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:33:13-44
+291            android:theme="@android:style/Theme.Translucent.NoTitleBar" >
+291-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:34:13-72
+292            <intent-filter>
+292-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:35:13-45:29
+293                <action android:name="android.intent.action.VIEW" />
+293-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:48:17-69
+293-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:48:25-66
+294
+295                <category android:name="android.intent.category.DEFAULT" />
+295-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:50:17-76
+295-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:50:27-73
+296                <category android:name="android.intent.category.BROWSABLE" />
+296-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:51:17-78
+296-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:51:27-75
+297
+298                <data
+298-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\main\AndroidManifest.xml:42:13-50
+299                    android:host="firebase.auth"
+300                    android:path="/"
+301                    android:scheme="genericidp" />
+302            </intent-filter>
+303        </activity>
+304        <activity
+304-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:47:9-64:20
+305            android:name="com.google.firebase.auth.internal.RecaptchaActivity"
+305-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:48:13-79
+306            android:excludeFromRecents="true"
+306-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:49:13-46
+307            android:exported="true"
+307-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:50:13-36
+308            android:launchMode="singleTask"
+308-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:51:13-44
+309            android:theme="@android:style/Theme.Translucent.NoTitleBar" >
+309-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:52:13-72
+310            <intent-filter>
+310-->[com.google.firebase:firebase-auth:23.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\835c5b79f9c66131cfadb731c03a8043\transformed\jetified-firebase-auth-23.2.1\AndroidManifest.xml:53:13-63:29
+311                <action android:name="android.intent.action.VIEW" />
+311-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:48:17-69
+311-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:48:25-66
+312
+313                <category android:name="android.intent.category.DEFAULT" />
+313-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:50:17-76
+313-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:50:27-73
+314                <category android:name="android.intent.category.BROWSABLE" />
+314-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:51:17-78
+314-->[com.mercadopago.android.px:checkout:4.53.2] C:\Users\rodri\.gradle\caches\8.12\transforms\08abcf33713677228e1f09db4915d6ba\transformed\jetified-checkout-4.53.2\AndroidManifest.xml:51:27-75
+315
+316                <data
+316-->C:\Users\rodri\StudioProjects\store_connect\android\app\src\main\AndroidManifest.xml:42:13-50
+317                    android:host="firebase.auth"
+318                    android:path="/"
+319                    android:scheme="recaptcha" />
+320            </intent-filter>
+321        </activity>
+322
+323        <provider
+323-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:9-17:20
+324            android:name="io.flutter.plugins.imagepicker.ImagePickerFileProvider"
+324-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:13-82
+325            android:authorities="com.rodrigocostadev.store_connect.store_connect.flutter.image_provider"
+325-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:13-74
+326            android:exported="false"
+326-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:12:13-37
+327            android:grantUriPermissions="true" >
+327-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:13:13-47
+328            <meta-data
+328-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:14:13-16:75
+329                android:name="android.support.FILE_PROVIDER_PATHS"
+329-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:15:17-67
+330                android:resource="@xml/flutter_image_picker_file_paths" />
+330-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:16:17-72
+331        </provider> <!-- Trigger Google Play services to install the backported photo picker module. -->
+332        <service
+332-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:19:9-31:19
+333            android:name="com.google.android.gms.metadata.ModuleDependencies"
+333-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:20:13-78
+334            android:enabled="false"
+334-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:21:13-36
+335            android:exported="false" >
+335-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:22:13-37
+336            <intent-filter>
+336-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:24:13-26:29
+337                <action android:name="com.google.android.gms.metadata.MODULE_DEPENDENCIES" />
+337-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:25:17-94
+337-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:25:25-91
+338            </intent-filter>
+339
+340            <meta-data
+340-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:28:13-30:36
+341                android:name="photopicker_activity:0:required"
+341-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:29:17-63
+342                android:value="" />
+342-->[:image_picker_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:30:17-33
+343        </service>
+344
+345        <activity
+345-->[:url_launcher_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.20\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:8:9-11:74
+346            android:name="io.flutter.plugins.urllauncher.WebViewActivity"
+346-->[:url_launcher_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.20\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:9:13-74
+347            android:exported="false"
+347-->[:url_launcher_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.20\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:10:13-37
+348            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
+348-->[:url_launcher_android] C:\Users\rodri\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.20\android\build\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml:11:13-71
+349
+350        <uses-library
+350-->[androidx.window:window:1.2.0] C:\Users\rodri\.gradle\caches\8.12\transforms\be5563a02fed89375545f95a98ff06f0\transformed\jetified-window-1.2.0\AndroidManifest.xml:23:9-25:40
+351            android:name="androidx.window.extensions"
+351-->[androidx.window:window:1.2.0] C:\Users\rodri\.gradle\caches\8.12\transforms\be5563a02fed89375545f95a98ff06f0\transformed\jetified-window-1.2.0\AndroidManifest.xml:24:13-54
+352            android:required="false" />
+352-->[androidx.window:window:1.2.0] C:\Users\rodri\.gradle\caches\8.12\transforms\be5563a02fed89375545f95a98ff06f0\transformed\jetified-window-1.2.0\AndroidManifest.xml:25:13-37
+353        <uses-library
+353-->[androidx.window:window:1.2.0] C:\Users\rodri\.gradle\caches\8.12\transforms\be5563a02fed89375545f95a98ff06f0\transformed\jetified-window-1.2.0\AndroidManifest.xml:26:9-28:40
+354            android:name="androidx.window.sidecar"
+354-->[androidx.window:window:1.2.0] C:\Users\rodri\.gradle\caches\8.12\transforms\be5563a02fed89375545f95a98ff06f0\transformed\jetified-window-1.2.0\AndroidManifest.xml:27:13-51
+355            android:required="false" />
+355-->[androidx.window:window:1.2.0] C:\Users\rodri\.gradle\caches\8.12\transforms\be5563a02fed89375545f95a98ff06f0\transformed\jetified-window-1.2.0\AndroidManifest.xml:28:13-37
+356
+357        <activity
+357-->[com.mercadolibre.android:cardform:1.16.1] C:\Users\rodri\.gradle\caches\8.12\transforms\6fbfaf4e97c9a13bb7337cc4fbcf687d\transformed\jetified-cardform-1.16.1\AndroidManifest.xml:15:9-20:20
+358            android:name="com.mercadolibre.android.cardform.presentation.ui.CardFormActivity"
+358-->[com.mercadolibre.android:cardform:1.16.1] C:\Users\rodri\.gradle\caches\8.12\transforms\6fbfaf4e97c9a13bb7337cc4fbcf687d\transformed\jetified-cardform-1.16.1\AndroidManifest.xml:16:13-94
+359            android:screenOrientation="sensorPortrait"
+359-->[com.mercadolibre.android:cardform:1.16.1] C:\Users\rodri\.gradle\caches\8.12\transforms\6fbfaf4e97c9a13bb7337cc4fbcf687d\transformed\jetified-cardform-1.16.1\AndroidManifest.xml:17:13-55
+360            android:theme="@style/CardFormStyle"
+360-->[com.mercadolibre.android:cardform:1.16.1] C:\Users\rodri\.gradle\caches\8.12\transforms\6fbfaf4e97c9a13bb7337cc4fbcf687d\transformed\jetified-cardform-1.16.1\AndroidManifest.xml:18:13-49
+361            android:windowSoftInputMode="adjustResize" >
+361-->[com.mercadolibre.android:cardform:1.16.1] C:\Users\rodri\.gradle\caches\8.12\transforms\6fbfaf4e97c9a13bb7337cc4fbcf687d\transformed\jetified-cardform-1.16.1\AndroidManifest.xml:19:13-55
+362        </activity>
+363        <activity
+363-->[com.mercadolibre.android:cardform:1.16.1] C:\Users\rodri\.gradle\caches\8.12\transforms\6fbfaf4e97c9a13bb7337cc4fbcf687d\transformed\jetified-cardform-1.16.1\AndroidManifest.xml:21:9-25:58
+364            android:name="com.mercadolibre.android.cardform.presentation.ui.CardFormWebActivity"
+364-->[com.mercadolibre.android:cardform:1.16.1] C:\Users\rodri\.gradle\caches\8.12\transforms\6fbfaf4e97c9a13bb7337cc4fbcf687d\transformed\jetified-cardform-1.16.1\AndroidManifest.xml:22:13-97
+365            android:screenOrientation="sensorPortrait"
+365-->[com.mercadolibre.android:cardform:1.16.1] C:\Users\rodri\.gradle\caches\8.12\transforms\6fbfaf4e97c9a13bb7337cc4fbcf687d\transformed\jetified-cardform-1.16.1\AndroidManifest.xml:23:13-55
+366            android:theme="@style/CardFormStyle"
+366-->[com.mercadolibre.android:cardform:1.16.1] C:\Users\rodri\.gradle\caches\8.12\transforms\6fbfaf4e97c9a13bb7337cc4fbcf687d\transformed\jetified-cardform-1.16.1\AndroidManifest.xml:24:13-49
+367            android:windowSoftInputMode="adjustResize" />
+367-->[com.mercadolibre.android:cardform:1.16.1] C:\Users\rodri\.gradle\caches\8.12\transforms\6fbfaf4e97c9a13bb7337cc4fbcf687d\transformed\jetified-cardform-1.16.1\AndroidManifest.xml:25:13-55
+368        <activity android:name="com.mercadolibre.android.ui.activities.LayoutUtilsActivity" >
+368-->[com.mercadolibre.android:ui_legacy:9.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\703cdd8b720387c17aed3d324bf47b28\transformed\jetified-ui_legacy-9.2.1\AndroidManifest.xml:12:9-13:20
+368-->[com.mercadolibre.android:ui_legacy:9.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\703cdd8b720387c17aed3d324bf47b28\transformed\jetified-ui_legacy-9.2.1\AndroidManifest.xml:12:19-92
+369        </activity>
+370        <activity android:name="com.mercadolibre.android.ui.activities.MLImageTestActivity" />
+370-->[com.mercadolibre.android:ui_legacy:9.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\703cdd8b720387c17aed3d324bf47b28\transformed\jetified-ui_legacy-9.2.1\AndroidManifest.xml:14:9-95
+370-->[com.mercadolibre.android:ui_legacy:9.2.1] C:\Users\rodri\.gradle\caches\8.12\transforms\703cdd8b720387c17aed3d324bf47b28\transformed\jetified-ui_legacy-9.2.1\AndroidManifest.xml:14:19-92
+371
+372        <provider
+372-->[com.google.firebase:firebase-common:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\c347d0e97720ba827fc8c34b0fc31a50\transformed\jetified-firebase-common-21.0.0\AndroidManifest.xml:23:9-28:39
+373            android:name="com.google.firebase.provider.FirebaseInitProvider"
+373-->[com.google.firebase:firebase-common:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\c347d0e97720ba827fc8c34b0fc31a50\transformed\jetified-firebase-common-21.0.0\AndroidManifest.xml:24:13-77
+374            android:authorities="com.rodrigocostadev.store_connect.store_connect.firebaseinitprovider"
+374-->[com.google.firebase:firebase-common:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\c347d0e97720ba827fc8c34b0fc31a50\transformed\jetified-firebase-common-21.0.0\AndroidManifest.xml:25:13-72
+375            android:directBootAware="true"
+375-->[com.google.firebase:firebase-common:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\c347d0e97720ba827fc8c34b0fc31a50\transformed\jetified-firebase-common-21.0.0\AndroidManifest.xml:26:13-43
+376            android:exported="false"
+376-->[com.google.firebase:firebase-common:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\c347d0e97720ba827fc8c34b0fc31a50\transformed\jetified-firebase-common-21.0.0\AndroidManifest.xml:27:13-37
+377            android:initOrder="100" />
+377-->[com.google.firebase:firebase-common:21.0.0] C:\Users\rodri\.gradle\caches\8.12\transforms\c347d0e97720ba827fc8c34b0fc31a50\transformed\jetified-firebase-common-21.0.0\AndroidManifest.xml:28:13-36
+378
+379        <service
+379-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:24:9-32:19
+380            android:name="androidx.credentials.playservices.CredentialProviderMetadataHolder"
+380-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:25:13-94
+381            android:enabled="true"
+381-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:26:13-35
+382            android:exported="false" >
+382-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:27:13-37
+383            <meta-data
+383-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:29:13-31:104
+384                android:name="androidx.credentials.CREDENTIAL_PROVIDER_KEY"
+384-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:30:17-76
+385                android:value="androidx.credentials.playservices.CredentialProviderPlayServicesImpl" />
+385-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:31:17-101
+386        </service>
+387
+388        <activity
+388-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:34:9-41:20
+389            android:name="androidx.credentials.playservices.HiddenActivity"
+389-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:35:13-76
+390            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+390-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:36:13-87
+391            android:enabled="true"
+391-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:37:13-35
+392            android:exported="false"
+392-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:38:13-37
+393            android:fitsSystemWindows="true"
+393-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:39:13-45
+394            android:theme="@style/Theme.Hidden" >
+394-->[androidx.credentials:credentials-play-services-auth:1.2.0-rc01] C:\Users\rodri\.gradle\caches\8.12\transforms\ab4192e88bd9fbb19205365e73fa5625\transformed\jetified-credentials-play-services-auth-1.2.0-rc01\AndroidManifest.xml:40:13-48
+395        </activity>
+396        <activity
+396-->[com.google.android.gms:play-services-auth:20.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\f9cc6bc081a172f783909bac89acb391\transformed\jetified-play-services-auth-20.7.0\AndroidManifest.xml:23:9-27:75
+397            android:name="com.google.android.gms.auth.api.signin.internal.SignInHubActivity"
+397-->[com.google.android.gms:play-services-auth:20.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\f9cc6bc081a172f783909bac89acb391\transformed\jetified-play-services-auth-20.7.0\AndroidManifest.xml:24:13-93
+398            android:excludeFromRecents="true"
+398-->[com.google.android.gms:play-services-auth:20.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\f9cc6bc081a172f783909bac89acb391\transformed\jetified-play-services-auth-20.7.0\AndroidManifest.xml:25:13-46
+399            android:exported="false"
+399-->[com.google.android.gms:play-services-auth:20.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\f9cc6bc081a172f783909bac89acb391\transformed\jetified-play-services-auth-20.7.0\AndroidManifest.xml:26:13-37
+400            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+400-->[com.google.android.gms:play-services-auth:20.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\f9cc6bc081a172f783909bac89acb391\transformed\jetified-play-services-auth-20.7.0\AndroidManifest.xml:27:13-72
+401        <!--
+402            Service handling Google Sign-In user revocation. For apps that do not integrate with
+403            Google Sign-In, this service will never be started.
+404        -->
+405        <service
+405-->[com.google.android.gms:play-services-auth:20.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\f9cc6bc081a172f783909bac89acb391\transformed\jetified-play-services-auth-20.7.0\AndroidManifest.xml:33:9-37:51
+406            android:name="com.google.android.gms.auth.api.signin.RevocationBoundService"
+406-->[com.google.android.gms:play-services-auth:20.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\f9cc6bc081a172f783909bac89acb391\transformed\jetified-play-services-auth-20.7.0\AndroidManifest.xml:34:13-89
+407            android:exported="true"
+407-->[com.google.android.gms:play-services-auth:20.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\f9cc6bc081a172f783909bac89acb391\transformed\jetified-play-services-auth-20.7.0\AndroidManifest.xml:35:13-36
+408            android:permission="com.google.android.gms.auth.api.signin.permission.REVOCATION_NOTIFICATION"
+408-->[com.google.android.gms:play-services-auth:20.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\f9cc6bc081a172f783909bac89acb391\transformed\jetified-play-services-auth-20.7.0\AndroidManifest.xml:36:13-107
+409            android:visibleToInstantApps="true" />
+409-->[com.google.android.gms:play-services-auth:20.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\f9cc6bc081a172f783909bac89acb391\transformed\jetified-play-services-auth-20.7.0\AndroidManifest.xml:37:13-48
+410
+411        <activity
+411-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\rodri\.gradle\caches\8.12\transforms\7bde51cee9d44dcf9e988ccfa9f6777f\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:20:9-22:45
+412            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+412-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\rodri\.gradle\caches\8.12\transforms\7bde51cee9d44dcf9e988ccfa9f6777f\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:20:19-85
+413            android:exported="false"
+413-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\rodri\.gradle\caches\8.12\transforms\7bde51cee9d44dcf9e988ccfa9f6777f\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:22:19-43
+414            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+414-->[com.google.android.gms:play-services-base:18.1.0] C:\Users\rodri\.gradle\caches\8.12\transforms\7bde51cee9d44dcf9e988ccfa9f6777f\transformed\jetified-play-services-base-18.1.0\AndroidManifest.xml:21:19-78
+415
+416        <provider
+416-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fa44c14186a683d5bc2209030e013c3e\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:24:9-32:20
+417            android:name="androidx.startup.InitializationProvider"
+417-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fa44c14186a683d5bc2209030e013c3e\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:25:13-67
+418            android:authorities="com.rodrigocostadev.store_connect.store_connect.androidx-startup"
+418-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fa44c14186a683d5bc2209030e013c3e\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:26:13-68
+419            android:exported="false" >
+419-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fa44c14186a683d5bc2209030e013c3e\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:27:13-37
+420            <meta-data
+420-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fa44c14186a683d5bc2209030e013c3e\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:29:13-31:52
+421                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+421-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fa44c14186a683d5bc2209030e013c3e\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:30:17-78
+422                android:value="androidx.startup" />
+422-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fa44c14186a683d5bc2209030e013c3e\transformed\jetified-lifecycle-process-2.7.0\AndroidManifest.xml:31:17-49
+423            <meta-data
+423-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
+424                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+424-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
+425                android:value="androidx.startup" />
+425-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
+426        </provider>
+427
+428        <meta-data
+428-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\252b6d729034d9777830e368b1fe3d86\transformed\jetified-play-services-basement-18.4.0\AndroidManifest.xml:6:9-122
+429            android:name="com.google.android.gms.version"
+429-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\252b6d729034d9777830e368b1fe3d86\transformed\jetified-play-services-basement-18.4.0\AndroidManifest.xml:6:20-65
+430            android:value="@integer/google_play_services_version" />
+430-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\252b6d729034d9777830e368b1fe3d86\transformed\jetified-play-services-basement-18.4.0\AndroidManifest.xml:6:66-119
+431
+432        <provider
+432-->[com.squareup.picasso:picasso:2.71828] C:\Users\rodri\.gradle\caches\8.12\transforms\9d4160cc76309a50fa0e6db75a94929b\transformed\jetified-picasso-2.71828\AndroidManifest.xml:8:9-11:40
+433            android:name="com.squareup.picasso.PicassoProvider"
+433-->[com.squareup.picasso:picasso:2.71828] C:\Users\rodri\.gradle\caches\8.12\transforms\9d4160cc76309a50fa0e6db75a94929b\transformed\jetified-picasso-2.71828\AndroidManifest.xml:9:13-64
+434            android:authorities="com.rodrigocostadev.store_connect.store_connect.com.squareup.picasso"
+434-->[com.squareup.picasso:picasso:2.71828] C:\Users\rodri\.gradle\caches\8.12\transforms\9d4160cc76309a50fa0e6db75a94929b\transformed\jetified-picasso-2.71828\AndroidManifest.xml:10:13-72
+435            android:exported="false" />
+435-->[com.squareup.picasso:picasso:2.71828] C:\Users\rodri\.gradle\caches\8.12\transforms\9d4160cc76309a50fa0e6db75a94929b\transformed\jetified-picasso-2.71828\AndroidManifest.xml:11:13-37
+436
+437        <receiver
+437-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
+438            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+438-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
+439            android:directBootAware="false"
+439-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
+440            android:enabled="true"
+440-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
+441            android:exported="true"
+441-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
+442            android:permission="android.permission.DUMP" >
+442-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
+443            <intent-filter>
+443-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
+444                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+444-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
+444-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
+445            </intent-filter>
+446            <intent-filter>
+446-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
+447                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+447-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
+447-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
+448            </intent-filter>
+449            <intent-filter>
+449-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
+450                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+450-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
+450-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
+451            </intent-filter>
+452            <intent-filter>
+452-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
+453                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+453-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
+453-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\rodri\.gradle\caches\8.12\transforms\fba97832fa31299ff872f93cac9e032f\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:50:25-92
+454            </intent-filter>
+455        </receiver> <!-- The activities will be merged into the manifest of the hosting app. -->
+456        <activity
+456-->[com.google.android.play:core-common:2.0.3] C:\Users\rodri\.gradle\caches\8.12\transforms\f2f87cf62e8421b8255e93c249633e08\transformed\jetified-core-common-2.0.3\AndroidManifest.xml:14:9-18:65
+457            android:name="com.google.android.play.core.common.PlayCoreDialogWrapperActivity"
+457-->[com.google.android.play:core-common:2.0.3] C:\Users\rodri\.gradle\caches\8.12\transforms\f2f87cf62e8421b8255e93c249633e08\transformed\jetified-core-common-2.0.3\AndroidManifest.xml:15:13-93
+458            android:exported="false"
+458-->[com.google.android.play:core-common:2.0.3] C:\Users\rodri\.gradle\caches\8.12\transforms\f2f87cf62e8421b8255e93c249633e08\transformed\jetified-core-common-2.0.3\AndroidManifest.xml:16:13-37
+459            android:stateNotNeeded="true"
+459-->[com.google.android.play:core-common:2.0.3] C:\Users\rodri\.gradle\caches\8.12\transforms\f2f87cf62e8421b8255e93c249633e08\transformed\jetified-core-common-2.0.3\AndroidManifest.xml:17:13-42
+460            android:theme="@style/Theme.PlayCore.Transparent" />
+460-->[com.google.android.play:core-common:2.0.3] C:\Users\rodri\.gradle\caches\8.12\transforms\f2f87cf62e8421b8255e93c249633e08\transformed\jetified-core-common-2.0.3\AndroidManifest.xml:18:13-62
+461    </application>
+462
+463</manifest>

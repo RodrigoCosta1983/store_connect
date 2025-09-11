@@ -1,0 +1,463 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.rodrigocostadev.store_connect.store_connect"
+    android:versionCode="1"
+    android:versionName="1.0" >
+
+    <uses-sdk
+        android:minSdkVersion="23"
+        android:targetSdkVersion="35" />
+    <!--
+     Required to query activities that can process text, see:
+         https://developer.android.com/training/package-visibility and
+         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+
+         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+
+            <data android:mimeType="text/plain" />
+        </intent>
+    </queries>
+
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission
+        android:name="android.permission.VIBRATE"
+        android:required="false" />
+
+    <uses-feature
+        android:name="android.hardware.location.gps"
+        android:required="false" />
+
+    <uses-permission android:name="android.permission.WAKE_LOCK" /> <!-- Required by older versions of Google Play services to create IID tokens -->
+    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" />
+    <uses-permission android:name="com.google.android.providers.gsf.permission.READ_GSERVICES" />
+
+    <permission
+        android:name="com.rodrigocostadev.store_connect.store_connect.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="com.rodrigocostadev.store_connect.store_connect.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+
+    <application
+        android:name="android.app.Application"
+        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+        android:debuggable="true"
+        android:extractNativeLibs="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="store_connect"
+        android:supportsRtl="true" >
+        <activity
+            android:name="com.rodrigocostadev.store_connect.store_connect.MainActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:exported="true"
+            android:hardwareAccelerated="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:windowSoftInputMode="adjustResize" >
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+
+        <service
+            android:name="com.google.firebase.components.ComponentDiscoveryService"
+            android:directBootAware="true"
+            android:exported="false" >
+            <meta-data
+                android:name="com.google.firebase.components:io.flutter.plugins.firebase.functions.FlutterFirebaseAppRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:io.flutter.plugins.firebase.auth.FlutterFirebaseAuthRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:io.flutter.plugins.firebase.firestore.FlutterFirebaseFirestoreRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:io.flutter.plugins.firebase.storage.FlutterFirebaseAppRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:io.flutter.plugins.firebase.core.FlutterFirebaseCoreRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.auth.FirebaseAuthRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.firestore.FirebaseFirestoreKtxRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.firestore.FirestoreRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.functions.FirebaseFunctionsKtxRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.functions.FunctionsRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.storage.FirebaseStorageKtxRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.storage.StorageRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.appcheck.FirebaseAppCheckKtxRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.appcheck.FirebaseAppCheckRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.iid.Registrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsKtxRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.ktx.FirebaseCommonLegacyRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+            <meta-data
+                android:name="com.google.firebase.components:com.google.firebase.FirebaseCommonKtxRegistrar"
+                android:value="com.google.firebase.components.ComponentRegistrar" />
+        </service>
+
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.payment_methods.PaymentMethodsActivity"
+            android:exported="false"
+            android:label="@string/px_title_activity_payment_methods"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.bank_deals.BankDealsActivity"
+            android:exported="false"
+            android:label="@string/px_title_activity_bank_deals"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.TermsAndConditionsActivity"
+            android:exported="false"
+            android:label="@string/px_title_activity_terms_and_conditions"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.checkout.CheckoutActivity"
+            android:exported="true"
+            android:label=""
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar"
+            android:windowSoftInputMode="adjustResize" >
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="px"
+                    android:path="/one_tap"
+                    android:scheme="mercadopago" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="px"
+                    android:path="/one_tap"
+                    android:scheme="meli" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.guessing_card.GuessingCardActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.payment_vault.PaymentVaultActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.installments.InstallmentsActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.IssuersActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.cardvault.CardVaultActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.ErrorActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.payment_result.PaymentResultActivity"
+            android:exported="false"
+            android:label=""
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.SecurityCodeActivity"
+            android:exported="false"
+            android:label=""
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar"
+            android:windowSoftInputMode="stateVisible" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.PaymentTypesActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.review_payment_methods.ReviewPaymentMethodsActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.payer_information.PayerInformationActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.plugins.PaymentProcessorActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.business_result.BusinessPaymentResultActivity"
+            android:exported="false"
+            android:label=""
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.review_and_confirm.ReviewAndConfirmActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.bank_deal_detail.BankDealDetailActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/Theme.MercadoPagoTheme.NoActionBar" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.guessing_card.card_association_result.CardAssociationResultSuccessActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/ToolbarTransparentTheme" />
+        <activity
+            android:name="com.mercadopago.android.px.internal.features.guessing_card.card_association_result.CardAssociationResultErrorActivity"
+            android:exported="false"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/ToolbarTransparentTheme" />
+
+        <provider
+            android:name="com.mercadopago.android.px.internal.di.PxCheckoutInitProvider"
+            android:authorities="com.rodrigocostadev.store_connect.store_connect.px.provider"
+            android:exported="false" />
+
+        <activity
+            android:name="com.google.firebase.auth.internal.GenericIdpActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" >
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="firebase.auth"
+                    android:path="/"
+                    android:scheme="genericidp" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="com.google.firebase.auth.internal.RecaptchaActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" >
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="firebase.auth"
+                    android:path="/"
+                    android:scheme="recaptcha" />
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name="io.flutter.plugins.imagepicker.ImagePickerFileProvider"
+            android:authorities="com.rodrigocostadev.store_connect.store_connect.flutter.image_provider"
+            android:exported="false"
+            android:grantUriPermissions="true" >
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/flutter_image_picker_file_paths" />
+        </provider> <!-- Trigger Google Play services to install the backported photo picker module. -->
+        <service
+            android:name="com.google.android.gms.metadata.ModuleDependencies"
+            android:enabled="false"
+            android:exported="false" >
+            <intent-filter>
+                <action android:name="com.google.android.gms.metadata.MODULE_DEPENDENCIES" />
+            </intent-filter>
+
+            <meta-data
+                android:name="photopicker_activity:0:required"
+                android:value="" />
+        </service>
+
+        <activity
+            android:name="io.flutter.plugins.urllauncher.WebViewActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
+
+        <uses-library
+            android:name="androidx.window.extensions"
+            android:required="false" />
+        <uses-library
+            android:name="androidx.window.sidecar"
+            android:required="false" />
+
+        <activity
+            android:name="com.mercadolibre.android.cardform.presentation.ui.CardFormActivity"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/CardFormStyle"
+            android:windowSoftInputMode="adjustResize" >
+        </activity>
+        <activity
+            android:name="com.mercadolibre.android.cardform.presentation.ui.CardFormWebActivity"
+            android:screenOrientation="sensorPortrait"
+            android:theme="@style/CardFormStyle"
+            android:windowSoftInputMode="adjustResize" />
+        <activity android:name="com.mercadolibre.android.ui.activities.LayoutUtilsActivity" >
+        </activity>
+        <activity android:name="com.mercadolibre.android.ui.activities.MLImageTestActivity" />
+
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="com.rodrigocostadev.store_connect.store_connect.firebaseinitprovider"
+            android:directBootAware="true"
+            android:exported="false"
+            android:initOrder="100" />
+
+        <service
+            android:name="androidx.credentials.playservices.CredentialProviderMetadataHolder"
+            android:enabled="true"
+            android:exported="false" >
+            <meta-data
+                android:name="androidx.credentials.CREDENTIAL_PROVIDER_KEY"
+                android:value="androidx.credentials.playservices.CredentialProviderPlayServicesImpl" />
+        </service>
+
+        <activity
+            android:name="androidx.credentials.playservices.HiddenActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:enabled="true"
+            android:exported="false"
+            android:fitsSystemWindows="true"
+            android:theme="@style/Theme.Hidden" >
+        </activity>
+        <activity
+            android:name="com.google.android.gms.auth.api.signin.internal.SignInHubActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <!--
+            Service handling Google Sign-In user revocation. For apps that do not integrate with
+            Google Sign-In, this service will never be started.
+        -->
+        <service
+            android:name="com.google.android.gms.auth.api.signin.RevocationBoundService"
+            android:exported="true"
+            android:permission="com.google.android.gms.auth.api.signin.permission.REVOCATION_NOTIFICATION"
+            android:visibleToInstantApps="true" />
+
+        <activity
+            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="com.rodrigocostadev.store_connect.store_connect.androidx-startup"
+            android:exported="false" >
+            <meta-data
+                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+                android:value="androidx.startup" />
+            <meta-data
+                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+                android:value="androidx.startup" />
+        </provider>
+
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
+
+        <provider
+            android:name="com.squareup.picasso.PicassoProvider"
+            android:authorities="com.rodrigocostadev.store_connect.store_connect.com.squareup.picasso"
+            android:exported="false" />
+
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            android:directBootAware="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.DUMP" >
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+            </intent-filter>
+        </receiver> <!-- The activities will be merged into the manifest of the hosting app. -->
+        <activity
+            android:name="com.google.android.play.core.common.PlayCoreDialogWrapperActivity"
+            android:exported="false"
+            android:stateNotNeeded="true"
+            android:theme="@style/Theme.PlayCore.Transparent" />
+    </application>
+
+</manifest>
