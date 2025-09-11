@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '../payment_screen.dart';
 
 class SubscriptionManagementScreen extends StatelessWidget {
   final String storeId;
@@ -100,12 +103,27 @@ class SubscriptionManagementScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
+                      // ***** INÍCIO DA ALTERAÇÃO *****
                       onPressed: () {
-                        // Nosso próximo passo será aqui!
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('TODO: Chamar Mercado Pago')),
-                        );
+                        // Pega o usuário logado atualmente
+                        final user = FirebaseAuth.instance.currentUser;
+
+                        // Garante que o usuário não é nulo antes de navegar
+                        if (user != null) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              // Passa o ID do usuário para a PaymentScreen
+                              builder: (context) => PaymentScreen(userId: user.uid),
+                            ),
+                          );
+                        } else {
+                          // Mostra um erro se, por algum motivo, o usuário não estiver logado
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Erro: Usuário não autenticado.')),
+                          );
+                        }
                       },
+                      // ***** FIM DA ALTERAÇÃO *****
                     ),
                   ),
                 const SizedBox(height: 20),
