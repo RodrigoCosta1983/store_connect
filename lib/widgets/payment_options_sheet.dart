@@ -220,6 +220,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
             ListTile(
               leading: const Icon(Icons.person_add_alt_1, size: 30, color: Colors.orange),
               title: const Text('Fiado / A Prazo', style: TextStyle(fontSize: 18)),
+
               // --- LÓGICA DE SELEÇÃO ÚNICA IMPLEMENTADA AQUI ---
               onTap: () {
                 Navigator.of(context).pop(); // Fecha o BottomSheet de pagamento primeiro
