@@ -2,15 +2,18 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:store_connect/screens/subscription/subscription_management_screen.dart';
 
 class SubscriptionScreen extends StatelessWidget {
   final String storeId;
   const SubscriptionScreen({super.key, required this.storeId});
 
   void _manageSubscription(BuildContext context) {
-    // TODO: Adicionar o link de pagamento do Mercado Pago aqui na Fase 2
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('A integração com o pagamento será adicionada em breve!')),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        // Navega para a tela de gerenciamento, passando o ID da loja
+        builder: (context) => SubscriptionManagementScreen(storeId: storeId),
+      ),
     );
   }
 

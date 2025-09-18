@@ -13,6 +13,8 @@ class SaleOrder {
   final bool isPaid;
   final String paymentMethod;
   final DateTime? dueDate;
+  final String notes; // <-- 1. CAMPO ADICIONADO
+  final String storeId;
 
   SaleOrder({
     required this.id,
@@ -24,6 +26,8 @@ class SaleOrder {
     required this.isPaid,
     required this.paymentMethod,
     this.dueDate,
+    required this.notes, // <-- 2. CAMPO ADICIONADO AO CONSTRUTOR
+    required this.storeId,
   });
 
   factory SaleOrder.fromFirestore(DocumentSnapshot doc) {
@@ -37,13 +41,14 @@ class SaleOrder {
       id: doc.id,
       totalAmount: (data['totalAmount'] as num? ?? 0).toDouble(),
       products: loadedProducts,
-      // CORRIGIDO: Adicionada a verificação de nulo para createdAt
       createdAt: (data['createdAt'] as Timestamp? ?? Timestamp.now()).toDate(),
       customerId: data['customerId'],
       customerName: data['customerName'],
       isPaid: data['isPaid'] ?? false,
       paymentMethod: data['paymentMethod'] ?? 'Não informado',
       dueDate: data['dueDate'] != null ? (data['dueDate'] as Timestamp).toDate() : null,
+      notes: data['notes'] ?? '', // <-- 3. CAMPO CARREGADO DO FIREBASE
+      storeId: data['storeId'] ?? '',
     );
   }
 }

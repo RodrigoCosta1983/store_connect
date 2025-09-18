@@ -35,7 +35,7 @@ class _AbcReportScreenState extends State<AbcReportScreen> {
       startDate = DateTime.now().subtract(const Duration(days: 30));
     }
     setState(() {
-      _abcAnalysisFuture = salesProvider.calculateAbcAnalysis(storeId: widget.storeId, startDate: startDate);
+      _abcAnalysisFuture = salesProvider.calculateAbcAnalysis(startDate: startDate);
     });
   }
 

@@ -6,38 +6,49 @@ import 'package:store_connect/models/cart_item_model.dart';
 import 'package:store_connect/models/customer_model.dart';
 import 'package:store_connect/models/sale_order_model.dart';
 import 'package:store_connect/models/abc_product_model.dart';
+import 'cash_flow_provider.dart';
 
 class SalesProvider with ChangeNotifier {
   var isLoading = false;
+  String? _storeId; // Variável interna para guardar o ID da loja
+
+  // Construtor agora é simples e não exige mais o storeId
+  SalesProvider();
+
+  // Novo método para atualizar o storeId após o login
+  void updateStoreId(String newId) {
+    _storeId = newId;
+    notifyListeners(); // Notifica caso alguma UI dependa de saber se o ID já existe
+  }
 
   Future<void> addOrder({
-    required String storeId,
     required List<CartItem> cartProducts,
     required double total,
     required Customer customer,
     required DateTime dueDate,
     required String notes,
   }) async {
+    if (_storeId == null) throw Exception("Store ID não definido no SalesProvider.");
+
     isLoading = true;
     notifyListeners();
 
     try {
       await FirebaseFirestore.instance
-          .collection('stores').doc(storeId)
+          .collection('stores').doc(_storeId) // Usa a variável interna
           .collection('sales').add({
         'totalAmount': total,
         'products': cartProducts.map((cp) => cp.toMap()).toList(),
         'createdAt': Timestamp.now(),
-        'storeId': storeId,
+        'storeId': _storeId,
         'notes': notes,
         'paymentMethod': 'Fiado',
-        'isPaid': false, // Vendas fiado começam como não pagas
-        'dueDate': Timestamp.fromDate(dueDate), // Data de vencimento
+        'isPaid': false,
+        'dueDate': Timestamp.fromDate(dueDate),
         'customerId': customer.id,
         'customerName': customer.name,
       });
     } catch (error) {
-      // Lança o erro para ser tratado na UI
       throw Exception(error.toString());
     } finally {
       isLoading = false;
@@ -46,13 +57,13 @@ class SalesProvider with ChangeNotifier {
   }
 
   Future<List<AbcProduct>> calculateAbcAnalysis({
-    required String storeId,
     DateTime? startDate,
   }) async {
-    // 1. Busca as vendas no período especificado
+    if (_storeId == null) throw Exception("Store ID não definido no SalesProvider.");
+
     Query salesQuery = FirebaseFirestore.instance
         .collection('stores')
-        .doc(storeId)
+        .doc(_storeId) // Usa a variável interna
         .collection('sales');
 
     if (startDate != null) {
@@ -61,7 +72,6 @@ class SalesProvider with ChangeNotifier {
     final salesSnapshot = await salesQuery.get();
     if (salesSnapshot.docs.isEmpty) return [];
 
-    // 2. Agrega os dados: soma a receita e quantidade por produto
     final Map<String, AbcProduct> productData = {};
     double overallTotalRevenue = 0;
 
@@ -69,38 +79,48 @@ class SalesProvider with ChangeNotifier {
       final sale = SaleOrder.fromFirestore(doc);
       for (var item in sale.products) {
         final revenue = item.price * item.quantity;
-
         productData.putIfAbsent(
           item.productId,
               () => AbcProduct(productId: item.productId, productName: item.name),
         );
-
         productData[item.productId]!.totalRevenue += revenue;
         productData[item.productId]!.totalQuantity += item.quantity;
         overallTotalRevenue += revenue;
       }
     }
 
-    // 3. Ordena os produtos por receita (do maior para o menor)
     final sortedProducts = productData.values.toList()
       ..sort((a, b) => b.totalRevenue.compareTo(a.totalRevenue));
 
-    // 4. Calcula a porcentagem acumulada e classifica em A, B ou C
     double cumulativePercentage = 0;
     for (var product in sortedProducts) {
       product.percentageOfTotal = (product.totalRevenue / overallTotalRevenue) * 100;
       cumulativePercentage += product.percentageOfTotal;
-
-      if (cumulativePercentage <= 80) {
-        product.classification = 'A'; // Produtos mais importantes (80% da receita)
-      } else if (cumulativePercentage <= 95) {
-        product.classification = 'B'; // Produtos de importância média (próximos 15% da receita)
-      } else {
-        product.classification = 'C'; // Produtos menos importantes (últimos 5% da receita)
-      }
+      if (cumulativePercentage <= 80) product.classification = 'A';
+      else if (cumulativePercentage <= 95) product.classification = 'B';
+      else product.classification = 'C';
     }
-
     return sortedProducts;
   }
 
+  // --- MÉTODO ADICIONADO QUE ESTAVA FALTANDO ---
+  Future<void> markOrderAsPaid(String orderId, double amount, CashFlowProvider cashFlowProvider) async {
+    if (_storeId == null) throw Exception("Store ID não definido no SalesProvider.");
+
+    try {
+      final orderRef = FirebaseFirestore.instance.collection('stores').doc(_storeId).collection('sales').doc(orderId);
+      await orderRef.update({'isPaid': true});
+
+      await cashFlowProvider.addCashFlowEntry(
+        description: 'Recebimento Venda #${orderId.substring(0, 6)}',
+        amount: amount,
+        type: 'Entrada',
+        storeId: _storeId!,
+      );
+      notifyListeners();
+    } catch (error) {
+      print("Erro ao marcar a venda como paga: $error");
+      throw error;
+    }
+  }
 }
