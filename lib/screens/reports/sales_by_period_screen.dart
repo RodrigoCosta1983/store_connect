@@ -143,10 +143,8 @@ class _SalesByPeriodScreenState extends State<SalesByPeriodScreen> {
                 : ListView.builder(
               itemCount: _sales.length,
               itemBuilder: (ctx, index) {
-                return OrderItemWidget(
-                  storeId: widget.storeId,
-                  order: _sales[index],
-                );
+                final sale = _sales[index];
+                return OrderItemWidget(order: sale, storeId: widget.storeId);
               },
             ),
           ),

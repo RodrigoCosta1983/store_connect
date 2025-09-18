@@ -3,9 +3,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart'; // <-- 1. IMPORT ADICIONADO
+import 'package:store_connect/providers/sales_provider.dart'; // <-- 1. IMPORT ADICIONADO
 import 'package:store_connect/screens/auth/login_screen.dart';
-import 'package:store_connect/screens/home_screen.dart'; // Mantemos este para o redirecionamento
-import 'package:store_connect/screens/subscription_screen.dart'; // NOVO: Importa a tela de assinatura
+import 'package:store_connect/screens/home_screen.dart';
+import 'package:store_connect/screens/subscription_screen.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -23,7 +25,7 @@ class AuthGate extends StatelessWidget {
           return const LoginScreen();
         }
 
-        // Se o usuário está logado, verificamos o documento dele e o da loja
+        // Se o usuário está logado, verificamos o documento dele
         return FutureBuilder<DocumentSnapshot>(
           future: FirebaseFirestore.instance.collection('users').doc(snapshot.data!.uid).get(),
           builder: (context, userDocSnapshot) {
@@ -42,7 +44,12 @@ class AuthGate extends StatelessWidget {
               return const Scaffold(body: Center(child: Text('Nenhuma loja associada a este usuário.')));
             }
 
-            // --- NOVA LÓGICA DE VERIFICAÇÃO DE ASSINATURA ---
+            // --- 2. LINHA ADICIONADA ---
+            // Este é o momento perfeito para avisar o SalesProvider qual é o ID da loja.
+            // Ele guardará essa informação para ser usada em todas as operações de venda.
+            Provider.of<SalesProvider>(context, listen: false).updateStoreId(storeId);
+
+            // A lógica de verificação da assinatura continua a mesma
             return FutureBuilder<DocumentSnapshot>(
               future: FirebaseFirestore.instance.collection('stores').doc(storeId).get(),
               builder: (context, storeDocSnapshot) {
@@ -57,17 +64,13 @@ class AuthGate extends StatelessWidget {
                 final storeData = storeDocSnapshot.data!.data() as Map<String, dynamic>;
                 final subscriptionStatus = storeData['subscriptionStatus'] as String?;
 
-                // Se o status for 'active', libera o acesso
                 if (subscriptionStatus == 'active') {
                   return HomeScreen(storeId: storeId);
-                }
-                // Caso contrário, mostra a tela de assinatura
-                else {
+                } else {
                   return SubscriptionScreen(storeId: storeId);
                 }
               },
             );
-            // --- FIM DA NOVA LÓGICA ---
           },
         );
       },
