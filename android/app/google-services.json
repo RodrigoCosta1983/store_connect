@@ -7,17 +7,17 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:294766590074:android:82c38b9f3a34123dafe3c3",
+        "mobilesdk_app_id": "1:294766590074:android:c8960029155f64b5afe3c3",
         "android_client_info": {
-          "package_name": "com.rodrigocostadev.store_connect.store_connect"
+          "package_name": "com.storeconnect.app"
         }
       },
       "oauth_client": [
         {
-          "client_id": "294766590074-bk6k6p4agud2hagnqecc842q2lhh7q8a.apps.googleusercontent.com",
+          "client_id": "294766590074-h0k5fdf8rssj8bf6mbomlj48dprjlb8o.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.rodrigocostadev.store_connect.store_connect",
+            "package_name": "com.storeconnect.app",
             "certificate_hash": "054be68aec121cf6d39380e25272dda96f305cbb"
           }
         },
