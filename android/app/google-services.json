@@ -12,7 +12,20 @@
           "package_name": "com.rodrigocostadev.store_connect.store_connect"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "294766590074-bk6k6p4agud2hagnqecc842q2lhh7q8a.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rodrigocostadev.store_connect.store_connect",
+            "certificate_hash": "054be68aec121cf6d39380e25272dda96f305cbb"
+          }
+        },
+        {
+          "client_id": "294766590074-s5uc0aaaege2em5vsg8j5mimih6at2i1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA3glXnB8XDm1IUFfKUGmaNcULnUZF_hrM"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "294766590074-s5uc0aaaege2em5vsg8j5mimih6at2i1.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "294766590074-10o4jc70stlt45db2jlco38aoi9m7qvi.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.rodrigocostadev.storeconnect.storeConnect"
+              }
+            }
+          ]
         }
       }
     }
