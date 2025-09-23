@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "294766590074-hisk5laubc2j012cl2cmldbt8u2qe71k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.storeconnect.app",
+            "certificate_hash": "668d016345a0a10fb578ee174775ae65a630c8bb"
+          }
+        },
+        {
           "client_id": "294766590074-s5uc0aaaege2em5vsg8j5mimih6at2i1.apps.googleusercontent.com",
           "client_type": 3
         }
