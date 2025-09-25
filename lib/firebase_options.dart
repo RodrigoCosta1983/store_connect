@@ -72,4 +72,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'store-connect-app.firebasestorage.app',
     iosBundleId: 'com.rodrigocostadev.storeconnect.storeConnect',
   );
+
 }

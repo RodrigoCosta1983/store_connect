@@ -4,8 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:store_connect/screens/auth/login_screen.dart';
-import 'package:store_connect/screens/home_screen.dart'; // Mantemos este para o redirecionamento
-import 'package:store_connect/screens/subscription_screen.dart'; // NOVO: Importa a tela de assinatura
+import 'package:store_connect/screens/home_screen.dart';
+import 'package:store_connect/screens/subscription_screen.dart';
+// Importamos a tela de criação de loja, que será nosso novo destino
+import 'package:store_connect/screens/auth/create_store_screen.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -23,7 +25,7 @@ class AuthGate extends StatelessWidget {
           return const LoginScreen();
         }
 
-        // Se o usuário está logado, verificamos o documento dele e o da loja
+        // Se o usuário está logado, verificamos se ele já tem um registro no nosso banco
         return FutureBuilder<DocumentSnapshot>(
           future: FirebaseFirestore.instance.collection('users').doc(snapshot.data!.uid).get(),
           builder: (context, userDocSnapshot) {
@@ -31,7 +33,15 @@ class AuthGate extends StatelessWidget {
               return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
 
-            if (userDocSnapshot.hasError || !userDocSnapshot.data!.exists) {
+            // --- LÓGICA CORRIGIDA AQUI ---
+            // Se o documento do usuário NÃO EXISTE, ele é um novo usuário.
+            // Direcionamos para a tela de criação de loja.
+            if (!userDocSnapshot.data!.exists) {
+              return const CreateStoreScreen();
+            }
+            // ---------------------------------
+
+            if (userDocSnapshot.hasError) {
               return const Scaffold(body: Center(child: Text('Erro ao carregar dados do usuário.')));
             }
 
@@ -42,7 +52,7 @@ class AuthGate extends StatelessWidget {
               return const Scaffold(body: Center(child: Text('Nenhuma loja associada a este usuário.')));
             }
 
-            // --- NOVA LÓGICA DE VERIFICAÇÃO DE ASSINATURA ---
+            // A lógica de verificação de assinatura continua a mesma
             return FutureBuilder<DocumentSnapshot>(
               future: FirebaseFirestore.instance.collection('stores').doc(storeId).get(),
               builder: (context, storeDocSnapshot) {
@@ -57,17 +67,13 @@ class AuthGate extends StatelessWidget {
                 final storeData = storeDocSnapshot.data!.data() as Map<String, dynamic>;
                 final subscriptionStatus = storeData['subscriptionStatus'] as String?;
 
-                // Se o status for 'active', libera o acesso
                 if (subscriptionStatus == 'active') {
                   return HomeScreen(storeId: storeId);
-                }
-                // Caso contrário, mostra a tela de assinatura
-                else {
+                } else {
                   return SubscriptionScreen(storeId: storeId);
                 }
               },
             );
-            // --- FIM DA NOVA LÓGICA ---
           },
         );
       },

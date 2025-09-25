@@ -6,7 +6,6 @@ import 'package:store_connect/models/customer_model.dart';
 import 'package:store_connect/providers/cart_provider.dart';
 import 'package:store_connect/widgets/confirm_fiado_dialog.dart';
 
-
 class PaymentOptionsSheet extends StatefulWidget {
   final String storeId;
   final String notes;
@@ -36,8 +35,6 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     }
   }
 
-  // dentro da classe _PaymentOptionsSheetState
-
   Future<void> _handleInstantSale(String paymentMethod) async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
@@ -46,10 +43,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     final firestore = FirebaseFirestore.instance;
 
     try {
-      // 1. Inicia um Batched Write
       final batch = firestore.batch();
-
-      // 2. Prepara a criação do documento de venda
       final saleDocRef = firestore.collection('stores').doc(widget.storeId).collection('sales').doc();
       final customer = cart.selectedCustomer;
 
@@ -65,14 +59,11 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
         'customerName': customer?.name,
       });
 
-      // 3. Prepara a atualização do estoque para cada produto
       for (final cartItem in cart.items.values) {
         final productRef = firestore.collection('stores').doc(widget.storeId).collection('products').doc(cartItem.productId);
-        // FieldValue.increment com valor negativo para subtrair
         batch.update(productRef, {'quantidade': FieldValue.increment(-cartItem.quantity)});
       }
 
-      // 4. Executa todas as operações de uma só vez
       await batch.commit();
 
       cart.clear();
@@ -126,7 +117,24 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     );
   }
 
-  // Esta função agora serve apenas como um fallback
+  // --- FUNÇÃO CENTRAL PARA O PROCESSO FIADO ---
+  Future<void> _startFiadoProcess(Customer customer) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => ConfirmFiadoDialog(
+        storeId: widget.storeId,
+        customer: customer,
+        notes: widget.notes,
+      ),
+    );
+
+    if (result == true && mounted) {
+      Navigator.of(context).pop(true);
+    }
+  }
+
+  // --- FUNÇÃO PARA SELECIONAR CLIENTE ---
   void _selectCustomerForFiado() {
     showDialog(
       context: context,
@@ -154,15 +162,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
                       title: Text(customer.name),
                       onTap: () {
                         Navigator.of(ctx).pop(); // Fecha o diálogo de seleção
-                        // Abre o diálogo de confirmação do fiado
-                        showDialog(
-                          context: context,
-                          builder: (dialogCtx) => ConfirmFiadoDialog(
-                            storeId: widget.storeId,
-                            customer: customer,
-                            notes: widget.notes,
-                          ),
-                        );
+                        _startFiadoProcess(customer); // Chama a função central
                       },
                     );
                   },
@@ -190,7 +190,6 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
       );
     }
 
-    // Pega o CartProvider para usar na lógica do "Fiado"
     final cart = Provider.of<CartProvider>(context, listen: false);
 
     return Container(
@@ -220,24 +219,13 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
             ListTile(
               leading: const Icon(Icons.person_add_alt_1, size: 30, color: Colors.orange),
               title: const Text('Fiado / A Prazo', style: TextStyle(fontSize: 18)),
-              // --- LÓGICA DE SELEÇÃO ÚNICA IMPLEMENTADA AQUI ---
+              // --- LÓGICA CORRIGIDA E SIMPLIFICADA ---
               onTap: () {
-                Navigator.of(context).pop(); // Fecha o BottomSheet de pagamento primeiro
-
                 final selectedCustomer = cart.selectedCustomer;
 
                 if (selectedCustomer != null) {
-                  // Se um cliente JÁ FOI selecionado na tela do carrinho, usa ele diretamente
-                  showDialog(
-                    context: context,
-                    builder: (dialogCtx) => ConfirmFiadoDialog(
-                      storeId: widget.storeId,
-                      customer: selectedCustomer,
-                      notes: widget.notes,
-                    ),
-                  );
+                  _startFiadoProcess(selectedCustomer);
                 } else {
-                  // Se NENHUM cliente foi selecionado, mostra a lista para escolher um
                   _selectCustomerForFiado();
                 }
               },

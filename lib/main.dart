@@ -1,4 +1,6 @@
-import 'dart:async'; // Importe para usar StreamSubscription
+// lib/main.dart
+
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,8 +12,12 @@ import 'package:store_connect/providers/theme_provider.dart';
 import 'package:store_connect/screens/auth/auth_gate.dart';
 import 'package:store_connect/themes/app_theme.dart';
 import 'firebase_options.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
-// Chave global para acessar o estado do navegador de qualquer lugar
+// --- ADICIONADO ---
+// Importa a biblioteca para verificar a plataforma (web, mobile, etc.)
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
@@ -21,6 +27,13 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
   }
+
+  // --- ALTERAÇÃO PRINCIPAL AQUI ---
+  // Só inicializa a Stripe se NÃO estivermos na web
+  if (!kIsWeb) {
+    Stripe.publishableKey = 'pk_test_51RtadZF7qAVyn13s6gJurceEqlBHWNNd4xJdGqklUGjHMDfq8vWc2XzSGU4XtDOqAgVnGQYX4hztddfrWErMECa400jGYmKoX0';
+  }
+
   runApp(const MyApp());
 }
 
@@ -37,12 +50,8 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    // Inicia o 'ouvinte' do estado de autenticação
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((User? user) {
       if (user == null) {
-        // Se o usuário for nulo (logout), força a navegação para o AuthGate,
-        // que por sua vez mostrará a tela de Login.
-        // O `pushAndRemoveUntil` limpa todas as telas anteriores.
         navigatorKey.currentState?.pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const AuthGate()),
               (route) => false,
@@ -53,7 +62,6 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
-    // Cancela o 'ouvinte' para evitar vazamentos de memória
     _authSubscription.cancel();
     super.dispose();
   }
@@ -64,13 +72,13 @@ class _MyAppState extends State<MyApp> {
       providers: [
         ChangeNotifierProvider(create: (ctx) => ThemeProvider()),
         ChangeNotifierProvider(create: (ctx) => CartProvider()),
-        ChangeNotifierProvider(create: (ctx) => SalesProvider()),
         ChangeNotifierProvider(create: (ctx) => CashFlowProvider()),
+        ChangeNotifierProvider(create: (ctx) => SalesProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
-            navigatorKey: navigatorKey, // Atribui a chave global
+            navigatorKey: navigatorKey,
             title: 'StoreConnect',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,

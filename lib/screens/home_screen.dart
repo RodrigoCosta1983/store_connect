@@ -1,7 +1,9 @@
+// lib/screens/home_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:store_connect/screens/sales/new_sale_screen.dart'; // Import da tela de gestão
+import 'package:store_connect/screens/sales/new_sale_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final String storeId;
@@ -12,7 +14,18 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Minhas Lojas'),
+        title: StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('stores').doc(storeId).snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasData && snapshot.data!.exists) {
+                final storeData = snapshot.data!.data() as Map<String, dynamic>;
+                // LÓGICA ATUALIZADA: Tenta ler 'name', se não existir, tenta ler 'storeName'
+                final storeName = storeData['name'] ?? storeData['storeName'] ?? 'Minha Loja';
+                return Text(storeName);
+              }
+              return const Text('StoreConnect'); // Título padrão enquanto carrega
+            }
+        ),
         actions: [
           IconButton(
             tooltip: 'Sair',
@@ -34,7 +47,8 @@ class HomeScreen extends StatelessWidget {
           }
 
           final storeData = snapshot.data!.data() as Map<String, dynamic>;
-          final storeName = storeData['storeName'] ?? 'Nome da Loja Indisponível';
+          // LÓGICA ATUALIZADA: Tenta ler 'name', se não existir, tenta ler 'storeName'
+          final storeName = storeData['name'] ?? storeData['storeName'] ?? 'Nome da Loja Indisponível';
 
           return Center(
             child: Column(
@@ -58,8 +72,6 @@ class HomeScreen extends StatelessWidget {
                     textStyle: const TextStyle(fontSize: 18),
                   ),
                   onPressed: () {
-                    // A MÁGICA ACONTECE AQUI!
-                    // Navega para a tela principal do nosso módulo de gestão.
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (ctx) => NewSaleScreen(storeId: storeId),

@@ -1,15 +1,23 @@
+// android/app/build.gradle.kts
+
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
-    // START: FlutterFire Configuration
     id("com.google.gms.google-services")
-    // END: FlutterFire Configuration
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val keyPropertiesFile = rootProject.file("android/key.properties")
+val keyProperties = Properties()
+if (keyPropertiesFile.exists()) {
+    keyProperties.load(FileInputStream(keyPropertiesFile))
+}
+
 android {
-    namespace = "com.rodrigocostadev.store_connect.store_connect"
+    namespace = "com.storeconnect.app"
     compileSdk = 35
     ndkVersion = "27.0.12077973"
 
@@ -19,27 +27,44 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "11"
+    }
+
+    signingConfigs {
+        create("release") {
+            keyAlias = "storeconnectkey"
+            keyPassword = "Sophie#3891"
+            storeFile = file("storeconnect-release-key.jks")
+            storePassword = "Sophie#3891"
+        }
     }
 
     defaultConfig {
-        applicationId = "com.rodrigocostadev.store_connect.store_connect"
-        // ✅ 2. Change this line's value from 21 to 23
+        applicationId = "com.storeconnect.app"
         minSdk = 23
-        targetSdk = 34 // This value might be different for you, don't change it
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 35
+        versionCode = 5
+        versionName = "1.0.0"
+        multiDexEnabled = true
     }
 
     buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("androidx.multidex:multidex:2.0.1")
 }
