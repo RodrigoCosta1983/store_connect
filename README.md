@@ -110,7 +110,7 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 
 A próxima grande funcionalidade a ser implementada é a monetização do serviço, transformando o StoreConnect em um SaaS (Software as a Service).
 
-- **☑️ Integração com Mercado Pago para Cobrança de Assinaturas**
+- **☑️ Integração com Stripe para Cobrança de Assinaturas**
     - [ ] Desenvolvimento de um sistema de planos (ex: Básico, Pro) com diferentes limites ou funcionalidades.
     - [ ] Versão Web: Adaptar a aplicação para funcionar em navegadores, utilizando Stripe para o sistema de assinaturas web.
     - [ ] Desenvolvimento de **Cloud Functions** (lógica de backend no Firebase) para receber webhooks do Stripe, validar os pagamentos e atualizar o status da assinatura da loja no Firestore (ex: `subscriptionStatus: 'active'` ou `'expired'`).
@@ -265,7 +265,7 @@ The application was built on a solid foundation, focusing on essential features 
 
 The next major feature to be implemented is the monetization of the service, turning StoreConnect into a SaaS (Software as a Service).
 
-- **☑️ Mercado Pago Integration for Subscription Billing**
+- **☑️ Stripe Integration for Subscription Billing**
     - [ ] Development of a plan system (e.g., Basic, Pro) with different limits or features.
     - [ ] Web Version: Adapt the application to work in browsers, using Stripe for the web subscription system.
     - [ ] Development of **Cloud Functions** (Firebase backend logic) to receive webhooks from Stripe, validate payments, and update the store's subscription status in Firestore (e.g., `subscriptionStatus: 'active'` or `'expired'`).
