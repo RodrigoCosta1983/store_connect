@@ -51,6 +51,30 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
     - Funcionalidade segura para **alterar senha e e-mail** diretamente no app, com reautenticação para garantir a segurança.
 - **Autenticação Segura:** Fluxo completo de login e logout gerenciado pelo Firebase Auth e um `AuthGate` para proteger as rotas.
 
+### 🚀 Onboarding e Segurança
+- **Fluxo de Cadastro Completo:** Permite que novos usuários se cadastrem com E-mail/Senha ou Login com Google.
+
+- **Criação de Loja:** Onboarding guiado para que o novo usuário crie sua própria loja no sistema.
+
+- **Login Seguro e Moderno:**
+
+- Múltiplas opções de login (E-mail/Senha, Google).
+
+- Opção de "Lembrar-me" para salvar credenciais de forma segura.
+
+- Login com Biometria (digital ou facial) para acesso rápido e seguro, com opção de ativação nas configurações.
+
+- Gerenciamento de Perfil: O usuário pode editar seus dados e alterar sua senha com segurança.
+
+### 💰 Monetização (SaaS)
+- **Integração com Google Play Billing:** Sistema completo para gestão de assinaturas.
+
+- Tela de Assinatura: Interface que busca os planos cadastrados no Play Console e guia o usuário no processo de compra.
+
+- Validação em Tempo Real: O AuthGate verifica o status da assinatura e libera ou bloqueia o acesso ao app instantaneamente após a compra ou cancelamento.
+
+- Ambiente de Testes: Configuração completa para testar compras com contas de licença, sem cobranças reais.
+
 ## 📸 Telas do Aplicativo
 
 *(Instrução: Para adicionar suas imagens aqui, faça o upload delas para a pasta do seu projeto no GitHub e substitua as `URL_DA_SUA_IMAGEM_AQUI` pelo link da imagem)*
@@ -88,8 +112,8 @@ A próxima grande funcionalidade a ser implementada é a monetização do servi�
 
 - **☑️ Integração com Mercado Pago para Cobrança de Assinaturas**
     - [ ] Desenvolvimento de um sistema de planos (ex: Básico, Pro) com diferentes limites ou funcionalidades.
-    - [ ] Integração com a API do Mercado Pago para gerar links de pagamento ou cobranças recorrentes (assinaturas) para cada loja cadastrada.
-    - [ ] Desenvolvimento de **Cloud Functions** (lógica de backend no Firebase) para receber webhooks do Mercado Pago, validar os pagamentos e atualizar o status da assinatura da loja no Firestore (ex: `subscriptionStatus: 'active'` ou `'expired'`).
+    - [ ] Versão Web: Adaptar a aplicação para funcionar em navegadores, utilizando Stripe para o sistema de assinaturas web.
+    - [ ] Desenvolvimento de **Cloud Functions** (lógica de backend no Firebase) para receber webhooks do Stripe, validar os pagamentos e atualizar o status da assinatura da loja no Firestore (ex: `subscriptionStatus: 'active'` ou `'expired'`).
     - [ ] Lógica no `AuthGate` para bloquear o acesso às funcionalidades do app para lojas com assinatura pendente ou expirada.
 
 ## 🏁 Como Executar o Projeto
@@ -182,6 +206,30 @@ The application was built on a solid foundation, focusing on essential features 
     - Secure functionality to **change password and email** directly within the app, with re-authentication to ensure security.
 - **Secure Authentication:** A complete login and logout flow managed by Firebase Auth and an `AuthGate` to protect routes.
 
+### 🚀 Onboarding and Security
+- **Complete Registration Flow:** Allows new users to register with Email/Password or Google Login.
+
+- **Store Creation:** Guided onboarding for new users to create their own store in the system.
+
+- **Secure and Modern Login:**
+
+- Multiple login options (Email/Password, Google).
+
+- "Remember Me" option to securely save credentials.
+
+- Biometric login (fingerprint or facial) for quick and secure access, with an option to enable it in the settings.
+
+- Profile Management: Users can securely edit their data and change their password.
+
+### 💰 Monetization (SaaS)
+- **Integration with Google Play Billing:** Complete subscription management system.
+
+- Subscription Screen: Interface that searches for plans registered on the Play Console and guides the user through the purchase process.
+
+- Real-Time Validation: AuthGate checks subscription status and instantly grants or blocks access to the app after purchase or cancellation.
+
+- Test Environment: Full configuration for testing purchases with licensed accounts, without incurring any actual charges.
+
 ## 📸 App Screens
 
 *(Instruction: To add your images here, upload them to your project's folder on GitHub and replace the `URL_FOR_YOUR_IMAGE_HERE` with the image link)*
@@ -219,8 +267,8 @@ The next major feature to be implemented is the monetization of the service, tur
 
 - **☑️ Mercado Pago Integration for Subscription Billing**
     - [ ] Development of a plan system (e.g., Basic, Pro) with different limits or features.
-    - [ ] Integration with the Mercado Pago API to generate payment links or recurring charges (subscriptions) for each registered store.
-    - [ ] Development of **Cloud Functions** (Firebase backend logic) to receive webhooks from Mercado Pago, validate payments, and update the store's subscription status in Firestore (e.g., `subscriptionStatus: 'active'` or `'expired'`).
+    - [ ] Web Version: Adapt the application to work in browsers, using Stripe for the web subscription system.
+    - [ ] Development of **Cloud Functions** (Firebase backend logic) to receive webhooks from Stripe, validate payments, and update the store's subscription status in Firestore (e.g., `subscriptionStatus: 'active'` or `'expired'`).
     - [ ] Logic in the `AuthGate` to block access to the app's features for stores with a pending or expired subscription.
 
 ## 🏁 Getting Started
