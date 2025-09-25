@@ -272,6 +272,10 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
   }
 
   Widget _buildCustomerCard(Customer customer, DocumentSnapshot customerDoc, bool isDarkMode) {
+    // Define as cores dos ícones com base no tema
+    final editIconColor = isDarkMode ? Colors.white70 : Theme.of(context).primaryColor;
+    final deleteIconColor = isDarkMode ? Colors.red.shade300 : Theme.of(context).colorScheme.error;
+
     return Card(
       color: isDarkMode ? Colors.black.withOpacity(0.6) : Colors.white.withOpacity(0.8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -293,11 +297,13 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: Icon(Icons.edit, color: Theme.of(context).primaryColor),
+              icon: const Icon(Icons.edit),
+              color: editIconColor, // <-- COR APLICADA
               onPressed: () => _showCustomerDialog(customer: customerDoc),
             ),
             IconButton(
-              icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
+              icon: const Icon(Icons.delete),
+              color: deleteIconColor, // <-- COR APLICADA
               onPressed: () => _deleteCustomer(customer.id),
             ),
           ],

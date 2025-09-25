@@ -25,14 +25,12 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      // Se por algum motivo o usuário não estiver logado, volta para a tela de login
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (ctx) => const AuthGate()));
       return;
     }
 
     try {
       final firestore = FirebaseFirestore.instance;
-      // Usamos um batch para garantir que as duas operações ocorram juntas
       final batch = firestore.batch();
 
       // 1. Cria o documento da loja na coleção 'stores'
@@ -41,7 +39,7 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
         'name': _storeNameController.text.trim(),
         'ownerId': user.uid,
         'createdAt': Timestamp.now(),
-        'subscriptionStatus': 'inactive', // Começa como inativo
+        'subscriptionStatus': 'inactive',
       });
 
       // 2. Cria o documento do usuário na coleção 'users', ligando-o à loja
@@ -51,11 +49,8 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
         'storeId': storeRef.id,
       });
 
-      // Executa as duas operações
       await batch.commit();
 
-      // Se tudo deu certo, vai para o AuthGate, que vai ler os novos dados
-      // e direcionar para a tela de assinatura.
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (ctx) => const AuthGate()),
@@ -76,7 +71,29 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Crie Sua Loja')),
+      // --- APPBAR ATUALIZADA ---
+      appBar: AppBar(
+        title: const Text('Crie Sua Loja'),
+        // Remove a seta de "voltar" padrão para evitar confusão
+        automaticallyImplyLeading: false,
+        actions: [
+          // Adiciona um botão de "Sair" no canto superior direito
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Sair e voltar para o Login',
+            onPressed: () {
+              // 1. Desloga o usuário da conta recém-criada no Firebase Auth
+              FirebaseAuth.instance.signOut();
+
+              // 2. Garante que o usuário volte para a tela inicial de login/autenticação
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (ctx) => const AuthGate()),
+                    (route) => false,
+              );
+            },
+          ),
+        ],
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),

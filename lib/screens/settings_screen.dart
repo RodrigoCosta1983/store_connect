@@ -102,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: TextField(
           controller: _thresholdController,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Alertar quando estoque for ≤ a'),
+          decoration: const InputDecoration(labelText: 'Alertar quando estoque for maior ou igual a'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
