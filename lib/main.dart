@@ -9,11 +9,14 @@ import 'package:store_connect/providers/cart_provider.dart';
 import 'package:store_connect/providers/sales_provider.dart';
 import 'package:store_connect/providers/cash_flow_provider.dart';
 import 'package:store_connect/providers/theme_provider.dart';
-import 'package:store_connect/providers/subscription_provider.dart'; // <-- 1. IMPORTAMOS O NOVO PROVIDER
 import 'package:store_connect/screens/auth/auth_gate.dart';
 import 'package:store_connect/themes/app_theme.dart';
 import 'firebase_options.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+
+// --- ADICIONADO ---
+// Importa a biblioteca para verificar a plataforma (web, mobile, etc.)
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -25,7 +28,12 @@ void main() async {
     );
   }
 
-  Stripe.publishableKey = 'pk_test_51RtadZF7qAVyn13s6gJurceEqlBHWNNd4xJdGqklUGjHMDfq8vWc2XzSGU4XtDOqAgVnGQYX4hztddfrWErMECa400jGYmKoX0';
+  // --- ALTERAÇÃO PRINCIPAL AQUI ---
+  // Só inicializa a Stripe se NÃO estivermos na web
+  if (!kIsWeb) {
+    Stripe.publishableKey = 'pk_test_51RtadZF7qAVyn13s6gJurceEqlBHWNNd4xJdGqklUGjHMDfq8vWc2XzSGU4XtDOqAgVnGQYX4hztddfrWErMECa400jGYmKoX0';
+  }
+
   runApp(const MyApp());
 }
 
@@ -66,7 +74,6 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (ctx) => CartProvider()),
         ChangeNotifierProvider(create: (ctx) => CashFlowProvider()),
         ChangeNotifierProvider(create: (ctx) => SalesProvider()),
-        ChangeNotifierProvider(create: (ctx) => SubscriptionProvider()), // <-- 2. ADICIONAMOS O PROVIDER À LISTA
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {

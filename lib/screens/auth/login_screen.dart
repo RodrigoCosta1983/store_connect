@@ -2,6 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:store_connect/screens/auth/auth_gate.dart';
 import 'package:store_connect/screens/auth/signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -18,36 +22,138 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isPasswordVisible = false;
 
+  // --- NOVAS VARIÁVEIS ---
+  bool _rememberMe = false;
+  final _storage = const FlutterSecureStorage();
+  final LocalAuthentication _localAuth = LocalAuthentication();
+  bool _biometricLoginAvailable = false;
+
   @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _checkBiometricAvailability();
+    _loadCredentials();
+  }
+
+  // Verifica se o login com biometria está disponível e se há credenciais salvas
+  Future<void> _checkBiometricAvailability() async {
+    final hasBiometrics = await _localAuth.canCheckBiometrics || await _localAuth.isDeviceSupported();
+
+    // --- LÓGICA ATUALIZADA ---
+    // Agora verifica também se o usuário PERMITIU o uso da biometria nas configurações
+    final biometricsEnabled = await _storage.read(key: 'biometricsEnabled') == 'true';
+    final hasCredentials = await _storage.read(key: 'email') != null;
+
+    // O botão só aparece se as 3 condições forem verdadeiras
+    if (hasBiometrics && hasCredentials && biometricsEnabled && mounted) {
+      setState(() {
+        _biometricLoginAvailable = true;
+      });
+    } else {
+      setState(() {
+        _biometricLoginAvailable = false;
+      });
+    }
+  }
+
+  // Carrega o e-mail salvo se a opção "Lembrar-me" foi usada
+  Future<void> _loadCredentials() async {
+    final email = await _storage.read(key: 'email');
+    if (email != null && mounted) {
+      setState(() {
+        _emailController.text = email;
+        _rememberMe = true;
+      });
+    }
+  }
+
+  // Função para salvar ou remover as credenciais
+  Future<void> _handleCredentialsStorage() async {
+    if (_rememberMe) {
+      await _storage.write(key: 'email', value: _emailController.text.trim());
+      await _storage.write(key: 'password', value: _passwordController.text);
+    } else {
+      await _storage.deleteAll();
+    }
+  }
+
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    }
   }
 
   Future<void> _submitLogin() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
+
     try {
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      // O AuthGate cuidará da navegação após o login bem-sucedido
-    } on FirebaseAuthException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.message ?? 'Falha na autenticação.'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
+      // Salva as credenciais se a opção "Lembrar-me" estiver marcada
+      await _handleCredentialsStorage();
+      // O AuthGate cuidará do redirecionamento
+    } on FirebaseAuthException catch (e) {
+      _showError(e.message ?? 'Falha na autenticação.');
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _googleSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
       }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      await FirebaseAuth.instance.signInWithCredential(credential);
+      // O AuthGate cuidará do redirecionamento
+
+    } catch (e) {
+      _showError('Erro ao fazer login com Google: $e');
+    }
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _authenticateWithBiometrics() async {
+    try {
+      bool authenticated = await _localAuth.authenticate(
+        localizedReason: 'Faça login com sua digital para acessar o StoreConnect',
+        options: const AuthenticationOptions(
+          stickyAuth: true, // Mantém o diálogo aberto
+          biometricOnly: true, // Exige biometria (digital ou rosto)
+        ),
+      );
+
+      if (authenticated && mounted) {
+        setState(() => _isLoading = true);
+        final email = await _storage.read(key: 'email');
+        final password = await _storage.read(key: 'password');
+
+        if (email != null && password != null) {
+          // Usa as credenciais salvas para fazer o login
+          await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+        } else {
+          _showError('Credenciais não encontradas. Faça login manualmente.');
+        }
+      }
+    } catch (e) {
+      _showError('Erro na autenticação biométrica: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -64,14 +170,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 1. Logo da StoreConnect
                   Image.asset(
-                    'assets/images/logo.png', // CERTIFIQUE-SE QUE ESTE É O NOME CORRETO DO SEU ARQUIVO DE LOGO
-                    height: 100, // Ajuste a altura conforme necessário
+                    'assets/images/logo.png',
+                    height: 100,
                   ),
                   const SizedBox(height: 24),
-
-                  // 2. Título e Subtítulo
                   const Text(
                     'Bem-vindo de volta!',
                     textAlign: TextAlign.center,
@@ -84,8 +187,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.grey.shade600),
                   ),
                   const SizedBox(height: 40),
-
-                  // 3. Campos de Texto
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -112,21 +213,61 @@ class _LoginScreenState extends State<LoginScreen> {
                     validator: (value) => (value == null || value.isEmpty) ? 'Por favor, insira sua senha.' : null,
                   ),
                   const SizedBox(height: 24),
+                  CheckboxListTile(
+                    title: const Text("Lembrar dados"),
+                    value: _rememberMe,
+                    onChanged: (newValue) {
+                      setState(() {
+                        _rememberMe = newValue ?? false;
+                      });
+                    },
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  const SizedBox(height: 24),
 
-                  // 4. Botão de Login
                   if (_isLoading)
                     const Center(child: CircularProgressIndicator())
                   else
-                    ElevatedButton(
-                      onPressed: _submitLogin,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('ENTRAR', style: TextStyle(fontSize: 16)),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // --- BOTÕES DE LOGIN ATUALIZADOS ---
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _submitLogin,
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: const Text('ENTRAR', style: TextStyle(fontSize: 16)),
+                              ),
+                            ),
+                            // Mostra o botão de digital apenas se disponível
+                            if (_biometricLoginAvailable) ...[
+                              const SizedBox(width: 16),
+                              IconButton(
+                                icon: const Icon(Icons.fingerprint, size: 36),
+                                onPressed: _authenticateWithBiometrics,
+                                tooltip: 'Login com Digital',
+                              ),
+                            ]
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        OutlinedButton.icon(
+                          icon: Image.asset('assets/images/google-logo.png', height: 20),
+                          label: const Text('Continuar com Google', style: TextStyle(fontSize: 16)),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: _isLoading ? null : _googleSignIn,
+                        ),
+                      ],
                     ),
-
-                  // 5. Link para Cadastro
                   const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
