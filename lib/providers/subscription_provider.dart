@@ -6,7 +6,6 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// SUBSTITUA 'plano_mensal_storeconnect' PELO ID EXATO DO SEU PRODUTO NO PLAY CONSOLE
 const String _subscriptionId = 'plano_mensal_storeconnect';
 
 class SubscriptionProvider with ChangeNotifier {
@@ -17,9 +16,17 @@ class SubscriptionProvider with ChangeNotifier {
   bool _isAvailable = false;
   bool _isLoading = true;
 
+  // ✅ ADICIONA CALLBACK PARA NOTIFICAR QUANDO COMPRA FOR CONCLUÍDA
+  VoidCallback? _onPurchaseSuccess;
+
   List<ProductDetails> get products => _products;
   bool get isAvailable => _isAvailable;
   bool get isLoading => _isLoading;
+
+  // ✅ MÉTODO PARA DEFINIR O CALLBACK
+  void setOnPurchaseSuccessCallback(VoidCallback? callback) {
+    _onPurchaseSuccess = callback;
+  }
 
   SubscriptionProvider() {
     final Stream<List<PurchaseDetails>> purchaseUpdated = _inAppPurchase.purchaseStream;
@@ -75,27 +82,71 @@ class SubscriptionProvider with ChangeNotifier {
     }
   }
 
-  // --- FUNÇÃO CORRIGIDA ---
   Future<void> _handleSuccessfulPurchase(PurchaseDetails purchaseDetails) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      print('❌ Usuário não autenticado para processar compra');
+      return;
+    }
+
+    print('🔄 Iniciando processamento da compra...');
+    print('   User ID: ${user.uid}');
+    print('   Purchase ID: ${purchaseDetails.purchaseID}');
+    print('   Product ID: ${purchaseDetails.productID}');
 
     try {
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final storeId = userDoc.data()?['storeId'];
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
 
-      if (storeId != null) {
-        // ATUALIZA O DOCUMENTO DA LOJA COM TODAS AS INFORMAÇÕES NECESSÁRIAS
-        await FirebaseFirestore.instance.collection('stores').doc(storeId).update({
-          'subscriptionStatus': 'active',
-          'productId': purchaseDetails.productID,
-          'purchaseDate': DateTime.now().toIso8601String(),
-          'googlePlayOrderId': purchaseDetails.purchaseID, // <-- LINHA ADICIONADA
-        });
-        print('Assinatura ativada e ID do Pedido salvo para a loja: $storeId');
+      if (!userDoc.exists) {
+        print('❌ Documento do usuário não existe');
+        return;
       }
-    } catch (e) {
-      print('Erro ao atualizar o status da assinatura no Firestore: $e');
+
+      final storeId = userDoc.data()?['storeId'] as String?;
+      if (storeId == null || storeId.isEmpty) {
+        print('❌ StoreId não encontrado no documento do usuário');
+        return;
+      }
+
+      print('   Store ID encontrado: $storeId');
+
+      final updateData = {
+        'subscriptionStatus': 'active',
+        'productId': purchaseDetails.productID,
+        'purchaseDate': Timestamp.now(),
+        'googlePlayOrderId': purchaseDetails.purchaseID,
+        'lastUpdated': Timestamp.now(),
+      };
+
+      print('   Atualizando documento da loja...');
+      print('   Dados: $updateData');
+
+      await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .set(updateData, SetOptions(merge: true));
+
+      print('✅ Assinatura ativada com sucesso!');
+      print('   Store ID: $storeId');
+      print('   Status: active');
+
+      notifyListeners();
+
+      // ✅ AGUARDA UM POUCO ANTES DE CHAMAR O CALLBACK PARA GARANTIR QUE A UI ESTEJA ESTÁVEL
+      print('🔄 Aguardando UI estabilizar...');
+      await Future.delayed(const Duration(milliseconds: 1000));
+
+      print('🔄 Chamando callback para atualizar AuthGate...');
+      if (_onPurchaseSuccess != null) {
+        _onPurchaseSuccess!();
+      }
+
+    } catch (e, stackTrace) {
+      print('❌ Erro ao processar compra: $e');
+      print('   Stack: $stackTrace');
     }
   }
 

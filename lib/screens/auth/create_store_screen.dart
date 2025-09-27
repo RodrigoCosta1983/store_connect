@@ -3,7 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import 'package:store_connect/providers/sales_provider.dart';
 import 'package:store_connect/screens/auth/auth_gate.dart';
+import 'package:store_connect/screens/subscription_screen.dart';
 
 class CreateStoreScreen extends StatefulWidget {
   const CreateStoreScreen({super.key});
@@ -32,9 +35,8 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
     try {
       final firestore = FirebaseFirestore.instance;
       final batch = firestore.batch();
-
-      // 1. Cria o documento da loja na coleção 'stores'
       final storeRef = firestore.collection('stores').doc();
+
       batch.set(storeRef, {
         'name': _storeNameController.text.trim(),
         'ownerId': user.uid,
@@ -42,7 +44,6 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
         'subscriptionStatus': 'inactive',
       });
 
-      // 2. Cria o documento do usuário na coleção 'users', ligando-o à loja
       final userRef = firestore.collection('users').doc(user.uid);
       batch.set(userRef, {
         'email': user.email,
@@ -51,9 +52,14 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
 
       await batch.commit();
 
+      // --- NAVEGAÇÃO CORRIGIDA ---
       if (mounted) {
+        // 1. Avisa ao SalesProvider qual é o ID da nova loja para o resto do app
+        Provider.of<SalesProvider>(context, listen: false).updateStoreId(storeRef.id);
+
+        // 2. Navega diretamente para a tela de assinatura, que é o próximo passo
         Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (ctx) => const AuthGate()),
+            MaterialPageRoute(builder: (ctx) => SubscriptionScreen(storeId: storeRef.id)),
                 (route) => false
         );
       }
@@ -71,21 +77,15 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // --- APPBAR ATUALIZADA ---
       appBar: AppBar(
         title: const Text('Crie Sua Loja'),
-        // Remove a seta de "voltar" padrão para evitar confusão
         automaticallyImplyLeading: false,
         actions: [
-          // Adiciona um botão de "Sair" no canto superior direito
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sair e voltar para o Login',
             onPressed: () {
-              // 1. Desloga o usuário da conta recém-criada no Firebase Auth
               FirebaseAuth.instance.signOut();
-
-              // 2. Garante que o usuário volte para a tela inicial de login/autenticação
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (ctx) => const AuthGate()),
                     (route) => false,
@@ -100,7 +100,7 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
           child: Form(
             key: _formKey,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 const Text(
                   'Estamos quase lá! Qual o nome do seu negócio?',
