@@ -140,7 +140,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Selecionar Cliente para Fiado'),
+          title: const Text('Selecionar Cliente – Crédito'),
           content: SizedBox(
             width: double.maxFinite,
             child: StreamBuilder<QuerySnapshot>(
@@ -218,7 +218,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
             const Divider(),
             ListTile(
               leading: const Icon(Icons.person_add_alt_1, size: 30, color: Colors.orange),
-              title: const Text('Fiado / A Prazo', style: TextStyle(fontSize: 18)),
+              title: const Text('Crédito / A Prazo', style: TextStyle(fontSize: 18)),
               // --- LÓGICA CORRIGIDA E SIMPLIFICADA ---
               onTap: () {
                 final selectedCustomer = cart.selectedCustomer;

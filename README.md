@@ -16,8 +16,8 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 - **Tela de Venda Rápida (PDV):** Interface com grade de produtos responsiva que se adapta a diferentes tamanhos de tela (celulares, tablets).
 - **Controle de Estoque em Tempo Real:** A interface visualiza o status do estoque de cada produto (normal, baixo, esgotado) e impede a venda de itens sem estoque.
 - **Carrinho de Compras:** Sistema completo para adicionar produtos, com a flexibilidade de vender para um cliente cadastrado ou para o "Consumidor Final".
-- **Múltiplos Métodos de Pagamento:** Suporte para vendas em Dinheiro, Cartão, PIX e "Fiado" (a prazo).
-- **Vendas "Fiado":** Sistema para registrar vendas a prazo, exigindo a seleção de um cliente cadastrado.
+- **Múltiplos Métodos de Pagamento:** Suporte para vendas em Dinheiro, Cartão, PIX e a Crédito.
+- **Vendas "A Crédito":** Sistema para registrar vendas a prazo, exigindo a seleção de um cliente cadastrado.
 
 ### Gestão de Estoque
 - **Cadastro e Edição de Produtos:** Formulário completo para gerenciar produtos, incluindo nome, preço, quantidade em estoque e **estoque mínimo** para alertas.
@@ -27,14 +27,14 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 ### Gestão de Clientes (CRM)
 - **Cadastro e Edição de Clientes:** Tela dedicada para gerenciar a base de clientes da loja.
 - **Busca Inteligente:** Interface de busca dinâmica para encontrar clientes rapidamente.
-- **Reutilização de Componentes:** A tela de gerenciamento também funciona como um seletor de clientes para outras partes do app (ex: vendas fiado).
+- **Reutilização de Componentes:** A tela de gerenciamento também funciona como um seletor de clientes para outras partes do app (ex: vendas A Crédito).
 
 ### Dashboard e Relatórios
 - **Dashboard em Tempo Real:** Painel principal com os KPIs (Indicadores Chave de Performance) mais importantes:
     - Total de Vendas do Dia
     - Número de Vendas
     - Ticket Médio
-    - Total a Receber (Fiado)
+    - Total a Receber (A Crédito)
     - Contagem de Produtos com Estoque Baixo
 - **Hub de Relatórios:** Uma central organizada para análises mais profundas.
     - **Relatório de Vendas por Período:** Permite filtrar vendas por um intervalo de datas customizável.
@@ -44,7 +44,7 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 
 ### Configurações e Segurança
 - **Tela de Configurações:**
-    - Permite habilitar/desabilitar a funcionalidade de vendas "Fiado".
+    - Permite habilitar/desabilitar a funcionalidade de vendas "A Crédito".
     - Permite configurar o limite numérico para o alerta de estoque baixo.
 - **Tela de Perfil do Usuário:**
     - Permite que o usuário edite seus dados de perfil (nome, documento, telefone).
@@ -171,8 +171,8 @@ The application was built on a solid foundation, focusing on essential features 
 - **Quick Sale Screen (POS):** A responsive product grid interface that adapts to different screen sizes (phones, tablets).
 - **Real-time Inventory Control:** The interface displays the stock status of each product (normal, low, out of stock) and prevents the sale of out-of-stock items.
 - **Shopping Cart:** A complete system for adding products, with the flexibility to sell to a registered customer or to a "Final Consumer".
-- **Multiple Payment Methods:** Support for sales via Cash, Card, PIX, and "Fiado" (on credit).
-- **"Fiado" (Credit) Sales:** A system to record on-credit sales, requiring the selection of a registered customer.
+- **Multiple Payment Methods:** Support for sales via Cash, Card, PIX, and credit.
+- **(Credit) Sales:** A system to record on-credit sales, requiring the selection of a registered customer.
 
 ### Inventory Management
 - **Product Creation and Editing:** A complete form to manage products, including name, price, quantity in stock, and a **minimum stock level** for alerts.
@@ -189,7 +189,7 @@ The application was built on a solid foundation, focusing on essential features 
     - Total Sales for the Day
     - Number of Sales
     - Average Ticket
-    - Total Accounts Receivable (Fiado)
+    - Total Accounts Receivable (Credit)
     - Low Stock Product Count
 - **Reports Hub:** An organized center for deeper analysis.
     - **Sales by Period Report:** Allows filtering sales by a customizable date range.
@@ -199,7 +199,7 @@ The application was built on a solid foundation, focusing on essential features 
 
 ### Settings & Security
 - **Settings Screen:**
-    - Allows enabling/disabling the "Fiado" (on-credit) sales feature.
+    - Allows you to enable or disable the credit sales feature.
     - Allows configuring the numerical threshold for the low stock alert.
 - **User Profile Screen:**
     - Allows the user to edit their profile data (name, document, phone).

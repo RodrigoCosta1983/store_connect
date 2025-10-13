@@ -155,7 +155,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: Colors.purple,
                   ),
                   KpiCard(
-                    title: 'Total a Receber (Fiado)',
+                    title: 'Total a Receber (Crédito)',
                     value: formatCurrency.format(_totalFiado),
                     icon: Icons.person_add_disabled,
                     color: Colors.orange,

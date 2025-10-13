@@ -90,7 +90,7 @@ class _AccountsReceivableScreenState extends State<AccountsReceivableScreen> {
     final formatCurrency = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Contas a Receber (Fiado)'),
+        title: const Text('Contas a Receber (Crédito)'),
       ),
       // MODIFICADO: A lógica de exibição agora checa se há uma mensagem de erro
       body: _errorMessage != null

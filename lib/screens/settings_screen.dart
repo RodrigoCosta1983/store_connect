@@ -205,7 +205,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Text('Vendas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ),
           SwitchListTile(
-            title: const Text('Habilitar Venda "Fiado"'),
+            title: const Text('Habilitar Venda a Crédito'),
             subtitle: const Text('Permite registrar vendas a prazo para clientes.'),
             value: _fiadoEnabled,
             onChanged: _saveFiadoPreference,

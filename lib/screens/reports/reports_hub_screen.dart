@@ -65,7 +65,7 @@ class ReportsHubScreen extends StatelessWidget {
           const Divider(),
           ListTile(
             leading: const Icon(Icons.people, color: Colors.orange),
-            title: const Text('Contas a Receber (Fiado)'),
+            title: const Text('Contas a Receber (Crédito)'),
             subtitle: const Text('Veja o saldo devedor de cada cliente.'),
             trailing: const Icon(Icons.chevron_right),
             // MODIFICADO: Adicionada a navegação
