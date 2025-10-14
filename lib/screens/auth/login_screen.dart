@@ -130,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _authenticateWithBiometrics() async {
     try {
       bool authenticated = await _localAuth.authenticate(
-        localizedReason: 'Faça login com sua digital para acessar o StoreConnect',
+        localizedReason: 'Faça login com sua digital para acessar o Store&Connect',
         options: const AuthenticationOptions(
           stickyAuth: true, // Mantém o diálogo aberto
           biometricOnly: true, // Exige biometria (digital ou rosto)

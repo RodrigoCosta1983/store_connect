@@ -7,25 +7,25 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:294766590074:android:c8960029155f64b5afe3c3",
+        "mobilesdk_app_id": "1:294766590074:android:f993b08bb3f300b2afe3c3",
         "android_client_info": {
-          "package_name": "com.storeconnect.app"
+          "package_name": "com.storeeconnect.app"
         }
       },
       "oauth_client": [
         {
-          "client_id": "294766590074-h0k5fdf8rssj8bf6mbomlj48dprjlb8o.apps.googleusercontent.com",
+          "client_id": "294766590074-4if12hscuagb9ej5fm4bh8cravukb4u7.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.storeconnect.app",
+            "package_name": "com.storeeconnect.app",
             "certificate_hash": "054be68aec121cf6d39380e25272dda96f305cbb"
           }
         },
         {
-          "client_id": "294766590074-hisk5laubc2j012cl2cmldbt8u2qe71k.apps.googleusercontent.com",
+          "client_id": "294766590074-hibmsioa929o1l02k8lrf14enq8jdho8.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.storeconnect.app",
+            "package_name": "com.storeeconnect.app",
             "certificate_hash": "668d016345a0a10fb578ee174775ae65a630c8bb"
           }
         },

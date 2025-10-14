@@ -17,7 +17,7 @@ if (keyPropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.storeconnect.app"
+    namespace = "com.storeeconnect.app"
     compileSdk = 35
     ndkVersion = "27.0.12077973"
 
@@ -32,18 +32,18 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = "storeconnectkey"
+            keyAlias = "storeeconnectkey"
             keyPassword = "Sophie#3891"
-            storeFile = file("storeconnect-release-key.jks")
+            storeFile = file("storeeconnect-release-key.jks")
             storePassword = "Sophie#3891"
         }
     }
 
     defaultConfig {
-        applicationId = "com.storeconnect.app"
+        applicationId = "com.storeeconnect.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 6
+        versionCode = 4
         versionName = "1.0.0"
         multiDexEnabled = true
     }

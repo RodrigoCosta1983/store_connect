@@ -74,7 +74,7 @@ class _MyAppState extends State<MyApp> {
         builder: (context, themeProvider, child) {
           return MaterialApp(
             navigatorKey: NavigationService.navigatorKey,
-            title: 'StoreConnect',
+            title: 'Store&Connect',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,

@@ -23,7 +23,7 @@ class HomeScreen extends StatelessWidget {
                 final storeName = storeData['name'] ?? storeData['storeName'] ?? 'Minha Loja';
                 return Text(storeName);
               }
-              return const Text('StoreConnect'); // Título padrão enquanto carrega
+              return const Text('Store&Connect'); // Título padrão enquanto carrega
             }
         ),
         actions: [

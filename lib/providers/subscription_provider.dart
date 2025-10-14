@@ -6,7 +6,7 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-const String _subscriptionId = 'plano_mensal_storeconnect';
+const String _subscriptionId = 'plano_mensal_storeeconnect';
 
 class SubscriptionProvider with ChangeNotifier {
   final InAppPurchase _inAppPurchase = InAppPurchase.instance;

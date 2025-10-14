@@ -1,5 +1,5 @@
 // ADICIONADO: A declaração do pacote que estava faltando
-package com.storeconnect.app
+package com.storeeconnect.app
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

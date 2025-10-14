@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- CORRETO -->
+    <string name="app_name">Store&amp;Connect</string>
     <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is off -->
     <style name="LaunchTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <!-- Show a splash screen on the activity. Automatically removed when

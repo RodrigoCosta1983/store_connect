@@ -1,4 +1,4 @@
-# StoreConnect - Sistema de Gestão para Lojas e Distribuidoras
+# Store&Connect - Sistema de Gestão para Lojas e Distribuidoras
 
 [Read in English](#english-version)
 
@@ -6,7 +6,7 @@
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
 ![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)
 
-**StoreConnect** é um sistema de Ponto de Venda (PDV) e gestão completo, desenvolvido em Flutter, projetado para otimizar as operações de pequenas e médias lojas e distribuidoras. A aplicação é focada em uma arquitetura multi-loja, permitindo que um único sistema gerencie múltiplos estabelecimentos de forma segura e centralizada, com dados armazenados e sincronizados em tempo real através do Firebase.
+**Store&Connect** é um sistema de Ponto de Venda (PDV) e gestão completo, desenvolvido em Flutter, projetado para otimizar as operações de pequenas e médias lojas e distribuidoras. A aplicação é focada em uma arquitetura multi-loja, permitindo que um único sistema gerencie múltiplos estabelecimentos de forma segura e centralizada, com dados armazenados e sincronizados em tempo real através do Firebase.
 
 ## ✨ Funcionalidades Principais
 
@@ -108,7 +108,7 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 
 ## 🔮 Próximos Passos (Roadmap)
 
-A próxima grande funcionalidade a ser implementada é a monetização do serviço, transformando o StoreConnect em um SaaS (Software as a Service).
+A próxima grande funcionalidade a ser implementada é a monetização do serviço, transformando o Store&Connect em um SaaS (Software as a Service).
 
 - **☑️ Integração com Stripe para Cobrança de Assinaturas**
     - [ ] Desenvolvimento de um sistema de planos (ex: Básico, Pro) com diferentes limites ou funcionalidades.
@@ -155,13 +155,13 @@ Website: rodrigocosta-dev.com
 
 ## <a name="english-version"></a> English Version
 
-[Leia em Português](#storeconnect---sistema-de-gestão-para-lojas-e-distribuidoras)
+[Leia em Português](#store&connect---sistema-de-gestão-para-lojas-e-distribuidoras)
 
 ![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
 ![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)
 
-**StoreConnect** is a comprehensive Point of Sale (POS) and management system, developed in Flutter, designed to optimize the operations of small and medium-sized stores and distributors. The application is focused on a multi-store architecture, allowing a single system to manage multiple establishments securely and centrally, with data stored and synced in real-time via Firebase.
+**Store&Connect** is a comprehensive Point of Sale (POS) and management system, developed in Flutter, designed to optimize the operations of small and medium-sized stores and distributors. The application is focused on a multi-store architecture, allowing a single system to manage multiple establishments securely and centrally, with data stored and synced in real-time via Firebase.
 
 ## ✨ Key Features
 
@@ -263,7 +263,7 @@ The application was built on a solid foundation, focusing on essential features 
 
 ## 🔮 Next Steps (Roadmap)
 
-The next major feature to be implemented is the monetization of the service, turning StoreConnect into a SaaS (Software as a Service).
+The next major feature to be implemented is the monetization of the service, turning Store&Connect into a SaaS (Software as a Service).
 
 - **☑️ Stripe Integration for Subscription Billing**
     - [ ] Development of a plan system (e.g., Basic, Pro) with different limits or features.

@@ -92,7 +92,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
             const DrawerHeader(
               decoration: BoxDecoration(color: Colors.blue),
               child: Text(
-                'StoreConnect',
+                'Store&Connect',
                 style: TextStyle(color: Colors.white, fontSize: 24),
               ),
             ),
@@ -182,7 +182,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 showDialog(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text("Sobre o StoreConnect"),
+                    title: const Text("Sobre o Store&Connect"),
                     content: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,

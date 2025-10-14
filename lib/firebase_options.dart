@@ -70,7 +70,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '294766590074',
     projectId: 'store-connect-app',
     storageBucket: 'store-connect-app.firebasestorage.app',
-    iosBundleId: 'com.rodrigocostadev.storeconnect.storeConnect',
+    iosBundleId: 'com.storeeconnect.storeconnect.storeConnect',
   );
 
 }
