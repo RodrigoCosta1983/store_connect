@@ -156,6 +156,84 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // Adicione este método à sua classe de State da tela de login
+
+  void _showForgotPasswordDialog(BuildContext context) {
+    final TextEditingController emailController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Redefinir Senha"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Digite seu e-mail e enviaremos um link para você redefinir sua senha."),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'E-mail',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: const Text("Cancelar"),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+            },
+          ),
+          ElevatedButton(
+            child: const Text("Enviar"),
+            onPressed: () async {
+              final email = emailController.text.trim();
+              if (email.isEmpty || !email.contains('@')) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Por favor, digite um e-mail válido.')),
+                );
+                return;
+              }
+
+              try {
+                await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
+                // Fecha a caixa de diálogo
+                if (context.mounted) Navigator.of(ctx).pop();
+
+                // Mostra a mensagem de sucesso
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Link para redefinição de senha enviado!')),
+                  );
+                }
+
+              } on FirebaseAuthException catch (e) {
+                // Fecha a caixa de diálogo
+                if (context.mounted) Navigator.of(ctx).pop();
+
+                // Mostra a mensagem de erro
+                String errorMessage = "Ocorreu um erro. Tente novamente.";
+                if (e.code == 'user-not-found') {
+                  errorMessage = "Nenhum usuário encontrado com este e-mail.";
+                }
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(errorMessage)),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -223,6 +301,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     controlAffinity: ListTileControlAffinity.leading,
                     contentPadding: EdgeInsets.zero,
                   ),
+
                   const SizedBox(height: 24),
 
                   if (_isLoading)
@@ -254,6 +333,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ]
                           ],
+                        ),
+                        TextButton(
+                          child: const Text('Esqueci a senha'),
+                          onPressed: () {
+                            _showForgotPasswordDialog(context);
+                          },
                         ),
                         const SizedBox(height: 24),
                         OutlinedButton.icon(
