@@ -73,7 +73,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           ),
           body: Padding(
             padding: const EdgeInsets.all(16.0),
-            child: content,
+            child: SingleChildScrollView(
+              child: content,
+            ),
           ),
         );
       },
