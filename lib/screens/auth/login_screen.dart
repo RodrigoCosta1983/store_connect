@@ -330,8 +330,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // TODO: Adicione um ícone do Google aqui. Ex:
-                  // Image.asset('assets/icons/google_logo.png', height: 24.0),
-                  const Text('G', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.blue)), // Ícone provisório
+                  Image.asset('assets/images/google_logo.png', height: 20.0),
+                  //const Text('G', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.blue)), // Ícone provisório
                   const SizedBox(width: 12),
                   const Text('Continuar com Google', style: TextStyle(fontSize: 16)),
                 ],
