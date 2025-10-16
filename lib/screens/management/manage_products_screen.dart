@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart'; // <-- IMPORT ADICIONADO PARA FORMATAR PREÇO
 import 'package:store_connect/widgets/dynamic_background.dart';
 
 // --- Diálogo de Adicionar/Editar Produto (sem alterações) ---
@@ -20,6 +21,7 @@ class _ProductDialog extends StatefulWidget {
 }
 
 class _ProductDialogState extends State<_ProductDialog> {
+  // ... (código do diálogo permanece o mesmo) ...
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
@@ -154,7 +156,7 @@ class _ProductDialogState extends State<_ProductDialog> {
               TextFormField(
                 controller: _priceController,
                 decoration: const InputDecoration(labelText: 'Preço (ex: 10.50)'),
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Campo obrigatório.';
                   if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Número inválido.';
@@ -267,7 +269,6 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                       }
                       final allProducts = snapshot.data?.docs ?? [];
 
-                      // --- CORREÇÃO: A lógica de filtro agora está aqui ---
                       final filteredProducts = allProducts.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
                         final name = (data['name_lowercase'] as String? ?? '').toLowerCase();
@@ -289,13 +290,15 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                         );
                       }
 
-                      return ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
-                        itemCount: filteredProducts.length,
-                        itemBuilder: (ctx, index) {
-                          final productDoc = filteredProducts[index];
-                          final productData = productDoc.data() as Map<String, dynamic>;
-                          return _buildProductCard(productDoc, productData, isDarkMode);
+                      // --- MUDANÇA PRINCIPAL: LÓGICA RESPONSIVA ---
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          // Se a tela for larga, mostra a tabela. Senão, a lista.
+                          if (constraints.maxWidth > 768) {
+                            return _buildProductDataTable(filteredProducts, isDarkMode, constraints);
+                          } else {
+                            return _buildProductListView(filteredProducts, isDarkMode);
+                          }
                         },
                       );
                     },
@@ -314,7 +317,111 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     );
   }
 
+  // --- WIDGET ANTIGO (AGORA UM MÉTODO SEPARADO) ---
+  Widget _buildProductListView(List<QueryDocumentSnapshot> products, bool isDarkMode) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
+      itemCount: products.length,
+      itemBuilder: (ctx, index) {
+        final productDoc = products[index];
+        final productData = productDoc.data() as Map<String, dynamic>;
+        return _buildProductCard(productDoc, productData, isDarkMode);
+      },
+    );
+  }
+
+  // --- NOVO WIDGET: A TABELA PARA WEB ---
+  Widget _buildProductDataTable(List<QueryDocumentSnapshot> products, bool isDarkMode, BoxConstraints constraints) {
+    final formatCurrency = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+
+    return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        // Envolve a tabela com um ConstrainedBox para definir uma largura mínima
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: constraints.maxWidth), // Força a tabela a ter no mínimo a largura da tela
+          child: DataTable(
+              columnSpacing: 24,
+              headingRowColor: MaterialStateProperty.all(Theme.of(context).splashColor),
+              columns: const [
+                DataColumn(label: Text('Produto')),
+                DataColumn(label: Text('Estoque (Mín.)'), numeric: true),
+                DataColumn(label: Text('Preço'), numeric: true),
+                DataColumn(label: Text('Ações')),
+              ],
+              rows: products.map((productDoc) {
+            final productData = productDoc.data() as Map<String, dynamic>;
+            final imageUrl = productData['imageUrl'] as String?;
+            final quantidade = productData['quantidade'] as int? ?? 0;
+            final minimumStock = productData['minimumStock'] as int? ?? 0;
+            final price = (productData['price'] as num? ?? 0).toDouble();
+            final bool needsRestock = quantidade <= minimumStock;
+
+            return DataRow(
+              color: MaterialStateProperty.resolveWith<Color?>(
+                    (Set<MaterialState> states) {
+                  // Colore a linha inteira se o estoque estiver baixo
+                  if (needsRestock) return Colors.red.withOpacity(0.2);
+                  return null; // Usa a cor padrão
+                },
+              ),
+              cells: [
+                // Célula do Produto
+                DataCell(Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: Colors.grey.shade700,
+                      backgroundImage: (imageUrl != null && imageUrl.isNotEmpty) ? NetworkImage(imageUrl) : null,
+                      child: (imageUrl == null || imageUrl.isEmpty) ? const Icon(Icons.inventory_2, color: Colors.white, size: 20) : null,
+                    ),
+                    const SizedBox(width: 16),
+                    Text(productData['name'] ?? 'Sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                )),
+                // Célula do Estoque
+                DataCell(
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (needsRestock) const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 18),
+                      if (needsRestock) const SizedBox(width: 8),
+                      Text(
+                        '$quantidade ($minimumStock)',
+                        style: TextStyle(
+                          color: needsRestock ? Colors.red.shade800 : null,
+                          fontWeight: needsRestock ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Célula do Preço
+                DataCell(Text(formatCurrency.format(price))),
+                // Célula das Ações
+                DataCell(Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                      onPressed: () => _showProductDialog(product: productDoc),
+                      tooltip: 'Editar',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => _deleteProduct(productDoc.id),
+                      tooltip: 'Excluir',
+                    ),
+                  ],
+                )),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCustomHeader(bool isDarkMode) {
+    // ... (código do header permanece o mesmo) ...
     final headerColor = isDarkMode ? Colors.white : Colors.black;
 
     return Padding(
@@ -357,6 +464,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   }
 
   Widget _buildProductCard(DocumentSnapshot productDoc, Map<String, dynamic> productData, bool isDarkMode) {
+    // ... (código do card permanece o mesmo) ...
     final imageUrl = productData['imageUrl'] as String?;
     final quantidade = productData['quantidade'] as int? ?? 0;
     final minimumStock = productData['minimumStock'] as int? ?? 0;

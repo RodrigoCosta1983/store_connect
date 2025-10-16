@@ -51,17 +51,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         totalSales += (doc.data()['totalAmount'] as num? ?? 0).toDouble();
       }
 
-      // 2. Busca produtos com estoque baixo (exemplo: <= 5 unidades)
-      // Primeiro, busca o valor do limite do documento da loja
+      // 2. Busca produtos com estoque baixo
       final storeDoc = await storeRef.get();
       final lowStockThreshold = (storeDoc
-          .data()?['lowStockThreshold'] as int? ?? 5); // Usa 5 como padrão
+          .data()?['lowStockThreshold'] as int? ?? 5);
 
-      // Agora, usa o valor dinâmico na busca
       final lowStockSnapshot = await storeRef
           .collection('products')
           .where('quantidade',
-          isLessThanOrEqualTo: lowStockThreshold) // <-- Valor dinâmico
+          isLessThanOrEqualTo: lowStockThreshold)
           .get();
 
       // 3. Busca o total de vendas "fiado" (não pagas)
@@ -97,8 +95,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // lib/screens/dashboard_screen.dart -> dentro da classe _DashboardScreenState
-
   @override
   Widget build(BuildContext context) {
     final double ticketMedio = _salesCountToday > 0 ? _totalSalesToday /
@@ -128,45 +124,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
               onRefresh: _fetchDashboardData,
-              child: GridView.count(
-                padding: const EdgeInsets.all(16),
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1.1,
-                // Mantive o valor que funcionou para o layout
-                children: [
-                  KpiCard(
-                    title: 'Vendas de Hoje',
-                    value: formatCurrency.format(_totalSalesToday),
-                    icon: Icons.point_of_sale,
-                    color: Colors.green,
-                  ),
-                  KpiCard(
-                    title: 'Nº de Vendas (Hoje)',
-                    value: _salesCountToday.toString(),
-                    icon: Icons.receipt_long,
-                    color: Colors.blue,
-                  ),
-                  KpiCard(
-                    title: 'Ticket Médio (Hoje)',
-                    value: formatCurrency.format(ticketMedio),
-                    icon: Icons.price_check,
-                    color: Colors.purple,
-                  ),
-                  KpiCard(
-                    title: 'Total a Receber (Fiado)',
-                    value: formatCurrency.format(_totalFiado),
-                    icon: Icons.person_add_disabled,
-                    color: Colors.orange,
-                  ),
-                  KpiCard(
-                    title: 'Produtos c/ Estoque Baixo',
-                    value: _lowStockProductsCount.toString(),
-                    icon: Icons.warning_amber,
-                    color: Colors.red,
-                  ),
-                ],
+              // --- MUDANÇA PRINCIPAL AQUI ---
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Lógica para determinar o número de colunas
+                  final double screenWidth = constraints.maxWidth;
+                  int crossAxisCount;
+                  double childAspectRatio;
+
+                  if (screenWidth > 1200) {
+                    crossAxisCount = 5; // Telas muito largas: 5 colunas
+                    childAspectRatio = 1.2;
+                  } else if (screenWidth > 900) {
+                    crossAxisCount = 4; // Telas largas: 4 colunas
+                    childAspectRatio = 1.1;
+                  } else if (screenWidth > 600) {
+                    crossAxisCount = 3; // Telas médias: 3 colunas
+                    childAspectRatio = 1.0;
+                  } else {
+                    crossAxisCount = 2; // Telas pequenas (mobile): 2 colunas
+                    childAspectRatio = 1.1;
+                  }
+
+                  return GridView(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount, // Usa o valor dinâmico
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: childAspectRatio, // Proporção ajustável
+                    ),
+                    children: [
+                      KpiCard(
+                        title: 'Vendas de Hoje',
+                        value: formatCurrency.format(_totalSalesToday),
+                        icon: Icons.point_of_sale,
+                        color: Colors.green,
+                      ),
+                      KpiCard(
+                        title: 'Nº de Vendas (Hoje)',
+                        value: _salesCountToday.toString(),
+                        icon: Icons.receipt_long,
+                        color: Colors.blue,
+                      ),
+                      KpiCard(
+                        title: 'Ticket Médio (Hoje)',
+                        value: formatCurrency.format(ticketMedio),
+                        icon: Icons.price_check,
+                        color: Colors.purple,
+                      ),
+                      KpiCard(
+                        title: 'Total a Receber (A Prazo)',
+                        value: formatCurrency.format(_totalFiado),
+                        icon: Icons.person_add_disabled,
+                        color: Colors.orange,
+                      ),
+                      KpiCard(
+                        title: 'Produtos c/ Estoque Baixo',
+                        value: _lowStockProductsCount.toString(),
+                        icon: Icons.warning_amber,
+                        color: Colors.red,
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),

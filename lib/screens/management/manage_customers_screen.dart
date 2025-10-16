@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:store_connect/models/customer_model.dart';
 import 'package:store_connect/widgets/dynamic_background.dart';
 
@@ -204,13 +205,13 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
                       );
                     }
 
-                    return ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
-                      itemCount: filteredCustomers.length,
-                      itemBuilder: (ctx, index) {
-                        final customerDoc = filteredCustomers[index];
-                        final customer = Customer.fromFirestore(customerDoc);
-                        return _buildCustomerCard(customer, customerDoc, isDarkMode);
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (constraints.maxWidth > 768) {
+                          return _buildCustomerDataTable(filteredCustomers, isDarkMode, constraints);
+                        } else {
+                          return _buildCustomerListView(filteredCustomers, isDarkMode);
+                        }
                       },
                     );
                   },
@@ -219,6 +220,89 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  // --- LAYOUT DE LISTA (MOBILE) ---
+  Widget _buildCustomerListView(List<QueryDocumentSnapshot> customers, bool isDarkMode) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
+      itemCount: customers.length,
+      itemBuilder: (ctx, index) {
+        final customerDoc = customers[index];
+        final customer = Customer.fromFirestore(customerDoc);
+        return _buildCustomerCard(customer, customerDoc, isDarkMode);
+      },
+    );
+  }
+
+  // --- NOVO LAYOUT DE TABELA (WEB) ---
+  Widget _buildCustomerDataTable(List<QueryDocumentSnapshot> customers, bool isDarkMode, BoxConstraints constraints) {
+    final DateFormat dateFormat = DateFormat('dd/MM/yyyy');
+
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+          child: DataTable(
+            headingRowColor: MaterialStateProperty.all(Theme.of(context).splashColor),
+            columnSpacing: 32,
+            columns: const [
+              DataColumn(label: Text('Cliente')),
+              DataColumn(label: Text('Telefone')),
+              DataColumn(label: Text('Data de Cadastro')),
+              DataColumn(label: Text('Ações')),
+            ],
+            rows: customers.map((customerDoc) {
+              final customer = Customer.fromFirestore(customerDoc);
+              final customerData = customerDoc.data() as Map<String, dynamic>;
+              final createdAt = customerData['createdAt'] as Timestamp?;
+
+              return DataRow(
+                onSelectChanged: widget.isSelectionMode ? (selected) {
+                  if (selected ?? false) {
+                    Navigator.of(context).pop(customer);
+                  }
+                } : null,
+                cells: [
+                  DataCell(Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                        child: Text(customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?'),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(customer.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  )),
+                  DataCell(Text(customer.phone ?? 'Não informado')),
+                  DataCell(Text(createdAt != null ? dateFormat.format(createdAt.toDate()) : 'N/A')),
+                  DataCell(
+                    widget.isSelectionMode
+                        ? Container() // No modo de seleção, não mostra ações
+                        : Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                          onPressed: () => _showCustomerDialog(customer: customerDoc),
+                          tooltip: 'Editar',
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _deleteCustomer(customer.id),
+                          tooltip: 'Excluir',
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
       ),
     );
   }

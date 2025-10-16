@@ -28,6 +28,7 @@ class NewSaleScreen extends StatefulWidget {
 
 class _NewSaleScreenState extends State<NewSaleScreen> {
   String _appVersion = 'Carregando...';
+  String _buildNumber = '';
 
   @override
   void initState() {
@@ -40,6 +41,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     if (mounted) {
       setState(() {
         _appVersion = info.version;
+        _buildNumber = info.buildNumber;
       });
     }
   }
@@ -202,7 +204,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           child: Padding(
                             padding: const EdgeInsets.only(top: 12.0),
                             child: Text(
-                              'Versão do App: $_appVersion',
+                              'Versão do App: $_appVersion+$_buildNumber',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: isDarkMode
