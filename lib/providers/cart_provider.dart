@@ -1,18 +1,17 @@
 // lib/providers/cart_provider.dart
 
 import 'package:flutter/foundation.dart';
-import '../models/product_model.dart';
+import 'package:store_connect/models/product_model.dart'; // Certifique-se que o caminho está correto
 import '../models/cart_item_model.dart';
-import '../models/customer_model.dart'; // 1. IMPORTE O MODELO DO CLIENTE
+import '../models/customer_model.dart';
 
 class CartProvider with ChangeNotifier {
   Map<String, CartItem> _items = {};
-
-  // 2. ADICIONE A VARIÁVEL PARA GUARDAR O CLIENTE
   Customer? _selectedCustomer;
 
   Map<String, CartItem> get items => {..._items};
   int get itemCount => _items.length;
+  Customer? get selectedCustomer => _selectedCustomer;
 
   double get totalAmount {
     var total = 0.0;
@@ -22,19 +21,9 @@ class CartProvider with ChangeNotifier {
     return total;
   }
 
-  // 3. ADICIONE O GETTER PARA ACESSAR O CLIENTE
-  Customer? get selectedCustomer => _selectedCustomer;
-
-
-
-
   void addItem(Product product) {
-    // Pega a quantidade que já está no carrinho, se houver
     final existingQuantity = _items[product.id]?.quantity ?? 0;
-
-    // VERIFICAÇÃO: Impede adicionar mais do que o estoque permite
     if (existingQuantity >= product.quantidade) {
-      // Opcional: você pode mostrar uma SnackBar ou apenas ignorar a ação
       print('Não é possível adicionar mais. Estoque máximo atingido no carrinho.');
       return;
     }
@@ -63,12 +52,33 @@ class CartProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // --- NOVO MÉTODO PARA O BOTÃO '-' ---
+  void removeSingleItem(String productId) {
+    if (!_items.containsKey(productId)) {
+      return;
+    }
+    if (_items[productId]!.quantity > 1) {
+      _items.update(
+        productId,
+            (existing) => CartItem(
+          productId: existing.productId,
+          name: existing.name,
+          price: existing.price,
+          quantity: existing.quantity - 1,
+        ),
+      );
+    } else {
+      _items.remove(productId);
+    }
+    notifyListeners();
+  }
+
+
   void removeItem(String productId) {
     _items.remove(productId);
     notifyListeners();
   }
 
-  // 4. ADICIONE O MÉTODO PARA SELECIONAR UM CLIENTE
   void selectCustomer(Customer? customer) {
     _selectedCustomer = customer;
     notifyListeners();
@@ -76,7 +86,7 @@ class CartProvider with ChangeNotifier {
 
   void clear() {
     _items = {};
-    _selectedCustomer = null; // 5. LIMPA O CLIENTE JUNTO COM OS ITENS
+    _selectedCustomer = null;
     notifyListeners();
   }
 }

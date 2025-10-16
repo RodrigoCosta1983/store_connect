@@ -1,4 +1,6 @@
-import 'dart:async'; // Importe para usar StreamSubscription
+// lib/main.dart
+
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,13 +8,16 @@ import 'package:provider/provider.dart';
 import 'package:store_connect/providers/cart_provider.dart';
 import 'package:store_connect/providers/sales_provider.dart';
 import 'package:store_connect/providers/cash_flow_provider.dart';
+import 'package:store_connect/providers/subscription_provider.dart';
 import 'package:store_connect/providers/theme_provider.dart';
 import 'package:store_connect/screens/auth/auth_gate.dart';
 import 'package:store_connect/themes/app_theme.dart';
 import 'firebase_options.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
-// Chave global para acessar o estado do navegador de qualquer lugar
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+// --- ADICIONADO ---
+import 'package:store_connect/services/navigation_service.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +26,11 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
   }
+
+  if (!kIsWeb) {
+    Stripe.publishableKey = 'pk_test_51RtadZF7qAVyn13s6gJurceEqlBHWNNd4xJdGqklUGjHMDfq8vWc2XzSGU4XtDOqAgVnGQYX4hztddfrWErMECa400jGYmKoX0';
+  }
+
   runApp(const MyApp());
 }
 
@@ -37,23 +47,15 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    // Inicia o 'ouvinte' do estado de autenticação
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((User? user) {
       if (user == null) {
-        // Se o usuário for nulo (logout), força a navegação para o AuthGate,
-        // que por sua vez mostrará a tela de Login.
-        // O `pushAndRemoveUntil` limpa todas as telas anteriores.
-        navigatorKey.currentState?.pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const AuthGate()),
-              (route) => false,
-        );
+        NavigationService.refreshAuthGate();
       }
     });
   }
 
   @override
   void dispose() {
-    // Cancela o 'ouvinte' para evitar vazamentos de memória
     _authSubscription.cancel();
     super.dispose();
   }
@@ -64,14 +66,15 @@ class _MyAppState extends State<MyApp> {
       providers: [
         ChangeNotifierProvider(create: (ctx) => ThemeProvider()),
         ChangeNotifierProvider(create: (ctx) => CartProvider()),
-        ChangeNotifierProvider(create: (ctx) => SalesProvider()),
         ChangeNotifierProvider(create: (ctx) => CashFlowProvider()),
+        ChangeNotifierProvider(create: (ctx) => SalesProvider()),
+        ChangeNotifierProvider(create: (ctx) => SubscriptionProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
-            navigatorKey: navigatorKey, // Atribui a chave global
-            title: 'StoreConnect',
+            navigatorKey: NavigationService.navigatorKey,
+            title: 'Store&Connect',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,

@@ -1,22 +1,13 @@
-// functions/index.js
+// functions/index.js (com formatação corrigida)
 
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
-const mercadopago = require("mercadopago");
+const stripe = require("stripe")(functions.config().stripe.secret_key);
 
 admin.initializeApp();
 
-// IMPORTANTE: Substitua pelo seu Access Token de TESTE
-const MERCADO_PAGO_ACCESS_TOKEN =
-  "TEST-8901718055170782-091009-8efa9f1d7576736404695a8394cf5db4-235493638";
-
-// CORRIGIDO: Usa a nova sintaxe para configurar o cliente do Mercado Pago
-const mpClient = new mercadopago.MercadoPagoConfig({
-  accessToken: MERCADO_PAGO_ACCESS_TOKEN,
-});
-
-// Função "chamável" a partir do app Flutter
-exports.createPaymentPreference = functions.https.onCall(async (data, context) => {
+exports.createPaymentIntent = functions.https.onCall(async (data, context) => {
+  // Verifica se o usuário está autenticado
   if (!context.auth) {
     throw new functions.https.HttpsError(
         "unauthenticated",
@@ -24,35 +15,29 @@ exports.createPaymentPreference = functions.https.onCall(async (data, context) =
     );
   }
 
-  const preference = {
-    items: [
-      {
-        title: "Assinatura Mensal StoreConnect",
-        description: "Acesso completo à plataforma.",
-        quantity: 1,
-        currency_id: "BRL",
-        unit_price: 50.00,
-      },
-    ],
-    back_urls: {
-      success: "https://seusite.com/success",
-      failure: "https://seusite.com/failure",
-      pending: "https://seusite.com/pending",
-    },
-    auto_return: "approved",
-  };
+  // Define o valor da cobrança em centavos (R$ 50,00 = 5000)
+  const amount = 5000;
+  const currency = "brl";
 
   try {
-    // CORRIGIDO: Usa a nova sintaxe para criar a preferência
-    const preferenceClient = new mercadopago.Preference(mpClient);
-    const response = await preferenceClient.create({body: preference});
+    // Cria a "Intenção de Pagamento" (PaymentIntent) no Stripe
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount,
+      currency: currency,
+      automatic_payment_methods: {
+        enabled: true,
+      },
+    });
 
-    return {preferenceId: response.id};
+    // Retorna o 'client_secret' para o App Flutter
+    return {
+      clientSecret: paymentIntent.client_secret,
+    };
   } catch (error) {
-    console.error("Erro ao criar preferência no Mercado Pago:", error);
+    console.error("Erro ao criar PaymentIntent no Stripe:", error);
     throw new functions.https.HttpsError(
         "internal",
-        "Não foi possível criar a preferência de pagamento.",
+        "Não foi possível iniciar o processo de pagamento.",
     );
   }
 });

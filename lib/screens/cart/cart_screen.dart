@@ -139,15 +139,21 @@ class _CartScreenState extends State<CartScreen> {
           const SizedBox(height: 10),
           Expanded(
             child: ListView.builder(
-              itemCount: cart.items.length,
-              itemBuilder: (ctx, i) => CartItemWidget(
-                productId: cartItems[i].productId,
-                title: cartItems[i].name,
-                quantity: cartItems[i].quantity,
-                price: cartItems[i].price,
-              ),
+              itemCount: cart.itemCount,
+              itemBuilder: (ctx, i) {
+                final cartItem = cart.items.values.toList()[i];
+                final productId = cart.items.keys.toList()[i];
+
+                // A lógica de buscar o produto foi movida para o widget de item.
+                // Nós apenas passamos as informações necessárias para ele.
+                return CartItemWidget(
+                  productId: productId,
+                  cartItem: cartItem,
+                  storeId: widget.storeId, // Passa o ID da loja para o widget
+                );
+              },
             ),
-          )
+          ),
         ],
       ),
     );

@@ -1,4 +1,4 @@
-# StoreConnect - Sistema de Gestão para Lojas e Distribuidoras
+# Store&Connect - Sistema de Gestão para Lojas e Distribuidoras
 
 [Read in English](#english-version)
 
@@ -6,7 +6,7 @@
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
 ![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)
 
-**StoreConnect** é um sistema de Ponto de Venda (PDV) e gestão completo, desenvolvido em Flutter, projetado para otimizar as operações de pequenas e médias lojas e distribuidoras. A aplicação é focada em uma arquitetura multi-loja, permitindo que um único sistema gerencie múltiplos estabelecimentos de forma segura e centralizada, com dados armazenados e sincronizados em tempo real através do Firebase.
+**Store&Connect** é um sistema de Ponto de Venda (PDV) e gestão completo, desenvolvido em Flutter, projetado para otimizar as operações de pequenas e médias lojas e distribuidoras. A aplicação é focada em uma arquitetura multi-loja, permitindo que um único sistema gerencie múltiplos estabelecimentos de forma segura e centralizada, com dados armazenados e sincronizados em tempo real através do Firebase.
 
 ## ✨ Funcionalidades Principais
 
@@ -16,8 +16,8 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 - **Tela de Venda Rápida (PDV):** Interface com grade de produtos responsiva que se adapta a diferentes tamanhos de tela (celulares, tablets).
 - **Controle de Estoque em Tempo Real:** A interface visualiza o status do estoque de cada produto (normal, baixo, esgotado) e impede a venda de itens sem estoque.
 - **Carrinho de Compras:** Sistema completo para adicionar produtos, com a flexibilidade de vender para um cliente cadastrado ou para o "Consumidor Final".
-- **Múltiplos Métodos de Pagamento:** Suporte para vendas em Dinheiro, Cartão, PIX e "Fiado" (a prazo).
-- **Vendas "Fiado":** Sistema para registrar vendas a prazo, exigindo a seleção de um cliente cadastrado.
+- **Múltiplos Métodos de Pagamento:** Suporte para vendas em Dinheiro, Cartão, PIX e a Crédito.
+- **Vendas "A Crédito":** Sistema para registrar vendas a prazo, exigindo a seleção de um cliente cadastrado.
 
 ### Gestão de Estoque
 - **Cadastro e Edição de Produtos:** Formulário completo para gerenciar produtos, incluindo nome, preço, quantidade em estoque e **estoque mínimo** para alertas.
@@ -27,14 +27,14 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 ### Gestão de Clientes (CRM)
 - **Cadastro e Edição de Clientes:** Tela dedicada para gerenciar a base de clientes da loja.
 - **Busca Inteligente:** Interface de busca dinâmica para encontrar clientes rapidamente.
-- **Reutilização de Componentes:** A tela de gerenciamento também funciona como um seletor de clientes para outras partes do app (ex: vendas fiado).
+- **Reutilização de Componentes:** A tela de gerenciamento também funciona como um seletor de clientes para outras partes do app (ex: vendas A Crédito).
 
 ### Dashboard e Relatórios
 - **Dashboard em Tempo Real:** Painel principal com os KPIs (Indicadores Chave de Performance) mais importantes:
     - Total de Vendas do Dia
     - Número de Vendas
     - Ticket Médio
-    - Total a Receber (Fiado)
+    - Total a Receber (A Crédito)
     - Contagem de Produtos com Estoque Baixo
 - **Hub de Relatórios:** Uma central organizada para análises mais profundas.
     - **Relatório de Vendas por Período:** Permite filtrar vendas por um intervalo de datas customizável.
@@ -44,12 +44,36 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 
 ### Configurações e Segurança
 - **Tela de Configurações:**
-    - Permite habilitar/desabilitar a funcionalidade de vendas "Fiado".
+    - Permite habilitar/desabilitar a funcionalidade de vendas "A Crédito".
     - Permite configurar o limite numérico para o alerta de estoque baixo.
 - **Tela de Perfil do Usuário:**
     - Permite que o usuário edite seus dados de perfil (nome, documento, telefone).
     - Funcionalidade segura para **alterar senha e e-mail** diretamente no app, com reautenticação para garantir a segurança.
 - **Autenticação Segura:** Fluxo completo de login e logout gerenciado pelo Firebase Auth e um `AuthGate` para proteger as rotas.
+
+### 🚀 Onboarding e Segurança
+- **Fluxo de Cadastro Completo:** Permite que novos usuários se cadastrem com E-mail/Senha ou Login com Google.
+
+- **Criação de Loja:** Onboarding guiado para que o novo usuário crie sua própria loja no sistema.
+
+- **Login Seguro e Moderno:**
+
+- Múltiplas opções de login (E-mail/Senha, Google).
+
+- Opção de "Lembrar-me" para salvar credenciais de forma segura.
+
+- Login com Biometria (digital ou facial) para acesso rápido e seguro, com opção de ativação nas configurações.
+
+- Gerenciamento de Perfil: O usuário pode editar seus dados e alterar sua senha com segurança.
+
+### 💰 Monetização (SaaS)
+- **Integração com Google Play Billing:** Sistema completo para gestão de assinaturas.
+
+- Tela de Assinatura: Interface que busca os planos cadastrados no Play Console e guia o usuário no processo de compra.
+
+- Validação em Tempo Real: O AuthGate verifica o status da assinatura e libera ou bloqueia o acesso ao app instantaneamente após a compra ou cancelamento.
+
+- Ambiente de Testes: Configuração completa para testar compras com contas de licença, sem cobranças reais.
 
 ## 📸 Telas do Aplicativo
 
@@ -84,12 +108,12 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 
 ## 🔮 Próximos Passos (Roadmap)
 
-A próxima grande funcionalidade a ser implementada é a monetização do serviço, transformando o StoreConnect em um SaaS (Software as a Service).
+A próxima grande funcionalidade a ser implementada é a monetização do serviço, transformando o Store&Connect em um SaaS (Software as a Service).
 
-- **☑️ Integração com Mercado Pago para Cobrança de Assinaturas**
+- **☑️ Integração com Stripe para Cobrança de Assinaturas**
     - [ ] Desenvolvimento de um sistema de planos (ex: Básico, Pro) com diferentes limites ou funcionalidades.
-    - [ ] Integração com a API do Mercado Pago para gerar links de pagamento ou cobranças recorrentes (assinaturas) para cada loja cadastrada.
-    - [ ] Desenvolvimento de **Cloud Functions** (lógica de backend no Firebase) para receber webhooks do Mercado Pago, validar os pagamentos e atualizar o status da assinatura da loja no Firestore (ex: `subscriptionStatus: 'active'` ou `'expired'`).
+    - [ ] Versão Web: Adaptar a aplicação para funcionar em navegadores, utilizando Stripe para o sistema de assinaturas web.
+    - [ ] Desenvolvimento de **Cloud Functions** (lógica de backend no Firebase) para receber webhooks do Stripe, validar os pagamentos e atualizar o status da assinatura da loja no Firestore (ex: `subscriptionStatus: 'active'` ou `'expired'`).
     - [ ] Lógica no `AuthGate` para bloquear o acesso às funcionalidades do app para lojas com assinatura pendente ou expirada.
 
 ## 🏁 Como Executar o Projeto
@@ -131,13 +155,13 @@ Website: rodrigocosta-dev.com
 
 ## <a name="english-version"></a> English Version
 
-[Leia em Português](#storeconnect---sistema-de-gestão-para-lojas-e-distribuidoras)
+[Leia em Português](#store&connect---sistema-de-gestão-para-lojas-e-distribuidoras)
 
 ![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
 ![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)
 
-**StoreConnect** is a comprehensive Point of Sale (POS) and management system, developed in Flutter, designed to optimize the operations of small and medium-sized stores and distributors. The application is focused on a multi-store architecture, allowing a single system to manage multiple establishments securely and centrally, with data stored and synced in real-time via Firebase.
+**Store&Connect** is a comprehensive Point of Sale (POS) and management system, developed in Flutter, designed to optimize the operations of small and medium-sized stores and distributors. The application is focused on a multi-store architecture, allowing a single system to manage multiple establishments securely and centrally, with data stored and synced in real-time via Firebase.
 
 ## ✨ Key Features
 
@@ -147,8 +171,8 @@ The application was built on a solid foundation, focusing on essential features 
 - **Quick Sale Screen (POS):** A responsive product grid interface that adapts to different screen sizes (phones, tablets).
 - **Real-time Inventory Control:** The interface displays the stock status of each product (normal, low, out of stock) and prevents the sale of out-of-stock items.
 - **Shopping Cart:** A complete system for adding products, with the flexibility to sell to a registered customer or to a "Final Consumer".
-- **Multiple Payment Methods:** Support for sales via Cash, Card, PIX, and "Fiado" (on credit).
-- **"Fiado" (Credit) Sales:** A system to record on-credit sales, requiring the selection of a registered customer.
+- **Multiple Payment Methods:** Support for sales via Cash, Card, PIX, and credit.
+- **(Credit) Sales:** A system to record on-credit sales, requiring the selection of a registered customer.
 
 ### Inventory Management
 - **Product Creation and Editing:** A complete form to manage products, including name, price, quantity in stock, and a **minimum stock level** for alerts.
@@ -165,7 +189,7 @@ The application was built on a solid foundation, focusing on essential features 
     - Total Sales for the Day
     - Number of Sales
     - Average Ticket
-    - Total Accounts Receivable (Fiado)
+    - Total Accounts Receivable (Credit)
     - Low Stock Product Count
 - **Reports Hub:** An organized center for deeper analysis.
     - **Sales by Period Report:** Allows filtering sales by a customizable date range.
@@ -175,12 +199,36 @@ The application was built on a solid foundation, focusing on essential features 
 
 ### Settings & Security
 - **Settings Screen:**
-    - Allows enabling/disabling the "Fiado" (on-credit) sales feature.
+    - Allows you to enable or disable the credit sales feature.
     - Allows configuring the numerical threshold for the low stock alert.
 - **User Profile Screen:**
     - Allows the user to edit their profile data (name, document, phone).
     - Secure functionality to **change password and email** directly within the app, with re-authentication to ensure security.
 - **Secure Authentication:** A complete login and logout flow managed by Firebase Auth and an `AuthGate` to protect routes.
+
+### 🚀 Onboarding and Security
+- **Complete Registration Flow:** Allows new users to register with Email/Password or Google Login.
+
+- **Store Creation:** Guided onboarding for new users to create their own store in the system.
+
+- **Secure and Modern Login:**
+
+- Multiple login options (Email/Password, Google).
+
+- "Remember Me" option to securely save credentials.
+
+- Biometric login (fingerprint or facial) for quick and secure access, with an option to enable it in the settings.
+
+- Profile Management: Users can securely edit their data and change their password.
+
+### 💰 Monetization (SaaS)
+- **Integration with Google Play Billing:** Complete subscription management system.
+
+- Subscription Screen: Interface that searches for plans registered on the Play Console and guides the user through the purchase process.
+
+- Real-Time Validation: AuthGate checks subscription status and instantly grants or blocks access to the app after purchase or cancellation.
+
+- Test Environment: Full configuration for testing purchases with licensed accounts, without incurring any actual charges.
 
 ## 📸 App Screens
 
@@ -215,12 +263,12 @@ The application was built on a solid foundation, focusing on essential features 
 
 ## 🔮 Next Steps (Roadmap)
 
-The next major feature to be implemented is the monetization of the service, turning StoreConnect into a SaaS (Software as a Service).
+The next major feature to be implemented is the monetization of the service, turning Store&Connect into a SaaS (Software as a Service).
 
-- **☑️ Mercado Pago Integration for Subscription Billing**
+- **☑️ Stripe Integration for Subscription Billing**
     - [ ] Development of a plan system (e.g., Basic, Pro) with different limits or features.
-    - [ ] Integration with the Mercado Pago API to generate payment links or recurring charges (subscriptions) for each registered store.
-    - [ ] Development of **Cloud Functions** (Firebase backend logic) to receive webhooks from Mercado Pago, validate payments, and update the store's subscription status in Firestore (e.g., `subscriptionStatus: 'active'` or `'expired'`).
+    - [ ] Web Version: Adapt the application to work in browsers, using Stripe for the web subscription system.
+    - [ ] Development of **Cloud Functions** (Firebase backend logic) to receive webhooks from Stripe, validate payments, and update the store's subscription status in Firestore (e.g., `subscriptionStatus: 'active'` or `'expired'`).
     - [ ] Logic in the `AuthGate` to block access to the app's features for stores with a pending or expired subscription.
 
 ## 🏁 Getting Started

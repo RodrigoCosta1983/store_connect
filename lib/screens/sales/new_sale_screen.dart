@@ -94,7 +94,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
             const DrawerHeader(
               decoration: BoxDecoration(color: Colors.blue),
               child: Text(
-                'StoreConnect',
+                'Store&Connect',
                 style: TextStyle(color: Colors.white, fontSize: 24),
               ),
             ),
@@ -184,7 +184,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 showDialog(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text("Sobre o StoreConnect"),
+                    title: const Text("Sobre o Store&Connect"),
                     content: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,16 +315,30 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                       ),
 
                       itemBuilder: (ctx, i) {
-                        final productData = productDocs[i].data() as Map<String, dynamic>;
-
-                        // --- ADICIONE ESTA LINHA PARA DIAGNÓSTICO ---
-                        print('DADOS DO FIREBASE para ${productData['name']}: $productData');
-                        // ---------------------------------------------
-
-                        final product = Product.fromMap(productDocs[i].id, productData);
+                        final productData =
+                            productDocs[i].data() as Map<String, dynamic>;
+                        final product = Product.fromMap(
+                          productDocs[i].id,
+                          productData,
+                        );
 
                         final bool isOutOfStock = product.quantidade <= 0;
-                        final bool isLowStock = product.quantidade > 0 && product.quantidade <= 5;
+                        final bool isLowStock =
+                            product.quantidade > 0 && product.quantidade <= 5;
+
+                        // Pega o tema atual para saber se é modo escuro ou não
+                        final theme = Theme.of(context);
+                        final isDarkMode = theme.brightness == Brightness.dark;
+
+                        // Lógica de cores adaptáveis para o card e texto (já implementada)
+                        final cardColor = isOutOfStock
+                            ? theme.cardColor.withOpacity(0.5)
+                            : theme.cardColor.withOpacity(0.9);
+                        final textColor = isOutOfStock
+                            ? theme.textTheme.bodyMedium?.color?.withOpacity(
+                                0.5,
+                              )
+                            : theme.textTheme.bodyMedium?.color;
 
                         return Card(
                           elevation: 4,
@@ -332,29 +346,32 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                             borderRadius: BorderRadius.circular(15),
                           ),
                           clipBehavior: Clip.antiAlias,
-                          color: isOutOfStock
-                              ? Colors.grey.shade300
-                              : Theme.of(context).cardColor.withOpacity(0.9),
+                          color: cardColor,
+                          // <-- Usa a cor adaptável
                           child: Stack(
                             children: [
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: <Widget>[
-                                  // ... (parte da Imagem, Nome e Preço continua igual) ...
                                   Expanded(
-                                    child:
-                                        (product.imageUrl != null &&
-                                            product.imageUrl!.isNotEmpty)
-                                        ? Image.network(
-                                            product.imageUrl!,
-                                            fit: BoxFit.cover,
-                                          )
-                                        : Center(
-                                            child: Icon(
-                                              Icons.inventory_2,
-                                              size: 50,
+                                    child: Opacity(
+                                      opacity: isOutOfStock ? 0.4 : 1.0,
+                                      // Deixa a imagem um pouco apagada
+                                      child:
+                                          (product.imageUrl != null &&
+                                              product.imageUrl!.isNotEmpty)
+                                          ? Image.network(
+                                              product.imageUrl!,
+                                              fit: BoxFit.cover,
+                                            )
+                                          : Center(
+                                              child: Icon(
+                                                Icons.inventory_2,
+                                                size: 50,
+                                                color: textColor,
+                                              ),
                                             ),
-                                          ),
+                                    ),
                                   ),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
@@ -363,8 +380,10 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                     ),
                                     child: Text(
                                       product.name,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.bold,
+                                        color:
+                                            textColor, // <-- Usa a cor de texto adaptável
                                       ),
                                       textAlign: TextAlign.center,
                                       maxLines: 2,
@@ -382,7 +401,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                       'R\$ ${product.price.toStringAsFixed(2)}',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
-                                        color: Theme.of(context).primaryColor,
+                                        // --- COR DO PREÇO AJUSTADA ---
+                                        // Se for modo escuro, a cor será branca. Senão, usa a cor primária.
+                                        color: isDarkMode
+                                            ? Colors.white70
+                                            : theme.primaryColor,
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -411,10 +434,14 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                         ),
                                         tapTargetSize:
                                             MaterialTapTargetSize.shrinkWrap,
+                                        // --- COR DO BOTÃO AJUSTADA ---
+                                        // Se estiver esgotado, fica cinza. Senão, usa um roxo vibrante em ambos os modos.
                                         backgroundColor: isOutOfStock
-                                            ? Colors.grey
-                                            : Theme.of(context).primaryColor,
-                                        foregroundColor: Colors.white,
+                                            ? Colors.grey.withOpacity(0.3)
+                                            : Colors.deepPurple,
+                                        // Cor fixa para destaque
+                                        foregroundColor: Colors
+                                            .white, // Texto e ícone sempre brancos
                                       ),
                                       onPressed: isOutOfStock
                                           ? null
@@ -439,7 +466,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
-                                      // MODIFICADO: Usa 'product.quantidade' para exibir o estoque
                                       isOutOfStock
                                           ? 'Esgotado'
                                           : 'Estoque: ${product.quantidade}',

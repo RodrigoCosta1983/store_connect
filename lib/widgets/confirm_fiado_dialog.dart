@@ -84,7 +84,7 @@ class _ConfirmFiadoDialogState extends State<ConfirmFiadoDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Venda (Fiado) finalizada e estoque atualizado!'),
+            content: Text('Venda a crédito concluída! Estoque atualizado.'),
             backgroundColor: Colors.green,
           ),
         );
@@ -109,7 +109,7 @@ class _ConfirmFiadoDialogState extends State<ConfirmFiadoDialog> {
     final cart = Provider.of<CartProvider>(context, listen: false);
 
     return AlertDialog(
-      title: const Text('Confirmar Venda Fiado'),
+      title: const Text('Confirmar Venda a Crédito'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

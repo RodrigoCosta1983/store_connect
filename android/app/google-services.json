@@ -7,12 +7,33 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:294766590074:android:82c38b9f3a34123dafe3c3",
+        "mobilesdk_app_id": "1:294766590074:android:f993b08bb3f300b2afe3c3",
         "android_client_info": {
-          "package_name": "com.rodrigocostadev.store_connect.store_connect"
+          "package_name": "com.storeeconnect.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "294766590074-4if12hscuagb9ej5fm4bh8cravukb4u7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.storeeconnect.app",
+            "certificate_hash": "054be68aec121cf6d39380e25272dda96f305cbb"
+          }
+        },
+        {
+          "client_id": "294766590074-vvofb78210aa7r9p0qebi788446mcptk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.storeeconnect.app",
+            "certificate_hash": "638c0f42c6feb59e7895fc173920615a18d3e4e9"
+          }
+        },
+        {
+          "client_id": "294766590074-s5uc0aaaege2em5vsg8j5mimih6at2i1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyA3glXnB8XDm1IUFfKUGmaNcULnUZF_hrM"
@@ -20,7 +41,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "294766590074-s5uc0aaaege2em5vsg8j5mimih6at2i1.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "294766590074-10o4jc70stlt45db2jlco38aoi9m7qvi.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.rodrigocostadev.storeconnect.storeConnect"
+              }
+            }
+          ]
         }
       }
     }
