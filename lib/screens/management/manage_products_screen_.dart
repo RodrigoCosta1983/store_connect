@@ -1,6 +1,5 @@
 // lib/screens/management/manage_products_screen.dart
 
-import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
@@ -8,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart'; // <-- IMPORT ADICIONADO PARA FORMATAR PREÇO
 import 'package:store_connect/widgets/dynamic_background.dart';
 
 // --- Diálogo de Adicionar/Editar Produto (sem alterações) ---
@@ -22,7 +20,6 @@ class _ProductDialog extends StatefulWidget {
 }
 
 class _ProductDialogState extends State<_ProductDialog> {
-  // ... (código do diálogo permanece o mesmo) ...
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
@@ -72,10 +69,6 @@ class _ProductDialogState extends State<_ProductDialog> {
     setState(() {});
   }
 
-  // Substitua APENAS o método _saveProduct na classe _ProductDialogState
-
-  // SUBSTITUA TODO O MÉTODO _saveProduct por este:
-
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
     if (widget.storeId.isEmpty) return;
@@ -89,160 +82,16 @@ class _ProductDialogState extends State<_ProductDialog> {
     String imageUrl = _existingImageUrl ?? '';
 
     try {
-      print('===== DEBUG UPLOAD PRODUTO =====');
-      print('🏪 StoreId: ${widget.storeId}');
-      print('📦 Nome: $name');
-      print('💰 Preço: $price');
-      print('📊 Quantidade: $quantidade');
-
-      // Verifica se há imagem para upload
       if (_selectedImageFile != null || _selectedImageBytes != null) {
-        print('📸 Nova imagem selecionada. Iniciando upload...');
-
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final path = 'product_images/${widget.storeId}/$fileName';
-        print('🔗 Caminho: $path');
-
-        // MUDANÇA: Vamos tentar obter a referência de forma diferente
-        print('🔧 Obtendo instância do Storage...');
-        final storage = FirebaseStorage.instance;
-        print('✓ Instância obtida');
-
-        print('🔧 Criando referência...');
-        final ref = storage.ref(path); // Forma alternativa mais simples
-        print('✓ Referência criada: ${ref.fullPath}');
-        print('✓ Bucket: ${ref.bucket}');
-
-        try {
-          if (kIsWeb) {
-            print('⏳ Upload Web - Não implementado neste teste');
-          } else {
-            print('⏳ Fazendo upload (Mobile)...');
-            print('📦 Arquivo existe: ${await _selectedImageFile!.exists()}');
-            print('📦 Tamanho do arquivo: ${await _selectedImageFile!.length()} bytes');
-
-            // MUDANÇA: Vamos tentar com metadados explícitos
-            final metadata = SettableMetadata(
-              contentType: 'image/jpeg',
-              customMetadata: {
-                'uploadedBy': 'flutter-app',
-                'storeId': widget.storeId,
-              },
-            );
-
-            print('🚀 Iniciando putFile...');
-            final uploadTask = ref.putFile(_selectedImageFile!, metadata);
-            print('✓ Task criada');
-
-            // Monitora com mais detalhes
-            int lastProgress = -1;
-            uploadTask.snapshotEvents.listen(
-                  (TaskSnapshot snapshot) {
-                final progress = (snapshot.bytesTransferred / snapshot.totalBytes * 100).toInt();
-                if (progress != lastProgress) {
-                  lastProgress = progress;
-                  print('📊 Progresso: $progress% (${snapshot.bytesTransferred}/${snapshot.totalBytes} bytes)');
-                  print('   Estado: ${snapshot.state}');
-                  print('   Metadata: ${snapshot.metadata?.fullPath}');
-                }
-              },
-              onError: (error) {
-                print('❌ ERRO NO STREAM: $error');
-                print('   Tipo: ${error.runtimeType}');
-                if (error is FirebaseException) {
-                  print('   Código Firebase: ${error.code}');
-                  print('   Mensagem: ${error.message}');
-                }
-              },
-              onDone: () {
-                print('✅ Stream finalizado (onDone)');
-              },
-            );
-
-            print('⏰ Aguardando conclusão (timeout: 30s)...');
-
-            // Aguarda com timeout
-            final TaskSnapshot snapshot = await uploadTask
-                .timeout(
-              const Duration(seconds: 30),
-              onTimeout: () {
-                print('⏰ TIMEOUT após 30 segundos!');
-                print('   Último estado conhecido: ${uploadTask.snapshot.state}');
-                print('   Bytes transferidos: ${uploadTask.snapshot.bytesTransferred}');
-                throw TimeoutException('Upload demorou mais de 30 segundos');
-              },
-            )
-                .catchError((error) {
-              print('❌ ERRO NO AWAIT: $error');
-              print('   Tipo: ${error.runtimeType}');
-              if (error is FirebaseException) {
-                print('   Código: ${error.code}');
-                print('   Mensagem: ${error.message}');
-                print('   Plugin: ${error.plugin}');
-              }
-              throw error;
-            });
-
-            print('✅ Upload concluído!');
-            print('   Bytes finais: ${snapshot.bytesTransferred}');
-            print('   Estado final: ${snapshot.state}');
-          }
-
-          // Obtém a URL
-          print('🔗 Obtendo URL de download...');
-          imageUrl = await ref.getDownloadURL();
-          print('✅ URL obtida: $imageUrl');
-
-        } on TimeoutException catch (e) {
-          print('⏰ Timeout capturado: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Upload muito lento. Verifique sua conexão.'),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 5),
-              ),
-            );
-          }
-          setState(() => _isLoading = false);
-          return;
-
-        } on FirebaseException catch (e) {
-          print('===== ERRO FIREBASE STORAGE =====');
-          print('❌ Código: ${e.code}');
-          print('❌ Mensagem: ${e.message}');
-          print('❌ Plugin: ${e.plugin}');
-          print('❌ Stack: ${e.stackTrace}');
-          print('================================');
-
-          String errorMsg = 'Erro no upload: ${e.code}';
-          if (e.code == 'unauthorized') {
-            errorMsg = 'Sem permissão para fazer upload';
-          } else if (e.code == 'canceled') {
-            errorMsg = 'Upload cancelado';
-          } else if (e.code == 'unknown') {
-            errorMsg = 'Erro desconhecido. Verifique sua conexão.';
-          }
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(errorMsg),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 5),
-              ),
-            );
-          }
-
-          setState(() => _isLoading = false);
-          return;
+        final ref = FirebaseStorage.instance.ref().child('product_images').child(widget.storeId).child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+        if (kIsWeb) {
+          await ref.putData(_selectedImageBytes!);
+        } else {
+          await ref.putFile(_selectedImageFile!);
         }
-      } else {
-        print('ℹ️ Nenhuma imagem nova selecionada');
+        imageUrl = await ref.getDownloadURL();
       }
 
-      // Salva no Firestore
-      print('💾 Salvando no Firestore...');
       final productData = {
         'name': name,
         'name_lowercase': name.toLowerCase(),
@@ -253,50 +102,16 @@ class _ProductDialogState extends State<_ProductDialog> {
       };
 
       if (_isEditing) {
-        await FirebaseFirestore.instance
-            .collection('stores')
-            .doc(widget.storeId)
-            .collection('products')
-            .doc(widget.product!.id)
-            .update(productData);
-        print('✅ Produto atualizado no Firestore');
+        await FirebaseFirestore.instance.collection('stores').doc(widget.storeId).collection('products').doc(widget.product!.id).update(productData);
       } else {
         productData['createdAt'] = Timestamp.now();
-        await FirebaseFirestore.instance
-            .collection('stores')
-            .doc(widget.storeId)
-            .collection('products')
-            .add(productData);
-        print('✅ Produto criado no Firestore');
+        await FirebaseFirestore.instance.collection('stores').doc(widget.storeId).collection('products').add(productData);
       }
 
-      print('============================');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Produto salvo com sucesso!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.of(context).pop();
-      }
-
+      if (mounted) Navigator.of(context).pop();
     } catch (error) {
-      print('===== ERRO GERAL =====');
-      print('❌ Erro: $error');
-      print('❌ Tipo: ${error.runtimeType}');
-      print('❌ Stack: ${StackTrace.current}');
-      print('====================');
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao salvar produto: $error'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar produto: $error')));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -339,7 +154,7 @@ class _ProductDialogState extends State<_ProductDialog> {
               TextFormField(
                 controller: _priceController,
                 decoration: const InputDecoration(labelText: 'Preço (ex: 10.50)'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Campo obrigatório.';
                   if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Número inválido.';
@@ -452,6 +267,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                       }
                       final allProducts = snapshot.data?.docs ?? [];
 
+                      // --- CORREÇÃO: A lógica de filtro agora está aqui ---
                       final filteredProducts = allProducts.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
                         final name = (data['name_lowercase'] as String? ?? '').toLowerCase();
@@ -473,15 +289,13 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                         );
                       }
 
-                      // --- MUDANÇA PRINCIPAL: LÓGICA RESPONSIVA ---
-                      return LayoutBuilder(
-                        builder: (context, constraints) {
-                          // Se a tela for larga, mostra a tabela. Senão, a lista.
-                          if (constraints.maxWidth > 768) {
-                            return _buildProductDataTable(filteredProducts, isDarkMode, constraints);
-                          } else {
-                            return _buildProductListView(filteredProducts, isDarkMode);
-                          }
+                      return ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
+                        itemCount: filteredProducts.length,
+                        itemBuilder: (ctx, index) {
+                          final productDoc = filteredProducts[index];
+                          final productData = productDoc.data() as Map<String, dynamic>;
+                          return _buildProductCard(productDoc, productData, isDarkMode);
                         },
                       );
                     },
@@ -500,111 +314,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     );
   }
 
-  // --- WIDGET ANTIGO (AGORA UM MÉTODO SEPARADO) ---
-  Widget _buildProductListView(List<QueryDocumentSnapshot> products, bool isDarkMode) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
-      itemCount: products.length,
-      itemBuilder: (ctx, index) {
-        final productDoc = products[index];
-        final productData = productDoc.data() as Map<String, dynamic>;
-        return _buildProductCard(productDoc, productData, isDarkMode);
-      },
-    );
-  }
-
-  // --- NOVO WIDGET: A TABELA PARA WEB ---
-  Widget _buildProductDataTable(List<QueryDocumentSnapshot> products, bool isDarkMode, BoxConstraints constraints) {
-    final formatCurrency = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
-
-    return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        // Envolve a tabela com um ConstrainedBox para definir uma largura mínima
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: constraints.maxWidth), // Força a tabela a ter no mínimo a largura da tela
-          child: DataTable(
-              columnSpacing: 24,
-              headingRowColor: MaterialStateProperty.all(Theme.of(context).splashColor),
-              columns: const [
-                DataColumn(label: Text('Produto')),
-                DataColumn(label: Text('Estoque (Mín.)'), numeric: true),
-                DataColumn(label: Text('Preço'), numeric: true),
-                DataColumn(label: Text('Ações')),
-              ],
-              rows: products.map((productDoc) {
-            final productData = productDoc.data() as Map<String, dynamic>;
-            final imageUrl = productData['imageUrl'] as String?;
-            final quantidade = productData['quantidade'] as int? ?? 0;
-            final minimumStock = productData['minimumStock'] as int? ?? 0;
-            final price = (productData['price'] as num? ?? 0).toDouble();
-            final bool needsRestock = quantidade <= minimumStock;
-
-            return DataRow(
-              color: MaterialStateProperty.resolveWith<Color?>(
-                    (Set<MaterialState> states) {
-                  // Colore a linha inteira se o estoque estiver baixo
-                  if (needsRestock) return Colors.red.withOpacity(0.2);
-                  return null; // Usa a cor padrão
-                },
-              ),
-              cells: [
-                // Célula do Produto
-                DataCell(Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.grey.shade700,
-                      backgroundImage: (imageUrl != null && imageUrl.isNotEmpty) ? NetworkImage(imageUrl) : null,
-                      child: (imageUrl == null || imageUrl.isEmpty) ? const Icon(Icons.inventory_2, color: Colors.white, size: 20) : null,
-                    ),
-                    const SizedBox(width: 16),
-                    Text(productData['name'] ?? 'Sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ],
-                )),
-                // Célula do Estoque
-                DataCell(
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      if (needsRestock) const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 18),
-                      if (needsRestock) const SizedBox(width: 8),
-                      Text(
-                        '$quantidade ($minimumStock)',
-                        style: TextStyle(
-                          color: needsRestock ? Colors.red.shade800 : null,
-                          fontWeight: needsRestock ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Célula do Preço
-                DataCell(Text(formatCurrency.format(price))),
-                // Célula das Ações
-                DataCell(Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blueAccent),
-                      onPressed: () => _showProductDialog(product: productDoc),
-                      tooltip: 'Editar',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _deleteProduct(productDoc.id),
-                      tooltip: 'Excluir',
-                    ),
-                  ],
-                )),
-              ],
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
   Widget _buildCustomHeader(bool isDarkMode) {
-    // ... (código do header permanece o mesmo) ...
     final headerColor = isDarkMode ? Colors.white : Colors.black;
 
     return Padding(
@@ -647,7 +357,6 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   }
 
   Widget _buildProductCard(DocumentSnapshot productDoc, Map<String, dynamic> productData, bool isDarkMode) {
-    // ... (código do card permanece o mesmo) ...
     final imageUrl = productData['imageUrl'] as String?;
     final quantidade = productData['quantidade'] as int? ?? 0;
     final minimumStock = productData['minimumStock'] as int? ?? 0;

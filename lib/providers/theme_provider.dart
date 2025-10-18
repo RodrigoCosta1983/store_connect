@@ -21,8 +21,12 @@ class ThemeProvider with ChangeNotifier {
       _themeMode = ThemeMode.light;
     } else if (savedTheme == 'dark') {
       _themeMode = ThemeMode.dark;
-    } else {
+    } else if (savedTheme == 'system') {
       _themeMode = ThemeMode.system;
+    }
+    else {
+    // Nenhuma preferência salva ainda? Inicie com o modo claro.
+    _themeMode = ThemeMode.light;
     }
     notifyListeners();
   }

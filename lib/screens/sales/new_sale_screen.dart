@@ -257,16 +257,23 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 // --- Lógica para grade responsiva ---
                 final screenWidth = constraints.maxWidth;
                 int crossAxisCount = 2;
-                double childAspectRatio = 1 / 1.15;
+                double childAspectRatio;
 
-                if (screenWidth > 1200) {
+                if (screenWidth > 1500) {
+                  crossAxisCount = 6;
+                  childAspectRatio = 1.1; // Mais largo que alto
+                } else if (screenWidth > 1200) {
                   crossAxisCount = 5;
-                  childAspectRatio = 1 / 1.2;
-                } else if (screenWidth > 800) {
+                  childAspectRatio = 1.05; // Quase quadrado, um pouco largo
+                } else if (screenWidth > 900) {
                   crossAxisCount = 4;
-                  childAspectRatio = 1 / 1.1;
+                  childAspectRatio = 1.0; // Quadrado
                 } else if (screenWidth > 600) {
                   crossAxisCount = 3;
+                  childAspectRatio = 0.9; // Um pouco mais alto que largo
+                } else {
+                  crossAxisCount = 2;
+                  childAspectRatio = 0.8; // Padrão mobile, mais alto
                 }
                 // --- Fim da lógica responsiva ---
 

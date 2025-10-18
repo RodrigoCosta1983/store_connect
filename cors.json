@@ -1,6 +1,9 @@
 [
   {
-    "origin": ["http://localhost:*"],
+    "origin": [
+      "http://localhost:*",
+      "https://console.firebase.google.com"
+    ],
     "method": ["GET"],
     "maxAgeSeconds": 3600
   }

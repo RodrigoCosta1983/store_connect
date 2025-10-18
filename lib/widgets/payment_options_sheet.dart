@@ -1,3 +1,4 @@
+// payment_options_sheet.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -20,10 +21,15 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
   var _isLoading = false;
   bool _fiadoIsEnabled = false;
 
+  // ADICIONADO: guarda a URL do QR Code do PIX (se houver)
+  String? _pixQrCodeUrl;
+  bool _pixLoading = false;
+
   @override
   void initState() {
     super.initState();
     _loadFiadoPreference();
+    _loadPixQrCodeUrl(); // carrega a url do PIX ao abrir o sheet
   }
 
   Future<void> _loadFiadoPreference() async {
@@ -32,6 +38,27 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
       setState(() {
         _fiadoIsEnabled = prefs.getBool('fiado_enabled') ?? false;
       });
+    }
+  }
+
+  // ADICIONADO: carrega do Firestore o campo pixQrCodeUrl do documento da loja
+  Future<void> _loadPixQrCodeUrl() async {
+    setState(() => _pixLoading = true);
+    try {
+      final doc = await FirebaseFirestore.instance.collection('stores').doc(widget.storeId).get();
+      if (doc.exists) {
+        final data = doc.data();
+        final url = data?['pixQrCodeUrl'] as String?;
+        if (mounted) {
+          setState(() {
+            _pixQrCodeUrl = url;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Erro ao carregar pixQrCodeUrl: $e');
+    } finally {
+      if (mounted) setState(() => _pixLoading = false);
     }
   }
 
@@ -86,6 +113,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     }
   }
 
+  // Atualiza o diálogo de PIX para usar a imagem salva no Firestore (se existir)
   void _showPixDialog() {
     showDialog(
       context: context,
@@ -97,7 +125,24 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
           children: [
             const Text('Aponte a câmera para o QR Code para pagar.'),
             const SizedBox(height: 20),
-            Image.asset('assets/images/pix_qrcode.png', height: 150, width: 150),
+            // Se estiver carregando, mostra spinner; se tiver URL mostra Image.network; se não, fallback para asset
+            if (_pixLoading)
+              const SizedBox(height: 150, width: 150, child: Center(child: CircularProgressIndicator()))
+            else if (_pixQrCodeUrl != null && _pixQrCodeUrl!.isNotEmpty)
+            // Exibe a imagem do Firebase Storage com tratamento de erro e fit
+              Image.network(
+                _pixQrCodeUrl!,
+                height: 150,
+                width: 150,
+                fit: BoxFit.contain,
+                // em caso de falha, mostramos o placeholder local
+                errorBuilder: (context, error, stackTrace) {
+                  debugPrint('Erro ao carregar pixQrCodeUrl: $error');
+                  return Image.asset('assets/images/pix_qrcode.png', height: 150, width: 150);
+                },
+              )
+            else
+              Image.asset('assets/images/pix_qrcode.png', height: 150, width: 150),
           ],
         ),
         actions: [
@@ -219,7 +264,6 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
             ListTile(
               leading: const Icon(Icons.person_add_alt_1, size: 30, color: Colors.orange),
               title: const Text('Crédito / A Prazo', style: TextStyle(fontSize: 18)),
-              // --- LÓGICA CORRIGIDA E SIMPLIFICADA ---
               onTap: () {
                 final selectedCustomer = cart.selectedCustomer;
 
