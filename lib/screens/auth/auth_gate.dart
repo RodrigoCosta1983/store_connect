@@ -1,3 +1,5 @@
+// lib/screens/auth/auth_gate.dart
+
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -29,27 +31,46 @@ class _AuthGateState extends State<AuthGate> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final subscriptionProvider = Provider.of<SubscriptionProvider>(context, listen: false);
-      subscriptionProvider.setOnPurchaseSuccessCallback(_forceRefresh);
+      // Acesso seguro ao SubscriptionProvider: evita lançar caso o provider não exista (ex.: web)
+      final subscriptionProvider = _maybeSubscriptionProvider(context);
+      if (subscriptionProvider != null) {
+        try {
+          subscriptionProvider.setOnPurchaseSuccessCallback(_forceRefresh);
+          debugPrint('SubscriptionProvider: callback de compra registrado.');
+        } catch (e, st) {
+          debugPrint('Erro ao registrar callback no SubscriptionProvider: $e\n$st');
+        }
+      } else {
+        debugPrint('SubscriptionProvider não disponível — pulando registro do callback de compra.');
+      }
     });
   }
 
+  // Helper que tenta obter o SubscriptionProvider e retorna null se não estiver disponível.
+  SubscriptionProvider? _maybeSubscriptionProvider(BuildContext context) {
+    try {
+      return Provider.of<SubscriptionProvider>(context, listen: false);
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _forceRefresh() async {
-    print('🔄 AuthGate: Forçando refresh após compra...');
+    debugPrint('🔄 AuthGate: Forçando refresh após compra...');
 
     try {
-      print('⏱️ Aguardando 500ms...');
+      debugPrint('⏱️ Aguardando 500ms...');
       await Future.delayed(const Duration(milliseconds: 500));
 
-      print('👤 Verificando usuário atual...');
+      debugPrint('👤 Verificando usuário atual...');
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        print('❌ Usuário não encontrado');
+        debugPrint('❌ Usuário não encontrado');
         return;
       }
-      print('✅ Usuário encontrado: ${user.uid}');
+      debugPrint('✅ Usuário encontrado: ${user.uid}');
 
-      print('📄 Consultando documento do usuário...');
+      debugPrint('📄 Consultando documento do usuário...');
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -57,18 +78,18 @@ class _AuthGateState extends State<AuthGate> {
           .timeout(const Duration(seconds: 10));
 
       if (!userDoc.exists) {
-        print('❌ Documento do usuário não existe');
+        debugPrint('❌ Documento do usuário não existe');
         return;
       }
 
       final storeId = userDoc.data()?['storeId'] as String?;
       if (storeId == null || storeId.isEmpty) {
-        print('❌ StoreId não encontrado no documento do usuário');
+        debugPrint('❌ StoreId não encontrado no documento do usuário');
         return;
       }
-      print('✅ StoreId encontrado: $storeId');
+      debugPrint('✅ StoreId encontrado: $storeId');
 
-      print('🏪 Consultando documento da loja...');
+      debugPrint('🏪 Consultando documento da loja...');
       final storeDoc = await FirebaseFirestore.instance
           .collection('stores')
           .doc(storeId)
@@ -76,21 +97,21 @@ class _AuthGateState extends State<AuthGate> {
           .timeout(const Duration(seconds: 10));
 
       if (!storeDoc.exists) {
-        print('❌ Documento da loja não existe');
+        debugPrint('❌ Documento da loja não existe');
         return;
       }
 
       final subscriptionStatus = storeDoc.data()?['subscriptionStatus'] as String?;
 
-      print('🔍 Consulta direta após callback:');
-      print('   storeId: $storeId');
-      print('   subscriptionStatus: $subscriptionStatus');
+      debugPrint('🔍 Consulta direta após callback:');
+      debugPrint('   storeId: $storeId');
+      debugPrint('   subscriptionStatus: $subscriptionStatus');
 
       if (subscriptionStatus == 'active') {
-        print('✅ Status ativo detectado! Navegando para HomeScreen...');
+        debugPrint('✅ Status ativo detectado! Navegando para HomeScreen...');
         NavigationService.navigateToHome(storeId);
       } else {
-        print('⚠️ Status ainda não ativo ($subscriptionStatus), forçando rebuild...');
+        debugPrint('⚠️ Status ainda não ativo ($subscriptionStatus), forçando rebuild...');
         if (mounted) {
           setState(() {
             _refreshCounter++;
@@ -98,8 +119,8 @@ class _AuthGateState extends State<AuthGate> {
         }
       }
     } catch (e, stackTrace) {
-      print('❌ Erro na consulta direta: $e');
-      print('📋 Stack trace: $stackTrace');
+      debugPrint('❌ Erro na consulta direta: $e');
+      debugPrint('📋 Stack trace: $stackTrace');
       NavigationService.refreshAuthGate();
     }
   }
@@ -107,7 +128,7 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _retryLoad() async {
     if (_retryCount < _maxRetries) {
       _retryCount++;
-      print('🔄 Tentativa ${_retryCount}/$_maxRetries');
+      debugPrint('🔄 Tentativa ${_retryCount}/$_maxRetries');
 
       // Log analytics
       await FirebaseAnalytics.instance.logEvent(
@@ -122,7 +143,7 @@ class _AuthGateState extends State<AuthGate> {
         _refreshCounter++;
       });
     } else {
-      print('❌ Máximo de tentativas alcançado');
+      debugPrint('❌ Máximo de tentativas alcançado');
 
       // Log quando alcança máximo
       await FirebaseAnalytics.instance.logEvent(
@@ -303,7 +324,7 @@ class _AuthGateState extends State<AuthGate> {
             onTimeout: (sink) => sink.close(),
           )
               .handleError((error) {
-            print('❌ Erro no stream do usuário: $error');
+            debugPrint('❌ Erro no stream do usuário: $error');
           }),
           builder: (context, userDocSnapshot) {
             if (userDocSnapshot.connectionState == ConnectionState.waiting) {
@@ -323,7 +344,7 @@ class _AuthGateState extends State<AuthGate> {
 
             // Tratamento de erro no carregamento do usuário
             if (userDocSnapshot.hasError) {
-              print('❌ Erro no snapshot do usuário: ${userDocSnapshot.error}');
+              debugPrint('❌ Erro no snapshot do usuário: ${userDocSnapshot.error}');
 
               // Log erro do usuário
               FirebaseAnalytics.instance.logEvent(
@@ -366,7 +387,7 @@ class _AuthGateState extends State<AuthGate> {
                 onTimeout: (sink) => sink.close(),
               )
                   .handleError((error) {
-                print('❌ Erro no stream da loja: $error');
+                debugPrint('❌ Erro no stream da loja: $error');
               }),
               builder: (context, storeDocSnapshot) {
                 if (storeDocSnapshot.connectionState == ConnectionState.waiting) {
@@ -386,7 +407,7 @@ class _AuthGateState extends State<AuthGate> {
 
                 // Tratamento de erro no carregamento da loja
                 if (storeDocSnapshot.hasError) {
-                  print('❌ Erro no snapshot da loja: ${storeDocSnapshot.error}');
+                  debugPrint('❌ Erro no snapshot da loja: ${storeDocSnapshot.error}');
 
                   // Log erro da loja
                   FirebaseAnalytics.instance.logEvent(
@@ -428,14 +449,14 @@ class _AuthGateState extends State<AuthGate> {
                 final isFromCache = docSnapshot.metadata.isFromCache;
                 final hasPendingWrites = docSnapshot.metadata.hasPendingWrites;
 
-                print('===== AuthGate Debug [$now] =====');
-                print('   refreshCounter: $_refreshCounter');
-                print('   retryCount: $_retryCount');
-                print('   storeId: $storeId');
-                print('   subscriptionStatus: $subscriptionStatus');
-                print('   isFromCache: $isFromCache');
-                print('   hasPendingWrites: $hasPendingWrites');
-                print('================================');
+                debugPrint('===== AuthGate Debug [$now] =====');
+                debugPrint('   refreshCounter: $_refreshCounter');
+                debugPrint('   retryCount: $_retryCount');
+                debugPrint('   storeId: $storeId');
+                debugPrint('   subscriptionStatus: $subscriptionStatus');
+                debugPrint('   isFromCache: $isFromCache');
+                debugPrint('   hasPendingWrites: $hasPendingWrites');
+                debugPrint('================================');
 
                 // Reset retry count on success
                 if (_retryCount > 0) {
@@ -443,10 +464,10 @@ class _AuthGateState extends State<AuthGate> {
                 }
 
                 if (subscriptionStatus == 'active') {
-                  print('✅ Navegando para HomeScreen');
+                  debugPrint('✅ Navegando para HomeScreen');
                   return HomeScreen(storeId: storeId);
                 } else {
-                  print('⚠️ Navegando para SubscriptionScreen (status: $subscriptionStatus)');
+                  debugPrint('⚠️ Navegando para SubscriptionScreen (status: $subscriptionStatus)');
                   return SubscriptionScreen(storeId: storeId);
                 }
               },
@@ -456,5 +477,4 @@ class _AuthGateState extends State<AuthGate> {
       },
     );
   }
-
 }

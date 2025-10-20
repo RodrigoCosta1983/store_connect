@@ -1,10 +1,8 @@
 [
   {
-    "origin": [
-      "http://localhost:*",
-      "https://console.firebase.google.com"
-    ],
-    "method": ["GET"],
+    "origin": ["http://localhost:53634", "http://localhost:49753", "http://localhost:8080", "https://your-deployed-domain.com"],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
     "maxAgeSeconds": 3600
   }
 ]
