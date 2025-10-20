@@ -14,8 +14,9 @@ class DynamicBackground extends StatelessWidget {
         opacity: isDarkMode ? 0.3 : 0.4,
         child: Image.asset(
           isDarkMode
-              ? 'assets/images/background_light.png'
-              : 'assets/images/background_dark.jpg',
+              ? 'assets/images/background_dark_mode.png'
+             // : 'assets/images/background_light_mode.jpg',
+                : 'assets/images/background_claro_test.png',
           key: ValueKey(isDarkMode), // Garante a troca suave da imagem
           fit: BoxFit.cover,
         ),
