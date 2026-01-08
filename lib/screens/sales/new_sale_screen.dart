@@ -71,6 +71,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         actions: [
           Consumer<CartProvider>(
             builder: (context, cart, _) => Badge(
+              alignment: Alignment.topRight,
+              offset: const Offset(-6, -4),
               label: Text(cart.itemCount.toString()),
               isLabelVisible: cart.itemCount > 0,
               child: IconButton(
