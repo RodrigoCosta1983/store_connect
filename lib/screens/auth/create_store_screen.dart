@@ -6,7 +6,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:store_connect/providers/sales_provider.dart';
 import 'package:store_connect/screens/auth/auth_gate.dart';
-import 'package:store_connect/screens/subscription_screen.dart';
 
 class CreateStoreScreen extends StatefulWidget {
   const CreateStoreScreen({super.key});
@@ -34,32 +33,50 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
 
     try {
       final firestore = FirebaseFirestore.instance;
+
+      // 1. Verifica se o usuário já pagou no site para ativar a loja imediatamente
+      // Usa Source.server para ignorar o cache antigo do celular
+      final userDoc = await firestore.collection('users').doc(user.uid).get(const GetOptions(source: Source.server));
+      String initialStatus = 'inactive';
+
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        if (userData != null && userData['subscriptionStatus'] == 'active') {
+          initialStatus = 'active';
+        }
+      }
+
       final batch = firestore.batch();
       final storeRef = firestore.collection('stores').doc();
 
+      // 2. Cria a loja
       batch.set(storeRef, {
         'name': _storeNameController.text.trim(),
         'ownerId': user.uid,
         'createdAt': Timestamp.now(),
-        'subscriptionStatus': 'inactive',
+        'subscriptionStatus': initialStatus,
       });
 
       final userRef = firestore.collection('users').doc(user.uid);
+
+      // 3. Atualiza o usuário com o ID da loja (sem apagar o pagamento)
       batch.set(userRef, {
         'email': user.email,
         'storeId': storeRef.id,
-      });
+      }, SetOptions(merge: true));
 
       await batch.commit();
 
-      // --- NAVEGAÇÃO CORRIGIDA ---
+      // --- O "PULO DO GATO" (LOADING DE 2 SEGUNDOS) ---
+      // Mantém o spinner girando por 2 segundos para dar tempo do Firestore atualizar
+      await Future.delayed(const Duration(seconds: 4));
+
       if (mounted) {
-        // 1. Avisa ao SalesProvider qual é o ID da nova loja para o resto do app
         Provider.of<SalesProvider>(context, listen: false).updateStoreId(storeRef.id);
 
-        // 2. Navega diretamente para a tela de assinatura, que é o próximo passo
+        // Agora sim, manda para o AuthGate (que vai encontrar a loja 100% pronta)
         Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (ctx) => SubscriptionScreen(storeId: storeRef.id)),
+            MaterialPageRoute(builder: (ctx) => const AuthGate()),
                 (route) => false
         );
       }

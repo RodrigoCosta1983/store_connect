@@ -253,8 +253,8 @@ class _LoginScreenState extends State<LoginScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Image.asset('assets/images/logo.png', height: 150),
-          const SizedBox(height: 24),
+          Image.asset('assets/images/logo.png', height: 120),
+          const SizedBox(height: 20),
           const Text('Bem-vindo de volta!', textAlign: TextAlign.center, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text('Faça login para continuar gerenciando seu negócio.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600)),
