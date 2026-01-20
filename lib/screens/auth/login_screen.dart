@@ -97,8 +97,33 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text.trim(),
       );
       await _handleCredentialsStorage();
+      // O AuthGate no main.dart vai detectar a mudança e redirecionar
     } on FirebaseAuthException catch (e) {
-      _showError(e.message ?? 'Falha na autenticação.');
+      String errorMessage = 'Falha na autenticação.';
+
+      // TRADUÇÃO DOS ERROS DO FIREBASE
+      switch (e.code) {
+        case 'user-not-found':
+        case 'invalid-credential': // O Firebase atual costuma usar esse para não revelar se o email existe
+          errorMessage = 'Conta não encontrada. Verifique o e-mail ou cadastre-se.';
+          break;
+        case 'wrong-password':
+          errorMessage = 'Senha incorreta. Tente novamente.';
+          break;
+        case 'invalid-email':
+          errorMessage = 'O formato do e-mail é inválido.';
+          break;
+        case 'user-disabled':
+          errorMessage = 'Esta conta foi desativada.';
+          break;
+        case 'too-many-requests':
+          errorMessage = 'Muitas tentativas. Tente novamente mais tarde.';
+          break;
+        default:
+          errorMessage = 'Erro ao entrar: ${e.message}';
+      }
+
+      _showError(errorMessage);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

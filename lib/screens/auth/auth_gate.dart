@@ -8,12 +8,12 @@ import 'package:provider/provider.dart';
 
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:store_connect/providers/sales_provider.dart';
-import 'package:store_connect/providers/subscription_provider.dart';
+// Import do SubscriptionProvider removido pois não usamos mais compras no App.
+
 import 'package:store_connect/screens/auth/login_screen.dart';
 import 'package:store_connect/screens/auth/create_store_screen.dart';
 import 'package:store_connect/screens/home_screen.dart';
 import 'package:store_connect/screens/subscription_screen.dart';
-import 'package:store_connect/services/navigation_service.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -30,105 +30,14 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Acesso seguro ao SubscriptionProvider: evita lançar caso o provider não exista (ex.: web)
-      final subscriptionProvider = _maybeSubscriptionProvider(context);
-      if (subscriptionProvider != null) {
-        try {
-          subscriptionProvider.setOnPurchaseSuccessCallback(_forceRefresh);
-          debugPrint('SubscriptionProvider: callback de compra registrado.');
-        } catch (e, st) {
-          debugPrint('Erro ao registrar callback no SubscriptionProvider: $e\n$st');
-        }
-      } else {
-        debugPrint('SubscriptionProvider não disponível — pulando registro do callback de compra.');
-      }
-    });
-  }
-
-  // Helper que tenta obter o SubscriptionProvider e retorna null se não estiver disponível.
-  SubscriptionProvider? _maybeSubscriptionProvider(BuildContext context) {
-    try {
-      return Provider.of<SubscriptionProvider>(context, listen: false);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void _forceRefresh() async {
-    debugPrint('🔄 AuthGate: Forçando refresh após compra...');
-
-    try {
-      debugPrint('⏱️ Aguardando 500ms...');
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      debugPrint('👤 Verificando usuário atual...');
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        debugPrint('❌ Usuário não encontrado');
-        return;
-      }
-      debugPrint('✅ Usuário encontrado: ${user.uid}');
-
-      debugPrint('📄 Consultando documento do usuário...');
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get(const GetOptions(source: Source.server))
-          .timeout(const Duration(seconds: 10));
-
-      if (!userDoc.exists) {
-        debugPrint('❌ Documento do usuário não existe');
-        return;
-      }
-
-      final storeId = userDoc.data()?['storeId'] as String?;
-      if (storeId == null || storeId.isEmpty) {
-        debugPrint('❌ StoreId não encontrado no documento do usuário');
-        return;
-      }
-      debugPrint('✅ StoreId encontrado: $storeId');
-
-      debugPrint('🏪 Consultando documento da loja...');
-      final storeDoc = await FirebaseFirestore.instance
-          .collection('stores')
-          .doc(storeId)
-          .get(const GetOptions(source: Source.server))
-          .timeout(const Duration(seconds: 10));
-
-      if (!storeDoc.exists) {
-        debugPrint('❌ Documento da loja não existe');
-        return;
-      }
-
-      final subscriptionStatus = storeDoc.data()?['subscriptionStatus'] as String?;
-
-      debugPrint('🔍 Consulta direta após callback:');
-      debugPrint('   storeId: $storeId');
-      debugPrint('   subscriptionStatus: $subscriptionStatus');
-
-      if (subscriptionStatus == 'active') {
-        debugPrint('✅ Status ativo detectado! Navegando para HomeScreen...');
-        NavigationService.navigateToHome(storeId);
-      } else {
-        debugPrint('⚠️ Status ainda não ativo ($subscriptionStatus), forçando rebuild...');
-        if (mounted) {
-          setState(() {
-            _refreshCounter++;
-          });
-        }
-      }
-    } catch (e, stackTrace) {
-      debugPrint('❌ Erro na consulta direta: $e');
-      debugPrint('📋 Stack trace: $stackTrace');
-      NavigationService.refreshAuthGate();
-    }
+    // LIMPEZA: Removemos os listeners do Google Billing.
+    // Agora a validação é 100% via Stream do Firestore (tempo real).
   }
 
   Future<void> _retryLoad() async {
     if (_retryCount < _maxRetries) {
       _retryCount++;
-      debugPrint('🔄 Tentativa ${_retryCount}/$_maxRetries');
+      debugPrint('🔄 Tentativa $_retryCount/$_maxRetries');
 
       // Log analytics
       await FirebaseAnalytics.instance.logEvent(
@@ -346,7 +255,6 @@ class _AuthGateState extends State<AuthGate> {
             if (userDocSnapshot.hasError) {
               debugPrint('❌ Erro no snapshot do usuário: ${userDocSnapshot.error}');
 
-              // Log erro do usuário
               FirebaseAnalytics.instance.logEvent(
                 name: 'auth_gate_error',
                 parameters: {
@@ -409,7 +317,6 @@ class _AuthGateState extends State<AuthGate> {
                 if (storeDocSnapshot.hasError) {
                   debugPrint('❌ Erro no snapshot da loja: ${storeDocSnapshot.error}');
 
-                  // Log erro da loja
                   FirebaseAnalytics.instance.logEvent(
                     name: 'auth_gate_error',
                     parameters: {
@@ -426,7 +333,6 @@ class _AuthGateState extends State<AuthGate> {
                 }
 
                 if (!storeDocSnapshot.hasData || !storeDocSnapshot.data!.exists) {
-                  // Log loja não encontrada
                   FirebaseAnalytics.instance.logEvent(
                     name: 'auth_gate_error',
                     parameters: {
