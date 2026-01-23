@@ -61,7 +61,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
   }
 
   Future<void> _openPaymentPortal() async {
-    final Uri url = Uri.parse("https://rodrigocosta1983.github.io/StoreConnect_SITE/Appland/index.html");
+    final Uri url = Uri.parse("https://www.storeconnect.com.br");
 
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);

@@ -198,9 +198,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                         ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(Icons.link),
-                          title: const Text("rodrigocosta-dev.com"),
+                          title: const Text("Store&Connect"),
                           onTap: () =>
-                              _launchURL('https://rodrigocosta-dev.com'),
+                              _launchURL('https://www.storeconnect.com.br'),
                         ),
                         Center(
                           child: Padding(
