@@ -1,8 +1,9 @@
-// lib/screens/subscription_screen.dart
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:brasil_fields/brasil_fields.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // <--- Importante!
 import 'package:store_connect/screens/auth/auth_gate.dart';
 
 class SubscriptionScreen extends StatefulWidget {
@@ -15,7 +16,9 @@ class SubscriptionScreen extends StatefulWidget {
 }
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBindingObserver {
-  bool _isVerifying = false;
+  bool _isLoading = false;
+  final _cpfCnpjController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
@@ -26,160 +29,197 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _cpfCnpjController.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _checkSubscriptionStatus();
-    }
-  }
-
-  Future<void> _checkSubscriptionStatus() async {
-    if (_isVerifying) return;
+  // --- A Lógica Definitiva do Asaas ---
+  Future<void> _startSubscriptionProcess() async {
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() {
-      _isVerifying = true;
+      _isLoading = true;
     });
 
-    // Simula tempo de verificação enquanto o AuthGate recebe o stream
-    await Future.delayed(const Duration(seconds: 4));
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception("Usuário não logado");
 
-    if (mounted) {
-      setState(() {
-        _isVerifying = false;
+      final cpfCnpjLimpo = UtilBrasilFields.removeCaracteres(_cpfCnpjController.text);
+
+      // --- CORREÇÃO AQUI ---
+      // Garante que o nome nunca vá vazio, mesmo se o displayName for ""
+      String nomeCliente = user.displayName ?? "";
+      if (nomeCliente.trim().isEmpty) {
+        // Se estiver vazio, pega a parte antes do @ do email (ex: rodrigo25.inf)
+        nomeCliente = user.email?.split('@')[0] ?? "Cliente StoreConnect";
+      }
+      // ---------------------
+
+      print("Chamando Asaas para: $nomeCliente ($cpfCnpjLimpo)");
+
+      // 1. Chama a Função
+      final result = await FirebaseFunctions.instance
+          .httpsCallable(
+          'createAsaasSubscription',
+          options: HttpsCallableOptions(timeout: const Duration(seconds: 120))
+      )
+          .call({
+        "cpfCnpj": cpfCnpjLimpo,
+        "name": nomeCliente,
+        "email": user.email,
+        "phone": ""
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ainda aguardando confirmação do pagamento...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      final data = result.data as Map<dynamic, dynamic>;
+      final paymentUrl = data['paymentUrl'] as String;
+
+      print("Link gerado: $paymentUrl");
+
+      final uri = Uri.parse(paymentUrl);
+
+      // Tenta abrir DIRETO, sem perguntar canLaunchUrl antes (Bypass no bug do Android 11+)
+      try {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("✅ Link gerado! Pague no seu banco e aguarde aqui."),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+      } catch (e) {
+        // Se falhar mesmo tentando forçar, aí sim mostramos erro
+        print("Erro ao tentar abrir URL: $e");
+        throw Exception("Não foi possível abrir o navegador: $e");
+      }
+
+    } on FirebaseFunctionsException catch (e) {
+      _showError("Erro no Asaas: ${e.message}");
+      print("Erro detalhado Cloud Functions: ${e.details}"); // Ajuda no debug
+    } catch (e) {
+      _showError("Erro: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  Future<void> _openPaymentPortal() async {
-    final Uri url = Uri.parse("https://www.storeconnect.com.br");
-
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
-      debugPrint("Erro ao abrir URL: $url");
-    }
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Fundo levemente cinza para destacar o cartão branco na Web
       backgroundColor: Colors.grey[50],
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),
           child: ConstrainedBox(
-            // --- O SEGREDO DO LAYOUT WEB ---
-            // Define uma largura máxima. Se a tela for maior que 500px (PC),
-            // o card para de crescer. Se for menor (Celular), ele se adapta.
             constraints: const BoxConstraints(maxWidth: 500),
             child: Card(
-              elevation: 4, // Sombra suave
-              surfaceTintColor: Colors.white, // Garante branco puro no Material 3
+              elevation: 4,
               color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 30.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min, // Ocupa apenas o necessário verticalmente
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Ícone animado ou estático
-                    _isVerifying
-                        ? const SizedBox(
-                      height: 80,
-                      width: 80,
-                      child: CircularProgressIndicator(strokeWidth: 6, color: Colors.deepPurple),
-                    )
-                        : const Icon(Icons.lock_person_outlined, size: 80, color: Colors.deepPurple),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.verified_user_outlined, size: 60, color: Colors.deepPurple),
+                      const SizedBox(height: 20),
 
-                    const SizedBox(height: 24),
+                      const Text(
+                        "Assinatura Segura",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
 
-                    Text(
-                      _isVerifying ? "Verificando..." : "Finalize sua Assinatura",
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black87),
-                    ),
+                      const SizedBox(height: 10),
 
-                    const SizedBox(height: 16),
+                      Text(
+                        "Informe o CPF/CNPJ para gerar sua nota fiscal e acessar o sistema.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      ),
 
-                    Text(
-                      "Para ativar sua loja, acesse nosso site, faça login e realize o pagamento.\n\nAssim que pagar, volte para cá!",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600], height: 1.5),
-                    ),
+                      const SizedBox(height: 30),
 
-                    const SizedBox(height: 40),
+                      TextFormField(
+                        controller: _cpfCnpjController,
+                        decoration: InputDecoration(
+                          labelText: 'CPF ou CNPJ',
+                          hintText: 'Digite apenas números',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          prefixIcon: const Icon(Icons.badge_outlined),
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          CpfOuCnpjFormatter(),
+                        ],
+                        validator: (value) {
+                          if (value == null || value.isEmpty) return 'Obrigatório';
+                          if (!UtilBrasilFields.isCPFValido(value) && !UtilBrasilFields.isCNPJValido(value)) {
+                            return 'Documento inválido';
+                          }
+                          return null;
+                        },
+                      ),
 
-                    if (!_isVerifying) ...[
-                      // Botão 1: Ir Pagar
+                      const SizedBox(height: 30),
+
                       SizedBox(
                         width: double.infinity,
-                        height: 55, // Botão um pouco mais alto fica mais bonito na web
+                        height: 55,
                         child: ElevatedButton.icon(
-                          onPressed: _openPaymentPortal,
-                          icon: const Icon(Icons.open_in_new),
-                          label: const Text(
-                              "Ir para o Site e Pagar",
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+                          onPressed: _isLoading ? null : _startSubscriptionProcess,
+                          icon: _isLoading
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Icon(Icons.lock_outline),
+                          label: Text(
+                              _isLoading ? "Gerando Assinatura..." : "Ir para Pagamento",
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.deepPurple,
                             foregroundColor: Colors.white,
-                            elevation: 0,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 15),
 
-                      // Botão 2: Já Paguei
-                      SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: OutlinedButton.icon(
-                          onPressed: _checkSubscriptionStatus,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text("Já paguei, liberar acesso"),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.deepPurple,
-                            side: const BorderSide(color: Colors.deepPurple),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                      ),
+                      TextButton(
+                        onPressed: () async {
+                          await FirebaseAuth.instance.signOut();
+                          if (context.mounted) {
+                            Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(builder: (ctx) => const AuthGate()),
+                                    (route) => false
+                            );
+                          }
+                        },
+                        child: const Text("Sair da conta", style: TextStyle(color: Colors.grey)),
+                      )
                     ],
-
-                    const SizedBox(height: 30),
-
-                    TextButton.icon(
-                      onPressed: () async {
-                        await FirebaseAuth.instance.signOut();
-                        if (context.mounted) {
-                          Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(builder: (ctx) => const AuthGate()),
-                                  (route) => false
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.logout, size: 18),
-                      label: const Text("Sair da conta"),
-                      style: TextButton.styleFrom(foregroundColor: Colors.grey),
-                    )
-                  ],
+                  ),
                 ),
               ),
             ),
