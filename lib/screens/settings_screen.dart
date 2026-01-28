@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Adicionado
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:url_launcher/url_launcher.dart'; // Adicionado
 import 'package:store_connect/screens/profile/profile_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:store_connect/providers/theme_provider.dart';
@@ -65,6 +67,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.of(context).push(MaterialPageRoute(builder: (ctx) => PaymentSettingsScreen(storeId: widget.storeId)));
   }
 
+  // --- NOVO MÉTODO: Abrir Minha Assinatura ---
+  Future<void> _openMySubscription() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Busca o link de pagamento salvo na loja
+      final storeDoc = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(widget.storeId)
+          .get();
+
+      final link = storeDoc.data()?['paymentLink'];
+
+      if (link != null && link.toString().isNotEmpty) {
+        final uri = Uri.parse(link);
+        // Tenta abrir o link no navegador externo
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          // Fallback: tenta abrir mesmo sem verificação estrita em alguns Androids
+          try {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Não foi possível abrir o link da fatura.")),
+              );
+            }
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Nenhuma fatura pendente encontrada.")),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Erro ao buscar fatura: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erro ao buscar fatura: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -92,11 +145,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('Editar perfil e alterar senha'),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (ctx) => ProfileScreen(storeId: widget.storeId))),
           ),
+
+          // --- NOVO BOTÃO INSERIDO AQUI ---
+          ListTile(
+            leading: const Icon(Icons.receipt_long_outlined, color: Colors.blue),
+            title: const Text('Minha Assinatura / 2ª Via'),
+            subtitle: const Text('Acessar boleto ou gerenciar plano'),
+            trailing: const Icon(Icons.open_in_new),
+            onTap: _openMySubscription,
+          ),
+          // --------------------------------
+
           const Divider(),
-          // Pagamentos -> agora abre tela que contém Pagamentos + Vendas (conforme pedido)
+
           ListTile(
             leading: const Icon(Icons.payment_outlined),
-            title: const Text('Pagamentos'),
+            title: const Text('Pagamentos da Loja'), // Texto ajustado para diferenciar
             subtitle: const Text('Configurar meios de pagamento e vendas'),
             trailing: const Icon(Icons.chevron_right),
             onTap: _openPayments,
@@ -174,7 +238,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('Configurar alerta de estoque (uso geral)'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              // Reaproveitamos a tela de pagamentos para edição do threshold? Mantemos o diálogo simples:
               showDialog(
                 context: context,
                 builder: (ctx) {
@@ -342,7 +405,6 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
     }
   }
 
-  // Método robusto: upload com filename único, metadata, salvar path no Firestore e deletar antigo.
   Future<void> _updatePixQrCode() async {
     final pickedImage = await ImagePicker().pickImage(
       source: ImageSource.gallery,
@@ -357,7 +419,6 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
     String? oldStoragePath;
 
     try {
-      // 0) Obter dados antigos (url e storagePath) para poder deletar depois
       final doc = await storesRef.get();
       if (doc.exists) {
         final data = doc.data();
@@ -365,13 +426,11 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
         oldStoragePath = data?['pixQrCodePath'] as String?;
       }
 
-      // 1) Gerar nome único
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'qrcode_$timestamp.jpg';
       final storagePath = 'pix_qrcodes/${widget.storeId}/$fileName';
       final storageRef = FirebaseStorage.instance.ref().child(storagePath);
 
-      // 2) Fazer upload com metadata (defina cacheControl conforme sua necessidade)
       final metadata = SettableMetadata(
         contentType: 'image/jpeg',
         cacheControl: 'public, max-age=3600',
@@ -384,17 +443,14 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
         await storageRef.putFile(File(pickedImage.path), metadata);
       }
 
-      // 3) Obter download URL
       final newUrl = await storageRef.getDownloadURL();
 
-      // 4) Salvar novo URL e storagePath no Firestore (merge)
       await storesRef.set({
         'pixQrCodeUrl': newUrl,
         'pixQrCodePath': storagePath,
         'pixQrCodeUpdatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      // 5) Tentar deletar o arquivo antigo (se existir)
       if (oldStoragePath != null && oldStoragePath.isNotEmpty) {
         try {
           final oldRef = FirebaseStorage.instance.ref().child(oldStoragePath);
@@ -413,13 +469,11 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
         }
       }
 
-      // 6) Limpar cache local
       try {
         imageCache.clear();
         imageCache.clearLiveImages();
       } catch (_) {}
 
-      // 7) Atualiza UI
       if (mounted) {
         setState(() {
           _pixQrCodeUrl = newUrl;
@@ -453,7 +507,6 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Text('Pagamentos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           ),
-          // PIX QR
           ListTile(
             leading: CircleAvatar(
               radius: 20,
@@ -490,7 +543,6 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
             },
           ),
           const Divider(),
-          // Vendas (dentro de Pagamentos)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Text('Vendas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),

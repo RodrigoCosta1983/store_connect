@@ -43,7 +43,7 @@ android {
         applicationId = "com.storeeconnect.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 11
+        versionCode = 12
         versionName = "1.0.2"
         multiDexEnabled = true
     }
