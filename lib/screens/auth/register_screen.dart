@@ -19,7 +19,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
   var _enteredEmail = '';
   var _enteredPassword = '';
 
+  // Variável para capturar o CPF/CNPJ digitado
+  var _enteredDocument = '';
+
   final _firebaseAuth = FirebaseAuth.instance;
+
+  // --- FUNÇÃO DE SEGURANÇA (CORRIGIDA) ---
+  // Verifica se o CPF já existe na coleção de controle 'cpfs_cadastrados'.
+  // Usamos .doc().get() porque é mais rápido e não exige permissão de listar coleções.
+  Future<bool> _documentAlreadyExists(String docNumber) async {
+    // 1. Limpa o CPF (deixa só números) para usar como ID
+    final cleanDoc = docNumber.replaceAll(RegExp(r'[^0-9]'), '');
+
+    // 2. Tenta pegar o documento direto pelo ID na coleção de controle
+    final docSnap = await FirebaseFirestore.instance
+        .collection('cpfs_cadastrados')
+        .doc(cleanDoc)
+        .get();
+
+    // 3. Se o documento existe, retorna TRUE (bloqueia o cadastro)
+    return docSnap.exists;
+  }
 
   void _submit() async {
     final isValid = _formKey.currentState!.validate();
@@ -27,17 +47,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _formKey.currentState!.save();
 
     setState(() => _isLoading = true);
+
     try {
-      // 1. Criar usuário no Auth
+      // --- PASSO 1: O GUARDIÃO ---
+      // Antes de criar qualquer coisa, verifica se esse CPF já está "queimado"
+      final docExists = await _documentAlreadyExists(_enteredDocument);
+
+      if (docExists) {
+        // Se já existe, lançamos erro manual para cair no catch abaixo
+        throw FirebaseAuthException(
+            code: 'document-already-in-use',
+            message: 'Este CPF/CNPJ já possui cadastro. Faça login para reativar.'
+        );
+      }
+      // -----------------------------
+
+      // --- PASSO 2: CRIAR NO AUTH ---
+      // Se passou pelo guardião, podemos criar o login
       final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: _enteredEmail,
         password: _enteredPassword,
       );
 
-      // 2. Salvar dados no Firestore
-      // Usa o início do e-mail como nome provisório
+      // Prepara os dados
       final generatedName = _enteredEmail.split('@')[0];
+      final cleanDoc = _enteredDocument.replaceAll(RegExp(r'[^0-9]'), '');
 
+      // --- PASSO 3: SALVAR DADOS DO USUÁRIO ---
+      // Salva na coleção 'users' (Privada, só o dono lê)
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
@@ -45,10 +82,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'username': generatedName,
         'email': _enteredEmail,
         'storeId': '',
+        'documentNumber': cleanDoc,
+        'createdAt': FieldValue.serverTimestamp(),
+        'subscriptionStatus': 'trial', // Inicia no teste grátis
+      });
+
+      // --- PASSO 4: BLINDAR O CPF (IMPORTANTE) ---
+      // Salva na coleção 'cpfs_cadastrados' para ninguém mais usar esse número.
+      await FirebaseFirestore.instance
+          .collection('cpfs_cadastrados')
+          .doc(cleanDoc) // O ID é o próprio CPF
+          .set({
+        'uid': userCredential.user!.uid,
+        'cadastradoEm': FieldValue.serverTimestamp(),
       });
 
       if (context.mounted) {
-        // Sucesso: fecha a tela de cadastro
+        // Sucesso total!
         Navigator.of(context).pop();
       }
 
@@ -62,6 +112,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         );
       }
+    } catch (e) {
+      // Catch genérico para outros erros
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro inesperado: $e'), backgroundColor: Colors.red),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -69,7 +126,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // Widget auxiliar para os Labels
+  // Widget auxiliar para Labels
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6, left: 4),
@@ -86,11 +143,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Definimos a cor roxa apenas para os botões/detalhes
     final Color primaryPurple = const Color(0xFF5D38BF);
 
     return Scaffold(
-      // Fundo padrão (branco/tema) para um visual Clean
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -98,7 +153,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             constraints: const BoxConstraints(maxWidth: 400),
             child: Card(
               elevation: 8,
-              // Garante que o card seja BRANCO puro, sem tintura do Material 3
               surfaceTintColor: Colors.white,
               color: Colors.white,
               shape: RoundedRectangleBorder(
@@ -111,7 +165,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // --- Botão de Fechar (X) ---
+                      // Botão Fechar
                       Align(
                         alignment: Alignment.topRight,
                         child: IconButton(
@@ -122,7 +176,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                       ),
 
-                      // --- Logo ---
+                      // Logo
                       Image.asset(
                         'assets/images/logo.png',
                         height: 100,
@@ -132,9 +186,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // --- Títulos ---
                       const Text(
-                        'Crie sua conta',
+                        'Crie sua conta Agora',
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
@@ -145,14 +198,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Text(
                         'Comece a gerenciar seu negócio hoje.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                       const SizedBox(height: 30),
 
-                      // --- Campo E-mail ---
+                      // --- CAMPO CPF/CNPJ ---
+                      Align(alignment: Alignment.centerLeft, child: _buildLabel("CPF ou CNPJ")),
+                      TextFormField(
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          hintText: 'Somente números',
+                          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          prefixIcon: const Icon(Icons.badge_outlined, color: Colors.grey),
+                        ),
+                        textInputAction: TextInputAction.next,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) return 'Campo obrigatório.';
+                          final clean = value.replaceAll(RegExp(r'[^0-9]'), '');
+                          if (clean.length < 11) return 'CPF/CNPJ inválido.';
+                          return null;
+                        },
+                        onSaved: (value) => _enteredDocument = value!,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // --- CAMPO E-MAIL ---
                       Align(alignment: Alignment.centerLeft, child: _buildLabel("E-mail")),
                       TextFormField(
                         keyboardType: TextInputType.emailAddress,
@@ -172,7 +247,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // --- Campo Senha ---
+                      // --- CAMPO SENHA ---
                       Align(alignment: Alignment.centerLeft, child: _buildLabel("Senha")),
                       TextFormField(
                         obscureText: true,
@@ -192,7 +267,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 30),
 
-                      // --- Botão Criar Conta ---
+                      // Botão Criar Conta
                       if (_isLoading)
                         const Center(child: CircularProgressIndicator())
                       else
@@ -201,7 +276,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           child: ElevatedButton(
                             onPressed: _submit,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryPurple, // Roxo mantido no botão
+                              backgroundColor: primaryPurple,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(
@@ -211,17 +286,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                             child: const Text(
                               'CRIAR CONTA',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
 
                       const SizedBox(height: 20),
 
-                      // --- Rodapé (Login) ---
+                      // Rodapé
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
