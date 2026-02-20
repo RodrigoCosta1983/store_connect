@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:store_connect/providers/sales_provider.dart';
@@ -26,6 +27,29 @@ class _AuthGateState extends State<AuthGate> {
   int _refreshCounter = 0;
   int _retryCount = 0;
   static const int _maxRetries = 3;
+
+  // --- NOSSO CADEADO ---
+  bool _versaoJaSalva = false;
+
+  // --- NOSSA FUNÇÃO NINJA ---
+  Future<void> _atualizarVersaoNoFirebase(String uid) async {
+    try {
+      PackageInfo packageInfo = await PackageInfo.fromPlatform();
+      String versaoAtual = "${packageInfo.version}+${packageInfo.buildNumber}";
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .set({
+        'versao_app': versaoAtual,
+        'ultimo_login': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      debugPrint("✅ Versão $versaoAtual salva no Firestore (AuthGate)!");
+    } catch (e) {
+      debugPrint("❌ Erro ao salvar versão: $e");
+    }
+  }
 
   @override
   void initState() {
@@ -217,10 +241,18 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         if (!userSnapshot.hasData || userSnapshot.data == null) {
+          // Destranca o cadeado se o usuário fizer logout
+          _versaoJaSalva = false;
           return const LoginScreen();
         }
 
         final user = userSnapshot.data!;
+
+        // --- O GATILHO DA VERSÃO (SÓ RODA 1 VEZ) ---
+        if (!_versaoJaSalva) {
+          _versaoJaSalva = true; // Tranca o cadeado
+          _atualizarVersaoNoFirebase(user.uid); // Chama a função
+        }
 
         return StreamBuilder<DocumentSnapshot>(
           key: ValueKey('user_${user.uid}_$_refreshCounter'),
@@ -362,6 +394,7 @@ class _AuthGateState extends State<AuthGate> {
                 debugPrint('   subscriptionStatus: $subscriptionStatus');
                 debugPrint('   isFromCache: $isFromCache');
                 debugPrint('   hasPendingWrites: $hasPendingWrites');
+                debugPrint('StoreConnect debug log');
                 debugPrint('================================');
 
                 // Reset retry count on success
