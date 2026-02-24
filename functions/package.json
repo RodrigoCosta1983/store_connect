@@ -7161,5 +7161,10 @@
         "url": "https://github.com/sponsors/sindresorhus"
       }
     }
+  },
+  "dependencies": {
+    "axios": "^1.13.5",
+    "firebase-admin": "^13.6.1",
+    "firebase-functions": "^7.0.5"
   }
 }

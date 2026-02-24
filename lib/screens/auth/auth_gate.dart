@@ -231,7 +231,7 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      key: ValueKey('auth_$_refreshCounter'),
+    //  key: ValueKey('auth_$_refreshCounter'),
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, userSnapshot) {
         if (userSnapshot.connectionState == ConnectionState.waiting) {
@@ -255,7 +255,7 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         return StreamBuilder<DocumentSnapshot>(
-          key: ValueKey('user_${user.uid}_$_refreshCounter'),
+         // key: ValueKey('user_${user.uid}_$_refreshCounter'),
           stream: FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
@@ -317,7 +317,7 @@ class _AuthGateState extends State<AuthGate> {
             });
 
             return StreamBuilder<DocumentSnapshot>(
-              key: ValueKey('store_${storeId}_$_refreshCounter'),
+              //key: ValueKey('store_${storeId}_$_refreshCounter'),
               stream: FirebaseFirestore.instance
                   .collection('stores')
                   .doc(storeId)

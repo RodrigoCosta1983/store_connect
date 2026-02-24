@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:store_connect/screens/sales/new_sale_screen.dart';
 
+import 'auth/auth_gate.dart';
+
 class HomeScreen extends StatelessWidget {
   final String storeId;
 
@@ -41,6 +43,23 @@ class HomeScreen extends StatelessWidget {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasData && snapshot.data!.exists) {
+            final storeData = snapshot.data!.data() as Map<String, dynamic>;
+            final status = storeData['subscriptionStatus'];
+
+            // 🚨 AQUI ESTÁ O VIGIA:
+            if (status != 'active') {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                // Expulsa o usuário para o AuthGate imediatamente
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (ctx) => const AuthGate()),
+                      (route) => false,
+                );
+              });
+              return const Center(child: Text('Assinatura expirada...'));
+            }
           }
           if (!snapshot.hasData || !snapshot.data!.exists) {
             return const Center(child: Text('Loja não encontrada.'));

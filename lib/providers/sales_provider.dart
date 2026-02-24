@@ -28,7 +28,13 @@ class SalesProvider with ChangeNotifier {
     required DateTime dueDate,
     required String notes,
   }) async {
-    if (_storeId == null) throw Exception("Store ID não definido no SalesProvider.");
+    if (_storeId == null) throw Exception("Store ID não definido.");
+
+    // 🛡️ VERIFICAÇÃO DE SEGURANÇA ANTES DE GRAVAR
+    final storeDoc = await FirebaseFirestore.instance.collection('stores').doc(_storeId).get();
+    if (storeDoc.data()?['subscriptionStatus'] != 'active') {
+      throw Exception("Sua assinatura expirou. Regularize o pagamento para continuar vendendo.");
+    }
 
     isLoading = true;
     notifyListeners();
