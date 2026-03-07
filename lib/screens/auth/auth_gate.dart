@@ -6,11 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:store_connect/providers/sales_provider.dart';
-// Import do SubscriptionProvider removido pois não usamos mais compras no App.
-
 import 'package:store_connect/screens/auth/login_screen.dart';
 import 'package:store_connect/screens/auth/create_store_screen.dart';
 import 'package:store_connect/screens/home_screen.dart';
@@ -27,11 +24,11 @@ class _AuthGateState extends State<AuthGate> {
   int _refreshCounter = 0;
   int _retryCount = 0;
   static const int _maxRetries = 3;
-
-  // --- NOSSO CADEADO ---
   bool _versaoJaSalva = false;
 
-  // --- NOSSA FUNÇÃO NINJA ---
+  // 🛡️ O GUARDIÃO CONTRA O LOOP INFINITO
+  String? _lastStoreId;
+
   Future<void> _atualizarVersaoNoFirebase(String uid) async {
     try {
       PackageInfo packageInfo = await PackageInfo.fromPlatform();
@@ -51,40 +48,14 @@ class _AuthGateState extends State<AuthGate> {
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    // LIMPEZA: Removemos os listeners do Google Billing.
-    // Agora a validação é 100% via Stream do Firestore (tempo real).
-  }
-
   Future<void> _retryLoad() async {
     if (_retryCount < _maxRetries) {
       _retryCount++;
-      debugPrint('🔄 Tentativa $_retryCount/$_maxRetries');
-
-      // Log analytics
       await FirebaseAnalytics.instance.logEvent(
         name: 'auth_gate_retry',
-        parameters: {
-          'retry_count': _retryCount,
-          'max_retries': _maxRetries,
-        },
+        parameters: {'retry_count': _retryCount, 'max_retries': _maxRetries},
       );
-
-      setState(() {
-        _refreshCounter++;
-      });
-    } else {
-      debugPrint('❌ Máximo de tentativas alcançado');
-
-      // Log quando alcança máximo
-      await FirebaseAnalytics.instance.logEvent(
-        name: 'auth_gate_max_retries_reached',
-        parameters: {
-          'retry_count': _retryCount,
-        },
-      );
+      setState(() { _refreshCounter++; });
     }
   }
 
@@ -99,102 +70,27 @@ class _AuthGateState extends State<AuthGate> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.red, width: 3),
-                  ),
-                  child: const Icon(
-                    Icons.error_outline,
-                    color: Colors.red,
-                    size: 48,
-                  ),
+                  width: 80, height: 80,
+                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.red, width: 3)),
+                  child: const Icon(Icons.error_outline, color: Colors.red, size: 48),
                 ),
                 const SizedBox(height: 32),
-                const Text(
-                  'Erro ao carregar dados da loja',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+                const Text('Erro ao carregar dados da loja', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                 const SizedBox(height: 16),
-                Text(
-                  message,
-                  style: TextStyle(
-                    color: Colors.grey[400],
-                    fontSize: 16,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+                Text(message, style: TextStyle(color: Colors.grey[400], fontSize: 16), textAlign: TextAlign.center),
                 const SizedBox(height: 40),
                 ElevatedButton.icon(
                   onPressed: onRetry ?? _retryLoad,
                   icon: const Icon(Icons.refresh),
-                  label: Text(
-                    _retryCount >= _maxRetries
-                        ? 'Tentar novamente'
-                        : 'Tentar novamente ($_retryCount/$_maxRetries)',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                  label: Text(_retryCount >= _maxRetries ? 'Tentar novamente' : 'Tentar novamente ($_retryCount/$_maxRetries)'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                 ),
                 const SizedBox(height: 16),
                 TextButton.icon(
-                  onPressed: () async {
-                    await FirebaseAuth.instance.signOut();
-                  },
+                  onPressed: () async => await FirebaseAuth.instance.signOut(),
                   icon: const Icon(Icons.logout),
                   label: const Text('Sair e fazer login novamente'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.grey[400],
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[900],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.lightbulb_outline,
-                              color: Colors.amber[700],
-                              size: 20
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Dicas:',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _buildTip('Verifique sua conexão com a internet'),
-                      _buildTip('Aguarde alguns segundos e tente novamente'),
-                      _buildTip('Se o problema persistir, faça logout e entre novamente'),
-                    ],
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.grey[400]),
                 ),
               ],
             ),
@@ -204,209 +100,84 @@ class _AuthGateState extends State<AuthGate> {
     );
   }
 
-  Widget _buildTip(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '• ',
-            style: TextStyle(color: Colors.grey[400]),
-          ),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: Colors.grey[400],
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-    //  key: ValueKey('auth_$_refreshCounter'),
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, userSnapshot) {
-        if (userSnapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+        if (userSnapshot.connectionState == ConnectionState.waiting) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
         if (!userSnapshot.hasData || userSnapshot.data == null) {
-          // Destranca o cadeado se o usuário fizer logout
           _versaoJaSalva = false;
+          _lastStoreId = null; // Reseta ao deslogar
           return const LoginScreen();
         }
 
         final user = userSnapshot.data!;
 
-        // --- O GATILHO DA VERSÃO (SÓ RODA 1 VEZ) ---
         if (!_versaoJaSalva) {
-          _versaoJaSalva = true; // Tranca o cadeado
-          _atualizarVersaoNoFirebase(user.uid); // Chama a função
+          _versaoJaSalva = true;
+          _atualizarVersaoNoFirebase(user.uid);
         }
 
         return StreamBuilder<DocumentSnapshot>(
-         // key: ValueKey('user_${user.uid}_$_refreshCounter'),
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .snapshots()
-              .timeout(
-            const Duration(seconds: 15),
-            onTimeout: (sink) => sink.close(),
-          )
-              .handleError((error) {
-            debugPrint('❌ Erro no stream do usuário: $error');
-          }),
+          stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
           builder: (context, userDocSnapshot) {
-            if (userDocSnapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                body: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text('Carregando seus dados...'),
-                    ],
-                  ),
-                ),
-              );
-            }
-
-            // Tratamento de erro no carregamento do usuário
-            if (userDocSnapshot.hasError) {
-              debugPrint('❌ Erro no snapshot do usuário: ${userDocSnapshot.error}');
-
-              FirebaseAnalytics.instance.logEvent(
-                name: 'auth_gate_error',
-                parameters: {
-                  'error_type': 'user_load_failed',
-                  'error_message': userDocSnapshot.error.toString(),
-                },
-              );
-
-              return _buildErrorScreen(
-                'Não foi possível carregar seus dados.\nVerifique sua conexão e tente novamente.',
-              );
-            }
-
-            if (!userDocSnapshot.hasData || !userDocSnapshot.data!.exists) {
-              return const CreateStoreScreen();
-            }
+            if (userDocSnapshot.connectionState == ConnectionState.waiting) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            if (userDocSnapshot.hasError) return _buildErrorScreen('Erro ao carregar usuário.');
+            if (!userDocSnapshot.hasData || !userDocSnapshot.data!.exists) return const CreateStoreScreen();
 
             final userData = userDocSnapshot.data!.data() as Map<String, dynamic>?;
             final storeId = userData?['storeId'] as String?;
 
-            if (storeId == null || storeId.isEmpty) {
-              return const CreateStoreScreen();
+            if (storeId == null || storeId.isEmpty) return const CreateStoreScreen();
+
+            // 🛡️ A CORREÇÃO DO LOOP: Só chama o Provider se o ID for novo
+            if (_lastStoreId != storeId) {
+              _lastStoreId = storeId;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                Provider.of<SalesProvider>(context, listen: false).updateStoreId(storeId);
+              });
             }
 
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              Provider.of<SalesProvider>(context, listen: false)
-                  .updateStoreId(storeId);
-            });
-
             return StreamBuilder<DocumentSnapshot>(
-              //key: ValueKey('store_${storeId}_$_refreshCounter'),
-              stream: FirebaseFirestore.instance
-                  .collection('stores')
-                  .doc(storeId)
-                  .snapshots(includeMetadataChanges: true)
-                  .timeout(
-                const Duration(seconds: 15),
-                onTimeout: (sink) => sink.close(),
-              )
-                  .handleError((error) {
-                debugPrint('❌ Erro no stream da loja: $error');
-              }),
+              stream: FirebaseFirestore.instance.collection('stores').doc(storeId).snapshots(includeMetadataChanges: true),
               builder: (context, storeDocSnapshot) {
-                if (storeDocSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Scaffold(
-                    body: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 16),
-                          Text('Verificando sua assinatura...'),
-                        ],
-                      ),
-                    ),
-                  );
-                }
+                if (storeDocSnapshot.connectionState == ConnectionState.waiting) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+                if (storeDocSnapshot.hasError) return _buildErrorScreen('Erro ao carregar a loja.', onRetry: _retryLoad);
+                if (!storeDocSnapshot.hasData || !storeDocSnapshot.data!.exists) return _buildErrorScreen('A loja não foi encontrada.', onRetry: _retryLoad);
 
-                // Tratamento de erro no carregamento da loja
-                if (storeDocSnapshot.hasError) {
-                  debugPrint('❌ Erro no snapshot da loja: ${storeDocSnapshot.error}');
+                final storeData = storeDocSnapshot.data!.data() as Map<String, dynamic>?;
 
-                  FirebaseAnalytics.instance.logEvent(
-                    name: 'auth_gate_error',
-                    parameters: {
-                      'error_type': 'store_load_failed',
-                      'error_message': storeDocSnapshot.error.toString(),
-                      'store_id': storeId,
-                    },
-                  );
-
-                  return _buildErrorScreen(
-                    'Não foi possível carregar os dados da loja.\nVerifique sua conexão e tente novamente.',
-                    onRetry: _retryLoad,
-                  );
-                }
-
-                if (!storeDocSnapshot.hasData || !storeDocSnapshot.data!.exists) {
-                  FirebaseAnalytics.instance.logEvent(
-                    name: 'auth_gate_error',
-                    parameters: {
-                      'error_type': 'store_not_found',
-                      'store_id': storeId,
-                    },
-                  );
-
-                  return _buildErrorScreen(
-                    'A loja não foi encontrada.\nPode ser necessário recriar sua conta.',
-                    onRetry: _retryLoad,
-                  );
-                }
-
-                final docSnapshot = storeDocSnapshot.data!;
-                final storeData = docSnapshot.data() as Map<String, dynamic>?;
+                // 🧠 LÓGICA DE ACESSO DEFINITIVA
                 final subscriptionStatus = storeData?['subscriptionStatus'] as String?;
+                final subscriptionType = storeData?['subscriptionType'] as String?;
+                final trialEndDate = storeData?['trialEndDate'] as String?;
 
-                final now = DateTime.now();
-                final isFromCache = docSnapshot.metadata.isFromCache;
-                final hasPendingWrites = docSnapshot.metadata.hasPendingWrites;
-
-                debugPrint('===== AuthGate Debug [$now] =====');
-                debugPrint('   refreshCounter: $_refreshCounter');
-                debugPrint('   retryCount: $_retryCount');
-                debugPrint('   storeId: $storeId');
-                debugPrint('   subscriptionStatus: $subscriptionStatus');
-                debugPrint('   isFromCache: $isFromCache');
-                debugPrint('   hasPendingWrites: $hasPendingWrites');
-                debugPrint('StoreConnect debug log');
-                debugPrint('================================');
-
-                // Reset retry count on success
-                if (_retryCount > 0) {
-                  _retryCount = 0;
+                bool isTrialActive = false;
+                if (trialEndDate != null) {
+                  try {
+                    isTrialActive = DateTime.now().isBefore(DateTime.parse(trialEndDate));
+                  } catch (e) {}
                 }
+
+                // ✅ DECISÃO FINAL DE ROTEAMENTO
+                bool hasAccess = false;
 
                 if (subscriptionStatus == 'active') {
-                  debugPrint('✅ Navegando para HomeScreen');
+                  if (subscriptionType == 'pro') {
+                    hasAccess = true; // Pagou = Entra
+                  } else if (isTrialActive) {
+                    hasAccess = true; // Nos 7 dias = Entra
+                  }
+                }
+
+                if (hasAccess) {
+                  debugPrint('✅ Acesso Liberado -> HomeScreen');
                   return HomeScreen(storeId: storeId);
                 } else {
-                  debugPrint('⚠️ Navegando para SubscriptionScreen (status: $subscriptionStatus)');
+                  // Se for pending, inactive, ou trial expirou -> Fica travado na tela de pagamento!
+                  debugPrint('⚠️ Acesso Bloqueado -> SubscriptionScreen (status: $subscriptionStatus)');
                   return SubscriptionScreen(storeId: storeId);
                 }
               },

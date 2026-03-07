@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:store_connect/screens/auth/auth_gate.dart';
-import 'create_store_screen.dart';
+import 'package:store_connect/screens/auth/create_store_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -18,8 +18,10 @@ class _SignupScreenState extends State<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+
   bool _isLoading = false;
   bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
 
   @override
   void dispose() {
@@ -38,7 +40,6 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _handleUserRegistration(UserCredential userCredential) async {
-    // Se for um novo usuário, vai para a tela de criar loja
     if (userCredential.additionalUserInfo?.isNewUser ?? false) {
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -46,7 +47,6 @@ class _SignupScreenState extends State<SignupScreen> {
         );
       }
     } else {
-      // Se já existe, o AuthGate vai cuidar do direcionamento
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (ctx) => const AuthGate()),
@@ -56,8 +56,14 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  Future<void> _submitEmailSignup() async {
+  Future<void> _submitSignup() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_passwordController.text != _confirmPasswordController.text) {
+      _showError('As senhas não coincidem.');
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -67,9 +73,10 @@ class _SignupScreenState extends State<SignupScreen> {
       );
       await _handleUserRegistration(userCredential);
     } on FirebaseAuthException catch (e) {
-      String message = 'Ocorreu um erro.';
+      String message = 'Ocorreu um erro no cadastro.';
       if (e.code == 'weak-password') message = 'A senha fornecida é muito fraca.';
-      else if (e.code == 'email-already-in-use') message = 'Este email já está em uso.';
+      else if (e.code == 'email-already-in-use') message = 'Este e-mail já está em uso. Faça Login.';
+      else if (e.code == 'invalid-email') message = 'Formato de e-mail inválido.';
       _showError(message);
     } catch (e) {
       _showError('Erro desconhecido: $e');
@@ -83,7 +90,6 @@ class _SignupScreenState extends State<SignupScreen> {
     try {
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) {
-        // O usuário cancelou o login
         if (mounted) setState(() => _isLoading = false);
         return;
       }
@@ -97,147 +103,211 @@ class _SignupScreenState extends State<SignupScreen> {
       final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
       await _handleUserRegistration(userCredential);
     } catch (e) {
-      _showError('Erro ao fazer login com Google: $e');
+      _showError('Erro ao fazer cadastro com Google.');
     }
     if (mounted) setState(() => _isLoading = false);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // 1. Logo e Título
-                Icon(Icons.storefront, size: 60, color: Theme.of(context).primaryColor),
-                const SizedBox(height: 16),
-                const Text(
-                  'Crie sua Conta',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Comece a gerenciar seu negócio de forma inteligente.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 40),
+  // --- FORMULÁRIO DE CADASTRO ---
+  Widget _buildSignupForm() {
+    // 💡 A MÁGICA ESTÁ AQUI: Verifica se a tela encolheu
+    final isSmallScreen = MediaQuery.of(context).size.width <= 800;
 
-                // 2. Formulário
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _emailController,
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: const Icon(Icons.email_outlined),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (value) => (value == null || !value.contains('@')) ? 'Email inválido.' : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: !_isPasswordVisible,
-                        decoration: InputDecoration(
-                          labelText: 'Senha',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          suffixIcon: IconButton(
-                            icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
-                            onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
-                          ),
-                        ),
-                        validator: (value) => (value == null || value.length < 6) ? 'A senha deve ter no mínimo 6 caracteres.' : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _confirmPasswordController,
-                        obscureText: !_isPasswordVisible,
-                        decoration: InputDecoration(
-                          labelText: 'Confirmar Senha',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) return 'Confirme sua senha.';
-                          if (value != _passwordController.text) return 'As senhas não coincidem.';
-                          return null;
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 30),
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // A logo aparece dinamicamente sempre que o painel azul sumir!
+        //  if (isSmallScreen)
+            Center(
+              child: Image.asset(
+                'assets/images/logo_web.png',
+                height: 180,
+                errorBuilder: (ctx, err, stack) => const Icon(Icons.storefront, size: 80, color: Colors.deepPurple),
+              ),
+            ),
+          if (isSmallScreen) const SizedBox(height: 8),
 
-                // 3. Botão de Cadastro Principal
-                if (_isLoading)
-                  const Center(child: CircularProgressIndicator())
-                else
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: _submitEmailSignup,
-                    child: const Text('Cadastrar com Email', style: TextStyle(fontSize: 16)),
-                  ),
+          const Text(
+            'Crie sua Conta',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Comece a gerenciar seu negócio de forma inteligente.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey, fontSize: 15),
+          ),
+          const SizedBox(height: 20),
 
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(child: Divider(color: Colors.grey.shade400)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text('OU', style: TextStyle(color: Colors.grey.shade600)),
-                    ),
-                    Expanded(child: Divider(color: Colors.grey.shade400)),
-                  ],
-                ),
-                const SizedBox(height: 24),
+          TextFormField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(
+              labelText: 'E-mail',
+              prefixIcon: const Icon(Icons.email_outlined),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            validator: (value) => (value == null || !value.contains('@')) ? 'E-mail inválido.' : null,
+          ),
+          const SizedBox(height: 16),
 
-                // 4. Botão de Login com Google
-                OutlinedButton.icon(
-                  icon: Image.asset('assets/images/google-logo.png', height: 20), // Você precisará de um logo do Google
-                  label: const Flexible(
+          TextFormField(
+            controller: _passwordController,
+            obscureText: !_isPasswordVisible,
+            decoration: InputDecoration(
+              labelText: 'Senha',
+              prefixIcon: const Icon(Icons.lock_outline),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              suffixIcon: IconButton(
+                icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+              ),
+            ),
+            validator: (value) => (value == null || value.length < 6) ? 'A senha deve ter no mínimo 6 caracteres.' : null,
+          ),
+          const SizedBox(height: 16),
+
+          TextFormField(
+            controller: _confirmPasswordController,
+            obscureText: !_isConfirmPasswordVisible,
+            decoration: InputDecoration(
+              labelText: 'Confirmar Senha',
+              prefixIcon: const Icon(Icons.lock_reset),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              suffixIcon: IconButton(
+                icon: Icon(_isConfirmPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) return 'Confirme sua senha.';
+              return null;
+            },
+          ),
+          const SizedBox(height: 22),
+
+          if (_isLoading)
+            const Center(child: CircularProgressIndicator())
+          else
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _submitSignup,
+              child: const Text('CADASTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+
+          const SizedBox(height: 24),
+
+          Row(
+            children: [
+              Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text('OU', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+              ),
+              Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          if (!_isLoading)
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                side: BorderSide(color: Colors.grey.shade300),
+              ),
+              onPressed: _googleSignIn,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset('assets/images/google_logo.png', height: 24),
+                  const SizedBox(width: 12),
+                  const Flexible(
                     child: Text(
                       'Continuar com Google',
-                      style: TextStyle(fontSize: 16),
-                      overflow: TextOverflow.ellipsis, // Evita que o texto quebre de forma estranha
+                      style: TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: _isLoading ? null : _googleSignIn,
-                ),
+                ],
+              ),
+            ),
 
-                const SizedBox(height: 30),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('Já tem uma conta?'),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Faça Login'),
-                    ),
-                  ],
-                ),
-              ],
+          const SizedBox(height: 22),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Já tem uma conta? ', style: TextStyle(fontSize: 15)),
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: const Text('Faça Login', style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold, fontSize: 15)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebLayout() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            color: const Color(0xFFEAF4FC),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset('assets/images/logo_web.png', width: 180),
+                  const SizedBox(height: 32),
+                  const Text('Store & Connect', style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                  const SizedBox(height: 16),
+                  const Text('A melhor plataforma para sua loja.', style: TextStyle(fontSize: 18, color: Colors.black54)),
+                ],
+              ),
             ),
           ),
         ),
+        Expanded(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: _buildSignupForm(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
+        child: _buildSignupForm(),
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isWeb = MediaQuery.of(context).size.width > 800;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: isWeb ? _buildWebLayout() : _buildMobileLayout(),
     );
   }
 }

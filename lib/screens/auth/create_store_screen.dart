@@ -1,6 +1,8 @@
 // lib/screens/auth/create_store_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:brasil_fields/brasil_fields.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
@@ -16,13 +18,40 @@ class CreateStoreScreen extends StatefulWidget {
 
 class _CreateStoreScreenState extends State<CreateStoreScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final _storeNameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _cpfCnpjController = TextEditingController();
+
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _storeNameController.dispose();
+    _phoneController.dispose();
+    _cpfCnpjController.dispose();
+    super.dispose();
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  // --- O GUARDIÃO: Verifica se o CPF/CNPJ já foi usado ---
+  Future<bool> _documentAlreadyExists(String cleanDoc) async {
+    final docSnap = await FirebaseFirestore.instance
+        .collection('cpfs_cadastrados')
+        .doc(cleanDoc)
+        .get();
+    return docSnap.exists;
+  }
+
   Future<void> _submitCreateStore() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isLoading = true);
 
     final user = FirebaseAuth.instance.currentUser;
@@ -33,48 +62,58 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
 
     try {
       final firestore = FirebaseFirestore.instance;
+      final cleanDoc = UtilBrasilFields.removeCaracteres(_cpfCnpjController.text);
 
-      // 1. Verifica se o usuário já pagou no site para ativar a loja imediatamente
-      // Usa Source.server para ignorar o cache antigo do celular
-      final userDoc = await firestore.collection('users').doc(user.uid).get(const GetOptions(source: Source.server));
-      String initialStatus = 'inactive';
-
-      if (userDoc.exists) {
-        final userData = userDoc.data();
-        if (userData != null && userData['subscriptionStatus'] == 'active') {
-          initialStatus = 'active';
-        }
+      // 1. Validação de Segurança (Evitar duplo trial)
+      final docExists = await _documentAlreadyExists(cleanDoc);
+      if (docExists) {
+        _showError('Este CPF/CNPJ já utilizou o período de teste. Faça login com a conta original ou assine o plano Pro.');
+        setState(() => _isLoading = false);
+        return;
       }
 
+      // 2. Prepara as datas (7 dias de teste grátis a partir de AGORA)
+      final now = DateTime.now();
+      final trialEnd = now.add(const Duration(days: 7));
+
+      // 3. Inicia a gravação em Lote (Batch) para garantir consistência
       final batch = firestore.batch();
       final storeRef = firestore.collection('stores').doc();
+      final userRef = firestore.collection('users').doc(user.uid);
+      final cpfRef = firestore.collection('cpfs_cadastrados').doc(cleanDoc);
 
-      // 2. Cria a loja
+      // -> Cria a Loja (Já liberada para o AuthGate)
       batch.set(storeRef, {
         'name': _storeNameController.text.trim(),
+        'phone': UtilBrasilFields.removeCaracteres(_phoneController.text),
+        'document': cleanDoc,
         'ownerId': user.uid,
-        'createdAt': Timestamp.now(),
-        'subscriptionStatus': initialStatus,
+        'createdAt': FieldValue.serverTimestamp(),
+        'subscriptionStatus': 'active', // Abre a porta no AuthGate
+        'trialEndDate': trialEnd.toIso8601String(), // Limite de 7 dias
       });
 
-      final userRef = firestore.collection('users').doc(user.uid);
-
-      // 3. Atualiza o usuário com o ID da loja (sem apagar o pagamento)
+      // -> Atualiza o Usuário
       batch.set(userRef, {
-        'email': user.email,
         'storeId': storeRef.id,
+        'documentNumber': cleanDoc,
+        'phone': UtilBrasilFields.removeCaracteres(_phoneController.text),
       }, SetOptions(merge: true));
 
+      // -> Queima o CPF na coleção de controle
+      batch.set(cpfRef, {
+        'uid': user.uid,
+        'cadastradoEm': FieldValue.serverTimestamp(),
+      });
+
+      // 4. Executa todas as gravações ao mesmo tempo
       await batch.commit();
 
-      // --- O "PULO DO GATO" (LOADING DE 2 SEGUNDOS) ---
-      // Mantém o spinner girando por 2 segundos para dar tempo do Firestore atualizar
-      await Future.delayed(const Duration(seconds: 4));
-
       if (mounted) {
+        // Atualiza o provider
         Provider.of<SalesProvider>(context, listen: false).updateStoreId(storeRef.id);
 
-        // Agora sim, manda para o AuthGate (que vai encontrar a loja 100% pronta)
+        // Manda pro AuthGate! Ele vai ler 'active' e jogar direto pra Home
         Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (ctx) => const AuthGate()),
                 (route) => false
@@ -82,12 +121,8 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
       }
 
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao criar loja: $e'), backgroundColor: Colors.red),
-      );
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      _showError('Erro ao criar loja: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -95,7 +130,7 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Crie Sua Loja'),
+        title: const Text('Configurar Loja'),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
@@ -113,32 +148,101 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
       ),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                const Text(
-                  'Estamos quase lá! Qual o nome do seu negócio?',
-                  style: TextStyle(fontSize: 18),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _storeNameController,
-                  decoration: const InputDecoration(labelText: 'Nome da Loja'),
-                  validator: (value) => (value == null || value.trim().isEmpty) ? 'O nome da loja é obrigatório.' : null,
-                ),
-                const SizedBox(height: 30),
-                if (_isLoading)
-                  const CircularProgressIndicator()
-                else
-                  ElevatedButton(
-                    onPressed: _submitCreateStore,
-                    child: const Text('Concluir Cadastro'),
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(Icons.storefront, size: 64, color: Colors.deepPurple),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Dados do seu Negócio',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
                   ),
-              ],
+                  const SizedBox(height: 8),
+                  Text(
+                    'Preencha para liberar seus 7 dias de acesso grátis.',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+
+                  // CAMPO: Nome da Loja
+                  TextFormField(
+                    controller: _storeNameController,
+                    decoration: InputDecoration(
+                      labelText: 'Nome da Loja',
+                      prefixIcon: const Icon(Icons.shopping_bag_outlined),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    textInputAction: TextInputAction.next,
+                    validator: (value) => (value == null || value.trim().isEmpty) ? 'O nome da loja é obrigatório.' : null,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // CAMPO: WhatsApp
+                  TextFormField(
+                    controller: _phoneController,
+                    decoration: InputDecoration(
+                      labelText: 'WhatsApp',
+                      prefixIcon: const Icon(Icons.phone_android),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      TelefoneInputFormatter(),
+                    ],
+                    textInputAction: TextInputAction.next,
+                    validator: (value) => (value == null || value.isEmpty) ? 'O WhatsApp é obrigatório.' : null,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // CAMPO: CPF ou CNPJ
+                  TextFormField(
+                    controller: _cpfCnpjController,
+                    decoration: InputDecoration(
+                      labelText: 'CPF ou CNPJ',
+                      hintText: 'Somente números',
+                      prefixIcon: const Icon(Icons.badge_outlined),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      CpfOuCnpjFormatter(),
+                    ],
+                    textInputAction: TextInputAction.done,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'O documento é obrigatório.';
+                      if (!UtilBrasilFields.isCPFValido(value) && !UtilBrasilFields.isCNPJValido(value)) {
+                        return 'CPF ou CNPJ inválido.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 32),
+
+                  // BOTÃO DE SUBMIT
+                  if (_isLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: Colors.deepPurple,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: _submitCreateStore,
+                      child: const Text('Concluir Cadastro', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

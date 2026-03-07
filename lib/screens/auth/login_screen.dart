@@ -1,12 +1,12 @@
 // lib/screens/auth/login_screen.dart
 
-import 'package:flutter/foundation.dart' show kIsWeb; // Importante para a lógica web
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:store_connect/screens/auth/register_screen.dart'; // Usaremos register_screen
+import 'package:store_connect/screens/auth/signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,7 +22,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isPasswordVisible = false;
 
-  // --- FUNCIONALIDADES RESTAURADAS ---
   bool _rememberMe = false;
   final _storage = const FlutterSecureStorage();
   final LocalAuthentication _localAuth = LocalAuthentication();
@@ -43,17 +42,20 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _checkBiometricAvailability() async {
-    // A biometria só funciona em mobile, então pulamos na web.
     if (kIsWeb) return;
 
-    final hasBiometrics = await _localAuth.canCheckBiometrics || await _localAuth.isDeviceSupported();
-    final biometricsEnabled = await _storage.read(key: 'biometricsEnabled') == 'true';
-    final hasCredentials = await _storage.read(key: 'email') != null;
+    try {
+      final hasBiometrics = await _localAuth.canCheckBiometrics || await _localAuth.isDeviceSupported();
+      final biometricsEnabled = await _storage.read(key: 'biometricsEnabled') == 'true';
+      final hasCredentials = await _storage.read(key: 'email') != null;
 
-    if (hasBiometrics && hasCredentials && biometricsEnabled && mounted) {
-      setState(() => _biometricLoginAvailable = true);
-    } else {
-      setState(() => _biometricLoginAvailable = false);
+      if (hasBiometrics && hasCredentials && biometricsEnabled && mounted) {
+        setState(() => _biometricLoginAvailable = true);
+      } else {
+        setState(() => _biometricLoginAvailable = false);
+      }
+    } catch (e) {
+      debugPrint("Erro na biometria: $e");
     }
   }
 
@@ -70,7 +72,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleCredentialsStorage() async {
     if (_rememberMe) {
       await _storage.write(key: 'email', value: _emailController.text.trim());
-      await _storage.write(key: 'password', value: _passwordController.text);
+      await _storage.write(key: 'password', value: _passwordController.text.trim());
+      await _storage.write(key: 'biometricsEnabled', value: 'true');
     } else {
       await _storage.deleteAll();
       await _storage.write(key: 'biometricsEnabled', value: 'false');
@@ -97,15 +100,12 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text.trim(),
       );
       await _handleCredentialsStorage();
-      // O AuthGate no main.dart vai detectar a mudança e redirecionar
     } on FirebaseAuthException catch (e) {
       String errorMessage = 'Falha na autenticação.';
-
-      // TRADUÇÃO DOS ERROS DO FIREBASE
       switch (e.code) {
         case 'user-not-found':
-        case 'invalid-credential': // O Firebase atual costuma usar esse para não revelar se o email existe
-          errorMessage = 'Conta não encontrada. Verifique o e-mail ou cadastre-se.';
+        case 'invalid-credential':
+          errorMessage = 'Conta não encontrada ou dados incorretos.';
           break;
         case 'wrong-password':
           errorMessage = 'Senha incorreta. Tente novamente.';
@@ -122,7 +122,6 @@ class _LoginScreenState extends State<LoginScreen> {
         default:
           errorMessage = 'Erro ao entrar: ${e.message}';
       }
-
       _showError(errorMessage);
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -146,9 +145,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
       await FirebaseAuth.instance.signInWithCredential(credential);
     } catch (e) {
-      _showError('Erro ao fazer login com Google: $e');
+      _showError('Erro ao fazer login com Google.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _authenticateWithBiometrics() async {
@@ -167,17 +167,19 @@ class _LoginScreenState extends State<LoginScreen> {
           await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
         } else {
           _showError('Credenciais não encontradas. Faça login manualmente.');
+          setState(() => _isLoading = false);
         }
       }
     } catch (e) {
-      _showError('Erro na autenticação biométrica: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      _showError('Erro na autenticação biométrica.');
+      setState(() => _isLoading = false);
     }
   }
 
   void _showForgotPasswordDialog() {
-    final TextEditingController emailController = TextEditingController();
+    final TextEditingController dialogEmailController = TextEditingController();
+    dialogEmailController.text = _emailController.text; // Aproveita se já digitou
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -188,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
             const Text("Digite seu e-mail e enviaremos um link para redefinir sua senha."),
             const SizedBox(height: 16),
             TextField(
-              controller: emailController,
+              controller: dialogEmailController,
               keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(labelText: 'E-mail', border: OutlineInputBorder()),
             ),
@@ -202,14 +204,21 @@ class _LoginScreenState extends State<LoginScreen> {
           ElevatedButton(
             child: const Text("Enviar"),
             onPressed: () async {
-              final email = emailController.text.trim();
-              if (email.isEmpty) return;
-              await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-              if (ctx.mounted) Navigator.of(ctx).pop();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Link para redefinição de senha enviado!')),
-                );
+              final email = dialogEmailController.text.trim();
+              if (email.isEmpty || !email.contains('@')) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Digite um e-mail válido.'), backgroundColor: Colors.red));
+                return;
+              }
+              try {
+                await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Link enviado! Verifique seu e-mail.'), backgroundColor: Colors.green),
+                  );
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao enviar link.'), backgroundColor: Colors.red));
               }
             },
           ),
@@ -270,7 +279,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // --- FORMULÁRIO COMPLETO E RESTAURADO ---
   Widget _buildLoginForm() {
     return Form(
       key: _formKey,
@@ -278,12 +286,21 @@ class _LoginScreenState extends State<LoginScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Image.asset('assets/images/logo.png', height: 120),
-          const SizedBox(height: 20),
+          // Exibe a logo apenas no mobile (já que no PC ela fica na área azul)
+         // if (!kIsWeb)
+            Center(
+              child: Image.asset(
+                'assets/images/logo_web.png',
+                height: 180,
+                errorBuilder: (ctx, err, stack) => const Icon(Icons.storefront, size: 80, color: Colors.deepPurple),
+              ),
+            ),
+          const SizedBox(height: 8),
           const Text('Bem-vindo de volta!', textAlign: TextAlign.center, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text('Faça login para continuar gerenciando seu negócio.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600)),
-          const SizedBox(height: 40),
+          Text('Faça login para continuar gerenciando seu negócio.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 20),
+
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
@@ -310,7 +327,7 @@ class _LoginScreenState extends State<LoginScreen> {
             validator: (value) => (value == null || value.isEmpty) ? 'Por favor, insira sua senha.' : null,
           ),
           const SizedBox(height: 8),
-          // Mostra o "Lembrar dados" apenas no mobile (onde faz mais sentido)
+
           if (!kIsWeb)
             CheckboxListTile(
               title: const Text("Lembrar dados"),
@@ -318,8 +335,10 @@ class _LoginScreenState extends State<LoginScreen> {
               onChanged: (newValue) => setState(() => _rememberMe = newValue ?? false),
               controlAffinity: ListTileControlAffinity.leading,
               contentPadding: EdgeInsets.zero,
+              activeColor: Colors.deepPurple,
             ),
           const SizedBox(height: 8),
+
           if (_isLoading)
             const Center(child: CircularProgressIndicator())
           else
@@ -334,34 +353,57 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          backgroundColor: Colors.deepPurple,
+                          foregroundColor: Colors.white,
                         ),
-                        child: const Text('ENTRAR', style: TextStyle(fontSize: 16)),
+                        child: const Text('ENTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                       ),
                     ),
-                    // Mostra o botão de digital apenas se disponível (já tem o !kIsWeb na lógica)
-                    if (_biometricLoginAvailable) ...[
+                    if (_biometricLoginAvailable && !kIsWeb) ...[
                       const SizedBox(width: 16),
-                      IconButton(
-                        icon: const Icon(Icons.fingerprint, size: 36),
-                        onPressed: _authenticateWithBiometrics,
-                        tooltip: 'Login com Digital',
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.deepPurple),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.fingerprint, size: 32, color: Colors.deepPurple),
+                          onPressed: _authenticateWithBiometrics,
+                          tooltip: 'Login com Digital',
+                        ),
                       ),
                     ]
                   ],
                 ),
+                const SizedBox(height: 8),
                 TextButton(
-                  child: const Text('Esqueci a senha'),
+                  child: const Text('Esqueci a senha', style: TextStyle(color: Colors.deepPurple)),
                   onPressed: () => _showForgotPasswordDialog(),
                 ),
                 const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  icon: Image.asset('assets/images/google-logo.png', height: 20),
-                  label: const Text('Continuar com Google', style: TextStyle(fontSize: 16)),
+
+                // Botão Google protegido contra quebra de tela (Overflow)
+                OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: _isLoading ? null : _googleSignIn,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset('assets/images/google_logo.png', height: 24),
+                      const SizedBox(width: 12),
+                      const Flexible(
+                        child: Text(
+                          'Continuar com Google',
+                          style: TextStyle(fontSize: 16, color: Colors.black87),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -373,10 +415,10 @@ class _LoginScreenState extends State<LoginScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (ctx) => const RegisterScreen()), // Navega para RegisterScreen
+                    MaterialPageRoute(builder: (ctx) => const SignupScreen()),
                   );
                 },
-                child: const Text('Cadastre-se'),
+                child: const Text('Cadastre-se', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
               ),
             ],
           ),

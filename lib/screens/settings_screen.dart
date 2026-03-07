@@ -1,6 +1,7 @@
 // settings_screen.dart
 
 import 'dart:io';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -87,44 +88,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _openMySubscription() async {
     setState(() => _isLoading = true);
+
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      // 1. Mostra o aviso para o usuário não achar que o app travou
 
-      final storeDoc = await FirebaseFirestore.instance
-          .collection('stores')
-          .doc(widget.storeId)
-          .get();
+      await FirebaseAuth.instance.currentUser?.getIdToken(true);
 
-      final link = storeDoc.data()?['paymentLink'];
-
-      if (link != null && link.toString().isNotEmpty) {
-        final uri = Uri.parse(link);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        } else {
-          try {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Não foi possível abrir o link da fatura.")),
-              );
-            }
-          }
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Nenhuma fatura pendente encontrada.")),
-          );
-        }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Buscando seu portal financeiro...")),
+        );
       }
+
+      // 2. Bate na porta da nossa Cloud Function passando o ID da loja
+      final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('getAsaasPortalUrl');
+      final response = await callable.call(<String, dynamic>{
+        'storeId': widget.storeId,
+      });
+
+      // 3. Recebe a URL mágica do Asaas
+      final portalUrl = response.data['portalUrl'] as String?;
+
+      if (portalUrl != null && portalUrl.isNotEmpty) {
+        final uri = Uri.parse(portalUrl);
+
+        // 👇 Não perguntamos mais se ele pode abrir. Nós forçamos a abertura!
+        try {
+          await launchUrl(
+            uri,
+            mode: LaunchMode.externalApplication,
+          );
+        } catch (e) {
+          throw 'O celular impediu a abertura do navegador: $e';
+        }
+
+      } else {
+        throw 'URL não retornada pelo servidor.';
+      }
+
     } catch (e) {
       debugPrint('Erro ao buscar fatura: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erro ao buscar fatura: $e")),
+          const SnackBar(
+              content: Text("Erro ao acessar o portal financeiro. Tente novamente."),
+              backgroundColor: Colors.red
+          ),
         );
       }
     } finally {

@@ -42,6 +42,7 @@ Future<void> main() async {
 
       // Se fosse usar no iOS simulador:
       appleProvider: AppleProvider.debug,
+      webProvider: ReCaptchaV3Provider('debug'),
     );
     debugPrint('✅ App Check ativado: AndroidProvider.debug');
   } catch (e) {
