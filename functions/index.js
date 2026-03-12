@@ -27,232 +27,227 @@ const SUBSCRIPTION_PRICES = {
 };
 
 /**
- * 🔵 FUNÇÃO PRINCIPAL: Cria ou retorna assinatura no Asaas
+ * 🔵 FUNÇÃO: createAsaasSubscription
+ * * Descrição: Responsável por converter uma loja em um cliente pagante no Asaas.
  *
- * Fluxo:
- * 1. Novo cliente → ativa TRIAL de 7 dias (sem Asaas)
- * 2. Cliente existente → cria assinatura PAGA no Asaas
- * 3. Assinatura pendente → retorna link do boleto
+ * Fluxo Atualizado (Arquitetura Segura):
+ * 1. Solicitação → Recebe apenas o `storeId` do aplicativo (Flutter).
+ * 2. Enriquecimento → Busca de forma segura o CPF, Nome e Email direto no Firestore (evita manipulação de dados pelo frontend).
+ * 3. Verificação de Assinatura Existente:
+ * - Se já tem assinatura e está PAGA → Retorna aviso de sucesso.
+ * - Se já tem assinatura e está PENDENTE → Recupera e retorna o link do boleto já existente.
+ * 4. Nova Assinatura (Ação do botão "Assinar Agora"):
+ * - Cadastra ou localiza o cliente no Asaas (usando o CPF do banco).
+ * - Cria a assinatura PAGA (Plano Pro).
+ * - Atualiza a loja no Firestore com os IDs gerados pelo Asaas.
+ * - Retorna a URL do boleto recém-criado para o celular abrir na hora.
  *
- * Status possíveis:
- * - "trial" → teste gratuito ativo
- * - "pending" → boleto gerado, aguardando pagamento
- * - "active" → pagamento confirmado
- * - "inactive" → assinatura cancelada/expirada
+ * Status possíveis no Firestore (campo `subscriptionStatus`):
+ * - "trial"    → Teste gratuito ativo (Definido automaticamente na criação da conta da loja).
+ * - "pending"  → Boleto gerado no Asaas, aguardando o cliente realizar o pagamento.
+ * - "active"   → Pagamento confirmado pelo Webhook do Asaas (Acesso total liberado).
+ * - "inactive" → Assinatura cancelada, vencida ou pagamento rejeitado (Bloqueia o app).
  */
-exports.createAsaasSubscription = onCall({ timeoutSeconds: 120 }, async (request) => {
-  console.log("\n\n╔════════════════════════════════════════════════════════════╗");
-  console.log("║  🟢 INICIANDO PROCESSO DE ASSINATURA                       ║");
-  console.log("╚════════════════════════════════════════════════════════════╝");
 
-  const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Usuário não logado.");
-  }
+ exports.createAsaasSubscription = onCall({ timeoutSeconds: 120 }, async (request) => {
+   console.log("\n\n╔════════════════════════════════════════════════════════════╗");
+   console.log("║  🟢 INICIANDO PROCESSO DE ASSINATURA NO ASAAS              ║");
+   console.log("╚════════════════════════════════════════════════════════════╝");
 
-  const { cpfCnpj, name, phone, email } = request.data;
-  const userId = request.auth.uid;
-  const headers = {
-    "access_token": ASAAS_API_KEY,
-    "Content-Type": "application/json"
-  };
-  const db = admin.firestore();
+   const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
+   if (!request.auth) {
+     throw new HttpsError("unauthenticated", "Usuário não logado.");
+   }
 
-  try {
-    // ✅ PASSO 1: Valida se usuário tem loja
-    const userDoc = await db.collection("users").doc(userId).get();
-    if (!userDoc.exists || !userDoc.data().storeId) {
-      throw new HttpsError("not-found", "Nenhuma loja vinculada a este usuário.");
-    }
-    const storeId = userDoc.data().storeId;
+   const userId = request.auth.uid;
+   const headers = {
+     "access_token": ASAAS_API_KEY,
+     "Content-Type": "application/json"
+   };
+   const db = admin.firestore();
 
-    // ✅ PASSO 2: Busca dados da loja (se houver assinatura anterior)
-    const storeRef = db.collection("stores").doc(storeId);
-    const storeDoc = await storeRef.get();
-    const existingSubscriptionId = storeDoc.data()?.asaasSubscriptionId;
+   try {
+     // ✅ PASSO 1: Identifica a Loja
+     let storeId = request.data.storeId;
+     if (!storeId) {
+       const userDoc = await db.collection("users").doc(userId).get();
+       if (!userDoc.exists || !userDoc.data().storeId) {
+         throw new HttpsError("not-found", "Nenhuma loja vinculada a este usuário.");
+       }
+       storeId = userDoc.data().storeId;
+     }
 
-    console.log(`\n📌 User ID: ${userId}`);
-    console.log(`📌 Store ID: ${storeId}`);
-    console.log(`📌 CPF/CNPJ: ${cpfCnpj}`);
-    console.log(`📌 Assinatura Existente: ${existingSubscriptionId || "NÃO"}`);
+     // ✅ PASSO 2: Busca os dados completos da loja no banco
+     const storeRef = db.collection("stores").doc(storeId);
+     const storeDoc = await storeRef.get();
+     const storeData = storeDoc.data() || {};
 
-    // ✅ PASSO 3: Se há assinatura anterior, verifica status do pagamento
-    if (existingSubscriptionId) {
-      console.log("\n🔍 VERIFICANDO ASSINATURA EXISTENTE");
+     // 🚀 A MÁGICA AQUI: Pegamos o CPF e Nome direto do banco (pois o Flutter mandou só o storeId)
+     const cpfCnpj = request.data.cpfCnpj || storeData.document;
+     const name = request.data.name || storeData.name || "Cliente Store Connect";
+     const phone = request.data.phone || storeData.phone || "";
+     const email = request.data.email || request.auth.token?.email || `contato@${storeId}.com.br`;
 
-      try {
-        const payments = await axios.get(
-          `${ASAAS_URL}/payments?subscription=${existingSubscriptionId}&limit=5`,
-          { headers }
-        );
+     if (!cpfCnpj) {
+       throw new HttpsError("invalid-argument", "CPF/CNPJ não encontrado no cadastro da loja.");
+     }
 
-        if (payments.data.data && payments.data.data.length > 0) {
-          const payment = payments.data.data[0];
+     const existingSubscriptionId = storeData.asaasSubscriptionId;
 
-          // ✅ Pagamento já foi confirmado
-          if (payment.status === "CONFIRMED" || payment.status === "RECEIVED") {
-            await storeRef.update({
-              subscriptionStatus: "active",
-              lastPaymentDate: admin.firestore.FieldValue.serverTimestamp()
-            });
+     console.log(`\n📌 User ID: ${userId}`);
+     console.log(`📌 Store ID: ${storeId}`);
+     console.log(`📌 CPF/CNPJ: ${cpfCnpj}`);
+     console.log(`📌 Assinatura Existente: ${existingSubscriptionId || "NÃO"}`);
 
-            return {
-              success: true,
-              alreadyActive: true,
-              message: "✅ Assinatura já está ativa!"
-            };
-          }
+     // ✅ PASSO 3: Se há assinatura anterior, verifica status do pagamento
+     if (existingSubscriptionId) {
+       console.log("\n🔍 VERIFICANDO ASSINATURA EXISTENTE");
 
-          // ✅ Boleto ainda está pendente - retorna link
-          if (payment.status === "PENDING") {
-            const paymentLink = payment.billUrl || payment.invoiceUrl;
+       try {
+         const payments = await axios.get(
+           `${ASAAS_URL}/payments?subscription=${existingSubscriptionId}&limit=5`,
+           { headers }
+         );
 
-            if (!paymentLink) {
-              const fallbackUrl = `https://www.asaas.com/checkout/${existingSubscriptionId}`;
-              return {
-                success: true,
-                paymentUrl: fallbackUrl,
-                subscriptionId: existingSubscriptionId,
-                alreadyExists: true
-              };
-            }
-            return {
-              success: true,
-              paymentUrl: paymentLink,
-              subscriptionId: existingSubscriptionId,
-              alreadyExists: true
-            };
-          }
-        }
-      } catch (axiosError) {
-        console.error(`❌ ERRO ao buscar pagamentos:`, axiosError.response?.data || axiosError.message);
-      }
-    }
+         if (payments.data.data && payments.data.data.length > 0) {
+           const payment = payments.data.data[0];
 
-    // ✅ PASSO 4: Verifica se é novo cliente (para liberar trial)
-    const cpfRef = db.collection('cpfs_cadastrados').doc(cpfCnpj);
-    const cpfDoc = await cpfRef.get();
-    const ehNovoCliente = !cpfDoc.exists;
+           // ✅ Pagamento já foi confirmado
+           if (payment.status === "CONFIRMED" || payment.status === "RECEIVED") {
+             await storeRef.update({
+               subscriptionStatus: "active",
+               lastPaymentDate: admin.firestore.FieldValue.serverTimestamp()
+             });
 
-    console.log(`\n📊 CPF Existe? ${cpfDoc.exists}`);
-    console.log(`📊 É novo cliente? ${ehNovoCliente}`);
+             return {
+               success: true,
+               alreadyActive: true,
+               message: "✅ Assinatura já está ativa!"
+             };
+           }
 
-    // 🎁 PASSO 5: NOVO CLIENTE - Libera TRIAL de 7 dias (SEM ASAAS)
-    if (ehNovoCliente) {
-      const dataHoje = new Date();
-      const dataVencimento = new Date();
-      dataVencimento.setDate(dataHoje.getDate() + 7);
-      const trialEndDateStr = dataVencimento.toISOString().split('T')[0];
+           // ✅ Boleto ainda está pendente - retorna link
+           if (payment.status === "PENDING") {
+             const paymentLink = payment.billUrl || payment.invoiceUrl;
 
-      // ✅ Marca o CPF como cadastrado
-      await cpfRef.set({
-        uid: userId,
-        motivo: "Primeiro Teste 7 Dias",
-        data_cadastro: admin.firestore.FieldValue.serverTimestamp()
-      });
+             if (!paymentLink) {
+               const fallbackUrl = `https://www.asaas.com/checkout/${existingSubscriptionId}`;
+               return {
+                 success: true,
+                 paymentUrl: fallbackUrl,
+                 subscriptionId: existingSubscriptionId,
+                 alreadyExists: true
+               };
+             }
+             return {
+               success: true,
+               paymentUrl: paymentLink,
+               subscriptionId: existingSubscriptionId,
+               alreadyExists: true
+             };
+           }
+         }
+       } catch (axiosError) {
+         console.error(`❌ ERRO ao buscar pagamentos:`, axiosError.response?.data || axiosError.message);
+       }
+     }
 
-      // ✅ ATUALIZA A LOJA com trial ativo
-      await storeRef.update({
-        subscriptionStatus: "active",  // ← IMPORTANTE: "active" permite acesso
-        subscriptionType: "trial",
-        trialEndDate: trialEndDateStr,
-        trialStartedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+     // 💳 PASSO 4: CRIA ASSINATURA PAGA DIRETO (Se clicou no botão vermelho, ele quer assinar agora!)
+     console.log("\n💳 CRIANDO ASSINATURA PAGA NO ASAAS");
 
-      console.log(`✅ TRIAL DE 7 DIAS ATIVADO para loja ${storeId}`);
-      console.log(`   Vencimento: ${trialEndDateStr}`);
+     let customerId;
+     const search = await axios.get(`${ASAAS_URL}/customers?cpfCnpj=${cpfCnpj}`, { headers });
 
-      return {
-        success: true,
-        isTrial: true,
-        trialEndDate: trialEndDateStr,
-        message: "🎉 Aproveite seus 7 dias de teste!"
-      };
-    }
+     if (search.data.data?.length > 0) {
+       customerId = search.data.data[0].id;
+       console.log(`✅ Cliente encontrado: ${customerId}`);
+     } else {
+       const create = await axios.post(`${ASAAS_URL}/customers`, {
+         name,
+         email,
+         cpfCnpj,
+         phone,
+         externalReference: storeId
+       }, { headers });
+       customerId = create.data.id;
+       console.log(`✅ Novo cliente criado: ${customerId}`);
+     }
 
-    // 💳 PASSO 6: CLIENTE EXISTENTE - Cria assinatura PAGA
-    console.log("\n💳 CLIENTE EXISTENTE - CRIANDO ASSINATURA PAGA");
+     // ✅ Calcula data de vencimento (próximo mês)
+     const nextDueDate = new Date();
+    // nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+     const dueDateString = nextDueDate.toISOString().split('T')[0];
 
-    let customerId;
-    const search = await axios.get(`${ASAAS_URL}/customers?cpfCnpj=${cpfCnpj}`, { headers });
+     // ✅ Cria assinatura no Asaas
+     const subResponse = await axios.post(`${ASAAS_URL}/subscriptions`, {
+       customer: customerId,
+       billingType: "UNDEFINED",
+       value: SUBSCRIPTION_PRICES.pro,
+       nextDueDate: dueDateString,
+       cycle: "MONTHLY",
+       description: "Assinatura Store Connect Pro",
+       externalReference: storeId
+     }, { headers });
 
-    if (search.data.data?.length > 0) {
-      customerId = search.data.data[0].id;
-      console.log(`✅ Cliente encontrado: ${customerId}`);
-    } else {
-      const create = await axios.post(`${ASAAS_URL}/customers`, {
-        name,
-        email,
-        cpfCnpj,
-        phone,
-        externalReference: storeId
-      }, { headers });
-      customerId = create.data.id;
-      console.log(`✅ Novo cliente criado: ${customerId}`);
-    }
+     const subscriptionId = subResponse.data.id;
 
-    // ✅ Calcula data de vencimento (próximo mês)
-    const nextDueDate = new Date();
-    nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-    const dueDateString = nextDueDate.toISOString().split('T')[0];
+     // ✅ ATUALIZA A LOJA no Firestore com o ID do Asaas gerado
+     await storeRef.set({
+       asaasSubscriptionId: subscriptionId,
+       asaasCustomerId: customerId,
+       subscriptionStatus: "pending",  // ← Boleto gerado, aguardando
+       subscriptionType: "pro",
+       nextDueDate: dueDateString
+     }, { merge: true });
 
-    // ✅ Cria assinatura no Asaas
-    const subResponse = await axios.post(`${ASAAS_URL}/subscriptions`, {
-      customer: customerId,
-      billingType: "UNDEFINED",
-      value: SUBSCRIPTION_PRICES.pro,
-      nextDueDate: dueDateString,
-      cycle: "MONTHLY",
-      description: "Assinatura Store Connect Pro",
-      externalReference: storeId
-    }, { headers });
+     console.log(`✅ Assinatura salva no Firestore: ${subscriptionId}`);
 
-    const subscriptionId = subResponse.data.id;
+     // ✅ PASSO 5: Busca o link do boleto (com delay inteligente real)
+         let finalPaymentLink = null;
 
-    // ✅ ATUALIZA A LOJA com status "pending"
-    await storeRef.set({
-      asaasSubscriptionId: subscriptionId,
-      asaasCustomerId: customerId,
-      subscriptionStatus: "pending",  // ← Boleto gerado, aguardando
-      subscriptionType: "pro",
-      nextDueDate: dueDateString
-    }, { merge: true });
+         console.log(`⏳ Aguardando Asaas gerar o boleto para a assinatura ${subscriptionId}...`);
 
-    console.log(`✅ Assinatura criada: ${subscriptionId}`);
+         for (let i = 1; i <= 40; i++) {
+           const payments = await axios.get(`${ASAAS_URL}/payments?subscription=${subscriptionId}&limit=1`, { headers });
 
-    // ✅ PASSO 7: Busca o link do boleto (com retry)
-    let finalPaymentLink = null;
-    for (let i = 1; i <= 40; i++) {
-      const payments = await axios.get(`${ASAAS_URL}/payments?subscription=${subscriptionId}&limit=1`, { headers });
-      if (payments.data.data?.length > 0) {
-        finalPaymentLink = payments.data.data[0].billUrl || payments.data.data[0].invoiceUrl;
-        console.log(`✅ Boleto encontrado na tentativa ${i}`);
-        break;
-      }
-      await delay(1500);
-    }
+           if (payments.data.data && payments.data.data.length > 0) {
+             const payment = payments.data.data[0];
+             const linkGerado = payment.billUrl || payment.invoiceUrl;
 
-    if (!finalPaymentLink) {
-      throw new HttpsError("unavailable", "Asaas demorou a gerar o link do boleto.");
-    }
+             // SÓ PARA O LOOP SE O LINK REALMENTE EXISTIR AGORA!
+             if (linkGerado) {
+               finalPaymentLink = linkGerado;
+               console.log(`✅ Boleto encontrado na tentativa ${i}`);
+               break;
+             } else {
+               console.log(`🔄 Pagamento criado, aguardando URL do banco... Tentativa ${i}`);
+             }
+           }
+           // Espera 2 segundos antes de tentar de novo
+           await delay(2000);
+         }
 
-    console.log(`✅ Boleto gerado com sucesso`);
+         if (!finalPaymentLink) {
+           throw new HttpsError("unavailable", "Asaas demorou a gerar o link do boleto.");
+         }
 
-    return {
-      success: true,
-      paymentUrl: finalPaymentLink,
-      subscriptionId: subscriptionId,
-      isTrial: false,
-      price: SUBSCRIPTION_PRICES.pro,
-      nextDueDate: dueDateString,
-      message: "📄 Boleto gerado com sucesso!"
-    };
+         console.log(`✅ Boleto retornado para o celular com sucesso!`);
 
-  } catch (error) {
-    console.error(`\n❌ Erro: ${error.message}`);
-    throw new HttpsError("internal", `Erro na assinatura: ${error.message}`);
-  }
-});
+     return {
+       success: true,
+       paymentUrl: finalPaymentLink,
+       subscriptionId: subscriptionId,
+       isTrial: false,
+       price: SUBSCRIPTION_PRICES.pro,
+       nextDueDate: dueDateString,
+       message: "📄 Boleto gerado com sucesso!"
+     };
+
+   } catch (error) {
+     console.error(`\n❌ Erro na assinatura: ${error.message}`);
+     throw new HttpsError("internal", `Erro na assinatura: ${error.message}`);
+   }
+ });
 
 /**
  * 🔔 WEBHOOK DO ASAAS

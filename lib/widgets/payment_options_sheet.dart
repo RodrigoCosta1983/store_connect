@@ -45,7 +45,8 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
   Future<void> _loadPixQrCodeUrl() async {
     setState(() => _pixLoading = true);
     try {
-      final doc = await FirebaseFirestore.instance.collection('stores').doc(widget.storeId).get();
+      final doc = await FirebaseFirestore.instance.collection('stores').doc(
+          widget.storeId).get();
       if (doc.exists) {
         final data = doc.data();
         final url = data?['pixQrCodeUrl'] as String?;
@@ -71,7 +72,11 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
 
     try {
       final batch = firestore.batch();
-      final saleDocRef = firestore.collection('stores').doc(widget.storeId).collection('sales').doc();
+      final saleDocRef = firestore
+          .collection('stores')
+          .doc(widget.storeId)
+          .collection('sales')
+          .doc();
       final customer = cart.selectedCustomer;
 
       batch.set(saleDocRef, {
@@ -87,8 +92,13 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
       });
 
       for (final cartItem in cart.items.values) {
-        final productRef = firestore.collection('stores').doc(widget.storeId).collection('products').doc(cartItem.productId);
-        batch.update(productRef, {'quantidade': FieldValue.increment(-cartItem.quantity)});
+        final productRef = firestore
+            .collection('stores')
+            .doc(widget.storeId)
+            .collection('products')
+            .doc(cartItem.productId);
+        batch.update(productRef,
+            {'quantidade': FieldValue.increment(-cartItem.quantity)});
       }
 
       await batch.commit();
@@ -97,13 +107,16 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
       if (mounted) {
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Venda finalizada e estoque atualizado!'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Venda finalizada e estoque atualizado!'),
+              backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('ERRO: ${e.toString()}'), backgroundColor: Colors.red),
+          SnackBar(content: Text('ERRO: ${e.toString()}'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -118,47 +131,54 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Pagar com PIX'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Aponte a câmera para o QR Code para pagar.'),
-            const SizedBox(height: 20),
-            // Se estiver carregando, mostra spinner; se tiver URL mostra Image.network; se não, fallback para asset
-            if (_pixLoading)
-              const SizedBox(height: 150, width: 150, child: Center(child: CircularProgressIndicator()))
-            else if (_pixQrCodeUrl != null && _pixQrCodeUrl!.isNotEmpty)
-            // Exibe a imagem do Firebase Storage com tratamento de erro e fit
-              Image.network(
-                _pixQrCodeUrl!,
-                height: 150,
-                width: 150,
-                fit: BoxFit.contain,
-                // em caso de falha, mostramos o placeholder local
-                errorBuilder: (context, error, stackTrace) {
-                  debugPrint('Erro ao carregar pixQrCodeUrl: $error');
-                  return Image.asset('assets/images/pix_qrcode.png', height: 150, width: 150);
+      builder: (dialogContext) =>
+          AlertDialog(
+            title: const Text('Pagar com PIX'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Aponte a câmera para o QR Code para pagar.'),
+                const SizedBox(height: 20),
+                // Se estiver carregando, mostra spinner; se tiver URL mostra Image.network; se não, fallback para asset
+                if (_pixLoading)
+                  const SizedBox(height: 150,
+                      width: 150,
+                      child: Center(child: CircularProgressIndicator()))
+                else
+                  if (_pixQrCodeUrl != null && _pixQrCodeUrl!.isNotEmpty)
+                  // Exibe a imagem do Firebase Storage com tratamento de erro e fit
+                    Image.network(
+                      _pixQrCodeUrl!,
+                      height: 150,
+                      width: 150,
+                      fit: BoxFit.contain,
+                      // em caso de falha, mostramos o placeholder local
+                      errorBuilder: (context, error, stackTrace) {
+                        debugPrint('Erro ao carregar pixQrCodeUrl: $error');
+                        return Image.asset(
+                            'assets/images/pix_qrcode.png', height: 150,
+                            width: 150);
+                      },
+                    )
+                  else
+                    Image.asset('assets/images/pix_qrcode.png', height: 150,
+                        width: 150),
+              ],
+            ),
+            actions: [
+              TextButton(
+                child: const Text("Cancelar"),
+                onPressed: () => Navigator.of(dialogContext).pop(),
+              ),
+              ElevatedButton(
+                child: const Text("Pagamento Concluído"),
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  _handleInstantSale('PIX');
                 },
-              )
-            else
-              Image.asset('assets/images/pix_qrcode.png', height: 150, width: 150),
-          ],
-        ),
-        actions: [
-          TextButton(
-            child: const Text("Cancelar"),
-            onPressed: () => Navigator.of(dialogContext).pop(),
+              ),
+            ],
           ),
-          ElevatedButton(
-            child: const Text("Pagamento Concluído"),
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              _handleInstantSale('PIX');
-            },
-          ),
-        ],
-      ),
     );
   }
 
@@ -167,11 +187,12 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogCtx) => ConfirmFiadoDialog(
-        storeId: widget.storeId,
-        customer: customer,
-        notes: widget.notes,
-      ),
+      builder: (dialogCtx) =>
+          ConfirmFiadoDialog(
+            storeId: widget.storeId,
+            customer: customer,
+            notes: widget.notes,
+          ),
     );
 
     if (result == true && mounted) {
@@ -189,20 +210,28 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
           content: SizedBox(
             width: double.maxFinite,
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('stores').doc(widget.storeId).collection('customers').orderBy('name').snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('stores')
+                  .doc(
+                  widget.storeId)
+                  .collection('customers')
+                  .orderBy('name')
+                  .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('Nenhum cliente cadastrado.'));
+                  return const Center(
+                      child: Text('Nenhum cliente cadastrado.'));
                 }
                 final customersDocs = snapshot.data!.docs;
                 return ListView.builder(
                   shrinkWrap: true,
                   itemCount: customersDocs.length,
                   itemBuilder: (context, index) {
-                    final customer = Customer.fromFirestore(customersDocs[index]);
+                    final customer = Customer.fromFirestore(
+                        customersDocs[index]);
                     return ListTile(
                       title: Text(customer.name),
                       onTap: () {
@@ -237,45 +266,53 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
 
     final cart = Provider.of<CartProvider>(context, listen: false);
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Wrap(
-        runSpacing: 10,
-        children: <Widget>[
-          const Text('Escolha a forma de pagamento', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10, width: double.infinity),
-          ListTile(
-            leading: const Icon(Icons.money, size: 30, color: Colors.green),
-            title: const Text('Dinheiro', style: TextStyle(fontSize: 18)),
-            onTap: () => _handleInstantSale('Dinheiro'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.credit_card, size: 30, color: Colors.blueAccent),
-            title: const Text('Cartão', style: TextStyle(fontSize: 18)),
-            onTap: () => _handleInstantSale('Cartão'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.pix, size: 30, color: Colors.cyan),
-            title: const Text('PIX', style: TextStyle(fontSize: 18)),
-            onTap: _showPixDialog,
-          ),
-          if (_fiadoIsEnabled) ...[
-            const Divider(),
+    // Adicionamos o SafeArea para evitar que o conteúdo fique atrás do menu do sistema
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        // Ajustamos o padding
+        child: Wrap(
+          runSpacing: 10,
+          children: <Widget>[
+            const Text('Escolha a forma de pagamento',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10, width: double.infinity),
             ListTile(
-              leading: const Icon(Icons.person_add_alt_1, size: 30, color: Colors.orange),
-              title: const Text('Crédito / A Prazo', style: TextStyle(fontSize: 18)),
-              onTap: () {
-                final selectedCustomer = cart.selectedCustomer;
-
-                if (selectedCustomer != null) {
-                  _startFiadoProcess(selectedCustomer);
-                } else {
-                  _selectCustomerForFiado();
-                }
-              },
+              leading: const Icon(Icons.money, size: 30, color: Colors.green),
+              title: const Text('Dinheiro', style: TextStyle(fontSize: 18)),
+              onTap: () => _handleInstantSale('Dinheiro'),
             ),
+            ListTile(
+              leading: const Icon(
+                  Icons.credit_card, size: 30, color: Colors.blueAccent),
+              title: const Text('Cartão', style: TextStyle(fontSize: 18)),
+              onTap: () => _handleInstantSale('Cartão'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.pix, size: 30, color: Colors.cyan),
+              title: const Text('PIX', style: TextStyle(fontSize: 18)),
+              onTap: _showPixDialog,
+            ),
+            if (_fiadoIsEnabled) ...[
+              const Divider(),
+              ListTile(
+                leading: const Icon(
+                    Icons.person_add_alt_1, size: 30, color: Colors.orange),
+                title: const Text(
+                    'Crédito / A Prazo', style: TextStyle(fontSize: 18)),
+                onTap: () {
+                  final selectedCustomer = cart.selectedCustomer;
+
+                  if (selectedCustomer != null) {
+                    _startFiadoProcess(selectedCustomer);
+                  } else {
+                    _selectCustomerForFiado();
+                  }
+                },
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

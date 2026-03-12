@@ -86,48 +86,129 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.of(context).push(MaterialPageRoute(builder: (ctx) => PaymentSettingsScreen(storeId: widget.storeId)));
   }
 
+  // --- NOVA LÓGICA DE ASSINATURA ---
   Future<void> _openMySubscription() async {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Mostra o aviso para o usuário não achar que o app travou
+      // 1. Busca os dados da loja no Firestore para saber se ele já é cliente Asaas
+      final storeDoc = await FirebaseFirestore.instance.collection('stores').doc(widget.storeId).get();
+      final storeData = storeDoc.data() as Map<String, dynamic>?;
 
+      final asaasCustomerId = storeData?['asaasCustomerId'] as String?;
+
+      // Se não achar a data, colocamos uma de fallback só por segurança
+      final trialEndDateStr = storeData?['trialEndDate'] as String?;
+
+      if (asaasCustomerId != null && asaasCustomerId.isNotEmpty) {
+        // Cenário A: Ele já assinou antes. Vamos só pegar o link do portal.
+        await _callFinanceFunction('getAsaasPortalUrl');
+      } else {
+        // Cenário B: Ele não assinou. Está no Trial. Sobe o Pop-up!
+        setState(() => _isLoading = false); // Para o loading para ele ver o popup
+        _showTrialPopup(trialEndDateStr);
+      }
+
+    } catch (e) {
+      debugPrint('Erro ao verificar status da loja: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Erro ao acessar dados da loja. Tente novamente."), backgroundColor: Colors.red),
+        );
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _showTrialPopup(String? trialEndString) {
+    // Formata a data se ela existir
+    String formattedDate = "alguns dias";
+    if (trialEndString != null && trialEndString.isNotEmpty) {
+      try {
+        final date = DateTime.parse(trialEndString);
+        formattedDate = "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
+      } catch (_) {} // Se der erro no parse, mantém "alguns dias"
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Text('🎉 ', style: TextStyle(fontSize: 24)),
+            Expanded(child: Text('Período de Testes!', style: TextStyle(fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: Text(
+          "Fique tranquilo, você ainda tem acesso gratuito ao Store&Connect até o dia $formattedDate. Não é necessário realizar nenhum pagamento agora.\n\n"
+              "Mas, se você já quiser deixar sua assinatura ativa e garantir que sua loja não tenha nenhuma interrupção após o fim do teste, você pode gerar sua assinatura agora mesmo.",
+          style: const TextStyle(fontSize: 15),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsPadding: const EdgeInsets.only(bottom: 20, left: 16, right: 16),
+        actions: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade700,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  Navigator.of(ctx).pop(); // Fecha o popup
+                  // Chama a função que CRIA o cliente lá no Asaas
+                  _callFinanceFunction('createAsaasSubscription');
+                },
+                child: const Text('Quero Assinar Agora 🚀', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: Colors.grey.shade700),
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Entendi, vou continuar testando', style: TextStyle(fontSize: 15)),
+              ),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  // Método unificado para chamar as Cloud Functions financeiras
+  Future<void> _callFinanceFunction(String functionName) async {
+    setState(() => _isLoading = true);
+    try {
       await FirebaseAuth.instance.currentUser?.getIdToken(true);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Buscando seu portal financeiro...")),
+          const SnackBar(content: Text("Preparando seu portal financeiro...")),
         );
       }
 
-      // 2. Bate na porta da nossa Cloud Function passando o ID da loja
-      final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('getAsaasPortalUrl');
+      final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable(functionName);
       final response = await callable.call(<String, dynamic>{
         'storeId': widget.storeId,
       });
 
-      // 3. Recebe a URL mágica do Asaas
       final portalUrl = response.data['portalUrl'] as String?;
 
       if (portalUrl != null && portalUrl.isNotEmpty) {
         final uri = Uri.parse(portalUrl);
-
-        // 👇 Não perguntamos mais se ele pode abrir. Nós forçamos a abertura!
         try {
-          await launchUrl(
-            uri,
-            mode: LaunchMode.externalApplication,
-          );
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
         } catch (e) {
           throw 'O celular impediu a abertura do navegador: $e';
         }
-
       } else {
         throw 'URL não retornada pelo servidor.';
       }
-
     } catch (e) {
-      debugPrint('Erro ao buscar fatura: $e');
+      debugPrint('Erro na função $functionName: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -140,6 +221,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+  // --- FIM DA NOVA LÓGICA DE ASSINATURA ---
+
 
   @override
   Widget build(BuildContext context) {
@@ -195,7 +278,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Text('Segurança', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ),
 
-              // Biometria geralmente não funciona na Web, podemos esconder ou deixar desativado
               if (!kIsWeb)
                 SwitchListTile(
                   title: const Text('Acesso com Biometria'),
@@ -411,7 +493,6 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
     }
   }
 
-  // ATUALIZADO: Método Universal de Upload (Funciona Web e Mobile)
   Future<void> _updatePixQrCode() async {
     final pickedImage = await ImagePicker().pickImage(
       source: ImageSource.gallery,
@@ -434,7 +515,6 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
       }
 
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      // Garante nome correto do arquivo
       final ext = pickedImage.name.split('.').last;
       final fileName = 'qrcode_$timestamp.$ext';
       final storagePath = 'pix_qrcodes/${widget.storeId}/$fileName';
@@ -445,7 +525,6 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
         cacheControl: 'public, max-age=3600',
       );
 
-      // --- PULO DO GATO: Lê como bytes (universal) ---
       final bytes = await pickedImage.readAsBytes();
       await storageRef.putData(bytes, metadata);
 
@@ -499,7 +578,7 @@ class _PaymentSettingsScreenState extends State<PaymentSettingsScreen> {
       appBar: AppBar(title: const Text('Pagamentos')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Center( // Centraliza também a tela de pagamentos
+          : Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 700),
           child: ListView(
