@@ -66,14 +66,23 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 
 - Gerenciamento de Perfil: O usuário pode editar seus dados e alterar sua senha com segurança.
 
-### 💰 Monetização (SaaS)
-- **Integração com Google Play Billing:** Sistema completo para gestão de assinaturas.
+### Motor de Recibos e Impressão
+- **Geração Dinâmica de PDFs:** Criação de recibos profissionais *White-Label* (com a identidade visual da loja geradora).
 
-- Tela de Assinatura: Interface que busca os planos cadastrados no Play Console e guia o usuário no processo de compra.
+- **Múltiplos Formatos:** Exportação otimizada em tamanho **A4** (ideal para compartilhamento via WhatsApp e e-mail) e formato contínuo para **Bobinas de 58mm** (mini impressoras térmicas Bluetooth).
 
-- Validação em Tempo Real: O AuthGate verifica o status da assinatura e libera ou bloqueia o acesso ao app instantaneamente após a compra ou cancelamento.
+- **Tipografia e Emojis:** Implementação de `fontFallback` para garantir a renderização perfeita de emojis nos nomes de produtos e observações dos clientes.
 
-- Ambiente de Testes: Configuração completa para testar compras com contas de licença, sem cobranças reais.
+- **Rastreabilidade:** Inclusão automática do ID da transação no Firestore diretamente no cabeçalho do recibo.
+
+### 💰 Monetização (SaaS) e Pagamentos
+- **Integração com Asaas:** Sistema completo de cobrança e gestão de assinaturas recorrentes integrado à API do Asaas.
+
+- **Webhooks via Cloud Functions:** Lógica de backend no Firebase para receber webhooks do Asaas, validando pagamentos de forma assíncrona e atualizando o status da assinatura da loja no Firestore em tempo real.
+
+- **Integração com Google Play Billing:** Sistema complementar para gestão de assinaturas via lojas de aplicativos.
+
+- **Validação de Acesso (AuthGate):** O sistema verifica o status da assinatura e libera ou bloqueia o acesso ao app instantaneamente, garantindo a segurança do modelo SaaS.
 
 ## 📸 Telas do Aplicativo
 
@@ -108,13 +117,12 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 
 ## 🔮 Próximos Passos (Roadmap)
 
-A próxima grande funcionalidade a ser implementada é a monetização do serviço, transformando o Store&Connect em um SaaS (Software as a Service).
+Com a arquitetura SaaS e o gateway de pagamento (Asaas) já estabelecidos, os próximos objetivos focam em expansão de plataforma:
 
-- **☑️ Integração com Stripe para Cobrança de Assinaturas**
-    - [ ] Desenvolvimento de um sistema de planos (ex: Básico, Pro) com diferentes limites ou funcionalidades.
-    - [ ] Versão Web: Adaptar a aplicação para funcionar em navegadores, utilizando Stripe para o sistema de assinaturas web.
-    - [ ] Desenvolvimento de **Cloud Functions** (lógica de backend no Firebase) para receber webhooks do Stripe, validar os pagamentos e atualizar o status da assinatura da loja no Firestore (ex: `subscriptionStatus: 'active'` ou `'expired'`).
-    - [ ] Lógica no `AuthGate` para bloquear o acesso às funcionalidades do app para lojas com assinatura pendente ou expirada.
+- **Versão Web (Dashboard Administrativo):** Adaptar a aplicação Flutter para funcionar perfeitamente em navegadores, permitindo que os lojistas gerenciem seus estoques e vejam relatórios diretamente do computador, com um layout responsivo focado em desktop.
+
+- **Gestão de Múltiplos Usuários por Loja:** Criar níveis de acesso (Admin, Vendedor, Caixa) para que o dono da loja possa convidar funcionários para operar o PDV sem dar acesso às configurações financeiras e de assinatura.
+
 
 ## 🏁 Como Executar o Projeto
 
@@ -221,55 +229,25 @@ The application was built on a solid foundation, focusing on essential features 
 
 - Profile Management: Users can securely edit their data and change their password.
 
-### 💰 Monetization (SaaS)
-- **Integration with Google Play Billing:** Complete subscription management system.
+### Receipt Engine and Printing
+- **Dynamic PDF Generation:** Creation of professional White-Label receipts (featuring the generating store's visual identity).
+ 
+- **Multiple Formats:** Optimized export in **A4** size (ideal for sharing via WhatsApp and email) and continuous format for **58mm Rolls** (Bluetooth mini thermal printers).
+ 
+- **Typography and Emojis:** Implementation of `fontFallback` to ensure perfect rendering of emojis in product names and customer notes.
 
-- Subscription Screen: Interface that searches for plans registered on the Play Console and guides the user through the purchase process.
+- **Traceability:** Automatic inclusion of the Firestore transaction ID directly in the receipt header.
 
-- Real-Time Validation: AuthGate checks subscription status and instantly grants or blocks access to the app after purchase or cancellation.
-
-- Test Environment: Full configuration for testing purchases with licensed accounts, without incurring any actual charges.
-
-## 📸 App Screens
-
-*(Instruction: To add your images here, upload them to your project's folder on GitHub and replace the `URL_FOR_YOUR_IMAGE_HERE` with the image link)*
-
-| Tela de Venda | Dashboard | Perfil e Segurança |
-| :---: | :---: | :---: |
-| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Tela%20de%20Venda.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Dashboard.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Perfil%20e%20Seguran%C3%A7a.png"  width="200" height="400"> |
-
-| Análise ABC | Contas a Receber | Gerenciar Produtos |
-| :---: | :---: | :---: |
-| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/An%C3%A1lise%20ABC.png"  width="200" height="400">| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Contas%20a%20Receber.png"  width="200" height="400">  | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Gerenciar%20Produtos.png"  width="200" height="400">  |
-
-
-## 🚀 Tech Stack
-
-- **Framework:** [Flutter](https://flutter.dev/)
-- **Language:** [Dart](https://dart.dev/)
-- **Backend & Database:** [Firebase](https://firebase.google.com/)
-    - **Cloud Firestore:** Real-time NoSQL database.
-    - **Firebase Authentication:** User authentication system.
-    - **Firebase Storage:** Product image storage.
-- **State Management:** [Provider](https://pub.dev/packages/provider)
-- **Key Packages:**
-    - `cloud_firestore`
-    - `firebase_auth`
-    - `firebase_storage`
-    - `image_picker`
-    - `shared_preferences`
-    - `intl`
-    - `url_launcher`
+### 💰 Monetization (SaaS) and Payments
+- **Asaas Integration:** Complete billing and recurring subscription management system integrated with the Asaas API.
 
 ## 🔮 Next Steps (Roadmap)
 
-The next major feature to be implemented is the monetization of the service, turning Store&Connect into a SaaS (Software as a Service).
+With the SaaS architecture and payment gateway (Asaas) already established, the next objectives focus on platform expansion:
 
-- **☑️ Stripe Integration for Subscription Billing**
-    - [ ] Development of a plan system (e.g., Basic, Pro) with different limits or features.
-    - [ ] Web Version: Adapt the application to work in browsers, using Stripe for the web subscription system.
-    - [ ] Development of **Cloud Functions** (Firebase backend logic) to receive webhooks from Stripe, validate payments, and update the store's subscription status in Firestore (e.g., `subscriptionStatus: 'active'` or `'expired'`).
-    - [ ] Logic in the `AuthGate` to block access to the app's features for stores with a pending or expired subscription.
+- **Web Version (Admin Dashboard):** Adapt the Flutter application to work seamlessly in browsers, allowing store owners to manage their inventory and view reports directly from their computers, with a responsive desktop-focused layout.
+
+- **Multi-User Management per Store:** Create access levels (Admin, Salesperson, Cashier) so the store owner can invite employees to operate the POS without granting access to financial and subscription settings.
 
 ## 🏁 Getting Started
 

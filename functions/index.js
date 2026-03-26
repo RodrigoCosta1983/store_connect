@@ -191,14 +191,15 @@ const SUBSCRIPTION_PRICES = {
 
      const subscriptionId = subResponse.data.id;
 
-     // ✅ ATUALIZA A LOJA no Firestore com o ID do Asaas gerado
-     await storeRef.set({
+     // ✅ ATUALIZA A LOJA no Firestore sem apagar o Trial
+     await storeRef.update({
        asaasSubscriptionId: subscriptionId,
        asaasCustomerId: customerId,
-       subscriptionStatus: "pending",  // ← Boleto gerado, aguardando
+       subscriptionStatus: "pending",
        subscriptionType: "pro",
        nextDueDate: dueDateString
-     }, { merge: true });
+       // Note que não mexemos no trialEndDate, ele continua valendo!
+     });
 
      console.log(`✅ Assinatura salva no Firestore: ${subscriptionId}`);
 
@@ -224,7 +225,7 @@ const SUBSCRIPTION_PRICES = {
              }
            }
            // Espera 2 segundos antes de tentar de novo
-           await delay(2000);
+           await delay(3000);
          }
 
          if (!finalPaymentLink) {

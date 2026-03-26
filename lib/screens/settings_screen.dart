@@ -186,7 +186,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Preparando seu portal financeiro...")),
+          const SnackBar(
+            content: Text("O banco está gerando seu boleto. Isso pode levar alguns segundos..."),
+            duration: Duration(seconds: 10), // Deixa a mensagem mais tempo na tela
+          ),
         );
       }
 
