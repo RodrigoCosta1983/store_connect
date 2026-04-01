@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'package:store_connect/models/sale_order_model.dart';
 import 'package:store_connect/providers/cash_flow_provider.dart';
 import 'package:store_connect/providers/sales_provider.dart';
@@ -58,6 +60,7 @@ class OrderItemWidget extends StatelessWidget {
                   _runPdfAction(mainContext, () => PdfReceiptService().viewAndSavePdf(order)); // 2. Executa a ação
                 },
               ),
+              if (!kIsWeb)
               ListTile(
                 leading: const Icon(Icons.share_outlined),
                 title: const Text('Compartilhar'),
