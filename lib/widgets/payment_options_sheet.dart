@@ -7,6 +7,8 @@ import 'package:store_connect/models/customer_model.dart';
 import 'package:store_connect/providers/cart_provider.dart';
 import 'package:store_connect/widgets/confirm_fiado_dialog.dart';
 
+import '../screens/auth/auth_gate.dart';
+
 class PaymentOptionsSheet extends StatefulWidget {
   final String storeId;
   final String notes;
@@ -67,16 +69,52 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     if (_isLoading) return;
     setState(() => _isLoading = true);
 
-    final cart = Provider.of<CartProvider>(context, listen: false);
-    final firestore = FirebaseFirestore.instance;
-
     try {
+      // ------------------------------------------------------------------
+      // 🚨 A TRAVA DE SEGURANÇA (O GUARDA DA VENDA)
+      // Fazemos uma verificação direto no servidor, ignorando o cache offline
+      // ------------------------------------------------------------------
+      final storeDoc = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(widget.storeId)
+          .get(const GetOptions(source: Source.server));
+
+      if (!storeDoc.exists) throw Exception("Loja não encontrada.");
+
+      final storeData = storeDoc.data() as Map<String, dynamic>;
+      final status = storeData['subscriptionStatus'];
+
+      if (status != 'active') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Venda bloqueada! Sua assinatura está inativa ou expirada."),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 8),
+            ),
+          );
+          // Expulsa o cliente de volta para o portão (que o forçará a pagar)
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (ctx) => const AuthGate()),
+                (route) => false,
+          );
+        }
+        return; // ⛔ Interrompe a função AQUI. A venda NÃO vai para o banco!
+      }
+      // ------------------------------------------------------------------
+      // SE PASSOU DO BLOCO ACIMA, A ASSINATURA ESTÁ PAGA. PODE SALVAR!
+      // ------------------------------------------------------------------
+
+      final cart = Provider.of<CartProvider>(context, listen: false);
+      final firestore = FirebaseFirestore.instance;
       final batch = firestore.batch();
+
       final saleDocRef = firestore
           .collection('stores')
           .doc(widget.storeId)
           .collection('sales')
           .doc();
+
       final customer = cart.selectedCustomer;
 
       batch.set(saleDocRef, {

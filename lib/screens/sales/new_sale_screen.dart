@@ -186,13 +186,13 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 showDialog(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text("Sobre o Store&Connect"),
+                    title: const Text("Sobre"),
                     content: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          "Plataforma de gestão para distribuidoras, desenvolvido por RodrigoCosta-DEV.",
+                          "Store&Connect é o motor do seu negócio. Um PDV inteligente e sistema de gestão completo, criado para simplificar suas vendas, controlar seu estoque e impulsionar o seu crescimento em um só lugar.",
                         ),
                         const SizedBox(height: 20),
                         ListTile(

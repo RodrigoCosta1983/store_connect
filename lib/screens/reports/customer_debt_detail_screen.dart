@@ -21,35 +21,127 @@ class CustomerDebtDetailScreen extends StatefulWidget {
   State<CustomerDebtDetailScreen> createState() => _CustomerDebtDetailScreenState();
 }
 
-// lib/screens/reports/customer_debt_detail_screen.dart
-
 class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
-  // NOVO: Variável de estado para guardar a lista de vendas
   List<QueryDocumentSnapshot> _salesDocs = [];
+  bool _isLoading = false;
 
-  Future<void> _payOldestSale(String saleId) async {
+  // Calcula a dívida total somando o que falta pagar em cada nota
+  double get _totalDebt {
+    double total = 0.0;
+    for (var doc in _salesDocs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final amount = (data['totalAmount'] as num).toDouble();
+      final paid = (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
+      total += (amount - paid);
+    }
+    return total;
+  }
+
+  // Abre a janela para o lojista digitar o valor do pagamento
+  void _showPaymentDialog() {
+    final controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Receber Pagamento'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Dívida Total: R\$ ${_totalDebt.toStringAsFixed(2)}'),
+            const SizedBox(height: 15),
+            TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Valor recebido (R\$)',
+                border: OutlineInputBorder(),
+                prefixText: 'R\$ ',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final text = controller.text.replaceAll(',', '.');
+              final amount = double.tryParse(text);
+              if (amount != null && amount > 0) {
+                Navigator.of(ctx).pop();
+                _processCascadingPayment(amount);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Digite um valor válido.')),
+                );
+              }
+            },
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Algoritmo de Pagamento em Cascata
+  Future<void> _processCascadingPayment(double amountToPay) async {
+    setState(() => _isLoading = true);
+
     try {
-      await FirebaseFirestore.instance
-          .collection('stores')
-          .doc(widget.storeId)
-          .collection('sales')
-          .doc(saleId)
-          .update({'isPaid': true});
+      final firestore = FirebaseFirestore.instance;
+      final batch = firestore.batch();
+      double remainingAmount = amountToPay;
+
+      for (var doc in _salesDocs) {
+        if (remainingAmount <= 0.001) break; // Acabou o dinheiro do pagamento
+
+        final data = doc.data() as Map<String, dynamic>;
+        final totalAmount = (data['totalAmount'] as num).toDouble();
+        final alreadyPaid = (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
+        final debtForThisSale = totalAmount - alreadyPaid;
+
+        if (remainingAmount >= debtForThisSale) {
+          // O dinheiro dá para quitar essa venda inteira
+          batch.update(doc.reference, {
+            'isPaid': true,
+            'paidAmount': totalAmount, // Fica 100% pago
+          });
+          remainingAmount -= debtForThisSale; // Subtrai o que gastou e vai pra próxima
+        } else {
+          // O dinheiro NÃO dá para quitar inteira. Faz pagamento parcial.
+          batch.update(doc.reference, {
+            'paidAmount': alreadyPaid + remainingAmount,
+          });
+          remainingAmount = 0; // Dinheiro acabou
+        }
+      }
+
+      await batch.commit();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Pagamento registrado com sucesso!'),
-              backgroundColor: Colors.green),
+          SnackBar(
+            content: Text('Pagamento de R\$ ${amountToPay.toStringAsFixed(2)} abatido com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Erro ao registrar pagamento: $e'),
-              backgroundColor: Colors.red),
+            content: Text('Erro ao processar pagamento: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -68,7 +160,9 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
       appBar: AppBar(
         title: Text('Dívidas de ${widget.customerName}'),
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : StreamBuilder<QuerySnapshot>(
         stream: salesQuery.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -78,11 +172,9 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
             return const Center(child: Text('Ocorreu um erro.'));
           }
 
-          // MODIFICADO: Atualiza a variável de estado com os dados mais recentes
           _salesDocs = snapshot.data?.docs ?? [];
 
           if (_salesDocs.isEmpty) {
-            // Adicionado um pop para voltar automaticamente se não houver mais dívidas
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
                 Navigator.of(context).pop();
@@ -92,26 +184,46 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
                 child: Text('Este cliente não possui dívidas pendentes.'));
           }
 
-          return ListView.builder(
-            itemCount: _salesDocs.length,
-            itemBuilder: (ctx, index) {
-              final order = SaleOrder.fromFirestore(_salesDocs[index]);
-              return OrderItemWidget(order: order, storeId: widget.storeId);
-            },
+          return Column(
+            children: [
+              // Banner de Resumo da Dívida
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                color: Colors.red.shade50,
+                child: Column(
+                  children: [
+                    const Text('Total em Aberto', style: TextStyle(fontSize: 16)),
+                    Text(
+                      'R\$ ${_totalDebt.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _salesDocs.length,
+                  itemBuilder: (ctx, index) {
+                    final order = SaleOrder.fromFirestore(_salesDocs[index]);
+                    return OrderItemWidget(order: order, storeId: widget.storeId);
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // MODIFICADO: Usa a variável de estado que está acessível aqui
-          if (_salesDocs.isNotEmpty) {
-            // Pega o ID da primeira venda da lista (a mais antiga)
-            final oldestSaleId = _salesDocs[0].id;
-            _payOldestSale(oldestSaleId);
-          }
-        },
-        icon: const Icon(Icons.check),
-        label: const Text('Quitar Venda Mais Antiga'),
+        onPressed: _salesDocs.isNotEmpty ? _showPaymentDialog : null,
+        icon: const Icon(Icons.payments_outlined),
+        label: const Text('Abater Saldo'),
+        backgroundColor: Colors.green.shade600,
+        foregroundColor: Colors.white,
       ),
     );
   }
