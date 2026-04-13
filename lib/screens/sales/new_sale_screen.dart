@@ -30,10 +30,21 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   String _appVersion = 'Carregando...';
   String _buildNumber = '';
 
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  // --- NOVA VARIÁVEL PARA CONTROLAR O ESTADO DA LUPA ---
+  bool _isSearching = false;
+
   @override
   void initState() {
     super.initState();
     _loadAppVersion();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadAppVersion() async {
@@ -60,15 +71,56 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   @override
   Widget build(BuildContext context) {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Nova Venda'),
+        // --- LÓGICA DO TÍTULO VS BARRA DE PESQUISA ---
+        title: _isSearching
+            ? TextField(
+          controller: _searchController,
+          autofocus: true, // Abre o teclado automaticamente
+          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87, fontSize: 18),
+          decoration: InputDecoration(
+            hintText: 'Pesquisar produtos...',
+            hintStyle: TextStyle(color: isDarkMode ? Colors.white54 : Colors.black54),
+            border: InputBorder.none, // Remove a linha de baixo do campo
+          ),
+          onChanged: (value) {
+            setState(() {
+              _searchQuery = value;
+            });
+          },
+        )
+            : const Text('Nova Venda'),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          // --- ÍCONE DA LUPA OU DO X ---
+          if (_isSearching)
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () {
+                setState(() {
+                  _isSearching = false;
+                  _searchQuery = '';
+                  _searchController.clear();
+                });
+              },
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: () {
+                setState(() {
+                  _isSearching = true;
+                });
+              },
+            ),
+
+          // Ícone do Carrinho
           Consumer<CartProvider>(
             builder: (context, cart, _) => Badge(
               alignment: Alignment.topRight,
@@ -93,11 +145,69 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(color: Colors.blue),
-              child: Text(
-                'Store&Connect',
-                style: TextStyle(color: Colors.white, fontSize: 24),
+            DrawerHeader(
+              decoration: const BoxDecoration(color: Colors.blue),
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('stores')
+                    .doc(widget.storeId)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: Text(
+                        'Carregando...',
+                        style: TextStyle(color: Colors.white, fontSize: 20),
+                      ),
+                    );
+                  }
+
+                  if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
+                    return const Center(
+                      child: Text(
+                        'Store Connect',
+                        style: TextStyle(color: Colors.white, fontSize: 24),
+                      ),
+                    );
+                  }
+
+                  final storeData = snapshot.data!.data() as Map<String, dynamic>;
+                  final storeName = storeData['name'] ?? 'Minha Loja';
+                  // Puxa a URL da logo do banco de dados (ajuste o nome do campo se necessário)
+                  final logoUrl = storeData['logoUrl'] as String?;
+
+                  return Center( // Centraliza o bloco inteiro no DrawerHeader
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center, // Centraliza verticalmente
+                      crossAxisAlignment: CrossAxisAlignment.center, // Centraliza horizontalmente
+                      children: [
+                        // --- LÓGICA DA LOGO VS ÍCONE ---
+                        if (logoUrl != null && logoUrl.isNotEmpty)
+                          CircleAvatar(
+                            radius: 35, // Tamanho do círculo da logo
+                            backgroundImage: NetworkImage(logoUrl),
+                            backgroundColor: Colors.white, // Fundo branco caso a logo seja transparente
+                          )
+                        else
+                          const Icon(Icons.storefront, color: Colors.white, size: 45),
+
+                        const SizedBox(height: 12), // Espaço entre a logo e o nome
+
+                        Text(
+                          storeName,
+                          textAlign: TextAlign.center, // Centraliza o texto caso tenha duas linhas
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
             ListTile(
@@ -172,7 +282,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    // Esta chamada agora é válida porque a SettingsScreen foi corrigida
                     builder: (context) =>
                         SettingsScreen(storeId: widget.storeId),
                   ),
@@ -192,7 +301,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          "Store&Connect é o motor do seu negócio. Um PDV inteligente e sistema de gestão completo, criado para simplificar suas vendas, controlar seu estoque e impulsionar o seu crescimento em um só lugar.",
+                          "O Store Connect é o motor do seu negócio. Um PDV inteligente e sistema de gestão completo, criado para simplificar suas vendas, controlar seu estoque e impulsionar o seu crescimento em um só lugar.",
                         ),
                         const SizedBox(height: 20),
                         ListTile(
@@ -241,14 +350,12 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
       body: Stack(
         children: [
-          // Stack para a imagem de fundo
           Positioned.fill(
             child: Opacity(
               opacity: isDarkMode ? 0.4 : 0.15,
               child: Image.asset(
                 isDarkMode
                     ? 'assets/images/background_dark_mode.png'
-                   // : 'assets/images/background_dark.jpg',
                     : 'assets/images/background_claro_test.png',
                 fit: BoxFit.cover,
               ),
@@ -257,30 +364,28 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                // --- Lógica para grade responsiva ---
                 final screenWidth = constraints.maxWidth;
                 int crossAxisCount = 2;
                 double childAspectRatio;
 
                 if (screenWidth > 1500) {
                   crossAxisCount = 6;
-                  childAspectRatio = 1.1; // Mais largo que alto
+                  childAspectRatio = 1.1;
                 } else if (screenWidth > 1200) {
                   crossAxisCount = 5;
-                  childAspectRatio = 1.05; // Quase quadrado, um pouco largo
+                  childAspectRatio = 1.05;
                 } else if (screenWidth > 900) {
                   crossAxisCount = 4;
-                  childAspectRatio = 1.0; // Quadrado
+                  childAspectRatio = 1.0;
                 } else if (screenWidth > 600) {
                   crossAxisCount = 3;
-                  childAspectRatio = 0.9; // Um pouco mais alto que largo
+                  childAspectRatio = 0.9;
                 } else {
                   crossAxisCount = 2;
-                  childAspectRatio = 0.8; // Padrão mobile, mais alto
+                  childAspectRatio = 0.8;
                 }
-                // --- Fim da lógica responsiva ---
 
-                // StreamBuilder para buscar dados em tempo real
+                // REMOVIDO A COLUMN E O EXPANDED. VOLTOU A SER SÓ O STREAMBUILDER!
                 return StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('stores')
@@ -289,7 +394,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                       .orderBy('name_lowercase')
                       .snapshots(),
                   builder: (ctx, productSnapshot) {
-                    // Tratamento de estados de carregamento e erro
                     if (productSnapshot.connectionState ==
                         ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -299,8 +403,10 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                         child: Text('Ocorreu um erro ao carregar produtos.'),
                       );
                     }
-                    final productDocs = productSnapshot.data?.docs ?? [];
-                    if (productDocs.isEmpty) {
+
+                    final allProductDocs = productSnapshot.data?.docs ?? [];
+
+                    if (allProductDocs.isEmpty) {
                       return const Center(
                         child: Padding(
                           padding: EdgeInsets.all(16.0),
@@ -313,7 +419,28 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                       );
                     }
 
-                    // GridView para exibir os produtos
+                    // --- LÓGICA DE FILTRO MANTIDA ---
+                    final productDocs = allProductDocs.where((doc) {
+                      final productData = doc.data() as Map<String, dynamic>;
+                      final product = Product.fromMap(doc.id, productData);
+                      final productName = product.name.toLowerCase();
+                      final searchLower = _searchQuery.toLowerCase();
+                      return productName.contains(searchLower);
+                    }).toList();
+
+                    if (productDocs.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off, size: 60, color: Colors.grey.withOpacity(0.5)),
+                            const SizedBox(height: 16),
+                            const Text('Nenhum produto encontrado.'),
+                          ],
+                        ),
+                      );
+                    }
+
                     return GridView.builder(
                       padding: const EdgeInsets.all(10.0),
                       itemCount: productDocs.length,
@@ -323,10 +450,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                         crossAxisSpacing: 10,
                         mainAxisSpacing: 10,
                       ),
-
                       itemBuilder: (ctx, i) {
                         final productData =
-                            productDocs[i].data() as Map<String, dynamic>;
+                        productDocs[i].data() as Map<String, dynamic>;
                         final product = Product.fromMap(
                           productDocs[i].id,
                           productData,
@@ -336,18 +462,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                         final bool isLowStock =
                             product.quantidade > 0 && product.quantidade <= 5;
 
-                        // Pega o tema atual para saber se é modo escuro ou não
-                        final theme = Theme.of(context);
-                        final isDarkMode = theme.brightness == Brightness.dark;
-
-                        // Lógica de cores adaptáveis para o card e texto (já implementada)
                         final cardColor = isOutOfStock
                             ? theme.cardColor.withOpacity(0.5)
                             : theme.cardColor.withOpacity(0.9);
                         final textColor = isOutOfStock
-                            ? theme.textTheme.bodyMedium?.color?.withOpacity(
-                                0.5,
-                              )
+                            ? theme.textTheme.bodyMedium?.color?.withOpacity(0.5)
                             : theme.textTheme.bodyMedium?.color;
 
                         return Card(
@@ -357,7 +476,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           ),
                           clipBehavior: Clip.antiAlias,
                           color: cardColor,
-                          // <-- Usa a cor adaptável
                           child: Stack(
                             children: [
                               Column(
@@ -366,21 +484,20 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                   Expanded(
                                     child: Opacity(
                                       opacity: isOutOfStock ? 0.4 : 1.0,
-                                      // Deixa a imagem um pouco apagada
                                       child:
-                                          (product.imageUrl != null &&
-                                              product.imageUrl!.isNotEmpty)
+                                      (product.imageUrl != null &&
+                                          product.imageUrl!.isNotEmpty)
                                           ? Image.network(
-                                              product.imageUrl!,
-                                              fit: BoxFit.cover,
-                                            )
+                                        product.imageUrl!,
+                                        fit: BoxFit.cover,
+                                      )
                                           : Center(
-                                              child: Icon(
-                                                Icons.inventory_2,
-                                                size: 50,
-                                                color: textColor,
-                                              ),
-                                            ),
+                                        child: Icon(
+                                          Icons.inventory_2,
+                                          size: 50,
+                                          color: textColor,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                   Padding(
@@ -392,8 +509,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                       product.name,
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color:
-                                            textColor, // <-- Usa a cor de texto adaptável
+                                        color: textColor,
                                       ),
                                       textAlign: TextAlign.center,
                                       maxLines: 2,
@@ -401,18 +517,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                     ),
                                   ),
                                   Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      8,
-                                      0,
-                                      8,
-                                      8,
-                                    ),
+                                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                                     child: Text(
                                       'R\$ ${product.price.toStringAsFixed(2)}',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
-                                        // --- COR DO PREÇO AJUSTADA ---
-                                        // Se for modo escuro, a cor será branca. Senão, usa a cor primária.
                                         color: isDarkMode
                                             ? Colors.white70
                                             : theme.primaryColor,
@@ -422,12 +531,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                     ),
                                   ),
                                   Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      8,
-                                      0,
-                                      8,
-                                      8,
-                                    ),
+                                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                                     child: ElevatedButton.icon(
                                       icon: const Icon(
                                         Icons.add_shopping_cart,
@@ -443,15 +547,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                           vertical: 8,
                                         ),
                                         tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                        // --- COR DO BOTÃO AJUSTADA ---
-                                        // Se estiver esgotado, fica cinza. Senão, usa um roxo vibrante em ambos os modos.
+                                        MaterialTapTargetSize.shrinkWrap,
                                         backgroundColor: isOutOfStock
                                             ? Colors.grey.withOpacity(0.3)
                                             : Colors.deepPurple,
-                                        // Cor fixa para destaque
-                                        foregroundColor: Colors
-                                            .white, // Texto e ícone sempre brancos
+                                        foregroundColor: Colors.white,
                                       ),
                                       onPressed: isOutOfStock
                                           ? null

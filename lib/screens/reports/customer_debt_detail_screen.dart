@@ -219,7 +219,12 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _salesDocs.isNotEmpty ? _showPaymentDialog : null,
+        onPressed: () {
+          // Quando o usuário clica, ele verifica se a lista já carregou
+          if (_salesDocs.isNotEmpty) {
+            _showPaymentDialog();
+          }
+        },
         icon: const Icon(Icons.payments_outlined),
         label: const Text('Abater Saldo'),
         backgroundColor: Colors.green.shade600,
