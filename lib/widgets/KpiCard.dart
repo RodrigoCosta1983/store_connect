@@ -48,21 +48,26 @@ class KpiCard extends StatelessWidget {
                 Icon(icon, color: color, size: 28),
               ],
             ),
-            // Spacer para empurrar o valor para o final do espaço disponível
-            const Spacer(),
+
             // --- LINHA DO VALOR ---
             // FittedBox garante que o texto do valor diminua de tamanho
             // para caber perfeitamente no espaço, sem ser cortado.
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
+            Expanded(
+              child: Align(
+                // O Align empurra o número para o canto inferior esquerdo do cartão
+                alignment: Alignment.bottomLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  // Agora o FittedBox sabe exatamente a largura E a altura máximas!
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 28, // Mantemos o seu tamanho original
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                  ),
                 ),
-                maxLines: 1,
               ),
             ),
           ],
