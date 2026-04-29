@@ -6,7 +6,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:store_connect/screens/auth/signup_screen.dart';
+import 'package:store_connect/screens/auth/register_screen.dart';
+
+import 'email_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -49,7 +51,11 @@ class _LoginScreenState extends State<LoginScreen> {
       final biometricsEnabled = await _storage.read(key: 'biometricsEnabled') == 'true';
       final hasCredentials = await _storage.read(key: 'email') != null;
 
-      if (hasBiometrics && hasCredentials && biometricsEnabled && mounted) {
+      // --- O ESCUDO ---
+      // Se a tela já foi fechada enquanto esperávamos a resposta, paramos tudo aqui!
+      if (!mounted) return;
+
+      if (hasBiometrics && hasCredentials && biometricsEnabled) {
         setState(() => _biometricLoginAvailable = true);
       } else {
         setState(() => _biometricLoginAvailable = false);
@@ -95,11 +101,30 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+
+      // --- A NOSSA FECHADURA DE SEGURANÇA ---
+      final user = userCredential.user;
+      if (user != null && !user.emailVerified) {
+        // Se a senha está certa, mas o e-mail não foi validado:
+        await _handleCredentialsStorage(); // Salva a biometria/lembrar senha se ele pediu
+
+        if (mounted) {
+          // Manda para a sala de castigo (esperar clicar no link)
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const EmailVerificationScreen()),
+          );
+        }
+        return; // Interrompe a função para ele não ir para o Dashboard
+      }
+      // --------------------------------------
+
       await _handleCredentialsStorage();
+      // O fluxo normal vai assumir daqui e mandá-lo pro Dashboard (via AuthGate)
+
     } on FirebaseAuthException catch (e) {
       String errorMessage = 'Falha na autenticação.';
       switch (e.code) {
@@ -164,7 +189,20 @@ class _LoginScreenState extends State<LoginScreen> {
         final password = await _storage.read(key: 'password');
 
         if (email != null && password != null) {
-          await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+          final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+
+          // --- SEGURANÇA NO LOGIN BIOMÉTRICO ---
+          final user = userCredential.user;
+          if (user != null && !user.emailVerified) {
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (context) => const EmailVerificationScreen()),
+              );
+            }
+            return;
+          }
+          // -------------------------------------
+
         } else {
           _showError('Credenciais não encontradas. Faça login manualmente.');
           setState(() => _isLoading = false);
@@ -415,7 +453,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (ctx) => const SignupScreen()),
+                    MaterialPageRoute(builder: (ctx) => const RegisterScreen()),
                   );
                 },
                 child: const Text('Cadastre-se', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),

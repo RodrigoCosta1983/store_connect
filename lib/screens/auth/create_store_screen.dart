@@ -19,9 +19,9 @@ class CreateStoreScreen extends StatefulWidget {
 class _CreateStoreScreenState extends State<CreateStoreScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  // Controladores (Repare que o CPF sumiu daqui)
   final _storeNameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _cpfCnpjController = TextEditingController();
 
   bool _isLoading = false;
 
@@ -29,10 +29,10 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
   void dispose() {
     _storeNameController.dispose();
     _phoneController.dispose();
-    _cpfCnpjController.dispose();
     super.dispose();
   }
 
+  // Função para exibir erros na tela
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -40,20 +40,14 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
     );
   }
 
-  // --- O GUARDIÃO: Verifica se o CPF/CNPJ já foi usado ---
-  Future<bool> _documentAlreadyExists(String cleanDoc) async {
-    final docSnap = await FirebaseFirestore.instance
-        .collection('cpfs_cadastrados')
-        .doc(cleanDoc)
-        .get();
-    return docSnap.exists;
-  }
-
+  // --- FUNÇÃO PRINCIPAL: SALVAR A LOJA ---
   Future<void> _submitCreateStore() async {
+    // 1. Valida se os campos não estão vazios
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
+    // 2. Verifica se o utilizador está realmente logado
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (ctx) => const AuthGate()));
@@ -62,58 +56,45 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
 
     try {
       final firestore = FirebaseFirestore.instance;
-      final cleanDoc = UtilBrasilFields.removeCaracteres(_cpfCnpjController.text);
 
-      // 1. Validação de Segurança (Evitar duplo trial)
-      final docExists = await _documentAlreadyExists(cleanDoc);
-      if (docExists) {
-        _showError('Este CPF/CNPJ já utilizou o período de teste. Faça login com a conta original ou assine o plano Pro.');
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      // 2. Prepara as datas (7 dias de teste grátis a partir de AGORA)
+      // 3. Prepara as datas (7 dias de teste grátis a partir de AGORA)
       final now = DateTime.now();
       final trialEnd = now.add(const Duration(days: 7));
 
-      // 3. Inicia a gravação em Lote (Batch) para garantir consistência
+      // 4. Inicia a gravação em Lote (Batch) para garantir consistência
+      // O Batch garante que ou ele salva a loja E o utilizador juntos, ou não salva nenhum.
       final batch = firestore.batch();
+
+      // Cria uma referência vazia para a nova loja para podermos pegar o ID gerado
       final storeRef = firestore.collection('stores').doc();
       final userRef = firestore.collection('users').doc(user.uid);
-      final cpfRef = firestore.collection('cpfs_cadastrados').doc(cleanDoc);
 
-      // -> Cria a Loja (Já liberada para o AuthGate)
+      // -> PASSO A: Gravar os dados da Loja
       batch.set(storeRef, {
         'name': _storeNameController.text.trim(),
         'phone': UtilBrasilFields.removeCaracteres(_phoneController.text),
-        'document': cleanDoc,
         'ownerId': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
-        'subscriptionStatus': 'active', // Abre a porta no AuthGate
-        'trialEndDate': trialEnd.toIso8601String(), // Limite de 7 dias
+        'subscriptionStatus': 'active', // Liberado para os 7 dias grátis
+        'trialEndDate': trialEnd.toIso8601String(), // Data limite
       });
 
-      // -> Atualiza o Usuário
+      // -> PASSO B: Atualizar o Utilizador
+      // Ligamos o utilizador à loja recém-criada e guardamos o WhatsApp de contacto
       batch.set(userRef, {
         'storeId': storeRef.id,
-        'documentNumber': cleanDoc,
         'phone': UtilBrasilFields.removeCaracteres(_phoneController.text),
       }, SetOptions(merge: true));
 
-      // -> Queima o CPF na coleção de controle
-      batch.set(cpfRef, {
-        'uid': user.uid,
-        'cadastradoEm': FieldValue.serverTimestamp(),
-      });
-
-      // 4. Executa todas as gravações ao mesmo tempo
+      // 5. Executa todas as gravações ao mesmo tempo
       await batch.commit();
 
       if (mounted) {
-        // Atualiza o provider
+        // 6. Atualiza o provider global para o resto da aplicação saber em que loja estamos
         Provider.of<SalesProvider>(context, listen: false).updateStoreId(storeRef.id);
 
-        // Manda pro AuthGate! Ele vai ler 'active' e jogar direto pra Home
+        // 7. Manda pro AuthGate! Como o 'subscriptionStatus' é 'active' e ele tem um 'storeId',
+        // o AuthGate vai empurrá-lo direto para o Dashboard.
         Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (ctx) => const AuthGate()),
                 (route) => false
@@ -131,8 +112,9 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Configurar Loja'),
-        automaticallyImplyLeading: false,
+        automaticallyImplyLeading: false, // Remove a setinha de voltar
         actions: [
+          // Botão caso o cliente queira desistir e entrar com outra conta
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sair e voltar para o Login',
@@ -171,7 +153,7 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // CAMPO: Nome da Loja
+                  // --- CAMPO: Nome da Loja ---
                   TextFormField(
                     controller: _storeNameController,
                     decoration: InputDecoration(
@@ -184,7 +166,7 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // CAMPO: WhatsApp
+                  // --- CAMPO: WhatsApp ---
                   TextFormField(
                     controller: _phoneController,
                     decoration: InputDecoration(
@@ -195,39 +177,14 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
                     keyboardType: TextInputType.phone,
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      TelefoneInputFormatter(),
-                    ],
-                    textInputAction: TextInputAction.next,
-                    validator: (value) => (value == null || value.isEmpty) ? 'O WhatsApp é obrigatório.' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // CAMPO: CPF ou CNPJ
-                  TextFormField(
-                    controller: _cpfCnpjController,
-                    decoration: InputDecoration(
-                      labelText: 'CPF ou CNPJ',
-                      hintText: 'Somente números',
-                      prefixIcon: const Icon(Icons.badge_outlined),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      CpfOuCnpjFormatter(),
+                      TelefoneInputFormatter(), // Formata automaticamente para (XX) XXXXX-XXXX
                     ],
                     textInputAction: TextInputAction.done,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'O documento é obrigatório.';
-                      if (!UtilBrasilFields.isCPFValido(value) && !UtilBrasilFields.isCNPJValido(value)) {
-                        return 'CPF ou CNPJ inválido.';
-                      }
-                      return null;
-                    },
+                    validator: (value) => (value == null || value.isEmpty) ? 'O WhatsApp é obrigatório.' : null,
                   ),
                   const SizedBox(height: 32),
 
-                  // BOTÃO DE SUBMIT
+                  // --- BOTÃO CONCLUIR ---
                   if (_isLoading)
                     const Center(child: CircularProgressIndicator())
                   else

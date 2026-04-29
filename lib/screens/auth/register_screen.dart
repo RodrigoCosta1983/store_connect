@@ -3,6 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
+import 'package:store_connect/screens/auth/email_verification_screen.dart';
+import 'package:store_connect/screens/auth/create_store_screen.dart';
+import 'package:store_connect/screens/auth/auth_gate.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -14,128 +19,371 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // Variáveis de estado
-  var _isLoading = false;
-  var _enteredEmail = '';
-  var _enteredPassword = '';
+  // Controladores
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
-  // Variável para capturar o CPF/CNPJ digitado
-  var _enteredDocument = '';
+  // Variáveis de Estado
+  bool _isLoading = false;
+  bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
+  String _enteredDocument = '';
 
-  final _firebaseAuth = FirebaseAuth.instance;
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
 
-  // --- FUNÇÃO DE SEGURANÇA (CORRIGIDA) ---
-  // Verifica se o CPF já existe na coleção de controle 'cpfs_cadastrados'.
-  // Usamos .doc().get() porque é mais rápido e não exige permissão de listar coleções.
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // --- O GUARDIÃO DE CPF ---
   Future<bool> _documentAlreadyExists(String docNumber) async {
-    // 1. Limpa o CPF (deixa só números) para usar como ID
     final cleanDoc = docNumber.replaceAll(RegExp(r'[^0-9]'), '');
-
-    // 2. Tenta pegar o documento direto pelo ID na coleção de controle
     final docSnap = await FirebaseFirestore.instance
         .collection('cpfs_cadastrados')
         .doc(cleanDoc)
         .get();
-
-    // 3. Se o documento existe, retorna TRUE (bloqueia o cadastro)
     return docSnap.exists;
   }
 
-  void _submit() async {
-    final isValid = _formKey.currentState!.validate();
-    if (!isValid) return;
+  // --- CADASTRO COM E-MAIL E SENHA ---
+  Future<void> _submitSignup() async {
+    if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
+
+    if (_passwordController.text != _confirmPasswordController.text) {
+      _showError('As senhas não coincidem.');
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
-      // --- PASSO 1: O GUARDIÃO ---
-      // Antes de criar qualquer coisa, verifica se esse CPF já está "queimado"
+      // 1. Verifica CPF
       final docExists = await _documentAlreadyExists(_enteredDocument);
-
       if (docExists) {
-        // Se já existe, lançamos erro manual para cair no catch abaixo
         throw FirebaseAuthException(
             code: 'document-already-in-use',
             message: 'Este CPF/CNPJ já possui cadastro. Faça login para reativar.'
         );
       }
-      // -----------------------------
 
-      // --- PASSO 2: CRIAR NO AUTH ---
-      // Se passou pelo guardião, podemos criar o login
-      final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
-        email: _enteredEmail,
-        password: _enteredPassword,
+      // 2. Cria Usuário no Auth
+      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
-      // Prepara os dados
-      final generatedName = _enteredEmail.split('@')[0];
+      final generatedName = _emailController.text.split('@')[0];
       final cleanDoc = _enteredDocument.replaceAll(RegExp(r'[^0-9]'), '');
 
-      // --- PASSO 3: SALVAR DADOS DO USUÁRIO ---
-      // Salva na coleção 'users' (Privada, só o dono lê)
+      // 3. Salva no Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
           .set({
         'username': generatedName,
-        'email': _enteredEmail,
+        'email': _emailController.text.trim(),
         'storeId': '',
         'documentNumber': cleanDoc,
         'createdAt': FieldValue.serverTimestamp(),
-        'subscriptionStatus': 'trial', // Inicia no teste grátis
+        'subscriptionStatus': 'trial',
       });
 
-      // --- PASSO 4: BLINDAR O CPF (IMPORTANTE) ---
-      // Salva na coleção 'cpfs_cadastrados' para ninguém mais usar esse número.
+      // 4. Blinda o CPF
       await FirebaseFirestore.instance
           .collection('cpfs_cadastrados')
-          .doc(cleanDoc) // O ID é o próprio CPF
+          .doc(cleanDoc)
           .set({
         'uid': userCredential.user!.uid,
         'cadastradoEm': FieldValue.serverTimestamp(),
       });
 
-      if (context.mounted) {
-        // Sucesso total!
-        Navigator.of(context).pop();
+      // 5. ENVIA O E-MAIL E BLOQUEIA A TELA!
+      await userCredential.user!.sendEmailVerification();
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const EmailVerificationScreen()),
+        );
       }
 
-    } on FirebaseAuthException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.message ?? 'Falha no cadastro.'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
+    } on FirebaseAuthException catch (e) {
+      String message = 'Ocorreu um erro no cadastro.';
+      if (e.code == 'weak-password') message = 'A senha fornecida é muito fraca.';
+      else if (e.code == 'email-already-in-use') message = 'Este e-mail já está em uso. Faça Login.';
+      else if (e.code == 'invalid-email') message = 'Formato de e-mail inválido.';
+      else if (e.code == 'document-already-in-use') message = e.message!;
+      _showError(message);
     } catch (e) {
-      // Catch genérico para outros erros
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro inesperado: $e'), backgroundColor: Colors.red),
-        );
-      }
+      _showError('Erro inesperado: $e');
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // Widget auxiliar para Labels
-  Widget _buildLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6, left: 4),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: Colors.grey[700],
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
+  // --- CADASTRO COM GOOGLE ---
+  Future<void> _googleSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+
+      // Se for usuário novo pelo Google, manda criar a loja. Senão, vai pro Gate.
+      if (userCredential.additionalUserInfo?.isNewUser ?? false) {
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (ctx) => const CreateStoreScreen()),
+          );
+        }
+      } else {
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (ctx) => const AuthGate()),
+                (route) => false,
+          );
+        }
+      }
+    } catch (e) {
+      _showError('Erro ao fazer cadastro com Google.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // --- UI DO FORMULÁRIO ---
+  Widget _buildSignupForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Image.asset(
+              'assets/images/logo_web.png', // Ajuste para sua logo atual
+              height: 120,
+              errorBuilder: (ctx, err, stack) => const Icon(Icons.storefront, size: 80, color: Colors.deepPurple),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Crie sua Conta',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Comece a gerenciar seu negócio hoje.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey, fontSize: 15),
+          ),
+          const SizedBox(height: 24),
+
+          // CAMPO CPF/CNPJ
+          TextFormField(
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'CPF ou CNPJ',
+              prefixIcon: const Icon(Icons.badge_outlined),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) return 'Campo obrigatório.';
+              final clean = value.replaceAll(RegExp(r'[^0-9]'), '');
+              if (clean.length < 11) return 'Documento inválido.';
+              return null;
+            },
+            onSaved: (value) => _enteredDocument = value!,
+          ),
+          const SizedBox(height: 16),
+
+          // CAMPO E-MAIL
+          TextFormField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(
+              labelText: 'E-mail',
+              prefixIcon: const Icon(Icons.email_outlined),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            validator: (value) => (value == null || !value.contains('@')) ? 'E-mail inválido.' : null,
+          ),
+          const SizedBox(height: 16),
+
+          // CAMPO SENHA
+          TextFormField(
+            controller: _passwordController,
+            obscureText: !_isPasswordVisible,
+            decoration: InputDecoration(
+              labelText: 'Senha',
+              prefixIcon: const Icon(Icons.lock_outline),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              suffixIcon: IconButton(
+                icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+              ),
+            ),
+            validator: (value) => (value == null || value.length < 6) ? 'Mínimo de 6 caracteres.' : null,
+          ),
+          const SizedBox(height: 16),
+
+          // CAMPO CONFIRMAR SENHA
+          TextFormField(
+            controller: _confirmPasswordController,
+            obscureText: !_isConfirmPasswordVisible,
+            decoration: InputDecoration(
+              labelText: 'Confirmar Senha',
+              prefixIcon: const Icon(Icons.lock_reset),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              suffixIcon: IconButton(
+                icon: Icon(_isConfirmPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) return 'Confirme sua senha.';
+              return null;
+            },
+          ),
+          const SizedBox(height: 24),
+
+          // BOTÃO CADASTRAR
+          if (_isLoading)
+            const Center(child: CircularProgressIndicator())
+          else
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _submitSignup,
+              child: const Text('CADASTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+
+          const SizedBox(height: 24),
+
+          // DIVISOR
+          Row(
+            children: [
+              Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text('OU', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+              ),
+              Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // BOTÃO GOOGLE
+          if (!_isLoading)
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                side: BorderSide(color: Colors.grey.shade300),
+              ),
+              onPressed: _googleSignIn,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset('assets/images/google_logo.png', height: 24),
+                  const SizedBox(width: 12),
+                  const Flexible(
+                    child: Text(
+                      'Continuar com Google',
+                      style: TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 22),
+
+          // RODAPÉ LOGIN
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Já tem uma conta? ', style: TextStyle(fontSize: 15)),
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: const Text('Faça Login', style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold, fontSize: 15)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- LAYOUTS RESPONSIVOS ---
+  Widget _buildWebLayout() {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            color: const Color(0xFFEAF4FC),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset('assets/images/logo_web.png', width: 180, errorBuilder: (c,e,s) => const SizedBox()),
+                  const SizedBox(height: 32),
+                  const Text('Store & Connect', style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                  const SizedBox(height: 16),
+                  const Text('A melhor plataforma para sua loja.', style: TextStyle(fontSize: 18, color: Colors.black54)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: _buildSignupForm(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: _buildSignupForm(),
         ),
       ),
     );
@@ -143,180 +391,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final Color primaryPurple = const Color(0xFF5D38BF);
+    final isWeb = MediaQuery.of(context).size.width > 800;
 
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Card(
-              elevation: 8,
-              surfaceTintColor: Colors.white,
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Botão Fechar
-                      Align(
-                        alignment: Alignment.topRight,
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          icon: const Icon(Icons.close, color: Colors.grey, size: 28),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ),
-
-                      // Logo
-                      Image.asset(
-                        'assets/images/logo.png',
-                        height: 100,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(Icons.storefront, size: 60, color: primaryPurple);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-
-                      const Text(
-                        'Crie sua conta Agora',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Comece a gerenciar seu negócio hoje.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                      ),
-                      const SizedBox(height: 30),
-
-                      // --- CAMPO CPF/CNPJ ---
-                      Align(alignment: Alignment.centerLeft, child: _buildLabel("CPF ou CNPJ")),
-                      TextFormField(
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          hintText: 'Somente números',
-                          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          prefixIcon: const Icon(Icons.badge_outlined, color: Colors.grey),
-                        ),
-                        textInputAction: TextInputAction.next,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) return 'Campo obrigatório.';
-                          final clean = value.replaceAll(RegExp(r'[^0-9]'), '');
-                          if (clean.length < 11) return 'CPF/CNPJ inválido.';
-                          return null;
-                        },
-                        onSaved: (value) => _enteredDocument = value!,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // --- CAMPO E-MAIL ---
-                      Align(alignment: Alignment.centerLeft, child: _buildLabel("E-mail")),
-                      TextFormField(
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          hintText: 'seu@email.com',
-                          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          prefixIcon: const Icon(Icons.mail_outline, color: Colors.grey),
-                        ),
-                        textInputAction: TextInputAction.next,
-                        validator: (value) => (value == null || !value.contains('@')) ? 'E-mail inválido.' : null,
-                        onSaved: (value) => _enteredEmail = value!,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // --- CAMPO SENHA ---
-                      Align(alignment: Alignment.centerLeft, child: _buildLabel("Senha")),
-                      TextFormField(
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          hintText: 'Crie uma senha forte',
-                          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.grey[300]!),
-                          ),
-                          prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
-                        ),
-                        textInputAction: TextInputAction.done,
-                        validator: (value) => (value == null || value.trim().length < 6) ? 'Mínimo de 6 caracteres.' : null,
-                        onSaved: (value) => _enteredPassword = value!,
-                      ),
-                      const SizedBox(height: 30),
-
-                      // Botão Criar Conta
-                      if (_isLoading)
-                        const Center(child: CircularProgressIndicator())
-                      else
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _submit,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryPurple,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: const Text(
-                              'CRIAR CONTA',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-
-                      const SizedBox(height: 20),
-
-                      // Rodapé
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('Já tem uma conta? ', style: TextStyle(color: Colors.grey[600])),
-                          GestureDetector(
-                            onTap: () => Navigator.of(context).pop(),
-                            child: Text(
-                              'Fazer Login',
-                              style: TextStyle(
-                                color: primaryPurple,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: isWeb ? _buildWebLayout() : _buildMobileLayout(),
       ),
     );
   }
