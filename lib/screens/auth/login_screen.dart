@@ -47,8 +47,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (kIsWeb) return;
 
     try {
-      final hasBiometrics = await _localAuth.canCheckBiometrics || await _localAuth.isDeviceSupported();
-      final biometricsEnabled = await _storage.read(key: 'biometricsEnabled') == 'true';
+      final hasBiometrics =
+          await _localAuth.canCheckBiometrics ||
+          await _localAuth.isDeviceSupported();
+      final biometricsEnabled =
+          await _storage.read(key: 'biometricsEnabled') == 'true';
       final hasCredentials = await _storage.read(key: 'email') != null;
 
       // --- O ESCUDO ---
@@ -78,7 +81,10 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleCredentialsStorage() async {
     if (_rememberMe) {
       await _storage.write(key: 'email', value: _emailController.text.trim());
-      await _storage.write(key: 'password', value: _passwordController.text.trim());
+      await _storage.write(
+        key: 'password',
+        value: _passwordController.text.trim(),
+      );
       await _storage.write(key: 'biometricsEnabled', value: 'true');
     } else {
       await _storage.deleteAll();
@@ -101,10 +107,11 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+      final userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text.trim(),
+          );
 
       // --- A NOSSA FECHADURA DE SEGURANÇA ---
       final user = userCredential.user;
@@ -115,7 +122,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) {
           // Manda para a sala de castigo (esperar clicar no link)
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const EmailVerificationScreen()),
+            MaterialPageRoute(
+              builder: (context) => const EmailVerificationScreen(),
+            ),
           );
         }
         return; // Interrompe a função para ele não ir para o Dashboard
@@ -124,7 +133,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       await _handleCredentialsStorage();
       // O fluxo normal vai assumir daqui e mandá-lo pro Dashboard (via AuthGate)
-
     } on FirebaseAuthException catch (e) {
       String errorMessage = 'Falha na autenticação.';
       switch (e.code) {
@@ -162,7 +170,8 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
       final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
@@ -179,8 +188,12 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _authenticateWithBiometrics() async {
     try {
       bool authenticated = await _localAuth.authenticate(
-        localizedReason: 'Faça login com sua digital para acessar o Store&Connect',
-        options: const AuthenticationOptions(stickyAuth: true, biometricOnly: true),
+        localizedReason:
+            'Faça login com sua digital para acessar o Store&Connect',
+        options: const AuthenticationOptions(
+          stickyAuth: true,
+          biometricOnly: true,
+        ),
       );
 
       if (authenticated && mounted) {
@@ -189,20 +202,22 @@ class _LoginScreenState extends State<LoginScreen> {
         final password = await _storage.read(key: 'password');
 
         if (email != null && password != null) {
-          final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+          final userCredential = await FirebaseAuth.instance
+              .signInWithEmailAndPassword(email: email, password: password);
 
           // --- SEGURANÇA NO LOGIN BIOMÉTRICO ---
           final user = userCredential.user;
           if (user != null && !user.emailVerified) {
             if (mounted) {
               Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (context) => const EmailVerificationScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const EmailVerificationScreen(),
+                ),
               );
             }
             return;
           }
           // -------------------------------------
-
         } else {
           _showError('Credenciais não encontradas. Faça login manualmente.');
           setState(() => _isLoading = false);
@@ -216,7 +231,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showForgotPasswordDialog() {
     final TextEditingController dialogEmailController = TextEditingController();
-    dialogEmailController.text = _emailController.text; // Aproveita se já digitou
+    dialogEmailController.text =
+        _emailController.text; // Aproveita se já digitou
 
     showDialog(
       context: context,
@@ -225,12 +241,17 @@ class _LoginScreenState extends State<LoginScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Digite seu e-mail e enviaremos um link para redefinir sua senha."),
+            const Text(
+              "Digite seu e-mail e enviaremos um link para redefinir sua senha.",
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: dialogEmailController,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'E-mail', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'E-mail',
+                border: OutlineInputBorder(),
+              ),
             ),
           ],
         ),
@@ -244,11 +265,22 @@ class _LoginScreenState extends State<LoginScreen> {
             onPressed: () async {
               final email = dialogEmailController.text.trim();
               if (email.isEmpty || !email.contains('@')) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Digite um e-mail válido.'), backgroundColor: Colors.red));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Digite um e-mail válido.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
                 return;
               }
               try {
+                // --- 1. FORÇA O IDIOMA PARA PORTUGUÊS ---
+                // Isso já é suficiente para traduzir o E-mail e a Página Web!
+                FirebaseAuth.instance.setLanguageCode('pt-BR');
+
+                // --- 2. ENVIA O E-MAIL (Sem configurações extras para evitar bloqueios) ---
                 await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
                 if (ctx.mounted) Navigator.of(ctx).pop();
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -256,7 +288,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   );
                 }
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao enviar link.'), backgroundColor: Colors.red));
+                ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Erro ao enviar link: $e'), backgroundColor: Colors.red)
+                );
               }
             },
           ),
@@ -288,9 +322,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   Image.asset('assets/images/logo_web.png', width: 150),
                   const SizedBox(height: 24),
-                  const Text('Store & Connect', style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Store & Connect',
+                    style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 12),
-                  Text('Gerencie seu negócio de forma inteligente.', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Gerencie seu negócio de forma inteligente.',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ],
               ),
             ),
@@ -325,18 +365,30 @@ class _LoginScreenState extends State<LoginScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Exibe a logo apenas no mobile (já que no PC ela fica na área azul)
-         // if (!kIsWeb)
-            Center(
-              child: Image.asset(
-                'assets/images/logo_web.png',
-                height: 180,
-                errorBuilder: (ctx, err, stack) => const Icon(Icons.storefront, size: 80, color: Colors.deepPurple),
+          // if (!kIsWeb)
+          Center(
+            child: Image.asset(
+              'assets/images/logo_web.png',
+              height: 180,
+              errorBuilder: (ctx, err, stack) => const Icon(
+                Icons.storefront,
+                size: 80,
+                color: Colors.deepPurple,
               ),
             ),
+          ),
           const SizedBox(height: 8),
-          const Text('Bem-vindo de volta!', textAlign: TextAlign.center, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          const Text(
+            'Bem-vindo de volta!',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
-          Text('Faça login para continuar gerenciando seu negócio.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+          Text(
+            'Faça login para continuar gerenciando seu negócio.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
           const SizedBox(height: 20),
 
           TextFormField(
@@ -345,9 +397,13 @@ class _LoginScreenState extends State<LoginScreen> {
             decoration: InputDecoration(
               labelText: 'E-mail',
               prefixIcon: const Icon(Icons.email_outlined),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            validator: (value) => (value == null || !value.contains('@')) ? 'E-mail inválido.' : null,
+            validator: (value) => (value == null || !value.contains('@'))
+                ? 'E-mail inválido.'
+                : null,
           ),
           const SizedBox(height: 16),
           TextFormField(
@@ -356,13 +412,20 @@ class _LoginScreenState extends State<LoginScreen> {
             decoration: InputDecoration(
               labelText: 'Senha',
               prefixIcon: const Icon(Icons.lock_outline),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               suffixIcon: IconButton(
-                icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
-                onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                icon: Icon(
+                  _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                ),
+                onPressed: () =>
+                    setState(() => _isPasswordVisible = !_isPasswordVisible),
               ),
             ),
-            validator: (value) => (value == null || value.isEmpty) ? 'Por favor, insira sua senha.' : null,
+            validator: (value) => (value == null || value.isEmpty)
+                ? 'Por favor, insira sua senha.'
+                : null,
           ),
           const SizedBox(height: 8),
 
@@ -370,7 +433,8 @@ class _LoginScreenState extends State<LoginScreen> {
             CheckboxListTile(
               title: const Text("Lembrar dados"),
               value: _rememberMe,
-              onChanged: (newValue) => setState(() => _rememberMe = newValue ?? false),
+              onChanged: (newValue) =>
+                  setState(() => _rememberMe = newValue ?? false),
               controlAffinity: ListTileControlAffinity.leading,
               contentPadding: EdgeInsets.zero,
               activeColor: Colors.deepPurple,
@@ -390,11 +454,19 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: _submitLogin,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           backgroundColor: Colors.deepPurple,
                           foregroundColor: Colors.white,
                         ),
-                        child: const Text('ENTRAR', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        child: const Text(
+                          'ENTRAR',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
                     if (_biometricLoginAvailable && !kIsWeb) ...[
@@ -405,17 +477,24 @@ class _LoginScreenState extends State<LoginScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.fingerprint, size: 32, color: Colors.deepPurple),
+                          icon: const Icon(
+                            Icons.fingerprint,
+                            size: 32,
+                            color: Colors.deepPurple,
+                          ),
                           onPressed: _authenticateWithBiometrics,
                           tooltip: 'Login com Digital',
                         ),
                       ),
-                    ]
+                    ],
                   ],
                 ),
                 const SizedBox(height: 8),
                 TextButton(
-                  child: const Text('Esqueci a senha', style: TextStyle(color: Colors.deepPurple)),
+                  child: const Text(
+                    'Esqueci a senha',
+                    style: TextStyle(color: Colors.deepPurple),
+                  ),
                   onPressed: () => _showForgotPasswordDialog(),
                 ),
                 const SizedBox(height: 16),
@@ -424,7 +503,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   onPressed: _isLoading ? null : _googleSignIn,
                   child: Row(
@@ -456,7 +537,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     MaterialPageRoute(builder: (ctx) => const RegisterScreen()),
                   );
                 },
-                child: const Text('Cadastre-se', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+                child: const Text(
+                  'Cadastre-se',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple,
+                  ),
+                ),
               ),
             ],
           ),
