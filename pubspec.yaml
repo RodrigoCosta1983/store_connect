@@ -58,6 +58,7 @@ dependencies:
   flutter_signin_button: ^2.1.1
   firebase_app_check: ^0.3.2+10
   brasil_fields: ^1.15.0
+  flutter_native_contact_picker: ^0.0.11
 
 
 

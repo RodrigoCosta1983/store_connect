@@ -1,8 +1,8 @@
-// lib/screens/management/manage_customers_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
+import 'package:flutter_native_contact_picker/model/contact.dart';
 import 'package:store_connect/models/customer_model.dart';
 import 'package:store_connect/widgets/dynamic_background.dart';
 
@@ -22,6 +22,9 @@ class _CustomerDialogState extends State<_CustomerDialog> {
   final _phoneController = TextEditingController();
   var _isLoading = false;
 
+  // Instância do picker nativo
+  final FlutterNativeContactPicker _contactPicker = FlutterNativeContactPicker();
+
   bool get _isEditing => widget.customer != null;
 
   @override
@@ -39,6 +42,46 @@ class _CustomerDialogState extends State<_CustomerDialog> {
     _nameController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  // Função para limpar o número que vem da agenda
+  String _limparNumeroTelefone(String numeroBruto) {
+    String numeroLimpo = numeroBruto.replaceAll(RegExp(r'\D'), '');
+
+    // Remove o código do Brasil (55) se estiver presente
+    if (numeroLimpo.startsWith('55') && numeroLimpo.length >= 12) {
+      numeroLimpo = numeroLimpo.substring(2);
+    }
+    return numeroLimpo;
+  }
+
+  // Função para abrir a agenda e capturar os dados
+  Future<void> _buscarContatoNaAgenda() async {
+    try {
+      Contact? contatoSelecionado = await _contactPicker.selectContact();
+
+      if (contatoSelecionado != null) {
+        setState(() {
+          // Preenche o nome (se o campo estiver vazio, para não sobrescrever edições intencionais)
+          if (_nameController.text.isEmpty) {
+            _nameController.text = contatoSelecionado.fullName ?? '';
+          }
+
+          // Preenche o telefone com higienização
+          if (contatoSelecionado.phoneNumbers != null && contatoSelecionado.phoneNumbers!.isNotEmpty) {
+            String numeroOriginal = contatoSelecionado.phoneNumbers!.first;
+            _phoneController.text = _limparNumeroTelefone(numeroOriginal);
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Erro ao buscar contato: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Não foi possível acessar a agenda: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _saveCustomer() async {
@@ -84,9 +127,17 @@ class _CustomerDialogState extends State<_CustomerDialog> {
                 decoration: const InputDecoration(labelText: 'Nome do Cliente'),
                 validator: (value) => value!.trim().isEmpty ? 'Insira um nome.' : null,
               ),
+              // Adicionado o sufixIcon para chamar a agenda
               TextFormField(
                 controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'Telefone (opcional)'),
+                decoration: InputDecoration(
+                  labelText: 'Telefone (opcional)',
+                  suffixIcon: IconButton(
+                    icon: Icon(Icons.perm_contact_calendar_rounded, color: Theme.of(context).primaryColor),
+                    tooltip: 'Buscar na agenda',
+                    onPressed: _buscarContatoNaAgenda,
+                  ),
+                ),
                 keyboardType: TextInputType.phone,
               ),
             ],
@@ -121,6 +172,12 @@ class ManageCustomersScreen extends StatefulWidget {
 
 class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
   final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   void _showCustomerDialog({DocumentSnapshot? customer}) {
     showDialog(
@@ -205,13 +262,13 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
                       );
                     }
 
-                    return LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (constraints.maxWidth > 768) {
-                          return _buildCustomerDataTable(filteredCustomers, isDarkMode, constraints);
-                        } else {
-                          return _buildCustomerListView(filteredCustomers, isDarkMode);
-                        }
+                    return ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
+                      itemCount: filteredCustomers.length,
+                      itemBuilder: (ctx, index) {
+                        final customerDoc = filteredCustomers[index];
+                        final customer = Customer.fromFirestore(customerDoc);
+                        return _buildCustomerCard(customer, customerDoc, isDarkMode);
                       },
                     );
                   },
@@ -220,89 +277,6 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  // --- LAYOUT DE LISTA (MOBILE) ---
-  Widget _buildCustomerListView(List<QueryDocumentSnapshot> customers, bool isDarkMode) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
-      itemCount: customers.length,
-      itemBuilder: (ctx, index) {
-        final customerDoc = customers[index];
-        final customer = Customer.fromFirestore(customerDoc);
-        return _buildCustomerCard(customer, customerDoc, isDarkMode);
-      },
-    );
-  }
-
-  // --- NOVO LAYOUT DE TABELA (WEB) ---
-  Widget _buildCustomerDataTable(List<QueryDocumentSnapshot> customers, bool isDarkMode, BoxConstraints constraints) {
-    final DateFormat dateFormat = DateFormat('dd/MM/yyyy');
-
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: constraints.maxWidth),
-          child: DataTable(
-            headingRowColor: MaterialStateProperty.all(Theme.of(context).splashColor),
-            columnSpacing: 32,
-            columns: const [
-              DataColumn(label: Text('Cliente')),
-              DataColumn(label: Text('Telefone')),
-              DataColumn(label: Text('Data de Cadastro')),
-              DataColumn(label: Text('Ações')),
-            ],
-            rows: customers.map((customerDoc) {
-              final customer = Customer.fromFirestore(customerDoc);
-              final customerData = customerDoc.data() as Map<String, dynamic>;
-              final createdAt = customerData['createdAt'] as Timestamp?;
-
-              return DataRow(
-                onSelectChanged: widget.isSelectionMode ? (selected) {
-                  if (selected ?? false) {
-                    Navigator.of(context).pop(customer);
-                  }
-                } : null,
-                cells: [
-                  DataCell(Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: Theme.of(context).primaryColor,
-                        foregroundColor: Colors.white,
-                        child: Text(customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?'),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(customer.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  )),
-                  DataCell(Text(customer.phone ?? 'Não informado')),
-                  DataCell(Text(createdAt != null ? dateFormat.format(createdAt.toDate()) : 'N/A')),
-                  DataCell(
-                    widget.isSelectionMode
-                        ? Container() // No modo de seleção, não mostra ações
-                        : Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.blueAccent),
-                          onPressed: () => _showCustomerDialog(customer: customerDoc),
-                          tooltip: 'Editar',
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deleteCustomer(customer.id),
-                          tooltip: 'Excluir',
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            }).toList(),
-          ),
-        ),
       ),
     );
   }
@@ -356,10 +330,6 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
   }
 
   Widget _buildCustomerCard(Customer customer, DocumentSnapshot customerDoc, bool isDarkMode) {
-    // Define as cores dos ícones com base no tema
-    final editIconColor = isDarkMode ? Colors.white70 : Theme.of(context).primaryColor;
-    final deleteIconColor = isDarkMode ? Colors.red.shade300 : Theme.of(context).colorScheme.error;
-
     return Card(
       color: isDarkMode ? Colors.black.withOpacity(0.6) : Colors.white.withOpacity(0.8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -381,13 +351,11 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(Icons.edit),
-              color: editIconColor, // <-- COR APLICADA
+              icon: Icon(Icons.edit, color: Theme.of(context).primaryColor),
               onPressed: () => _showCustomerDialog(customer: customerDoc),
             ),
             IconButton(
-              icon: const Icon(Icons.delete),
-              color: deleteIconColor, // <-- COR APLICADA
+              icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
               onPressed: () => _deleteCustomer(customer.id),
             ),
           ],
