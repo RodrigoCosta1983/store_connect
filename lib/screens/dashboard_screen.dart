@@ -180,7 +180,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         color: Colors.orange,
                       ),
                       KpiCard(
-                        title: 'Produtos com Estoque Baixo',
+                        title: 'Produtos Estoque Baixo',
                         value: _lowStockProductsCount.toString(),
                         icon: Icons.warning_amber,
                         color: Colors.red,

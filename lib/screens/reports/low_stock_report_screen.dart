@@ -12,7 +12,7 @@ class LowStockReportScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Produtos com Estoque Baixo'),
+        title: const Text('Produtos Estoque Baixo'),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
