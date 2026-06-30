@@ -48,7 +48,7 @@ class SalesProvider with ChangeNotifier {
         'createdAt': Timestamp.now(),
         'storeId': _storeId,
         'notes': notes,
-        'paymentMethod': 'Fiado',
+        'paymentMethod': 'A prazo',
         'isPaid': false,
         'dueDate': Timestamp.fromDate(dueDate),
         'customerId': customer.id,

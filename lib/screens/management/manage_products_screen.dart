@@ -32,6 +32,10 @@ class _ProductDialogState extends State<_ProductDialog> {
   Uint8List? _selectedImageBytes;
   String? _existingImageUrl;
 
+  // --- NOVAS VARIÁVEIS DE CATEGORIA ---
+  String? _selectedCategoryId;
+  String? _selectedCategoryName;
+
   bool get _isEditing => widget.product != null;
 
   @override
@@ -45,6 +49,11 @@ class _ProductDialogState extends State<_ProductDialog> {
       _minimumStockController.text = (productData['minimumStock'] ?? 0).toString();
       if (productData.containsKey('imageUrl')) {
         _existingImageUrl = productData['imageUrl'];
+      }
+      // --- CARREGA A CATEGORIA SE ELA EXISTIR NO PRODUTO ---
+      if (productData.containsKey('categoryId')) {
+        _selectedCategoryId = productData['categoryId'];
+        _selectedCategoryName = productData['categoryName'];
       }
     }
   }
@@ -148,6 +157,8 @@ class _ProductDialogState extends State<_ProductDialog> {
         'quantidade': quantidade,
         'minimumStock': minimumStock,
         'imageUrl': imageUrl,
+        'categoryId': _selectedCategoryId,
+        'categoryName': _selectedCategoryName,
       };
 
       if (_isEditing) {
@@ -239,6 +250,62 @@ class _ProductDialogState extends State<_ProductDialog> {
                 decoration: const InputDecoration(labelText: 'Nome do Produto'),
                 validator: (value) => (value == null || value.isEmpty) ? 'Campo obrigatório.' : null,
               ),
+              const SizedBox(height: 16), // Espaçamento
+
+              // --- NOVO MENU DROPDOWN CONECTADO AO FIREBASE ---
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('stores')
+                    .doc(widget.storeId)
+                    .collection('categories')
+                    .orderBy('name')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const CircularProgressIndicator();
+                  }
+
+                  final categories = snapshot.data!.docs;
+
+                  // Se a loja ainda não tiver nenhuma categoria criada
+                  if (categories.isEmpty) {
+                    return const Text(
+                      'Nenhuma categoria encontrada. Crie uma no menu lateral.',
+                      style: TextStyle(color: Colors.orange, fontSize: 13),
+                    );
+                  }
+
+                  // Proteção: Se a categoria selecionada foi apagada do Firebase, reseta o campo
+                  if (_selectedCategoryId != null) {
+                    final categoryExists = categories.any((doc) => doc.id == _selectedCategoryId);
+                    if (!categoryExists) {
+                      _selectedCategoryId = null;
+                      _selectedCategoryName = null;
+                    }
+                  }
+
+                  return DropdownButtonFormField<String>(
+                    value: _selectedCategoryId,
+                    decoration: const InputDecoration(
+                      labelText: 'Categoria',
+                    ),
+                    items: categories.map((doc) {
+                      return DropdownMenuItem<String>(
+                        value: doc.id,
+                        child: Text(doc['name']),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedCategoryId = value;
+                        _selectedCategoryName = categories.firstWhere((doc) => doc.id == value)['name'];
+                      });
+                    },
+                    validator: (value) => value == null ? 'Selecione uma categoria.' : null,
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _priceController,
                 decoration: const InputDecoration(labelText: 'Preço (ex: 10.50)'),

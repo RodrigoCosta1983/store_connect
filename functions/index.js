@@ -261,89 +261,107 @@ const SUBSCRIPTION_PRICES = {
  */
 
  /**
-  * 🔔 WEBHOOK DO ASAAS
-  */
- exports.asaasWebhook = onRequest(async (req, res) => {
-   console.log("\n\n╔════════════════════════════════════════════════════════════╗");
-   console.log("║  🔔 WEBHOOK ASAAS RECEBIDO                                ║");
-   console.log("╚════════════════════════════════════════════════════════════╝");
+   * 🔔 WEBHOOK DO ASAAS
+   */
+  exports.asaasWebhook = onRequest(async (req, res) => {
+    console.log("\n\n╔════════════════════════════════════════════════════════════╗");
+    console.log("║  🔔 WEBHOOK ASAAS RECEBIDO                                ║");
+    console.log("╚════════════════════════════════════════════════════════════╝");
 
-   if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
+    if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
 
-   try {
-     // 🛡️ Prevenção caso o Asaas mande o body como String crua
-     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    try {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
 
-     const event = body.event;
-     const payment = body.payment || {};
+      const event = body.event;
+      const payment = body.payment || {};
 
-     const asaasSubscriptionId = payment.subscription;
-     let targetId = payment.externalReference;
+      const asaasSubscriptionId = payment.subscription;
+      let targetId = payment.externalReference;
 
-     console.log(`📌 Evento: ${event}`);
-     console.log(`📌 ID Assinatura: ${asaasSubscriptionId}`);
-     console.log(`📌 External Reference: ${targetId}`);
+      console.log(`📌 Evento: ${event}`);
+      console.log(`📌 ID Assinatura: ${asaasSubscriptionId}`);
+      console.log(`📌 External Reference: ${targetId}`);
 
-     const db = admin.firestore();
-     let storeIdParaAtualizar = null;
+      const db = admin.firestore();
+      let storeIdParaAtualizar = null;
 
-     // 🔍 1ª Tentativa: Busca pelo ID da assinatura
-     if (asaasSubscriptionId) {
-         const snapshot = await db.collection("stores").where("asaasSubscriptionId", "==", asaasSubscriptionId).get();
-         if (!snapshot.empty) {
-             storeIdParaAtualizar = snapshot.docs[0].id;
-             console.log(`✅ Loja encontrada pela Assinatura: ${storeIdParaAtualizar}`);
-         }
-     }
+      // 🔍 1ª Tentativa: Busca pelo ID da assinatura
+      if (asaasSubscriptionId) {
+          const snapshot = await db.collection("stores").where("asaasSubscriptionId", "==", asaasSubscriptionId).get();
+          if (!snapshot.empty) {
+              storeIdParaAtualizar = snapshot.docs[0].id;
+              console.log(`✅ Loja encontrada pela Assinatura: ${storeIdParaAtualizar}`);
+          }
+      }
 
-     // 🔍 2ª Tentativa: Busca pela referência externa
-     if (!storeIdParaAtualizar && targetId) {
-         const userDoc = await db.collection("users").doc(targetId).get();
-         if (userDoc.exists && userDoc.data().storeId) {
-             storeIdParaAtualizar = userDoc.data().storeId;
-             console.log(`✅ Convertido de UID para StoreID: ${storeIdParaAtualizar}`);
-         } else {
-             storeIdParaAtualizar = targetId;
-             console.log(`✅ Usando targetId direto como StoreID: ${storeIdParaAtualizar}`);
-         }
-     }
+      // 🔍 2ª Tentativa: Busca pela referência externa
+      if (!storeIdParaAtualizar && targetId) {
+          const userDoc = await db.collection("users").doc(targetId).get();
+          if (userDoc.exists && userDoc.data().storeId) {
+              storeIdParaAtualizar = userDoc.data().storeId;
+              console.log(`✅ Convertido de UID para StoreID: ${storeIdParaAtualizar}`);
+          } else {
+              storeIdParaAtualizar = targetId;
+              console.log(`✅ Usando targetId direto como StoreID: ${storeIdParaAtualizar}`);
+          }
+      }
 
-     if (!storeIdParaAtualizar) {
-         console.log(`⚠️ Nenhuma loja encontrada! Ignorando.`);
-         return res.json({ received: true, status: "ignored_no_store" });
-     }
+      if (!storeIdParaAtualizar) {
+          console.log(`⚠️ Nenhuma loja encontrada! Ignorando.`);
+          return res.json({ received: true, status: "ignored_no_store" });
+      }
 
-     const storeRef = db.collection("stores").doc(storeIdParaAtualizar);
-     const storeSnap = await storeRef.get();
+      const storeRef = db.collection("stores").doc(storeIdParaAtualizar);
+      const storeSnap = await storeRef.get();
 
-     if (!storeSnap.exists) {
-         console.log(`⚠️ O documento da loja ${storeIdParaAtualizar} não existe no Firestore.`);
-         return res.json({ received: true, status: "ignored_not_found" });
-     }
+      if (!storeSnap.exists) {
+          console.log(`⚠️ O documento da loja ${storeIdParaAtualizar} não existe no Firestore.`);
+          return res.json({ received: true, status: "ignored_not_found" });
+      }
 
-     // 🔄 ATUALIZA O STATUS
-     if (event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED") {
-         await storeRef.update({
-             subscriptionStatus: "active",
-             lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
-             subscriptionType: "pro"
-         });
-         console.log(`🎉 Sucesso! Loja ${storeIdParaAtualizar} ATIVADA.`);
-     }
-     else if (event === "PAYMENT_OVERDUE" || event === "SUBSCRIPTION_DELETED" || event === "PAYMENT_DELETED") {
-         await storeRef.update({ subscriptionStatus: "inactive" });
-         console.log(`🚫 Sucesso! Loja ${storeIdParaAtualizar} INATIVADA.`);
-     } else {
-         console.log(`ℹ️ Evento ${event} ignorado pois não afeta o status.`);
-     }
+      // 🔄 ATUALIZA O STATUS E APLICA A GUILHOTINA
+      if (event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED") {
+          await storeRef.update({
+              subscriptionStatus: "active",
+              lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
+              subscriptionType: "pro"
+          });
+          console.log(`🎉 Sucesso! Loja ${storeIdParaAtualizar} ATIVADA.`);
+      }
+      else if (event === "PAYMENT_OVERDUE") {
+          // 1. Bloqueia o acesso no aplicativo imediatamente
+          await storeRef.update({ subscriptionStatus: "inactive" });
+          console.log(`🚫 Loja ${storeIdParaAtualizar} INATIVADA por atraso no pagamento.`);
 
-     res.json({ received: true, updatedStore: storeIdParaAtualizar });
+          // 2. A Guilhotina: Cancela a assinatura no Asaas
+          if (asaasSubscriptionId) {
+              try {
+                  const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
+                  await axios.delete(`${ASAAS_URL}/subscriptions/${asaasSubscriptionId}`, {
+                      headers: { "access_token": ASAAS_API_KEY }
+                  });
+                  console.log(`✂️ Bola de neve evitada! Assinatura ${asaasSubscriptionId} CANCELADA no Asaas.`);
+              } catch (cancelError) {
+                  console.error(`⚠️ Erro ao tentar cancelar assinatura no Asaas:`, cancelError.response?.data || cancelError.message);
+              }
+          }
+      }
+      else if (event === "SUBSCRIPTION_DELETED" || event === "PAYMENT_DELETED") {
+          await storeRef.update({ subscriptionStatus: "inactive" });
+          console.log(`🚫 Loja ${storeIdParaAtualizar} INATIVADA (Assinatura ou pagamento deletado no painel).`);
+      }
+      else {
+          console.log(`ℹ️ Evento ${event} ignorado pois não afeta o status da loja.`);
+      }
 
-   } catch (error) {
-     console.error(`❌ Erro crítico no webhook:`, error);
-     res.status(500).send("Erro interno");
-   }
- });
+      res.json({ received: true, updatedStore: storeIdParaAtualizar });
+
+    } catch (error) {
+      console.error(`❌ Erro crítico no webhook:`, error);
+      res.status(500).send("Erro interno");
+    }
+  });
 
 /**
  * 🗑️ LIMPEZA: Quando um produto é deletado

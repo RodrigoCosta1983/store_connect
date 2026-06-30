@@ -358,6 +358,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildLoginForm() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return Form(
       key: _formKey,
       child: Column(
@@ -491,9 +493,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 TextButton(
-                  child: const Text(
+                  child: Text(
                     'Esqueci a senha',
-                    style: TextStyle(color: Colors.deepPurple),
+                    style: TextStyle(color: isDarkMode ? Colors.purple[200] : Colors.deepPurple,),
                   ),
                   onPressed: () => _showForgotPasswordDialog(),
                 ),
@@ -514,10 +516,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       Image.asset('assets/images/google_logo.png', height: 24),
                       const SizedBox(width: 12),
-                      const Flexible(
+                      Flexible(
                         child: Text(
                           'Continuar com Google',
-                          style: TextStyle(fontSize: 16, color: Colors.black87),
+                          style: TextStyle(fontSize: 16, color: isDarkMode ? Colors.white : Colors.black87,),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -537,11 +539,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     MaterialPageRoute(builder: (ctx) => const RegisterScreen()),
                   );
                 },
-                child: const Text(
+                child: Text(
                   'Cadastre-se',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
+                    color: isDarkMode ? Colors.white : Colors.deepPurple,
                   ),
                 ),
               ),
