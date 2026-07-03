@@ -90,11 +90,11 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 
 |                                                              Tela de Venda                                                               | Dashboard | Perfil e Segurança |
 |:----------------------------------------------------------------------------------------------------------------------------------------:| :---: | :---: |
-| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Tela_de_Venda.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Dashboard.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Perfil%20e%20Seguran%C3%A7a.png"  width="200" height="400"> |
+| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/feature/native-contact-picker-now/assets/images/README/Tela_de_Venda.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Dashboard.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Perfil%20e%20Seguran%C3%A7a.png"  width="200" height="400"> |
 
-| Análise ABC | Contas a Receber | Gerenciar Produtos |
-| :---: | :---: | :---: |
-| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/An%C3%A1lise%20ABC.png"  width="200" height="400">| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Contas%20a%20Receber.png"  width="200" height="400">  | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Gerenciar%20Produtos.png"  width="200" height="400">  |
+| Análise ABC | Contas a Receber |                                                                Gerenciar Produtos                                                                |
+| :---: | :---: |:------------------------------------------------------------------------------------------------------------------------------------------------:|
+| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/An%C3%A1lise%20ABC.png"  width="200" height="400">| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Contas%20a%20Receber.png"  width="200" height="400">  | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/feature/native-contact-picker-now/assets/images/README/Gerenciar%20Produtos_.png"  width="200" height="400"> |
 
 
 ## 🚀 Tecnologias Utilizadas
