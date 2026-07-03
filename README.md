@@ -88,9 +88,9 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 
 *(Instrução: Para adicionar suas imagens aqui, faça o upload delas para a pasta do seu projeto no GitHub e substitua as `URL_DA_SUA_IMAGEM_AQUI` pelo link da imagem)*
 
-| Tela de Venda | Dashboard | Perfil e Segurança |
-| :---: | :---: | :---: |
-| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Tela%20de%20Venda.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Dashboard.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Perfil%20e%20Seguran%C3%A7a.png"  width="200" height="400"> |
+|                                                              Tela de Venda                                                               | Dashboard | Perfil e Segurança |
+|:----------------------------------------------------------------------------------------------------------------------------------------:| :---: | :---: |
+| <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Tela_de_Venda.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Dashboard.png"  width="200" height="400"> | <img src="https://github.com/RodrigoCosta1983/store_connect/blob/main/assets/images/README/Perfil%20e%20Seguran%C3%A7a.png"  width="200" height="400"> |
 
 | Análise ABC | Contas a Receber | Gerenciar Produtos |
 | :---: | :---: | :---: |
