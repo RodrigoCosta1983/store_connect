@@ -7,6 +7,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:store_connect/screens/sales/new_sale_screen.dart';
 
+import '../widgets/app_drawer.dart';
 import 'auth/auth_gate.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -163,6 +164,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: AppDrawer(storeId: widget.storeId),
       appBar: AppBar(
         title: StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance.collection('stores').doc(widget.storeId).snapshots(),

@@ -11,20 +11,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:store_connect/widgets/dynamic_background.dart';
 
-class _ProductDialog extends StatefulWidget {
-  final String storeId;
-  final DocumentSnapshot? product;
-  const _ProductDialog({required this.storeId, this.product});
-
-  @override
-  _ProductDialogState createState() => _ProductDialogState();
-}
-
 class _ProductDialogState extends State<_ProductDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
-  final _quantidadeController = TextEditingController();
+  final _quantidadeController = TextEditingController(); // Agora será apenas visual/soma
+  final _loteQuantidadeController = TextEditingController();
   final _minimumStockController = TextEditingController();
   var _isLoading = false;
 
@@ -32,7 +24,9 @@ class _ProductDialogState extends State<_ProductDialog> {
   Uint8List? _selectedImageBytes;
   String? _existingImageUrl;
 
-  // --- NOVAS VARIÁVEIS DE CATEGORIA ---
+  List<Map<String, dynamic>> _lotes = [];
+  DateTime? _dataValidadeSelecionada;
+
   String? _selectedCategoryId;
   String? _selectedCategoryName;
 
@@ -43,19 +37,44 @@ class _ProductDialogState extends State<_ProductDialog> {
     super.initState();
     if (_isEditing) {
       final productData = widget.product!.data() as Map<String, dynamic>;
-      _nameController.text = productData['name'];
-      _priceController.text = productData['price'].toString();
-      _quantidadeController.text = (productData['quantidade'] ?? 0).toString();
+      _nameController.text = productData['name'] ?? '';
+      _priceController.text = productData['price']?.toString() ?? '';
       _minimumStockController.text = (productData['minimumStock'] ?? 0).toString();
+
+      // 1. CARREGA IMAGEM E CATEGORIA
       if (productData.containsKey('imageUrl')) {
         _existingImageUrl = productData['imageUrl'];
       }
-      // --- CARREGA A CATEGORIA SE ELA EXISTIR NO PRODUTO ---
       if (productData.containsKey('categoryId')) {
         _selectedCategoryId = productData['categoryId'];
         _selectedCategoryName = productData['categoryName'];
       }
+
+      // 2. CARREGA LOTES
+      if (productData.containsKey('lotes') && productData['lotes'] is List) {
+        final rawLotes = productData['lotes'] as List;
+        setState(() {
+          _lotes = rawLotes.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        });
+      } else {
+        _lotes = [];
+      }
+
+      // 3. A CORREÇÃO DA QUANTIDADE (O PULO DO GATO)
+      // Se a lista de lotes for vazia, pega a quantidade do banco.
+      // Se tiver lote, aí sim usa a soma matemática.
+      if (_lotes.isEmpty) {
+        _quantidadeController.text = (productData['quantidade'] ?? 0).toString();
+      } else {
+        _sincronizarTotalManual();
+      }
     }
+  }
+
+  // --- NOVA FUNÇÃO PARA MANTER A SINCRONIA ---
+  void _sincronizarTotalManual() {
+    final somaLotes = _lotes.fold(0, (sum, item) => sum + (item['quantidade'] as int));
+    _quantidadeController.text = somaLotes.toString();
   }
 
   @override
@@ -63,8 +82,23 @@ class _ProductDialogState extends State<_ProductDialog> {
     _nameController.dispose();
     _priceController.dispose();
     _quantidadeController.dispose();
+    _loteQuantidadeController.dispose();
     _minimumStockController.dispose();
     super.dispose();
+  }
+
+  Future<void> _selecionarData(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2030),
+    );
+    if (picked != null && picked != _dataValidadeSelecionada) {
+      setState(() {
+        _dataValidadeSelecionada = picked;
+      });
+    }
   }
 
   Future<void> _pickImage() async {
@@ -79,7 +113,6 @@ class _ProductDialogState extends State<_ProductDialog> {
     setState(() {});
   }
 
-  // --- FUNÇÃO DE SALVAR PRODUTO COM PRINTS E LÓGICA DE LIMPEZA ---
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
     if (widget.storeId.isEmpty) return;
@@ -88,73 +121,39 @@ class _ProductDialogState extends State<_ProductDialog> {
 
     final String name = _nameController.text;
     final double price = double.parse(_priceController.text.replaceAll(',', '.'));
-    final int quantidade = int.tryParse(_quantidadeController.text) ?? 0;
     final int minimumStock = int.tryParse(_minimumStockController.text) ?? 0;
 
-    // Guarda a URL da imagem antiga para deletar depois
     final String oldImageUrl = _existingImageUrl ?? '';
-    String imageUrl = oldImageUrl; // Inicia com a URL antiga
+    String imageUrl = oldImageUrl;
 
     try {
-      print('===== DEBUG UPLOAD PRODUTO =====');
-      print('🏪 StoreId: ${widget.storeId}');
-      print('📦 Nome: $name');
-      print('💰 Preço: $price');
-      print('📊 Quantidade: $quantidade');
-
       if (_selectedImageFile != null || _selectedImageBytes != null) {
-        print('📸 Nova imagem selecionada. Iniciando upload...');
-
         final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
         final path = 'product_images/${widget.storeId}/$fileName';
-        print('🔗 Caminho: $path');
+        final ref = FirebaseStorage.instance.ref(path);
+        final metadata = SettableMetadata(contentType: 'image/jpeg');
 
-        print('🔧 Obtendo instância do Storage...');
-        final storage = FirebaseStorage.instance;
-        print('✓ Instância obtida');
+        final TaskSnapshot snapshot = kIsWeb
+            ? await ref.putData(_selectedImageBytes!, metadata)
+            : await ref.putFile(_selectedImageFile!, metadata);
 
-        print('🔧 Criando referência...');
-        final ref = storage.ref(path);
-        print('✓ Referência criada: ${ref.fullPath}');
-        print('✓ Bucket: ${ref.bucket}');
-
-        try {
-          final metadata = SettableMetadata(contentType: 'image/jpeg');
-          final TaskSnapshot snapshot;
-
-          if (kIsWeb) {
-            print('⏳ Fazendo upload (Web)...');
-            final uploadTask = ref.putData(_selectedImageBytes!, metadata);
-            snapshot = await uploadTask.timeout(const Duration(seconds: 30));
-          } else {
-            print('⏳ Fazendo upload (Mobile)...');
-            print('📦 Arquivo existe: ${await _selectedImageFile!.exists()}');
-            print('📦 Tamanho do arquivo: ${await _selectedImageFile!.length()} bytes');
-
-            final uploadTask = ref.putFile(_selectedImageFile!, metadata);
-            print('🚀 Iniciando putFile...');
-
-            snapshot = await uploadTask.timeout(const Duration(seconds: 30));
-          }
-
-          print('✅ Upload concluído!');
-          imageUrl = await snapshot.ref.getDownloadURL();
-          print('✅ URL obtida: $imageUrl');
-
-        } on TimeoutException {
-          print('⏰ TIMEOUT após 30 segundos!');
-          throw Exception('Upload demorou demais. Verifique sua conexão.');
-        }
-      } else {
-        print('ℹ️ Nenhuma imagem nova selecionada, mantendo a imagem atual.');
+        imageUrl = await snapshot.ref.getDownloadURL();
       }
 
-      print('💾 Salvando no Firestore...');
+      // 1. Filtrar lotes ativos
+      final lotesFiltrados = _lotes.where((lote) => (lote['quantidade'] as int) > 0).toList();
+
+      // 2. Calcular total: Se houver lotes, usa a soma. Senão, usa o campo manual.
+      final int manualQuantidade = int.tryParse(_quantidadeController.text) ?? 0;
+      final int somaLotes = lotesFiltrados.fold(0, (sum, item) => sum + (item['quantidade'] as int));
+      final int finalQuantidade = _lotes.isEmpty ? manualQuantidade : somaLotes;
+
       final productData = {
         'name': name,
         'name_lowercase': name.toLowerCase(),
         'price': price,
-        'quantidade': quantidade,
+        'lotes': lotesFiltrados,
+        'quantidade': finalQuantidade,
         'minimumStock': minimumStock,
         'imageUrl': imageUrl,
         'categoryId': _selectedCategoryId,
@@ -168,7 +167,6 @@ class _ProductDialogState extends State<_ProductDialog> {
             .collection('products')
             .doc(widget.product!.id)
             .update(productData);
-        print('✅ Produto atualizado no Firestore');
       } else {
         productData['createdAt'] = Timestamp.now();
         await FirebaseFirestore.instance
@@ -176,38 +174,18 @@ class _ProductDialogState extends State<_ProductDialog> {
             .doc(widget.storeId)
             .collection('products')
             .add(productData);
-        print('✅ Produto criado no Firestore');
       }
-
-      // --- LÓGICA DE LIMPEZA ADICIONADA ---
-      if (_isEditing && oldImageUrl.isNotEmpty && oldImageUrl != imageUrl) {
-        print('🗑️ Deletando imagem antiga: $oldImageUrl');
-        try {
-          await FirebaseStorage.instance.refFromURL(oldImageUrl).delete();
-          print('✅ Imagem antiga deletada com sucesso.');
-        } catch (e) {
-          print('⚠️ Falha ao deletar imagem antiga (pode já ter sido removida): $e');
-        }
-      }
-
-      print('============================');
 
       if (mounted) {
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Produto salvo com sucesso!'), backgroundColor: Colors.green),
         );
-        Navigator.of(context).pop();
       }
-
     } catch (error) {
-      print('===== ERRO GERAL NO _saveProduct =====');
-      print('❌ Erro: $error');
-      print('❌ Tipo: ${error.runtimeType}');
-      print('====================================');
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao salvar produto: $error'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Erro ao salvar: $error'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -215,10 +193,8 @@ class _ProductDialogState extends State<_ProductDialog> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
-    // ... (O restante do código permanece o mesmo) ...
     ImageProvider? provider;
     if (_selectedImageBytes != null) {
       provider = MemoryImage(_selectedImageBytes!);
@@ -250,9 +226,7 @@ class _ProductDialogState extends State<_ProductDialog> {
                 decoration: const InputDecoration(labelText: 'Nome do Produto'),
                 validator: (value) => (value == null || value.isEmpty) ? 'Campo obrigatório.' : null,
               ),
-              const SizedBox(height: 16), // Espaçamento
-
-              // --- NOVO MENU DROPDOWN CONECTADO AO FIREBASE ---
+              const SizedBox(height: 16),
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('stores')
@@ -261,94 +235,143 @@ class _ProductDialogState extends State<_ProductDialog> {
                     .orderBy('name')
                     .snapshots(),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const CircularProgressIndicator();
-                  }
+                  if (!snapshot.hasData) return const CircularProgressIndicator();
 
                   final categories = snapshot.data!.docs;
-
-                  // Se a loja ainda não tiver nenhuma categoria criada
-                  if (categories.isEmpty) {
-                    return const Text(
-                      'Nenhuma categoria encontrada. Crie uma no menu lateral.',
-                      style: TextStyle(color: Colors.orange, fontSize: 13),
-                    );
-                  }
-
-                  // Proteção: Se a categoria selecionada foi apagada do Firebase, reseta o campo
-                  if (_selectedCategoryId != null) {
-                    final categoryExists = categories.any((doc) => doc.id == _selectedCategoryId);
-                    if (!categoryExists) {
-                      _selectedCategoryId = null;
-                      _selectedCategoryName = null;
-                    }
+                  String? safeValue = _selectedCategoryId;
+                  if (safeValue != null && !categories.any((doc) => doc.id == safeValue)) {
+                    safeValue = null;
                   }
 
                   return DropdownButtonFormField<String>(
-                    value: _selectedCategoryId,
-                    decoration: const InputDecoration(
-                      labelText: 'Categoria',
-                    ),
-                    items: categories.map((doc) {
-                      return DropdownMenuItem<String>(
-                        value: doc.id,
-                        child: Text(doc['name']),
-                      );
-                    }).toList(),
+                    value: safeValue,
+                    decoration: const InputDecoration(labelText: 'Categoria'),
+                    items: categories.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc['name']))).toList(),
                     onChanged: (value) {
-                      setState(() {
-                        _selectedCategoryId = value;
-                        _selectedCategoryName = categories.firstWhere((doc) => doc.id == value)['name'];
-                      });
+                      if (value != null) {
+                        final selectedCat = categories.firstWhere((doc) => doc.id == value);
+                        setState(() {
+                          _selectedCategoryId = value;
+                          _selectedCategoryName = selectedCat['name'];
+                        });
+                      }
                     },
-                    validator: (value) => value == null ? 'Selecione uma categoria.' : null,
                   );
                 },
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _priceController,
-                decoration: const InputDecoration(labelText: 'Preço (ex: 10.50)'),
+                decoration: const InputDecoration(labelText: 'Preço'),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Campo obrigatório.';
-                  if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Número inválido.';
-                  return null;
-                },
               ),
+
+              // --- CAMPO DE QUANTIDADE TRAVADO SE HOUVER LOTES ---
+              // No seu TextFormField de Quantidade:
               TextFormField(
                 controller: _quantidadeController,
-                decoration: const InputDecoration(labelText: 'Quantidade em Estoque'),
+                decoration: InputDecoration(
+                  labelText: _lotes.isNotEmpty
+                      ? 'Quantidade (Soma automática dos lotes)'
+                      : 'Quantidade Manual',
+                  filled: _lotes.isNotEmpty,
+                  fillColor: _lotes.isNotEmpty ? Colors.grey.withOpacity(0.1) : null,
+                ),
+                // AQUI É O PULO DO GATO:
+                // Se tiver lotes, trava (readOnly). Se não, libera para digitação.
+                readOnly: _lotes.isNotEmpty,
                 keyboardType: TextInputType.number,
                 validator: (value) {
                   if (value == null || value.isEmpty) return 'Campo obrigatório.';
-                  if (int.tryParse(value) == null || int.parse(value) < 0) return 'Insira um número válido.';
+                  if (int.tryParse(value) == null || int.parse(value) < 0) return 'Número inválido.';
                   return null;
                 },
               ),
+
+              const Divider(height: 32),
+              const Text('Gerenciar Lotes', style: TextStyle(fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () => _selecionarData(context),
+                    icon: const Icon(Icons.calendar_today),
+                    label: Text(_dataValidadeSelecionada == null ? 'Data' : DateFormat('dd/MM/yyyy').format(_dataValidadeSelecionada!)),
+                  ),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _loteQuantidadeController,
+                      decoration: const InputDecoration(labelText: 'Quantidade'),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle, color: Colors.blue, size: 32),
+                    onPressed: () {
+                      final qtd = int.tryParse(_loteQuantidadeController.text);
+                      if (qtd != null && qtd > 0 && _dataValidadeSelecionada != null) {
+                        setState(() {
+                          _lotes.add({'quantidade': qtd, 'validade': Timestamp.fromDate(_dataValidadeSelecionada!)});
+                          _sincronizarTotalManual(); // Atualiza o campo total instantaneamente
+                        });
+                        _loteQuantidadeController.clear();
+                        _dataValidadeSelecionada = null;
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Informe a Qtd e a Validade!'), backgroundColor: Colors.orange),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+              Column(
+                children: _lotes.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final lote = entry.value;
+                  final DateTime date = (lote['validade'] as Timestamp).toDate();
+                  return ListTile(
+                    dense: true,
+                    title: Text('Qtd: ${lote['quantidade']} | Vence: ${DateFormat('dd/MM/yyyy').format(date)}'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () {
+                        setState(() {
+                          _lotes.removeAt(index);
+                          _sincronizarTotalManual(); // Atualiza o campo total instantaneamente
+                        });
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _minimumStockController,
                 decoration: const InputDecoration(labelText: 'Estoque Mínimo para Alerta'),
                 keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Defina um estoque mínimo.';
-                  if (int.tryParse(value) == null || int.parse(value) < 0) return 'Insira um número válido.';
-                  return null;
-                },
               ),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: _isLoading ? null : () => Navigator.of(context).pop(), child: const Text('Cancelar')),
-        ElevatedButton(
-          onPressed: _isLoading ? null : _saveProduct,
-          child: _isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Salvar'),
-        ),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+        ElevatedButton(onPressed: _isLoading ? null : _saveProduct, child: const Text('Salvar')),
       ],
     );
   }
+}
+
+class _ProductDialog extends StatefulWidget {
+  final String storeId;
+  final DocumentSnapshot? product;
+  const _ProductDialog({required this.storeId, this.product});
+
+  @override
+  _ProductDialogState createState() => _ProductDialogState();
 }
 
 class ManageProductsScreen extends StatefulWidget {

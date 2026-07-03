@@ -13,7 +13,11 @@ class PaymentOptionsSheet extends StatefulWidget {
   final String storeId;
   final String notes;
 
-  const PaymentOptionsSheet({super.key, required this.storeId, required this.notes});
+  const PaymentOptionsSheet({
+    super.key,
+    required this.storeId,
+    required this.notes,
+  });
 
   @override
   State<PaymentOptionsSheet> createState() => _PaymentOptionsSheetState();
@@ -47,8 +51,10 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
   Future<void> _loadPixQrCodeUrl() async {
     setState(() => _pixLoading = true);
     try {
-      final doc = await FirebaseFirestore.instance.collection('stores').doc(
-          widget.storeId).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(widget.storeId)
+          .get();
       if (doc.exists) {
         final data = doc.data();
         final url = data?['pixQrCodeUrl'] as String?;
@@ -69,6 +75,8 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     if (_isLoading) return;
     setState(() => _isLoading = true);
 
+    final cart = Provider.of<CartProvider>(context, listen: false);
+
     try {
       // ------------------------------------------------------------------
       // 🚨 A TRAVA DE SEGURANÇA (O GUARDA DA VENDA)
@@ -88,73 +96,172 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("Venda bloqueada! Sua assinatura está inativa ou expirada."),
+              content: Text(
+                "Venda bloqueada! Sua assinatura está inativa ou expirada.",
+              ),
               backgroundColor: Colors.red,
               duration: Duration(seconds: 8),
             ),
           );
-          // Expulsa o cliente de volta para o portão (que o forçará a pagar)
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (ctx) => const AuthGate()),
-                (route) => false,
+            (route) => false,
           );
         }
-        return; // ⛔ Interrompe a função AQUI. A venda NÃO vai para o banco!
+        return; // ⛔ Interrompe a função AQUI.
       }
-      // ------------------------------------------------------------------
-      // SE PASSOU DO BLOCO ACIMA, A ASSINATURA ESTÁ PAGA. PODE SALVAR!
-      // ------------------------------------------------------------------
 
-      final cart = Provider.of<CartProvider>(context, listen: false);
-      final firestore = FirebaseFirestore.instance;
-      final batch = firestore.batch();
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final firestore = FirebaseFirestore.instance;
 
-      final saleDocRef = firestore
-          .collection('stores')
-          .doc(widget.storeId)
-          .collection('sales')
-          .doc();
+        // =================================================================
+        // FASE 1: APENAS LEITURAS (READS)
+        // =================================================================
+        Map<String, DocumentSnapshot> productSnapshots = {};
 
-      final customer = cart.selectedCustomer;
+        for (final cartItem in cart.items.values) {
+          final productRef = firestore
+              .collection('stores')
+              .doc(widget.storeId)
+              .collection('products')
+              .doc(cartItem.productId);
 
-      batch.set(saleDocRef, {
-        'totalAmount': cart.totalAmount,
-        'products': cart.items.values.map((item) => item.toMap()).toList(),
-        'createdAt': Timestamp.now(),
-        'storeId': widget.storeId,
-        'notes': widget.notes,
-        'paymentMethod': paymentMethod,
-        'isPaid': true,
-        'customerId': customer?.id,
-        'customerName': customer?.name,
-      });
+          final productSnapshot = await transaction.get(productRef);
+          if (!productSnapshot.exists) {
+            throw Exception("Produto ${cartItem.name} não encontrado.");
+          }
+          productSnapshots[cartItem.productId] = productSnapshot;
+        }
 
-      for (final cartItem in cart.items.values) {
-        final productRef = firestore
+        // =================================================================
+        // FASE 2: APENAS ESCRITAS (WRITES / UPDATES)
+        // =================================================================
+        for (final cartItem in cart.items.values) {
+          final productSnapshot = productSnapshots[cartItem.productId]!;
+          final data = productSnapshot.data() as Map<String, dynamic>;
+          final productRef = productSnapshot.reference;
+
+          // VERIFICAÇÃO 1: Produto SEM lotes (Apenas Estoque Manual)
+          if (!data.containsKey('lotes') || (data['lotes'] as List).isEmpty) {
+            int qtdAtual = data['quantidade'] ?? 0;
+            if (qtdAtual < cartItem.quantity) {
+              throw Exception("Estoque insuficiente para ${cartItem.name}");
+            }
+            transaction.update(productRef, {
+              'quantidade': FieldValue.increment(-cartItem.quantity),
+            });
+          }
+          // VERIFICAÇÃO 2: Produto COM lotes (Estoque Automático - FIFO)
+          else {
+            List<dynamic> lotesBrutos = List.from(data['lotes'] ?? []);
+
+            // Pega apenas lotes com quantidade > 0 e ordena por validade
+            List<dynamic> lotesAtivos = lotesBrutos
+                .where((l) => l['quantidade'] > 0)
+                .toList();
+            lotesAtivos.sort(
+              (a, b) => (a['validade'] as Timestamp).compareTo(
+                b['validade'] as Timestamp,
+              ),
+            );
+
+            int qtdParaBaixar = cartItem.quantity;
+            List<Map<String, dynamic>> lotesAtualizados = [];
+
+            for (var lote in lotesAtivos) {
+              Map<String, dynamic> loteMap = Map<String, dynamic>.from(
+                lote as Map,
+              );
+
+              if (qtdParaBaixar <= 0) {
+                lotesAtualizados.add(loteMap);
+              } else {
+                int qtdNoLote = loteMap['quantidade'] as int;
+                if (qtdNoLote <= qtdParaBaixar) {
+                  qtdParaBaixar -=
+                      qtdNoLote; // Lote esgotou, não entra na nova lista
+                } else {
+                  loteMap['quantidade'] = qtdNoLote - qtdParaBaixar;
+                  lotesAtualizados.add(loteMap);
+                  qtdParaBaixar = 0;
+                }
+              }
+            }
+
+            if (qtdParaBaixar > 0) {
+              throw Exception(
+                "Estoque insuficiente para ${cartItem.name} nos lotes.",
+              );
+            }
+
+            // Recalcula o estoque total com base no que sobrou
+            final int novoTotalEstoque = lotesAtualizados.fold(
+              0,
+              (sum, item) => sum + (item['quantidade'] as int),
+            );
+
+            // Atualiza o produto no banco sincronizando a quantidade e a lista de lotes
+            transaction.update(productRef, {
+              'quantidade': novoTotalEstoque,
+              'lotes': lotesAtualizados,
+            });
+          }
+        }
+
+        // =================================================================
+        // FASE 3: REGISTRAR O RECIBO DA VENDA
+        // =================================================================
+        final saleDocRef = firestore
             .collection('stores')
             .doc(widget.storeId)
-            .collection('products')
-            .doc(cartItem.productId);
-        batch.update(productRef,
-            {'quantidade': FieldValue.increment(-cartItem.quantity)});
-      }
+            .collection('sales')
+            .doc();
 
-      await batch.commit();
+        transaction.set(saleDocRef, {
+          'totalAmount': cart.totalAmount,
+          'products': cart.items.values.map((item) => item.toMap()).toList(),
+          'createdAt': Timestamp.now(),
+          'storeId': widget.storeId,
+          'notes': widget.notes,
+          'paymentMethod': paymentMethod,
+          'isPaid': true,
+          'customerId': cart.selectedCustomer?.id,
+          'customerName': cart.selectedCustomer?.name,
+        });
+      });
 
+      // 4. Finaliza a venda limpando o carrinho
       cart.clear();
       if (mounted) {
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Venda finalizada e estoque atualizado!'),
-              backgroundColor: Colors.green),
+            content: Text('Venda finalizada e estoque atualizado!'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
+      debugPrint('❌ Erro na transação de venda: $e');
+
       if (mounted) {
+        setState(() => _isLoading = false);
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('ERRO: ${e.toString()}'),
-              backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(
+              e.toString().contains('UNAVAILABLE') ||
+                      e.toString().contains('socket')
+                  ? 'Sem conexão. Verifique sua internet e tente de novo.'
+                  : 'Erro: ${e.toString()}',
+            ),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Tentar Novamente',
+              textColor: Colors.white,
+              onPressed: () => _handleInstantSale(paymentMethod),
+            ),
+          ),
         );
       }
     } finally {
@@ -169,54 +276,59 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) =>
-          AlertDialog(
-            title: const Text('Pagar com PIX'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Aponte a câmera para o QR Code para pagar.'),
-                const SizedBox(height: 20),
-                // Se estiver carregando, mostra spinner; se tiver URL mostra Image.network; se não, fallback para asset
-                if (_pixLoading)
-                  const SizedBox(height: 150,
-                      width: 150,
-                      child: Center(child: CircularProgressIndicator()))
-                else
-                  if (_pixQrCodeUrl != null && _pixQrCodeUrl!.isNotEmpty)
-                  // Exibe a imagem do Firebase Storage com tratamento de erro e fit
-                    Image.network(
-                      _pixQrCodeUrl!,
-                      height: 150,
-                      width: 150,
-                      fit: BoxFit.contain,
-                      // em caso de falha, mostramos o placeholder local
-                      errorBuilder: (context, error, stackTrace) {
-                        debugPrint('Erro ao carregar pixQrCodeUrl: $error');
-                        return Image.asset(
-                            'assets/images/pix_qrcode.png', height: 150,
-                            width: 150);
-                      },
-                    )
-                  else
-                    Image.asset('assets/images/pix_qrcode.png', height: 150,
-                        width: 150),
-              ],
-            ),
-            actions: [
-              TextButton(
-                child: const Text("Cancelar"),
-                onPressed: () => Navigator.of(dialogContext).pop(),
-              ),
-              ElevatedButton(
-                child: const Text("Pagamento Concluído"),
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                  _handleInstantSale('PIX');
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Pagar com PIX'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Aponte a câmera para o QR Code para pagar.'),
+            const SizedBox(height: 20),
+            // Se estiver carregando, mostra spinner; se tiver URL mostra Image.network; se não, fallback para asset
+            if (_pixLoading)
+              const SizedBox(
+                height: 150,
+                width: 150,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_pixQrCodeUrl != null && _pixQrCodeUrl!.isNotEmpty)
+              // Exibe a imagem do Firebase Storage com tratamento de erro e fit
+              Image.network(
+                _pixQrCodeUrl!,
+                height: 150,
+                width: 150,
+                fit: BoxFit.contain,
+                // em caso de falha, mostramos o placeholder local
+                errorBuilder: (context, error, stackTrace) {
+                  debugPrint('Erro ao carregar pixQrCodeUrl: $error');
+                  return Image.asset(
+                    'assets/images/pix_qrcode.png',
+                    height: 150,
+                    width: 150,
+                  );
                 },
+              )
+            else
+              Image.asset(
+                'assets/images/pix_qrcode.png',
+                height: 150,
+                width: 150,
               ),
-            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: const Text("Cancelar"),
+            onPressed: () => Navigator.of(dialogContext).pop(),
           ),
+          ElevatedButton(
+            child: const Text("Pagamento Concluído"),
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _handleInstantSale('PIX');
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -225,12 +337,11 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogCtx) =>
-          ConfirmFiadoDialog(
-            storeId: widget.storeId,
-            customer: customer,
-            notes: widget.notes,
-          ),
+      builder: (dialogCtx) => ConfirmFiadoDialog(
+        storeId: widget.storeId,
+        customer: customer,
+        notes: widget.notes,
+      ),
     );
 
     if (result == true && mounted) {
@@ -250,8 +361,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('stores')
-                  .doc(
-                  widget.storeId)
+                  .doc(widget.storeId)
                   .collection('customers')
                   .orderBy('name')
                   .snapshots(),
@@ -261,7 +371,8 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
                 }
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                   return const Center(
-                      child: Text('Nenhum cliente cadastrado.'));
+                    child: Text('Nenhum cliente cadastrado.'),
+                  );
                 }
                 final customersDocs = snapshot.data!.docs;
                 return ListView.builder(
@@ -269,7 +380,8 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
                   itemCount: customersDocs.length,
                   itemBuilder: (context, index) {
                     final customer = Customer.fromFirestore(
-                        customersDocs[index]);
+                      customersDocs[index],
+                    );
                     return ListTile(
                       title: Text(customer.name),
                       onTap: () {
@@ -312,8 +424,10 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
         child: Wrap(
           runSpacing: 10,
           children: <Widget>[
-            const Text('Escolha a forma de pagamento',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const Text(
+              'Escolha a forma de pagamento',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 10, width: double.infinity),
             ListTile(
               leading: const Icon(Icons.money, size: 30, color: Colors.green),
@@ -322,7 +436,10 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
             ),
             ListTile(
               leading: const Icon(
-                  Icons.credit_card, size: 30, color: Colors.blueAccent),
+                Icons.credit_card,
+                size: 30,
+                color: Colors.blueAccent,
+              ),
               title: const Text('Cartão', style: TextStyle(fontSize: 18)),
               onTap: () => _handleInstantSale('Cartão'),
             ),
@@ -335,9 +452,14 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
               const Divider(),
               ListTile(
                 leading: const Icon(
-                    Icons.person_add_alt_1, size: 30, color: Colors.orange),
+                  Icons.person_add_alt_1,
+                  size: 30,
+                  color: Colors.orange,
+                ),
                 title: const Text(
-                    'Crédito / A Prazo', style: TextStyle(fontSize: 18)),
+                  'Crédito / A Prazo',
+                  style: TextStyle(fontSize: 18),
+                ),
                 onTap: () {
                   final selectedCustomer = cart.selectedCustomer;
 

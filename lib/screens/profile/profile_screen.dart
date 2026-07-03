@@ -1,5 +1,8 @@
 // lib/screens/profile_screen.dart
 
+import 'dart:io';
+
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -59,18 +62,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _saveProfile() async {
-    // Garante que o formulário é válido antes de prosseguir
+  // Adicione a lógica de upload antes de atualizar o Firestore
+  Future<void> _saveProfile({File? imageFile}) async { // Adicione a imagem como parâmetro opcional
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isSaving = true);
 
-    if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Usuário não encontrado.')));
-      setState(() => _isSaving = false);
-      return;
+    String? newUrl;
+
+    // 1. Se o usuário escolheu uma nova imagem, faz o upload
+    if (imageFile != null) {
+      try {
+        final ref = FirebaseStorage.instance.ref('store_logos/${widget.storeId}/logo.jpg');
+        await ref.putFile(imageFile);
+        newUrl = await ref.getDownloadURL();
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro no upload: $e')));
+      }
     }
 
+    // 2. Prepara os dados do Firestore
     final profileData = {
       'fullName': _nameController.text,
       'documentNumber': _documentController.text,
@@ -79,14 +89,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     };
 
     try {
-      // Garante que está salvando na coleção 'users', que é a correta para dados de perfil
+      // Atualiza o perfil no 'users'
       await FirebaseFirestore.instance.collection('users').doc(currentUser!.uid).set(profileData, SetOptions(merge: true));
+
+      // 3. Atualiza o Firestore com os dados da loja (incluindo a nova URL se ela existir)
+      Map<String, dynamic> storeUpdate = {
+        'name': _nameController.text,
+        'phone': _phoneController.text,
+      };
+      if (newUrl != null) {
+        storeUpdate['logoUrl'] = newUrl;
+      }
+
+      await FirebaseFirestore.instance.collection('stores').doc(widget.storeId).update(storeUpdate);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dados salvos com sucesso!'), backgroundColor: Colors.green));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar dados: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

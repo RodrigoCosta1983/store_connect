@@ -1,6 +1,10 @@
 // lib/screens/sales/new_sale_screen.dart
 
+import 'dart:io';
+
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -153,7 +157,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
           padding: EdgeInsets.zero,
           children: [
             DrawerHeader(
-              decoration: const BoxDecoration(color: Colors.blue),
+              decoration: const BoxDecoration(color: Colors.lightBlueAccent),
               child: StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('stores')
@@ -161,61 +165,55 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: Text(
-                        'Carregando...',
-                        style: TextStyle(color: Colors.white, fontSize: 20),
-                      ),
-                    );
+                    return const Center(child: CircularProgressIndicator(color: Colors.white));
                   }
 
-                  if (snapshot.hasError ||
-                      !snapshot.hasData ||
-                      !snapshot.data!.exists) {
-                    return const Center(
-                      child: Text(
-                        'Store Connect',
-                        style: TextStyle(color: Colors.white, fontSize: 24),
-                      ),
-                    );
+                  if (!snapshot.hasData || !snapshot.data!.exists) {
+                    return const Center(child: Text('Store Connect', style: TextStyle(color: Colors.white, fontSize: 24)));
                   }
 
-                  final storeData =
-                  snapshot.data!.data() as Map<String, dynamic>;
+                  final storeData = snapshot.data!.data() as Map<String, dynamic>;
                   final storeName = storeData['name'] ?? 'Minha Loja';
-                  // Puxa a URL da logo do banco de dados (ajuste o nome do campo se necessário)
                   final logoUrl = storeData['logoUrl'] as String?;
 
                   return Center(
-                    // Centraliza o bloco inteiro no DrawerHeader
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center, // Centraliza verticalmente
-                      crossAxisAlignment: CrossAxisAlignment.center, // Centraliza horizontalmente
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // --- LÓGICA DA LOGO VS ÍCONE ---
-                        if (logoUrl != null && logoUrl.isNotEmpty)
-                          CircleAvatar(
-                            radius: 35, // Tamanho do círculo da logo
-                            backgroundImage: NetworkImage(logoUrl),
-                            backgroundColor: Colors.white, // Fundo branco caso a logo seja transparente
-                          )
-                        else
-                          const Icon(Icons.storefront,
-                              color: Colors.white, size: 45),
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            (logoUrl != null && logoUrl.isNotEmpty)
+                                ? CircleAvatar(radius: 35, backgroundImage: NetworkImage(logoUrl), backgroundColor: Colors.white)
+                                : const Icon(Icons.storefront, color: Colors.white, size: 45),
+                            Positioned.fill(
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(35),
+                                  onTap: () async {
+                                    final pickedImage = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
+                                    if (pickedImage == null) return;
 
-                        const SizedBox(height: 12), // Espaço entre a logo e o nome
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Atualizando logo...")));
 
-                        Text(
-                          storeName,
-                          textAlign: TextAlign.center, // Centraliza o texto caso tenha duas linhas
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                                    try {
+                                      final ref = FirebaseStorage.instance.ref('store_logos/${widget.storeId}/logo.jpg');
+                                      await ref.putFile(File(pickedImage.path));
+                                      final newUrl = await ref.getDownloadURL();
+                                      await FirebaseFirestore.instance.collection('stores').doc(widget.storeId).update({'logoUrl': newUrl});
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Logo atualizada!")));
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                        const SizedBox(height: 12),
+                        Text(storeName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                       ],
                     ),
                   );
@@ -671,6 +669,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   // --- NOVO WIDGET: BARRA DE CATEGORIAS ---
   // --- WIDGET ATUALIZADO: BARRA DE CATEGORIAS COM BOTÃO MENU ---
   Widget _buildCategoryFilter() {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('stores')
@@ -696,15 +697,15 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ActionChip(
-                  avatar: const Icon(Icons.grid_view, size: 18, color: Colors.black87),
-                  label: const Text(
+                  avatar: Icon(Icons.grid_view, size: 18, color: isDarkMode ? Colors.white : Colors.black87),
+                  label: Text(
                     'Categorias',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+                    style: TextStyle(fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black87),
                   ),
-                  backgroundColor: Colors.grey.shade200,
+                  backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.grey.shade300),
+                    side: BorderSide(color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
                   ),
                   onPressed: () => _showCategoriesModal(context, categories),
                 ),
@@ -755,6 +756,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
   // --- NOVO MÉTODO: GAVETA (BOTTOM SHEET) DE CATEGORIAS ---
   void _showCategoriesModal(BuildContext context, List<QueryDocumentSnapshot> categories) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true, // Permite que a gaveta ocupe mais espaço na tela
@@ -762,8 +766,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       builder: (BuildContext ctx) {
         return Container(
           height: MediaQuery.of(context).size.height * 0.75, // Ocupa 75% da tela
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(24),
               topRight: Radius.circular(24),
@@ -793,7 +797,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           color: Colors.grey.shade200,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.close, size: 20, color: Colors.black54),
+                        child: Icon(Icons.close, size: 20, color: isDarkMode ? Colors.white70 : Colors.black54),
                       ),
                       onPressed: () => Navigator.of(ctx).pop(),
                     ),
@@ -802,13 +806,13 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               ),
 
               // Título
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Categorias',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black87),
                   ),
                 ),
               ),
@@ -840,9 +844,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100, // Fundo levemente cinza
+                          color: isDarkMode ? Colors.white10 : Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade200), // Borda sutil
+                          border: Border.all(color: isDarkMode ? Colors.white24 : Colors.grey.shade200),
                         ),
                         child: Row(
                           children: [
