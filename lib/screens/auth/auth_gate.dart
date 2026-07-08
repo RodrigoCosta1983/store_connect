@@ -146,11 +146,29 @@ class _AuthGateState extends State<AuthGate> {
                   return SubscriptionScreen(storeId: storeId);
                 }
 
-                // 🚪 Regra de Acesso Corrigida:
-                // Só entra se o status for ativo E (for plano PRO OU o trial for válido)
-                if (status == 'active' && (type == 'pro' || isTrialValid)) {
+                // --- GATILHO AUTOMÁTICO DE EXPIRAÇÃO DO TRIAL ---
+                // Se o plano for grátis E o trial expirou E ainda consta como ativo/trial:
+                if (type != 'pro' && !isTrialValid && (status == 'active' || status == 'trial')) {
+                  // 1. Atualiza o banco de dados de forma invisível para 'inactive'
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    FirebaseFirestore.instance
+                        .collection('stores')
+                        .doc(storeId)
+                        .update({'subscriptionStatus': 'inactive'});
+                  });
+
+                  // 2. Bloqueia a tela imediatamente
+                  return SubscriptionScreen(storeId: storeId);
+                }
+
+                // 🚪 REGRA DE ACESSO VIP (Atualizada):
+                // Acesso liberado para:
+                // 1. Clientes com plano Pro pago ('active' ou 'trial' válido)
+                // 2. Clientes dentro dos 3 dias de tolerância ('overdue')
+                if (status == 'active' || status == 'trial' || status == 'overdue') {
                   return HomeScreen(storeId: storeId);
                 } else {
+                  // Qualquer outro status ('inactive', 'pending', etc) é barrado na porta
                   return SubscriptionScreen(storeId: storeId);
                 }
               },

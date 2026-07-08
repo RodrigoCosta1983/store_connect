@@ -79,7 +79,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
 
     try {
       // ------------------------------------------------------------------
-      // 🚨 A TRAVA DE SEGURANÇA (O GUARDA DA VENDA)
+      // 🚨 A TRAVA DE SEGURANÇA (O GUARDA DA VENDA) ATUALIZADA
       // Fazemos uma verificação direto no servidor, ignorando o cache offline
       // ------------------------------------------------------------------
       final storeDoc = await FirebaseFirestore.instance
@@ -90,9 +90,10 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
       if (!storeDoc.exists) throw Exception("Loja não encontrada.");
 
       final storeData = storeDoc.data() as Map<String, dynamic>;
-      final status = storeData['subscriptionStatus'];
+      final status = storeData['subscriptionStatus'] as String? ?? 'trial';
 
-      if (status != 'active') {
+      // 🚪 Nova Regra: Permite 'active', 'trial' e 'overdue' (período de tolerância)
+      if (status != 'active' && status != 'trial' && status != 'overdue') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -105,7 +106,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
           );
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (ctx) => const AuthGate()),
-            (route) => false,
+                (route) => false,
           );
         }
         return; // ⛔ Interrompe a função AQUI.

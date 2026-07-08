@@ -13,6 +13,8 @@ const admin = require('firebase-admin');
 const axios = require("axios");
 const functions = require("firebase-functions");
 
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+
 admin.initializeApp();
 
 const ASAAS_ENV = process.env.ASAAS_ENV || "sandbox";
@@ -61,9 +63,10 @@ const SUBSCRIPTION_PRICES = {
 
    const userId = request.auth.uid;
    const headers = {
-     "access_token": ASAAS_API_KEY,
-     "Content-Type": "application/json"
-   };
+        "access_token": ASAAS_API_KEY,
+        "Content-Type": "application/json",
+        "User-Agent": "StoreConnectApp/1.0"
+      };
    const db = admin.firestore();
 
    try {
@@ -100,8 +103,8 @@ const SUBSCRIPTION_PRICES = {
      console.log(`📌 Assinatura Existente: ${existingSubscriptionId || "NÃO"}`);
 
      // ✅ PASSO 3: Se há assinatura anterior, verifica status do pagamento
-     if (existingSubscriptionId) {
-       console.log("\n🔍 VERIFICANDO ASSINATURA EXISTENTE");
+     if (existingSubscriptionId && storeData.subscriptionStatus !== "inactive") {
+            console.log("\n🔍 VERIFICANDO ASSINATURA EXISTENTE");
 
        try {
          const payments = await axios.get(
@@ -330,23 +333,14 @@ const SUBSCRIPTION_PRICES = {
           console.log(`🎉 Sucesso! Loja ${storeIdParaAtualizar} ATIVADA.`);
       }
       else if (event === "PAYMENT_OVERDUE") {
-          // 1. Bloqueia o acesso no aplicativo imediatamente
-          await storeRef.update({ subscriptionStatus: "inactive" });
-          console.log(`🚫 Loja ${storeIdParaAtualizar} INATIVADA por atraso no pagamento.`);
+                // 1. Inicia o Período de Tolerância (Grace Period) de 3 dias
+                await storeRef.update({
+                  subscriptionStatus: "overdue",
+                  overdueSince: admin.firestore.FieldValue.serverTimestamp()
+                });
+                console.log(`⚠️ Loja ${storeIdParaAtualizar} entrou em ATRASO (Grace Period iniciado).`);
+            }
 
-          // 2. A Guilhotina: Cancela a assinatura no Asaas
-          if (asaasSubscriptionId) {
-              try {
-                  const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
-                  await axios.delete(`${ASAAS_URL}/subscriptions/${asaasSubscriptionId}`, {
-                      headers: { "access_token": ASAAS_API_KEY }
-                  });
-                  console.log(`✂️ Bola de neve evitada! Assinatura ${asaasSubscriptionId} CANCELADA no Asaas.`);
-              } catch (cancelError) {
-                  console.error(`⚠️ Erro ao tentar cancelar assinatura no Asaas:`, cancelError.response?.data || cancelError.message);
-              }
-          }
-      }
       else if (event === "SUBSCRIPTION_DELETED" || event === "PAYMENT_DELETED") {
           await storeRef.update({ subscriptionStatus: "inactive" });
           console.log(`🚫 Loja ${storeIdParaAtualizar} INATIVADA (Assinatura ou pagamento deletado no painel).`);
@@ -363,6 +357,79 @@ const SUBSCRIPTION_PRICES = {
     }
   });
 
+
+  /**
+   * ⏰ CRON JOB: Verificador de Inadimplência
+   * Roda todos os dias às 02:00 AM.
+   * Bloqueia lojas com mais de 3 dias de atraso e cancela a assinatura no Asaas.
+   */
+  exports.checkOverdueSubscriptions = onSchedule(
+    {
+      schedule: "0 2 * * *", // Todo dia às 02:00 AM
+      timeZone: "America/Sao_Paulo",
+      timeoutSeconds: 120
+    },
+    async (event) => {
+      console.log("⏰ Iniciando varredura de assinaturas em atraso...");
+
+      const db = admin.firestore();
+
+      // Calcula a data exata de 3 dias atrás
+      const limitDate = new Date();
+      limitDate.setDate(limitDate.getDate() - 3);
+
+      try {
+        // Busca lojas que estão no período de tolerância e já passaram dos 3 dias
+        const snapshot = await db.collection("stores")
+          .where("subscriptionStatus", "==", "overdue")
+          .where("overdueSince", "<=", limitDate)
+          .get();
+
+        if (snapshot.empty) {
+          console.log("✅ Nenhuma loja com atraso superior a 3 dias encontrada hoje.");
+          return;
+        }
+
+        const batch = db.batch();
+        const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
+
+        // Percorre todas as lojas inadimplentes
+        for (const doc of snapshot.docs) {
+          const storeData = doc.data();
+          const asaasSubscriptionId = storeData.asaasSubscriptionId;
+          const storeId = doc.id;
+
+          // 1. Aplica o bloqueio no banco de dados
+          batch.update(doc.ref, {
+            subscriptionStatus: "inactive"
+          });
+
+          // 2. A Guilhotina: Cancela a assinatura no Asaas para evitar a bola de neve
+          if (asaasSubscriptionId) {
+            try {
+              await axios.delete(`${ASAAS_URL}/subscriptions/${asaasSubscriptionId}`, {
+                              headers: {
+                                "access_token": ASAAS_API_KEY,
+                                "User-Agent": "StoreConnectApp/1.0"
+                              }
+                            });
+              console.log(`✂️ Guilhotina aplicada: Assinatura ${asaasSubscriptionId} da loja ${storeId} CANCELADA.`);
+            } catch (error) {
+              console.error(`⚠️ Erro ao cancelar assinatura no Asaas (Loja ${storeId}):`, error.response?.data || error.message);
+            }
+          }
+        }
+
+        // Executa a atualização de todas as lojas no banco de uma vez só (alta performance)
+        await batch.commit();
+        console.log(`🔒 Processamento concluído. ${snapshot.size} lojas foram bloqueadas.`);
+
+      } catch (error) {
+        console.error("❌ Erro durante a execução do Cron Job:", error);
+      }
+    }
+  );
+
 /**
  * 🗑️ LIMPEZA: Quando um produto é deletado
  */
@@ -373,6 +440,7 @@ exports.onProductDelete = onDocumentDeleted("stores/{storeId}/products/{productI
 
 
 /**
+ * --- PORTAL DO CLIENTE (ASAAS) ---
  * --- FUNÇÃO PARA PEGAR O LINK DO PORTAL DO CLIENTE (ASAAS) ---
  */
 exports.getAsaasPortalUrl = onCall(async (request) => {
@@ -414,6 +482,7 @@ exports.getAsaasPortalUrl = onCall(async (request) => {
     const response = await axios.get(`${ASAAS_URL}/payments`, {
       headers: {
         "access_token": ASAAS_API_KEY,
+        "User-Agent": "StoreConnectApp/1.0"
       },
       params: {
         customer: asaasCustomerId,

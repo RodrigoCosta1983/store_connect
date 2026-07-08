@@ -6,6 +6,7 @@ import 'package:store_connect/widgets/payment_options_sheet.dart';
 import '../../models/customer_model.dart'; // Importa o modelo
 import '../../providers/cart_provider.dart';
 import '../../widgets/cart_item_widget.dart';
+import '../../widgets/warning_banner.dart';
 import '../management/manage_customers_screen.dart'; // Importa a tela de clientes
 
 class CartScreen extends StatefulWidget {
@@ -57,6 +58,7 @@ class _CartScreenState extends State<CartScreen> {
       ),
       body: Column(
         children: <Widget>[
+          WarningBanner(storeId: widget.storeId),
           // ... (O Card do Total e Botão Finalizar Venda permanece quase igual) ...
           Card(
             margin: const EdgeInsets.all(15),

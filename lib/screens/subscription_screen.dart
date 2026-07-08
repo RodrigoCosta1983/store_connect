@@ -217,7 +217,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      "Seu período de teste expirou ou você deseja fazer o upgrade. Tenha acesso ilimitado a todas as ferramentas da Store Connect.",
+                      "Seu acesso está temporariamente suspenso. Assine o Plano Pro ou regularize sua fatura pendente para restaurar o acesso ilimitado à sua loja. ",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.grey[600],
