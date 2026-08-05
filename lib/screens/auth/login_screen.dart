@@ -349,11 +349,19 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildMobileLayout() {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-        child: _buildLoginForm(),
-      ),
+    return CustomScrollView(
+      slivers: [
+        SliverFillRemaining(
+          hasScrollBody: false, // O segredo: só rola se o conteúdo não couber na tela!
+          child: SafeArea(
+            // O SafeArea aqui no topo blinda a tela inteira contra as barras da Xiaomi
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: _buildLoginForm(), // Seu formulário intacto e centralizado
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -529,25 +537,32 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('Ainda não tem uma conta?'),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (ctx) => const RegisterScreen()),
-                  );
-                },
-                child: Text(
-                  'Cadastre-se',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: isDarkMode ? Colors.white : Colors.deepPurple,
+          SafeArea(
+            top: false, // Não interfere na parte superior
+            bottom: true, // Calcula e injeta o tamanho da barra de gestos/botões nativa
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12.0), // Respiro extra para conforto visual
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Ainda não tem uma conta?'),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (ctx) => const RegisterScreen()),
+                      );
+                    },
+                    child: Text(
+                      'Cadastre-se',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDarkMode ? Colors.white : Colors.deepPurple,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ],
       ),

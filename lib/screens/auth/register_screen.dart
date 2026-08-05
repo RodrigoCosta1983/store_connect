@@ -28,7 +28,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
-  String _enteredDocument = '';
 
   @override
   void dispose() {
@@ -47,16 +46,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // --- O GUARDIÃO DE CPF ---
-  Future<bool> _documentAlreadyExists(String docNumber) async {
-    final cleanDoc = docNumber.replaceAll(RegExp(r'[^0-9]'), '');
-    final docSnap = await FirebaseFirestore.instance
-        .collection('cpfs_cadastrados')
-        .doc(cleanDoc)
-        .get();
-    return docSnap.exists;
-  }
-
   // --- CADASTRO COM E-MAIL E SENHA ---
   Future<void> _submitSignup() async {
     if (!_formKey.currentState!.validate()) return;
@@ -70,25 +59,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Verifica CPF
-      final docExists = await _documentAlreadyExists(_enteredDocument);
-      if (docExists) {
-        throw FirebaseAuthException(
-            code: 'document-already-in-use',
-            message: 'Este CPF/CNPJ já possui cadastro. Faça login para reativar.'
-        );
-      }
-
-      // 2. Cria Usuário no Auth
+      // 1. Cria Usuário no Auth
       final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
       final generatedName = _emailController.text.split('@')[0];
-      final cleanDoc = _enteredDocument.replaceAll(RegExp(r'[^0-9]'), '');
 
-      // 3. Salva no Firestore
+      // 2. Salva no Firestore apenas dados iniciais (Sem CPF)
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
@@ -96,21 +75,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'username': generatedName,
         'email': _emailController.text.trim(),
         'storeId': '',
-        'documentNumber': cleanDoc,
         'createdAt': FieldValue.serverTimestamp(),
         'subscriptionStatus': 'trial',
       });
 
-      // 4. Blinda o CPF
-      await FirebaseFirestore.instance
-          .collection('cpfs_cadastrados')
-          .doc(cleanDoc)
-          .set({
-        'uid': userCredential.user!.uid,
-        'cadastradoEm': FieldValue.serverTimestamp(),
-      });
-
-      // 5. ENVIA O E-MAIL E BLOQUEIA A TELA!
+      // 3. ENVIA O E-MAIL E BLOQUEIA A TELA!
       await userCredential.user!.sendEmailVerification();
 
       if (mounted) {
@@ -124,7 +93,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (e.code == 'weak-password') message = 'A senha fornecida é muito fraca.';
       else if (e.code == 'email-already-in-use') message = 'Este e-mail já está em uso. Faça Login.';
       else if (e.code == 'invalid-email') message = 'Formato de e-mail inválido.';
-      else if (e.code == 'document-already-in-use') message = e.message!;
       _showError(message);
     } catch (e) {
       _showError('Erro inesperado: $e');
@@ -202,25 +170,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           const SizedBox(height: 24),
 
-          // CAMPO CPF/CNPJ
-          TextFormField(
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: 'CPF ou CNPJ',
-              prefixIcon: const Icon(Icons.badge_outlined),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            validator: (value) {
-              if (value == null || value.isEmpty) return 'Campo obrigatório.';
-              final clean = value.replaceAll(RegExp(r'[^0-9]'), '');
-              if (clean.length < 11) return 'Documento inválido.';
-              return null;
-            },
-            onSaved: (value) => _enteredDocument = value!,
-          ),
-          const SizedBox(height: 16),
-
-          // CAMPO E-MAIL
+          // CAMPO E-MAIL (Primeiro campo agora)
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,

@@ -42,8 +42,8 @@ android {
     defaultConfig {
         applicationId = "com.storeeconnect.app"
         minSdk = 23
-        targetSdk = 35
-        versionCode = 32
+        targetSdk = 36
+        versionCode = 35
         versionName = "1.0.3"
         multiDexEnabled = true
     }

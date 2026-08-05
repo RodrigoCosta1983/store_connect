@@ -66,7 +66,8 @@ class _ConfirmFiadoDialogState extends State<ConfirmFiadoDialog> {
       final storeData = storeDoc.data() as Map<String, dynamic>;
       final status = storeData['subscriptionStatus'];
 
-      if (status != 'active') {
+      // 👇 NOVA REGRA: Permite active, trial e overdue. Bloqueia o resto (inactive, pending).
+      if (status != 'active' && status != 'trial' && status != 'overdue') {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -81,8 +82,11 @@ class _ConfirmFiadoDialogState extends State<ConfirmFiadoDialog> {
                 (route) => false,
           );
         }
-        return; // ⛔ Interrompe a função AQUI. O fiado NÃO vai para o banco!
+        return; // ⛔ Interrompe a função AQUI.
       }
+
+
+
       // ------------------------------------------------------------------
       // SE PASSOU DO BLOCO ACIMA, A ASSINATURA ESTÁ PAGA. PODE SALVAR!
       // ------------------------------------------------------------------
@@ -101,7 +105,7 @@ class _ConfirmFiadoDialogState extends State<ConfirmFiadoDialog> {
         'createdAt': Timestamp.now(),
         'storeId': widget.storeId,
         'notes': widget.notes,
-        'paymentMethod': 'Fiado',
+        'paymentMethod': 'A prazo',
         'isPaid': false,
         'dueDate': Timestamp.fromDate(_selectedDate!),
         'customerId': widget.customer.id,
@@ -121,7 +125,7 @@ class _ConfirmFiadoDialogState extends State<ConfirmFiadoDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Venda a crédito concluída! Estoque atualizado.'),
+            content: Text('Venda a prazo concluída! Estoque atualizado.'),
             backgroundColor: Colors.green,
           ),
         );
@@ -146,7 +150,7 @@ class _ConfirmFiadoDialogState extends State<ConfirmFiadoDialog> {
     final cart = Provider.of<CartProvider>(context, listen: false);
 
     return AlertDialog(
-      title: const Text('Confirmar Venda a Crédito'),
+      title: const Text('Confirmar Venda a Prazo'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

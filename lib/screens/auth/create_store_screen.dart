@@ -19,9 +19,12 @@ class CreateStoreScreen extends StatefulWidget {
 class _CreateStoreScreenState extends State<CreateStoreScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controladores (Repare que o CPF sumiu daqui)
+  // Controladores
   final _storeNameController = TextEditingController();
   final _phoneController = TextEditingController();
+
+  // Variável para armazenar o CPF
+  String _enteredDocument = '';
 
   bool _isLoading = false;
 
@@ -32,7 +35,6 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
     super.dispose();
   }
 
-  // Função para exibir erros na tela
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -40,14 +42,23 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
     );
   }
 
+  // --- O GUARDIÃO DE CPF (Transferido para cá!) ---
+  Future<bool> _documentAlreadyExists(String docNumber) async {
+    final cleanDoc = docNumber.replaceAll(RegExp(r'[^0-9]'), '');
+    final docSnap = await FirebaseFirestore.instance
+        .collection('cpfs_cadastrados')
+        .doc(cleanDoc)
+        .get();
+    return docSnap.exists;
+  }
+
   // --- FUNÇÃO PRINCIPAL: SALVAR A LOJA ---
   Future<void> _submitCreateStore() async {
-    // 1. Valida se os campos não estão vazios
     if (!_formKey.currentState!.validate()) return;
+    _formKey.currentState!.save(); // Salva o valor do CPF na variável
 
     setState(() => _isLoading = true);
 
-    // 2. Verifica se o utilizador está realmente logado
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (ctx) => const AuthGate()));
@@ -55,46 +66,55 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
     }
 
     try {
-      final firestore = FirebaseFirestore.instance;
+      final cleanDoc = _enteredDocument.replaceAll(RegExp(r'[^0-9]'), '');
 
-      // 3. Prepara as datas (7 dias de teste grátis a partir de AGORA)
+      // 1. Verifica se o CPF já usou os dias de teste em outra loja
+      final docExists = await _documentAlreadyExists(cleanDoc);
+      if (docExists) {
+        _showError('Este CPF/CNPJ já possui uma loja cadastrada no sistema.');
+        setState(() => _isLoading = false);
+        return; // Barra a criação da loja!
+      }
+
+      final firestore = FirebaseFirestore.instance;
       final now = DateTime.now();
       final trialEnd = now.add(const Duration(days: 7));
 
-      // 4. Inicia a gravação em Lote (Batch) para garantir consistência
-      // O Batch garante que ou ele salva a loja E o utilizador juntos, ou não salva nenhum.
       final batch = firestore.batch();
 
-      // Cria uma referência vazia para a nova loja para podermos pegar o ID gerado
       final storeRef = firestore.collection('stores').doc();
       final userRef = firestore.collection('users').doc(user.uid);
+      final cpfRef = firestore.collection('cpfs_cadastrados').doc(cleanDoc);
 
-      // -> PASSO A: Gravar os dados da Loja
+      // -> PASSO A: Gravar os dados da Loja (Já com o CPF para o Asaas)
       batch.set(storeRef, {
         'name': _storeNameController.text.trim(),
         'phone': UtilBrasilFields.removeCaracteres(_phoneController.text),
+        'document': cleanDoc,
         'ownerId': user.uid,
         'createdAt': FieldValue.serverTimestamp(),
         'subscriptionStatus': 'active', // Liberado para os 7 dias grátis
-        'trialEndDate': trialEnd.toIso8601String(), // Data limite
+        'trialEndDate': trialEnd.toIso8601String(),
       });
 
       // -> PASSO B: Atualizar o Utilizador
-      // Ligamos o utilizador à loja recém-criada e guardamos o WhatsApp de contacto
       batch.set(userRef, {
         'storeId': storeRef.id,
         'phone': UtilBrasilFields.removeCaracteres(_phoneController.text),
       }, SetOptions(merge: true));
 
-      // 5. Executa todas as gravações ao mesmo tempo
+      // -> PASSO C: Trancar o CPF na lista de controle
+      batch.set(cpfRef, {
+        'storeId': storeRef.id,
+        'uid': user.uid,
+        'cadastradoEm': FieldValue.serverTimestamp(),
+      });
+
+      // Executa tudo de uma vez!
       await batch.commit();
 
       if (mounted) {
-        // 6. Atualiza o provider global para o resto da aplicação saber em que loja estamos
         Provider.of<SalesProvider>(context, listen: false).updateStoreId(storeRef.id);
-
-        // 7. Manda pro AuthGate! Como o 'subscriptionStatus' é 'active' e ele tem um 'storeId',
-        // o AuthGate vai empurrá-lo direto para o Dashboard.
         Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (ctx) => const AuthGate()),
                 (route) => false
@@ -112,12 +132,11 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Configurar Loja'),
-        automaticallyImplyLeading: false, // Remove a setinha de voltar
+        automaticallyImplyLeading: false,
         actions: [
-          // Botão caso o cliente queira desistir e entrar com outra conta
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Sair e voltar para o Login',
+            tooltip: 'Sair',
             onPressed: () {
               FirebaseAuth.instance.signOut();
               Navigator.of(context).pushAndRemoveUntil(
@@ -147,7 +166,7 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Preencha para liberar seus 7 dias de acesso grátis.',
+                    'Precisamos de alguns dados para configurar sua loja e liberar seus 7 dias de acesso grátis.',
                     style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     textAlign: TextAlign.center,
                   ),
@@ -166,6 +185,25 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
                   ),
                   const SizedBox(height: 16),
 
+                  // --- CAMPO: CPF/CNPJ (Novo local!) ---
+                  TextFormField(
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'CPF ou CNPJ do Proprietário',
+                      prefixIcon: const Icon(Icons.badge_outlined),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    textInputAction: TextInputAction.next,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Campo obrigatório.';
+                      final clean = value.replaceAll(RegExp(r'[^0-9]'), '');
+                      if (clean.length < 11) return 'Documento inválido.';
+                      return null;
+                    },
+                    onSaved: (value) => _enteredDocument = value!,
+                  ),
+                  const SizedBox(height: 16),
+
                   // --- CAMPO: WhatsApp ---
                   TextFormField(
                     controller: _phoneController,
@@ -177,7 +215,7 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
                     keyboardType: TextInputType.phone,
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      TelefoneInputFormatter(), // Formata automaticamente para (XX) XXXXX-XXXX
+                      TelefoneInputFormatter(),
                     ],
                     textInputAction: TextInputAction.done,
                     validator: (value) => (value == null || value.isEmpty) ? 'O WhatsApp é obrigatório.' : null,

@@ -52,25 +52,28 @@ class MonthlySalesChart extends StatelessWidget {
                   case 4: text = 'S5'; break;
                   default: text = ''; break;
                 }
-                return SideTitleWidget(axisSide: meta.axisSide, child: Text(text, style: style));
+                return SideTitleWidget(meta: meta, child: Text(text, style: style));
               },
               reservedSize: 38,
             ),
           ),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 40,
-              getTitlesWidget: (value, meta) {
-                if (value == 0) return const SizedBox.shrink();
-                return Text(
-                  NumberFormat.compact().format(value),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                  textAlign: TextAlign.left,
-                );
-              },
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 40,
+                getTitlesWidget: (value, meta) {
+                  if (value == 0) return const SizedBox.shrink();
+                  return SideTitleWidget(
+                    meta: meta,
+                    child: Text(
+                      NumberFormat.compact().format(value),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      textAlign: TextAlign.left,
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),

@@ -47,7 +47,7 @@ class SalesChart extends StatelessWidget {
                   case 6: text = 'Sáb'; break;
                   default: text = ''; break;
                 }
-                return SideTitleWidget(axisSide: meta.axisSide, child: Text(text, style: style));
+                return SideTitleWidget(meta: meta, child: Text(text, style: style));
               },
               reservedSize: 38,
             ),
@@ -58,10 +58,13 @@ class SalesChart extends StatelessWidget {
               reservedSize: 40,
               getTitlesWidget: (value, meta) {
                 if (value == 0) return const SizedBox.shrink();
-                return Text(
-                  NumberFormat.compact().format(value),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                  textAlign: TextAlign.left,
+                return SideTitleWidget(
+                  meta: meta,
+                  child: Text(
+                    NumberFormat.compact().format(value),
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    textAlign: TextAlign.left,
+                  ),
                 );
               },
             ),

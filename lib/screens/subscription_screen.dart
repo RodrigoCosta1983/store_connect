@@ -86,6 +86,68 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  /// Modal rápido para capturar o CPF/CNPJ caso não esteja salvo na loja
+  Future<String?> _askForDocumentModal(BuildContext context) async {
+    final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Informação Necessária", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Para emitir sua fatura no Asaas e ativar seu plano, precisamos do seu CPF ou CNPJ:",
+                style: TextStyle(fontSize: 14, color: Colors.black87),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: "CPF ou CNPJ (apenas números)",
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.badge_outlined),
+                ),
+                validator: (val) {
+                  if (val == null || val.isEmpty) return "Campo obrigatório.";
+                  if (val.length != 11 && val.length != 14) return "Digite 11 (CPF) ou 14 (CNPJ) números.";
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.of(ctx).pop(controller.text.trim());
+              }
+            },
+            child: const Text("Confirmar"),
+          ),
+        ],
+      ),
+    );
+  }
+
+
   /// Inicia o processo de assinatura buscando os dados já salvos no Firestore
   Future<void> _startSubscriptionProcess() async {
     setState(() => _isLoading = true);
@@ -103,20 +165,33 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       if (!storeDoc.exists) throw Exception("Loja não encontrada");
 
       final storeData = storeDoc.data()!;
-      final document = storeData['document'] ?? '';
+      String document = storeData['document'] ?? ''; // 👇 Mudamos de final para String
       final name = storeData['name'] ?? '';
       final phone = storeData['phone'] ?? '';
 
+      // 🚀 REDE DE SEGURANÇA: Se o CPF não estiver no banco, pede na hora!
       if (document.isEmpty) {
-        throw Exception("CPF/CNPJ não encontrado no cadastro. Contate o suporte.");
+        setState(() => _isLoading = false); // Pausa o loading para abrir o modal
+
+        final inputDoc = await _askForDocumentModal(context);
+        if (inputDoc == null || inputDoc.isEmpty) return; // Se o usuário cancelar, interrompe o fluxo
+
+        document = inputDoc;
+        setState(() => _isLoading = true); // Retoma o loading
+
+        // Salva o documento no banco da loja para nunca mais precisar pedir
+        await FirebaseFirestore.instance
+            .collection('stores')
+            .doc(widget.storeId)
+            .update({'document': document});
       }
 
-      // 2. Chama a Cloud Function do Asaas enviando os dados recuperados do banco
+      // 2. Chama a Cloud Function do Asaas enviando os dados garantidos
       final response = await FirebaseFunctions.instance
           .httpsCallable('createAsaasSubscription',
           options: HttpsCallableOptions(timeout: const Duration(seconds: 120)))
           .call({
-        "cpfCnpj": document, // Já está limpo no banco
+        "cpfCnpj": document, // Agora sempre terá um valor válido!
         "name": name,
         "email": user.email,
         "phone": phone
