@@ -78,12 +78,11 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 ### 💰 Monetização (SaaS) e Pagamentos
 - **Integração com Asaas:** Sistema completo de cobrança e gestão de assinaturas recorrentes integrado à API do Asaas.
 
-- **Webhooks via Cloud Functions:** Lógica de backend no Firebase para receber webhooks do Asaas, validando pagamentos de forma assíncrona e atualizando o status da assinatura da loja no Firestore em tempo real.
+- **Portal Financeiro Nativo:** Tela integrada ao aplicativo para o lojista consultar o histórico de faturas, visualizar o status financeiro (Pago, Atrasado, A Vencer) e abrir boletos diretamente no app, garantindo uma UX premium e retenção de usuários.
 
-- **Integração com Google Play Billing:** Sistema complementar para gestão de assinaturas via lojas de aplicativos.
+- **Webhooks com Auto-Cura (Self-Healing):** Lógica avançada de backend (Cloud Functions) que recebe webhooks do Asaas, valida pagamentos de forma assíncrona, sincroniza datas de vencimento diretamente com a API e corrige inconsistências no banco de dados automaticamente.
 
-- **Validação de Acesso (AuthGate):** O sistema verifica o status da assinatura e libera ou bloqueia o acesso ao app instantaneamente, garantindo a segurança do modelo SaaS.
-
+- **Validação de Acesso (AuthGate):** O sistema verifica o status da assinatura em tempo real e libera ou bloqueia o acesso ao app instantaneamente, garantindo a segurança do modelo SaaS.
 ## 📸 Telas do Aplicativo
 
 *(Instrução: Para adicionar suas imagens aqui, faça o upload delas para a pasta do seu projeto no GitHub e substitua as `URL_DA_SUA_IMAGEM_AQUI` pelo link da imagem)*
@@ -241,6 +240,11 @@ The application was built on a solid foundation, focusing on essential features 
 ### 💰 Monetization (SaaS) and Payments
 - **Asaas Integration:** Complete billing and recurring subscription management system integrated with the Asaas API.
 
+- **Native Financial Portal:** An integrated in-app screen for store owners to consult their invoice history, view financial status (Paid, Overdue, Pending), and open bills directly within the app, ensuring a premium UX and high user retention.
+
+- **Self-Healing Webhooks (Cloud Functions):** Advanced backend logic in Firebase to receive Asaas webhooks, asynchronously validating payments, syncing due dates directly with the API, and automatically correcting database inconsistencies.
+
+- **Access Validation (AuthGate):** The system instantly verifies subscription status in real-time to grant or block app access, ensuring the security of the SaaS model.
 ## 🔮 Next Steps (Roadmap)
 
 With the SaaS architecture and payment gateway (Asaas) already established, the next objectives focus on platform expansion:
