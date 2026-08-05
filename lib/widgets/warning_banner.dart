@@ -6,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../screens/finance/invoices_screen.dart';
+
 class WarningBanner extends StatefulWidget {
   final String storeId;
 
@@ -125,13 +127,19 @@ class _WarningBannerState extends State<WarningBanner> {
               )
             else
               TextButton(
-                onPressed: _callFinanceFunction,
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) => InvoicesScreen(storeId: widget.storeId),
+                    ),
+                  );
+                },
                 style: TextButton.styleFrom(
-                  backgroundColor: diasRestantes == 0 ? Colors.red.shade800 : Colors.amber.shade900,
+                  backgroundColor: diasRestantes == 0 ? Colors.red.shade800 : Colors.blue.shade800,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text("PAGAR", style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text("VER FATURA", style: TextStyle(fontWeight: FontWeight.bold)),
               )
           ],
         ),
@@ -180,13 +188,20 @@ class _WarningBannerState extends State<WarningBanner> {
                   )
                 else
                   TextButton(
-                    onPressed: _callFinanceFunction,
+                    onPressed: () {
+                      // ✅ Agora ele navega para a nova tela nativa do aplicativo
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (ctx) => InvoicesScreen(storeId: widget.storeId),
+                        ),
+                      );
+                    },
                     style: TextButton.styleFrom(
-                      backgroundColor: diasRestantesTrial == 0 ? Colors.red.shade800 : Colors.orange.shade800,
+                      //backgroundColor: diasRestantes == 0 ? Colors.red.shade800 : Colors.blue.shade800,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: const Text("ASSINAR", style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text("VER FATURA", style: TextStyle(fontWeight: FontWeight.bold)),
                   )
               ],
             ),
@@ -194,6 +209,87 @@ class _WarningBannerState extends State<WarningBanner> {
         }
       } catch (e) {
         debugPrint("Erro no cálculo do banner: $e");
+      }
+    }
+
+    // 🔵 3. LÓGICA PARA FATURA A VENCER (PLANO PRO)
+    if (status == 'active' && type == 'pro') {
+      // ATENÇÃO: Substitua 'nextDueDate' pelo nome exato do campo onde você salva o vencimento no Firestore
+      final nextDueDateStr = storeData['nextDueDate'] as String?;
+
+      if (nextDueDateStr != null) {
+        try {
+          DateTime dataVencimento = DateTime.parse(nextDueDateStr);
+          DateTime hoje = DateTime.now();
+
+          // Zera as horas para calcular dias exatos
+          DateTime dataVencFormatada = DateTime(dataVencimento.year, dataVencimento.month, dataVencimento.day);
+          DateTime hojeFormatada = DateTime(hoje.year, hoje.month, hoje.day);
+
+          int diasRestantes = dataVencFormatada.difference(hojeFormatada).inDays;
+
+          // 🕵️ O SEU DEBUG AQUI!
+          debugPrint('=== 🕵️ DEBUG DO BANNER ASAAS ===');
+          debugPrint('Status: $status | Tipo: $type');
+          debugPrint('Data atual: $hojeFormatada');
+          debugPrint('Data Vencimento (Firebase): $dataVencFormatada');
+          debugPrint('Dias restantes: $diasRestantes');
+          debugPrint('==================================');
+
+          // Se faltam 3 dias ou menos (e ainda não venceu)
+          if (diasRestantes <= 3 && diasRestantes >= 0) {
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              color: diasRestantes == 0 ? Colors.red.shade100 : Colors.blue.shade100,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    color: diasRestantes == 0 ? Colors.red.shade800 : Colors.blue.shade800,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      diasRestantes == 0
+                          ? "Sua fatura vence HOJE! Efetue o pagamento para evitar o bloqueio."
+                          : "Sua próxima fatura vence em $diasRestantes dia(s).",
+                      style: TextStyle(
+                        color: diasRestantes == 0 ? Colors.red.shade900 : Colors.blue.shade900,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  if (_isLoadingPayment)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.0),
+                      child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  else
+                    TextButton(
+                      onPressed: () {
+                        // ✅ Agora ele navega para a nova tela nativa do aplicativo
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (ctx) => InvoicesScreen(storeId: widget.storeId),
+                          ),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        backgroundColor: diasRestantes == 0 ? Colors.red.shade800 : Colors.blue.shade800,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text("VER FATURA", style: TextStyle(fontWeight: FontWeight.bold)),
+                    )
+                ],
+              ),
+            );
+          }
+        } catch (e) {
+          debugPrint("Erro no cálculo do banner Pro: $e");
+        }
       }
     }
 

@@ -263,99 +263,140 @@ const SUBSCRIPTION_PRICES = {
  * - SUBSCRIPTION_DELETED → desativa assinatura
  */
 
- /**
-   * 🔔 WEBHOOK DO ASAAS
-   */
-  exports.asaasWebhook = onRequest(async (req, res) => {
-    console.log("\n\n╔════════════════════════════════════════════════════════════╗");
-    console.log("║  🔔 WEBHOOK ASAAS RECEBIDO                                ║");
-    console.log("╚════════════════════════════════════════════════════════════╝");
+   /**
+      * 🔔 WEBHOOK DO ASAAS
+      */
+     exports.asaasWebhook = onRequest(async (req, res) => {
+       console.log("\n\n╔════════════════════════════════════════════════════════════╗");
+       console.log("║  🔔 WEBHOOK ASAAS RECEBIDO                                ║");
+       console.log("╚════════════════════════════════════════════════════════════╝");
 
-    if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
+       if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
 
-    try {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+       try {
+         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
 
-      const event = body.event;
-      const payment = body.payment || {};
+         const event = body.event;
+         const payment = body.payment || {};
 
-      const asaasSubscriptionId = payment.subscription;
-      let targetId = payment.externalReference;
+         const asaasSubscriptionId = payment.subscription;
+         let targetId = payment.externalReference;
 
-      console.log(`📌 Evento: ${event}`);
-      console.log(`📌 ID Assinatura: ${asaasSubscriptionId}`);
-      console.log(`📌 External Reference: ${targetId}`);
+         console.log(`📌 Evento: ${event}`);
+         console.log(`📌 ID Assinatura: ${asaasSubscriptionId}`);
+         console.log(`📌 External Reference: ${targetId}`);
 
-      const db = admin.firestore();
-      let storeIdParaAtualizar = null;
+         const db = admin.firestore();
+         let storeIdParaAtualizar = null;
 
-      // 🔍 1ª Tentativa: Busca pelo ID da assinatura
-      if (asaasSubscriptionId) {
-          const snapshot = await db.collection("stores").where("asaasSubscriptionId", "==", asaasSubscriptionId).get();
-          if (!snapshot.empty) {
-              storeIdParaAtualizar = snapshot.docs[0].id;
-              console.log(`✅ Loja encontrada pela Assinatura: ${storeIdParaAtualizar}`);
-          }
-      }
+         // 🔍 1ª Tentativa: Busca pelo ID da assinatura
+         if (asaasSubscriptionId) {
+             const snapshot = await db.collection("stores").where("asaasSubscriptionId", "==", asaasSubscriptionId).get();
+             if (!snapshot.empty) {
+                 storeIdParaAtualizar = snapshot.docs[0].id;
+                 console.log(`✅ Loja encontrada pela Assinatura: ${storeIdParaAtualizar}`);
+             }
+         }
 
-      // 🔍 2ª Tentativa: Busca pela referência externa
-      if (!storeIdParaAtualizar && targetId) {
-          const userDoc = await db.collection("users").doc(targetId).get();
-          if (userDoc.exists && userDoc.data().storeId) {
-              storeIdParaAtualizar = userDoc.data().storeId;
-              console.log(`✅ Convertido de UID para StoreID: ${storeIdParaAtualizar}`);
-          } else {
-              storeIdParaAtualizar = targetId;
-              console.log(`✅ Usando targetId direto como StoreID: ${storeIdParaAtualizar}`);
-          }
-      }
+         // 🔍 2ª Tentativa: Busca pela referência externa
+         if (!storeIdParaAtualizar && targetId) {
+             const userDoc = await db.collection("users").doc(targetId).get();
+             if (userDoc.exists && userDoc.data().storeId) {
+                 storeIdParaAtualizar = userDoc.data().storeId;
+                 console.log(`✅ Convertido de UID para StoreID: ${storeIdParaAtualizar}`);
+             } else {
+                 storeIdParaAtualizar = targetId;
+                 console.log(`✅ Usando targetId direto como StoreID: ${storeIdParaAtualizar}`);
+             }
+         }
 
-      if (!storeIdParaAtualizar) {
-          console.log(`⚠️ Nenhuma loja encontrada! Ignorando.`);
-          return res.json({ received: true, status: "ignored_no_store" });
-      }
+         if (!storeIdParaAtualizar) {
+             console.log(`⚠️ Nenhuma loja encontrada! Ignorando.`);
+             return res.json({ received: true, status: "ignored_no_store" });
+         }
 
-      const storeRef = db.collection("stores").doc(storeIdParaAtualizar);
-      const storeSnap = await storeRef.get();
+         const storeRef = db.collection("stores").doc(storeIdParaAtualizar);
+         const storeSnap = await storeRef.get();
 
-      if (!storeSnap.exists) {
-          console.log(`⚠️ O documento da loja ${storeIdParaAtualizar} não existe no Firestore.`);
-          return res.json({ received: true, status: "ignored_not_found" });
-      }
+         if (!storeSnap.exists) {
+             console.log(`⚠️ O documento da loja ${storeIdParaAtualizar} não existe no Firestore.`);
+             return res.json({ received: true, status: "ignored_not_found" });
+         }
 
-      // 🔄 ATUALIZA O STATUS E APLICA A GUILHOTINA
-      if (event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED") {
-          await storeRef.update({
-              subscriptionStatus: "active",
-              lastPaymentDate: admin.firestore.FieldValue.serverTimestamp(),
-              subscriptionType: "pro"
-          });
-          console.log(`🎉 Sucesso! Loja ${storeIdParaAtualizar} ATIVADA.`);
-      }
-      else if (event === "PAYMENT_OVERDUE") {
-                // 1. Inicia o Período de Tolerância (Grace Period) de 3 dias
-                await storeRef.update({
-                  subscriptionStatus: "overdue",
-                  overdueSince: admin.firestore.FieldValue.serverTimestamp()
-                });
-                console.log(`⚠️ Loja ${storeIdParaAtualizar} entrou em ATRASO (Grace Period iniciado).`);
-            }
+         // -------------------------------------------------------------------------
+         // 🧠 A MÁGICA NOVA EVOLUÍDA: Consulta a próxima data real no Asaas
+         // -------------------------------------------------------------------------
+         let realNextDueDate = null;
+         if (asaasSubscriptionId) {
+             try {
+                 const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
+                 const headers = { "access_token": ASAAS_API_KEY, "User-Agent": "StoreConnectApp/1.0" };
 
-      else if (event === "SUBSCRIPTION_DELETED" || event === "PAYMENT_DELETED") {
-          await storeRef.update({ subscriptionStatus: "inactive" });
-          console.log(`🚫 Loja ${storeIdParaAtualizar} INATIVADA (Assinatura ou pagamento deletado no painel).`);
-      }
-      else {
-          console.log(`ℹ️ Evento ${event} ignorado pois não afeta o status da loja.`);
-      }
+                 // 1. Tenta achar a fatura pendente mais antiga
+                 const pendingRes = await axios.get(`${ASAAS_URL}/payments?subscription=${asaasSubscriptionId}&status=PENDING&limit=5`, { headers });
 
-      res.json({ received: true, updatedStore: storeIdParaAtualizar });
+                 if (pendingRes.data && pendingRes.data.data && pendingRes.data.data.length > 0) {
+                     const faturasPendentes = pendingRes.data.data.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+                     realNextDueDate = faturasPendentes[0].dueDate;
+                     console.log(`📅 Próximo vencimento via Fatura Pendente: ${realNextDueDate}`);
+                 } else {
+                     // 2. O PLANO B: Se NÃO TEM fatura pendente, busca a data do próximo ciclo direto na Assinatura
+                     const subRes = await axios.get(`${ASAAS_URL}/subscriptions/${asaasSubscriptionId}`, { headers });
+                     if (subRes.data && subRes.data.nextDueDate) {
+                         realNextDueDate = subRes.data.nextDueDate;
+                         console.log(`📅 Próximo vencimento via Assinatura (Tudo pago!): ${realNextDueDate}`);
+                     }
+                 }
+             } catch (err) {
+                 console.error("⚠️ Erro ao buscar a próxima data no Asaas:", err.message);
+             }
+         }
 
-    } catch (error) {
-      console.error(`❌ Erro crítico no webhook:`, error);
-      res.status(500).send("Erro interno");
-    }
-  });
+         // Preparamos um objeto flexível para atualizar o Firebase (agora sem duplicidade!)
+         let updateData = {};
+         if (realNextDueDate) {
+             updateData.nextDueDate = realNextDueDate;
+         }
+
+         // 🔄 ATUALIZA O STATUS E APLICA A GUILHOTINA
+         if (event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED") {
+             updateData.subscriptionStatus = "active";
+             updateData.lastPaymentDate = admin.firestore.FieldValue.serverTimestamp();
+             updateData.subscriptionType = "pro";
+
+             await storeRef.update(updateData);
+             console.log(`🎉 Sucesso! Loja ${storeIdParaAtualizar} ATIVADA e vencimento atualizado.`);
+         }
+         else if (event === "PAYMENT_OVERDUE") {
+             updateData.subscriptionStatus = "overdue";
+             updateData.overdueSince = admin.firestore.FieldValue.serverTimestamp();
+
+             await storeRef.update(updateData);
+             console.log(`⚠️ Loja ${storeIdParaAtualizar} entrou em ATRASO (Grace Period iniciado).`);
+         }
+         else if (event === "SUBSCRIPTION_DELETED" || event === "PAYMENT_DELETED") {
+             await storeRef.update({ subscriptionStatus: "inactive" });
+             console.log(`🚫 Loja ${storeIdParaAtualizar} INATIVADA (Assinatura ou pagamento deletado no painel).`);
+         }
+         else if (event === "PAYMENT_CREATED") {
+             if (Object.keys(updateData).length > 0) {
+                 await storeRef.update(updateData);
+                 console.log(`ℹ️ Loja ${storeIdParaAtualizar}: Data de vencimento corrigida pelo PAYMENT_CREATED.`);
+             }
+             res.json({ received: true, status: "date_synced" });
+             return;
+         }
+         else {
+             console.log(`ℹ️ Evento ${event} ignorado pois não afeta o status da loja.`);
+         }
+
+         res.json({ received: true, updatedStore: storeIdParaAtualizar });
+
+       } catch (error) {
+         console.error(`❌ Erro crítico no webhook:`, error);
+         res.status(500).send("Erro interno");
+       }
+     });
 
 
   /**
@@ -505,5 +546,66 @@ exports.getAsaasPortalUrl = onCall(async (request) => {
   } catch (error) {
     console.error("Erro ao buscar portal Asaas:", error);
     throw new HttpsError("internal", "Erro ao conectar com o financeiro.");
+  }
+});
+
+/**
+ * --- LISTAR FATURAS DO ASAAS ---
+ * Busca o histórico de cobranças de uma loja para exibir no app.
+ */
+exports.listAsaasInvoices = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "O usuário deve estar logado.");
+  }
+
+  const storeId = request.data.storeId;
+  if (!storeId) {
+    throw new HttpsError("invalid-argument", "O ID da loja é obrigatório.");
+  }
+
+  const db = admin.firestore();
+
+  try {
+    const storeDoc = await db.collection("stores").doc(storeId).get();
+    if (!storeDoc.exists) {
+      throw new HttpsError("not-found", "Loja não encontrada.");
+    }
+
+    const asaasCustomerId = storeDoc.data().asaasCustomerId;
+    if (!asaasCustomerId) {
+      throw new HttpsError("failed-precondition", "Loja sem cadastro financeiro.");
+    }
+
+    const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
+
+    // Busca até 12 faturas do cliente no Asaas
+    const response = await axios.get(`${ASAAS_URL}/payments?customer=${asaasCustomerId}&limit=12`, {
+      headers: {
+        "access_token": ASAAS_API_KEY,
+        "User-Agent": "StoreConnectApp/1.0"
+      }
+    });
+
+    if (!response.data || !response.data.data) {
+      return { invoices: [] };
+    }
+
+    // Mapeia apenas os dados que o Flutter precisa
+    const invoices = response.data.data.map(p => ({
+      id: p.id,
+      dueDate: p.dueDate,
+      value: p.value,
+      status: p.status,
+      invoiceUrl: p.invoiceUrl || p.billUrl || ""
+    }));
+
+    // Ordena da mais antiga para a mais nova, para as faturas atrasadas/atuais aparecerem primeiro
+    invoices.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+    return { invoices: invoices };
+
+  } catch (error) {
+    console.error("Erro ao listar faturas:", error.message);
+    throw new HttpsError("internal", "Erro ao conectar com o servidor financeiro.");
   }
 });

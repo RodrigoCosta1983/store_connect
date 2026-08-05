@@ -15,6 +15,8 @@ import 'package:store_connect/screens/profile/profile_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:store_connect/providers/theme_provider.dart';
 
+import 'finance/invoices_screen.dart';
+
 class SettingsScreen extends StatefulWidget {
   final String storeId;
   const SettingsScreen({super.key, required this.storeId});
@@ -355,8 +357,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       title: const Text('Minha Assinatura / 2ª Via'),
                       subtitle: const Text('Acessar boleto ou gerenciar plano'),
-                      trailing: const Icon(Icons.open_in_new),
-                      onTap: _openMySubscription,
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap:  () {
+                        // Esqueça o navegador! Navegamos direto para a nossa tela nativa:
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            // ATENÇÃO: Verifique se a variável storeId se chama widget.storeId ou apenas storeId no seu arquivo atual
+                            builder: (ctx) => InvoicesScreen(storeId: widget.storeId),
+                          ),
+                        );
+                      },
                     ),
 
                     const Divider(),
