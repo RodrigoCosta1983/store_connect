@@ -1,3 +1,30 @@
+/* ==============================================================================================
+ * 📝 RESUMO DO ARQUIVO: new_sale_screen.dart (TELA DE FRENTE DE CAIXA / PDV)
+ * ==============================================================================================
+ * 📌 Função Principal:
+ * É a tela principal de operação (PDV) do Store & Connect. Onde o usuário visualiza
+ * os produtos, realiza pesquisas, filtra por categorias e adiciona itens ao carrinho.
+ *
+ * ⚙️ Principais Componentes e Lógicas:
+ * 1. AppBar Inteligente: Contém a barra de pesquisa que alterna com o título (lupa) e o
+ *    ícone do carrinho de compras integrado ao [CartProvider] mostrando a quantidade de itens.
+ *
+ * 2. Menu Lateral (Drawer): Concentra a navegação principal do aplicativo. Utiliza o
+ *    [UserRoleProvider] de forma ativa para ocultar telas gerenciais (Dashboard, Relatórios,
+ *    Configurações) caso o usuário logado seja apenas um 'vendedor' ou 'caixa'.
+ *
+ * 3. Filtro de Categorias (_buildCategoryFilter e _showCategoriesModal): Busca as categorias
+ *    no Firestore em tempo real. Permite filtrar os produtos por botões horizontais (Chips)
+ *    ou por um menu inferior (BottomSheet) com imagens.
+ *
+ * 4. Grade de Produtos: Um StreamBuilder que lê os produtos do Firestore, cruza com o texto
+ *    pesquisado na lupa e com a categoria selecionada.
+ *    - É responsivo (muda a quantidade de colunas dependendo do tamanho da tela).
+ *    - Possui travas visuais para produtos sem estoque (desabilita botão, fica transparente)
+ *      ou com estoque baixo.
+ * ============================================================================================== */
+
+
 // lib/screens/sales/new_sale_screen.dart
 
 import 'dart:io';
@@ -20,6 +47,8 @@ import 'package:store_connect/screens/reports/reports_hub_screen.dart';
 import 'package:store_connect/screens/sales/sales_history_screen.dart';
 import 'package:store_connect/screens/settings_screen.dart';
 import 'package:store_connect/screens/dashboard_screen.dart';
+import 'package:store_connect/providers/user_role_provider.dart';
+import 'package:provider/provider.dart';
 
 import '../management/category_management_screen.dart';
 
@@ -81,6 +110,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
+
+    final roleProvider = Provider.of<UserRoleProvider>(context);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -220,6 +251,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 },
               ),
             ),
+            //if (roleProvider.canAccessSettings) //Para esconder a opção de configurações
             ListTile(
               leading: const Icon(Icons.dashboard),
               title: const Text('Dashboard'),
@@ -316,52 +348,124 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 );
               },
             ),
+            // ============================================================================
+// SOBRE O STORE CONNECT
+//
+// Exibe:
+// • Descrição resumida da plataforma
+// • Link para o site oficial
+// • Versão e build atualmente instalados
+//
+// O conteúdo do diálogo possui largura máxima de 500px para manter uma
+// leitura confortável principalmente na versão Web/Desktop.
+// ============================================================================
+
             ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text("Sobre"),
+              leading: const Icon(
+                Icons.info_outline,
+              ),
+              title: const Text(
+                'Sobre',
+              ),
               onTap: () {
                 showDialog(
                   context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text("Sobre"),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          "O Store Connect é o motor do seu negócio. Um PDV inteligente e sistema de gestão completo, criado para simplificar suas vendas, controlar seu estoque e impulsionar o seu crescimento em um só lugar.",
+                  builder: (context) {
+                    return AlertDialog(
+                      title: const Text(
+                        'Sobre',
+                      ),
+
+                      // ================================================================
+                      // CONTEÚDO CENTRALIZADO / RESPONSIVO
+                      // ================================================================
+
+                      content: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: 500,
                         ),
-                        const SizedBox(height: 20),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.link),
-                          title: const Text("Store&Connect"),
-                          onTap: () =>
-                              _launchURL('https://www.storeconnect.com.br'),
-                        ),
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 12.0),
-                            child: Text(
-                              'Versão do App: $_appVersion+$_buildNumber',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: isDarkMode
-                                    ? Colors.white70
-                                    : Colors.black54,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // ==========================================================
+                            // DESCRIÇÃO
+                            // ==========================================================
+
+                            const Text(
+                              'O Store Connect é o motor do seu negócio. '
+                                  'Um PDV inteligente e sistema de gestão completo, '
+                                  'criado para simplificar suas vendas, controlar seu '
+                                  'estoque e impulsionar o seu crescimento em um só lugar.',
+                            ),
+
+                            const SizedBox(
+                              height: 20,
+                            ),
+
+                            // ==========================================================
+                            // SITE
+                            // ==========================================================
+
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(
+                                Icons.link,
+                              ),
+                              title: const Text(
+                                'Store&Connect',
+                              ),
+                              subtitle: const Text(
+                                'Acessar nosso site',
+                              ),
+                              trailing: const Icon(
+                                Icons.open_in_new,
+                                size: 18,
+                              ),
+                              onTap: () => _launchURL(
+                                'https://www.storeconnect.com.br',
                               ),
                             ),
+
+                            const SizedBox(
+                              height: 8,
+                            ),
+
+                            // ==========================================================
+                            // VERSÃO
+                            // ==========================================================
+
+                            Center(
+                              child: Text(
+                                'Versão do App: $_appVersion+$_buildNumber',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isDarkMode
+                                      ? Colors.white70
+                                      : Colors.black54,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // ================================================================
+                      // AÇÕES
+                      // ================================================================
+
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                          child: const Text(
+                            'Fechar',
                           ),
                         ),
                       ],
-                    ),
-                    actions: [
-                      TextButton(
-                        child: const Text("Fechar"),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 );
               },
             ),
