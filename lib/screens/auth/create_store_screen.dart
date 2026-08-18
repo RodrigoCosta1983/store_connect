@@ -101,6 +101,7 @@ class _CreateStoreScreenState extends State<CreateStoreScreen> {
       batch.set(userRef, {
         'storeId': storeRef.id,
         'phone': UtilBrasilFields.removeCaracteres(_phoneController.text),
+        'role': 'admin',
       }, SetOptions(merge: true));
 
       // -> PASSO C: Trancar o CPF na lista de controle
