@@ -1,30 +1,115 @@
+// ============================================================================
+// ARQUIVO: manage_products_screen.dart
+// ============================================================================
+//
+// OBJETIVO:
+// Gerenciar o cadastro, edição, exclusão e visualização dos produtos da loja.
+//
+// PRINCIPAIS RESPONSABILIDADES:
+// - Cadastrar e editar produtos.
+// - Controlar quantidade manual ou por lotes.
+// - Gerenciar validade dos lotes.
+// - Fazer upload da imagem do produto.
+// - Vincular categoria.
+// - Controlar estoque mínimo.
+// - Exibir dados fiscais exclusivamente para lojas Business.
+// - Salvar NCM, CFOP, origem, unidade e CEST no mapa "fiscal".
+//
+// REGRAS DE PLANO:
+// - PRO/TRIAL:
+//   utiliza somente os dados comerciais e de estoque.
+// - BUSINESS ATIVO:
+//   libera também os campos fiscais do produto.
+//
+// FIRESTORE:
+// stores/{storeId}/products/{productId}
+//
+// ESTRUTURA FISCAL:
+// fiscal: {
+//   ncm,
+//   origem,
+//   cfop,
+//   unidade,
+//   cest,
+//   updatedAt
+// }
+//
+// CUIDADOS EM FUTURAS ALTERAÇÕES:
+// - Não apagar dados fiscais quando houver downgrade Business -> PRO.
+// - Não quebrar a sincronização entre lotes e quantidade total.
+// - Dados fiscais serão utilizados posteriormente na emissão da NFC-e.
+//
+// ============================================================================
+
 // lib/screens/management/manage_products_screen.dart
 
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:store_connect/widgets/dynamic_background.dart';
+import 'package:store_connect/screens/fiscal/widgets/ncm_search_dialog.dart';
+
+import 'package:store_connect/screens/products/import/product_import_screen.dart';
+
+// ============================================================================
+// DIÁLOGO DE CADASTRO / EDIÇÃO DE PRODUTO
+// ============================================================================
 
 class _ProductDialogState extends State<_ProductDialog> {
   final _formKey = GlobalKey<FormState>();
+
+  // ==========================================================================
+  // DADOS COMERCIAIS DO PRODUTO
+  // ==========================================================================
+
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
-  final _quantidadeController = TextEditingController(); // Agora será apenas visual/soma
+
+  // Quantidade total.
+  //
+  // Se existirem lotes, este campo passa a ser somente leitura
+  // e recebe automaticamente a soma dos lotes.
+  final _quantidadeController = TextEditingController();
+
   final _loteQuantidadeController = TextEditingController();
   final _minimumStockController = TextEditingController();
-  var _isLoading = false;
+
+  // ==========================================================================
+  // DADOS FISCAIS - EXCLUSIVOS BUSINESS
+  // ==========================================================================
+
+  final _ncmController = TextEditingController();
+  final _cfopController = TextEditingController();
+  final _cestController = TextEditingController();
+
+  // Origem padrão: mercadoria nacional.
+  String _selectedOrigem = '0';
+
+  // Unidade comercial padrão.
+  String _selectedUnidade = 'UN';
+
+  // ==========================================================================
+  // ESTADO
+  // ==========================================================================
+
+  bool _isLoading = false;
 
   File? _selectedImageFile;
   Uint8List? _selectedImageBytes;
   String? _existingImageUrl;
 
   List<Map<String, dynamic>> _lotes = [];
+
   DateTime? _dataValidadeSelecionada;
 
   String? _selectedCategoryId;
@@ -32,50 +117,284 @@ class _ProductDialogState extends State<_ProductDialog> {
 
   bool get _isEditing => widget.product != null;
 
+  // ==========================================================================
+  // ORIGENS DE MERCADORIA
+  //
+  // Deixamos os códigos explícitos para que depois possam ser usados
+  // diretamente na montagem da NFC-e.
+  // ==========================================================================
+
+  static const Map<String, String> _origens = {
+    '0': '0 - Nacional',
+    '1': '1 - Estrangeira - Importação direta',
+    '2': '2 - Estrangeira - Adquirida no mercado interno',
+    '3': '3 - Nacional, conteúdo de importação superior a 40%',
+    '4': '4 - Nacional, processos produtivos básicos',
+    '5': '5 - Nacional, conteúdo de importação até 40%',
+    '6': '6 - Estrangeira - Importação direta sem similar nacional',
+    '7': '7 - Estrangeira - Mercado interno sem similar nacional',
+    '8': '8 - Nacional, conteúdo de importação superior a 70%',
+  };
+
+  // ==========================================================================
+  // UNIDADES COMERCIAIS MAIS COMUNS
+  //
+  // Podemos aumentar esta lista futuramente.
+  // ==========================================================================
+
+  static const Map<String, String> _unidades = {
+    'UN': 'UN - Unidade',
+    'PC': 'PC - Peça',
+    'PAR': 'PAR - Par',
+    'KIT': 'KIT - Kit',
+    'CX': 'CX - Caixa',
+    'PCT': 'PCT - Pacote',
+    'KG': 'KG - Quilograma',
+    'G': 'G - Grama',
+    'M': 'M - Metro',
+    'M2': 'M² - Metro quadrado',
+    'LT': 'LT - Litro',
+    'ML': 'ML - Mililitro',
+  };
+
+
+  // ============================================================================
+  // ABRE A PESQUISA DE NCM
+  // ============================================================================
+  //
+  // OBJETIVO:
+  // - Abrir o diálogo de pesquisa.
+  // - Consultar a Cloud Function "searchNcm".
+  // - Receber resultados da base NCM sincronizada.
+  // - Preencher o campo NCM após a seleção.
+  //
+  // FLUXO:
+  // Produto Business
+  //      ↓
+  // Pesquisar NCM
+  //      ↓
+  // searchNcm
+  //      ↓
+  // Firestore / coleção ncm
+  //      ↓
+  // Usuário seleciona
+  //      ↓
+  // Campo NCM preenchido
+  //
+  // ============================================================================
+
+  // ============================================================================
+  // ABRE A PESQUISA DE NCM
+  // ============================================================================
+  //
+  // OBJETIVO:
+  // - Abrir o diálogo de pesquisa.
+  // - Consultar a Cloud Function "searchNcm".
+  // - Receber resultados da base NCM sincronizada.
+  // - Preencher o campo NCM após a seleção.
+  //
+  // FLUXO:
+  // Produto Business
+  //      ↓
+  // Pesquisar NCM
+  //      ↓
+  // searchNcm
+  //      ↓
+  // Firestore / coleção ncm
+  //      ↓
+  // Usuário seleciona
+  //      ↓
+  // Campo NCM preenchido
+  //
+  // ============================================================================
+
+  Future<void> _openNcmSearch() async {
+    final result = await showDialog<NcmSearchResult>(
+      context: context,
+      builder: (ctx) => NcmSearchDialog(
+        // Abre inicialmente com o nome do produto.
+        initialQuery: _nameController.text.trim(),
+
+        onSearch: (query) async {
+          try {
+            final callable = FirebaseFunctions.instance.httpsCallable(
+              'searchNcm',
+            );
+
+            final response = await callable.call({
+              'storeId': widget.storeId,
+              'query': query,
+              'limit': 20,
+            });
+
+            final data = Map<String, dynamic>.from(response.data);
+
+            final rawResults = data['results'];
+
+            if (rawResults is! List) {
+              return <NcmSearchResult>[];
+            }
+
+            return rawResults
+                .map((item) {
+                  final map = Map<String, dynamic>.from(item as Map);
+
+                  return NcmSearchResult(
+                    codigo: map['codigo']?.toString() ?? '',
+                    descricao: map['descricao']?.toString() ?? '',
+                  );
+                })
+                .where((item) => item.codigo.isNotEmpty)
+                .toList();
+          } on FirebaseFunctionsException catch (e) {
+            debugPrint('=== ❌ ERRO SEARCH NCM ===');
+            debugPrint('Código: ${e.code}');
+            debugPrint('Mensagem: ${e.message}');
+            debugPrint('Detalhes: ${e.details}');
+            debugPrint('=========================');
+
+            rethrow;
+          } catch (e) {
+            debugPrint('Erro inesperado na busca NCM: $e');
+
+            rethrow;
+          }
+        },
+      ),
+    );
+
+    // Usuário fechou sem selecionar.
+    if (result == null) {
+      return;
+    }
+
+    setState(() {
+      _ncmController.text = result.codigo;
+    });
+  }
+
+  // ==========================================================================
+  // INIT
+  // ==========================================================================
+
   @override
   void initState() {
     super.initState();
+
     if (_isEditing) {
       final productData = widget.product!.data() as Map<String, dynamic>;
-      _nameController.text = productData['name'] ?? '';
-      _priceController.text = productData['price']?.toString() ?? '';
-      _minimumStockController.text = (productData['minimumStock'] ?? 0).toString();
 
-      // 1. CARREGA IMAGEM E CATEGORIA
+      // ======================================================================
+      // 1. DADOS PRINCIPAIS
+      // ======================================================================
+
+      _nameController.text = productData['name'] ?? '';
+
+      _priceController.text = productData['price']?.toString() ?? '';
+
+      _minimumStockController.text = (productData['minimumStock'] ?? 0)
+          .toString();
+
+      // ======================================================================
+      // 2. IMAGEM
+      // ======================================================================
+
       if (productData.containsKey('imageUrl')) {
         _existingImageUrl = productData['imageUrl'];
       }
+
+      // ======================================================================
+      // 3. CATEGORIA
+      // ======================================================================
+
       if (productData.containsKey('categoryId')) {
         _selectedCategoryId = productData['categoryId'];
+
         _selectedCategoryName = productData['categoryName'];
       }
 
-      // 2. CARREGA LOTES
+      // ======================================================================
+      // 4. LOTES
+      // ======================================================================
+
       if (productData.containsKey('lotes') && productData['lotes'] is List) {
         final rawLotes = productData['lotes'] as List;
-        setState(() {
-          _lotes = rawLotes.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        });
+
+        _lotes = rawLotes
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
       } else {
         _lotes = [];
       }
 
-      // 3. A CORREÇÃO DA QUANTIDADE (O PULO DO GATO)
-      // Se a lista de lotes for vazia, pega a quantidade do banco.
-      // Se tiver lote, aí sim usa a soma matemática.
+      // ======================================================================
+      // 5. QUANTIDADE
+      //
+      // Sem lote:
+      // usa a quantidade armazenada.
+      //
+      // Com lote:
+      // usa a soma matemática dos lotes.
+      // ======================================================================
+
       if (_lotes.isEmpty) {
-        _quantidadeController.text = (productData['quantidade'] ?? 0).toString();
+        _quantidadeController.text = (productData['quantidade'] ?? 0)
+            .toString();
       } else {
         _sincronizarTotalManual();
+      }
+
+      // ======================================================================
+      // 6. DADOS FISCAIS
+      //
+      // Só precisamos carregar se o produto já possuir o mapa fiscal.
+      //
+      // Mesmo que a loja tenha voltado temporariamente para PRO,
+      // esses dados permanecem guardados no Firestore.
+      // ======================================================================
+
+      final rawFiscal = productData['fiscal'];
+
+      if (rawFiscal is Map) {
+        final fiscal = Map<String, dynamic>.from(rawFiscal);
+
+        _ncmController.text = fiscal['ncm']?.toString() ?? '';
+
+        _cfopController.text = fiscal['cfop']?.toString() ?? '';
+
+        _cestController.text = fiscal['cest']?.toString() ?? '';
+
+        final origem = fiscal['origem']?.toString();
+
+        if (origem != null && _origens.containsKey(origem)) {
+          _selectedOrigem = origem;
+        }
+
+        final unidade = fiscal['unidade']?.toString();
+
+        if (unidade != null && _unidades.containsKey(unidade)) {
+          _selectedUnidade = unidade;
+        }
       }
     }
   }
 
-  // --- NOVA FUNÇÃO PARA MANTER A SINCRONIA ---
+  // ==========================================================================
+  // SINCRONIZA QUANTIDADE TOTAL
+  // ==========================================================================
+
   void _sincronizarTotalManual() {
-    final somaLotes = _lotes.fold(0, (sum, item) => sum + (item['quantidade'] as int));
+    final somaLotes = _lotes.fold<int>(
+      0,
+      (sum, item) => sum + ((item['quantidade'] as num?)?.toInt() ?? 0),
+    );
+
     _quantidadeController.text = somaLotes.toString();
   }
+
+  // ==========================================================================
+  // DISPOSE
+  // ==========================================================================
 
   @override
   void dispose() {
@@ -84,16 +403,27 @@ class _ProductDialogState extends State<_ProductDialog> {
     _quantidadeController.dispose();
     _loteQuantidadeController.dispose();
     _minimumStockController.dispose();
+
+    // Dados fiscais
+    _ncmController.dispose();
+    _cfopController.dispose();
+    _cestController.dispose();
+
     super.dispose();
   }
+
+  // ==========================================================================
+  // SELECIONAR DATA DO LOTE
+  // ==========================================================================
 
   Future<void> _selecionarData(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime.now(),
-      lastDate: DateTime(2030),
+      lastDate: DateTime(2035),
     );
+
     if (picked != null && picked != _dataValidadeSelecionada) {
       setState(() {
         _dataValidadeSelecionada = picked;
@@ -101,36 +431,79 @@ class _ProductDialogState extends State<_ProductDialog> {
     }
   }
 
+  // ==========================================================================
+  // SELECIONAR IMAGEM
+  // ==========================================================================
+
   Future<void> _pickImage() async {
-    final pickedImage = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50, maxWidth: 600);
+    final pickedImage = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 50,
+      maxWidth: 600,
+    );
+
     if (pickedImage == null) return;
 
     if (kIsWeb) {
       _selectedImageBytes = await pickedImage.readAsBytes();
+
+      _selectedImageFile = null;
     } else {
       _selectedImageFile = File(pickedImage.path);
+
+      _selectedImageBytes = null;
     }
-    setState(() {});
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
+  // ==========================================================================
+  // SALVAR PRODUTO
+  // ==========================================================================
+
   Future<void> _saveProduct() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (widget.storeId.isEmpty) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-    setState(() => _isLoading = true);
+    if (widget.storeId.isEmpty) {
+      return;
+    }
 
-    final String name = _nameController.text;
-    final double price = double.parse(_priceController.text.replaceAll(',', '.'));
+    setState(() {
+      _isLoading = true;
+    });
+
+    // =========================================================================
+    // DADOS COMERCIAIS
+    // =========================================================================
+
+    final String name = _nameController.text.trim();
+
+    final double price = double.parse(
+      _priceController.text.replaceAll(',', '.'),
+    );
+
     final int minimumStock = int.tryParse(_minimumStockController.text) ?? 0;
 
     final String oldImageUrl = _existingImageUrl ?? '';
+
     String imageUrl = oldImageUrl;
 
     try {
+      // =======================================================================
+      // 1. UPLOAD DA IMAGEM
+      // =======================================================================
+
       if (_selectedImageFile != null || _selectedImageBytes != null) {
         final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+
         final path = 'product_images/${widget.storeId}/$fileName';
+
         final ref = FirebaseStorage.instance.ref(path);
+
         final metadata = SettableMetadata(contentType: 'image/jpeg');
 
         final TaskSnapshot snapshot = kIsWeb
@@ -140,15 +513,35 @@ class _ProductDialogState extends State<_ProductDialog> {
         imageUrl = await snapshot.ref.getDownloadURL();
       }
 
-      // 1. Filtrar lotes ativos
-      final lotesFiltrados = _lotes.where((lote) => (lote['quantidade'] as int) > 0).toList();
+      // =======================================================================
+      // 2. FILTRA LOTES SEM SALDO
+      // =======================================================================
 
-      // 2. Calcular total: Se houver lotes, usa a soma. Senão, usa o campo manual.
-      final int manualQuantidade = int.tryParse(_quantidadeController.text) ?? 0;
-      final int somaLotes = lotesFiltrados.fold(0, (sum, item) => sum + (item['quantidade'] as int));
+      final lotesFiltrados = _lotes
+          .where((lote) => ((lote['quantidade'] as num?)?.toInt() ?? 0) > 0)
+          .toList();
+
+      // =======================================================================
+      // 3. CALCULA QUANTIDADE FINAL
+      // =======================================================================
+
+      final int manualQuantidade =
+          int.tryParse(_quantidadeController.text) ?? 0;
+
+      final int somaLotes = lotesFiltrados.fold<int>(
+        0,
+        (sum, item) => sum + ((item['quantidade'] as num?)?.toInt() ?? 0),
+      );
+
       final int finalQuantidade = _lotes.isEmpty ? manualQuantidade : somaLotes;
 
-      final productData = {
+      // =======================================================================
+      // 4. MAPA BASE DO PRODUTO
+      //
+      // Este continua sendo o mesmo conteúdo utilizado pelo PRO.
+      // =======================================================================
+
+      final Map<String, dynamic> productData = {
         'name': name,
         'name_lowercase': name.toLowerCase(),
         'price': price,
@@ -160,6 +553,41 @@ class _ProductDialogState extends State<_ProductDialog> {
         'categoryName': _selectedCategoryName,
       };
 
+      // =======================================================================
+      // 5. DADOS FISCAIS - SOMENTE BUSINESS
+      //
+      // PRO:
+      // não cria nem altera o campo fiscal.
+      //
+      // BUSINESS:
+      // grava os dados necessários para utilização posterior na NFC-e.
+      // =======================================================================
+
+      if (widget.isBusiness) {
+        final ncm = _ncmController.text.replaceAll(RegExp(r'\D'), '');
+
+        final cfop = _cfopController.text.replaceAll(RegExp(r'\D'), '');
+
+        final cest = _cestController.text.replaceAll(RegExp(r'\D'), '');
+
+        productData['fiscal'] = {
+          'ncm': ncm,
+          'origem': _selectedOrigem,
+          'cfop': cfop,
+          'unidade': _selectedUnidade,
+
+          // CEST é opcional.
+          'cest': cest.isEmpty ? null : cest,
+
+          // Ajuda futuramente em auditoria / sincronização.
+          'updatedAt': Timestamp.now(),
+        };
+      }
+
+      // =======================================================================
+      // 6. SALVA / ATUALIZA
+      // =======================================================================
+
       if (_isEditing) {
         await FirebaseFirestore.instance
             .collection('stores')
@@ -169,6 +597,7 @@ class _ProductDialogState extends State<_ProductDialog> {
             .update(productData);
       } else {
         productData['createdAt'] = Timestamp.now();
+
         await FirebaseFirestore.instance
             .collection('stores')
             .doc(widget.storeId)
@@ -176,26 +605,42 @@ class _ProductDialogState extends State<_ProductDialog> {
             .add(productData);
       }
 
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Produto salvo com sucesso!'), backgroundColor: Colors.green),
-        );
-      }
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Produto salvo com sucesso!'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao salvar: $error'), backgroundColor: Colors.red),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao salvar: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
+
+  // ==========================================================================
+  // BUILD
+  // ==========================================================================
 
   @override
   Widget build(BuildContext context) {
     ImageProvider? provider;
+
     if (_selectedImageBytes != null) {
       provider = MemoryImage(_selectedImageBytes!);
     } else if (_selectedImageFile != null) {
@@ -206,176 +651,648 @@ class _ProductDialogState extends State<_ProductDialog> {
 
     return AlertDialog(
       title: Text(_isEditing ? 'Editar Produto' : 'Adicionar Produto'),
-      content: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              GestureDetector(
-                onTap: _pickImage,
-                child: CircleAvatar(
-                  radius: 40,
-                  backgroundColor: Colors.grey.shade200,
-                  backgroundImage: provider,
-                  child: provider == null ? const Icon(Icons.add_a_photo, size: 40, color: Colors.grey) : null,
+
+      content: SizedBox(
+        width: 520,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ============================================================
+                // IMAGEM
+                // ============================================================
+                Center(
+                  child: GestureDetector(
+                    onTap: _pickImage,
+                    child: CircleAvatar(
+                      radius: 40,
+                      backgroundColor: Colors.grey.shade200,
+                      backgroundImage: provider,
+                      child: provider == null
+                          ? const Icon(
+                              Icons.add_a_photo,
+                              size: 40,
+                              color: Colors.grey,
+                            )
+                          : null,
+                    ),
+                  ),
                 ),
-              ),
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Nome do Produto'),
-                validator: (value) => (value == null || value.isEmpty) ? 'Campo obrigatório.' : null,
-              ),
-              const SizedBox(height: 16),
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('stores')
-                    .doc(widget.storeId)
-                    .collection('categories')
-                    .orderBy('name')
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const CircularProgressIndicator();
 
-                  final categories = snapshot.data!.docs;
-                  String? safeValue = _selectedCategoryId;
-                  if (safeValue != null && !categories.any((doc) => doc.id == safeValue)) {
-                    safeValue = null;
-                  }
+                const SizedBox(height: 16),
 
-                  return DropdownButtonFormField<String>(
-                    value: safeValue,
-                    decoration: const InputDecoration(labelText: 'Categoria'),
-                    items: categories.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc['name']))).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        final selectedCat = categories.firstWhere((doc) => doc.id == value);
+                // ============================================================
+                // NOME
+                // ============================================================
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome do Produto',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Campo obrigatório.';
+                    }
+
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // ============================================================
+                // CATEGORIA
+                // ============================================================
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('stores')
+                      .doc(widget.storeId)
+                      .collection('categories')
+                      .orderBy('name')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final categories = snapshot.data!.docs;
+
+                    String? safeValue = _selectedCategoryId;
+
+                    if (safeValue != null &&
+                        !categories.any((doc) => doc.id == safeValue)) {
+                      safeValue = null;
+                    }
+
+                    return DropdownButtonFormField<String>(
+                      value: safeValue,
+
+                      // Evita overflow
+                      // em telas pequenas.
+                      isExpanded: true,
+
+                      decoration: const InputDecoration(labelText: 'Categoria'),
+                      items: categories
+                          .map(
+                            (doc) => DropdownMenuItem<String>(
+                              value: doc.id,
+                              child: Text(
+                                doc['name'].toString(),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) {
+                          return;
+                        }
+
+                        final selectedCat = categories.firstWhere(
+                          (doc) => doc.id == value,
+                        );
+
                         setState(() {
                           _selectedCategoryId = value;
-                          _selectedCategoryName = selectedCat['name'];
-                        });
-                      }
-                    },
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _priceController,
-                decoration: const InputDecoration(labelText: 'Preço'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              ),
 
-              // --- CAMPO DE QUANTIDADE TRAVADO SE HOUVER LOTES ---
-              // No seu TextFormField de Quantidade:
-              TextFormField(
-                controller: _quantidadeController,
-                decoration: InputDecoration(
-                  labelText: _lotes.isNotEmpty
-                      ? 'Quantidade (Soma automática dos lotes)'
-                      : 'Quantidade Manual',
-                  filled: _lotes.isNotEmpty,
-                  fillColor: _lotes.isNotEmpty ? Colors.grey.withOpacity(0.1) : null,
-                ),
-                // AQUI É O PULO DO GATO:
-                // Se tiver lotes, trava (readOnly). Se não, libera para digitação.
-                readOnly: _lotes.isNotEmpty,
-                keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Campo obrigatório.';
-                  if (int.tryParse(value) == null || int.parse(value) < 0) return 'Número inválido.';
-                  return null;
-                },
-              ),
-
-              const Divider(height: 32),
-              const Text('Gerenciar Lotes', style: TextStyle(fontWeight: FontWeight.bold)),
-              Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: () => _selecionarData(context),
-                    icon: const Icon(Icons.calendar_today),
-                    label: Text(_dataValidadeSelecionada == null ? 'Data' : DateFormat('dd/MM/yyyy').format(_dataValidadeSelecionada!)),
-                  ),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _loteQuantidadeController,
-                      decoration: const InputDecoration(labelText: 'Quantidade'),
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add_circle, color: Colors.blue, size: 32),
-                    onPressed: () {
-                      final qtd = int.tryParse(_loteQuantidadeController.text);
-                      if (qtd != null && qtd > 0 && _dataValidadeSelecionada != null) {
-                        setState(() {
-                          _lotes.add({'quantidade': qtd, 'validade': Timestamp.fromDate(_dataValidadeSelecionada!)});
-                          _sincronizarTotalManual(); // Atualiza o campo total instantaneamente
-                        });
-                        _loteQuantidadeController.clear();
-                        _dataValidadeSelecionada = null;
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Informe a Qtd e a Validade!'), backgroundColor: Colors.orange),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-              Column(
-                children: _lotes.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final lote = entry.value;
-                  final DateTime date = (lote['validade'] as Timestamp).toDate();
-                  return ListTile(
-                    dense: true,
-                    title: Text('Qtd: ${lote['quantidade']} | Vence: ${DateFormat('dd/MM/yyyy').format(date)}'),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () {
-                        setState(() {
-                          _lotes.removeAt(index);
-                          _sincronizarTotalManual(); // Atualiza o campo total instantaneamente
+                          _selectedCategoryName = selectedCat['name']
+                              .toString();
                         });
                       },
-                    ),
-                  );
-                }).toList(),
-              ),
+                    );
+                  },
+                ),
 
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _minimumStockController,
-                decoration: const InputDecoration(labelText: 'Estoque Mínimo para Alerta'),
-                keyboardType: TextInputType.number,
-              ),
-            ],
+                const SizedBox(height: 16),
+
+                // ============================================================
+                // PREÇO
+                // ============================================================
+                TextFormField(
+                  controller: _priceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Preço',
+                    prefixText: 'R\$ ',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Informe o preço.';
+                    }
+
+                    final parsed = double.tryParse(value.replaceAll(',', '.'));
+
+                    if (parsed == null || parsed < 0) {
+                      return 'Preço inválido.';
+                    }
+
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // ============================================================
+                // QUANTIDADE
+                // ============================================================
+                TextFormField(
+                  controller: _quantidadeController,
+                  decoration: InputDecoration(
+                    labelText: _lotes.isNotEmpty
+                        ? 'Quantidade (Soma automática dos lotes)'
+                        : 'Quantidade Manual',
+                    filled: _lotes.isNotEmpty,
+                    fillColor: _lotes.isNotEmpty
+                        ? Colors.grey.withOpacity(0.1)
+                        : null,
+                  ),
+                  readOnly: _lotes.isNotEmpty,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Campo obrigatório.';
+                    }
+
+                    if (int.tryParse(value) == null || int.parse(value) < 0) {
+                      return 'Número inválido.';
+                    }
+
+                    return null;
+                  },
+                ),
+
+                // ============================================================
+                // LOTES
+                // ============================================================
+                const Divider(height: 32),
+
+                const Text(
+                  'Gerenciar Lotes',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+
+                const SizedBox(height: 8),
+
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => _selecionarData(context),
+                      icon: const Icon(Icons.calendar_today),
+                      label: Text(
+                        _dataValidadeSelecionada == null
+                            ? 'Data'
+                            : DateFormat(
+                                'dd/MM/yyyy',
+                              ).format(_dataValidadeSelecionada!),
+                      ),
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    Expanded(
+                      child: TextFormField(
+                        controller: _loteQuantidadeController,
+                        decoration: const InputDecoration(
+                          labelText: 'Quantidade',
+                        ),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                      ),
+                    ),
+
+                    IconButton(
+                      icon: const Icon(
+                        Icons.add_circle,
+                        color: Colors.blue,
+                        size: 32,
+                      ),
+                      onPressed: () {
+                        final qtd = int.tryParse(
+                          _loteQuantidadeController.text,
+                        );
+
+                        if (qtd != null &&
+                            qtd > 0 &&
+                            _dataValidadeSelecionada != null) {
+                          setState(() {
+                            _lotes.add({
+                              'quantidade': qtd,
+                              'validade': Timestamp.fromDate(
+                                _dataValidadeSelecionada!,
+                              ),
+                            });
+
+                            _sincronizarTotalManual();
+                          });
+
+                          _loteQuantidadeController.clear();
+
+                          _dataValidadeSelecionada = null;
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Informe a Qtd e a Validade!'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+
+                Column(
+                  children: _lotes.asMap().entries.map((entry) {
+                    final index = entry.key;
+
+                    final lote = entry.value;
+
+                    final validadeRaw = lote['validade'];
+
+                    DateTime? validade;
+
+                    if (validadeRaw is Timestamp) {
+                      validade = validadeRaw.toDate();
+                    } else if (validadeRaw is DateTime) {
+                      validade = validadeRaw;
+                    }
+
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        validade != null
+                            ? 'Qtd: ${lote['quantidade']} | Vence: ${DateFormat('dd/MM/yyyy').format(validade)}'
+                            : 'Qtd: ${lote['quantidade']}',
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () {
+                          setState(() {
+                            _lotes.removeAt(index);
+
+                            _sincronizarTotalManual();
+                          });
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ============================================================
+                // ESTOQUE MÍNIMO
+                // ============================================================
+                TextFormField(
+                  controller: _minimumStockController,
+                  decoration: const InputDecoration(
+                    labelText: 'Estoque Mínimo para Alerta',
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+
+                // ============================================================
+                // DADOS FISCAIS
+                //
+                // EXCLUSIVO BUSINESS
+                // ============================================================
+                if (widget.isBusiness) ...[
+                  const SizedBox(height: 24),
+
+                  const Divider(),
+
+                  const SizedBox(height: 8),
+
+                  // ==========================================================
+                  // CABEÇALHO
+                  // ==========================================================
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.receipt_long_outlined,
+                        color: Colors.deepPurple,
+                      ),
+
+                      const SizedBox(width: 8),
+
+                      const Expanded(
+                        child: Text(
+                          'Dados Fiscais',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'BUSINESS',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.deepPurple,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    'Informações utilizadas na emissão fiscal do produto.',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ==========================================================
+                  // NCM
+                  // ==========================================================
+                  TextFormField(
+                    controller: _ncmController,
+                    decoration: InputDecoration(
+                      labelText: 'NCM',
+                      hintText: 'Ex.: 61091000',
+                      helperText: 'Classificação fiscal do produto - 8 dígitos',
+                      prefixIcon: const Icon(Icons.tag_outlined),
+
+                      suffixIcon: IconButton(
+                        tooltip: 'Pesquisar NCM',
+                        onPressed: _openNcmSearch,
+                        icon: const Icon(Icons.search),
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(8),
+                    ],
+                    validator: (value) {
+                      if (!widget.isBusiness) {
+                        return null;
+                      }
+
+                      final clean = (value ?? '').replaceAll(RegExp(r'\D'), '');
+
+                      if (clean.isEmpty) {
+                        return 'Informe o NCM.';
+                      }
+
+                      if (clean.length != 8) {
+                        return 'O NCM deve possuir 8 dígitos.';
+                      }
+
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ==========================================================
+                  // ORIGEM
+                  // ==========================================================
+                  DropdownButtonFormField<String>(
+                    value: _selectedOrigem,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Origem da Mercadoria',
+                      prefixIcon: Icon(Icons.public_outlined),
+                    ),
+                    items: _origens.entries
+                        .map(
+                          (entry) => DropdownMenuItem<String>(
+                            value: entry.key,
+                            child: Text(
+                              entry.value,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+
+                      setState(() {
+                        _selectedOrigem = value;
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ==========================================================
+                  // CFOP
+                  // ==========================================================
+                  TextFormField(
+                    controller: _cfopController,
+                    decoration: const InputDecoration(
+                      labelText: 'CFOP',
+                      hintText: 'Ex.: 5102',
+                      helperText: 'Código fiscal utilizado na operação',
+                      prefixIcon: Icon(Icons.numbers_outlined),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(4),
+                    ],
+                    validator: (value) {
+                      if (!widget.isBusiness) {
+                        return null;
+                      }
+
+                      final clean = (value ?? '').replaceAll(RegExp(r'\D'), '');
+
+                      if (clean.isEmpty) {
+                        return 'Informe o CFOP.';
+                      }
+
+                      if (clean.length != 4) {
+                        return 'O CFOP deve possuir 4 dígitos.';
+                      }
+
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ==========================================================
+                  // UNIDADE COMERCIAL
+                  // ==========================================================
+                  DropdownButtonFormField<String>(
+                    value: _selectedUnidade,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Unidade Comercial',
+                      prefixIcon: Icon(Icons.straighten_outlined),
+                    ),
+                    items: _unidades.entries
+                        .map(
+                          (entry) => DropdownMenuItem<String>(
+                            value: entry.key,
+                            child: Text(
+                              entry.value,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+
+                      setState(() {
+                        _selectedUnidade = value;
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ==========================================================
+                  // CEST
+                  //
+                  // Opcional, pois nem todo produto exige.
+                  // ==========================================================
+                  TextFormField(
+                    controller: _cestController,
+                    decoration: const InputDecoration(
+                      labelText: 'CEST',
+                      hintText: 'Opcional',
+                      helperText: 'Preencha quando aplicável ao produto',
+                      prefixIcon: Icon(Icons.description_outlined),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(7),
+                    ],
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return null;
+                      }
+
+                      final clean = value.replaceAll(RegExp(r'\D'), '');
+
+                      if (clean.length != 7) {
+                        return 'O CEST deve possuir 7 dígitos.';
+                      }
+
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ==========================================================
+                  // AVISO
+                  // ==========================================================
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.amber.withOpacity(0.35)),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, size: 20, color: Colors.amber),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Confirme NCM, CFOP e demais informações fiscais com o responsável fiscal ou contador da empresa.',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),
+
+      // ======================================================================
+      // AÇÕES
+      // ======================================================================
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
-        ElevatedButton(onPressed: _isLoading ? null : _saveProduct, child: const Text('Salvar')),
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+
+        ElevatedButton(
+          onPressed: _isLoading ? null : _saveProduct,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Salvar'),
+        ),
       ],
     );
   }
 }
 
+// ============================================================================
+// WIDGET DO DIÁLOGO
+// ============================================================================
+
 class _ProductDialog extends StatefulWidget {
   final String storeId;
   final DocumentSnapshot? product;
-  const _ProductDialog({required this.storeId, this.product});
+
+  // Informa se a loja possui Business ativo.
+  final bool isBusiness;
+
+  const _ProductDialog({
+    required this.storeId,
+    required this.isBusiness,
+    this.product,
+  });
 
   @override
-  _ProductDialogState createState() => _ProductDialogState();
+  State<_ProductDialog> createState() => _ProductDialogState();
 }
+
+// ============================================================================
+// TELA GERENCIAR PRODUTOS
+// ============================================================================
 
 class ManageProductsScreen extends StatefulWidget {
   final String storeId;
+
   const ManageProductsScreen({super.key, required this.storeId});
 
   @override
@@ -385,26 +1302,167 @@ class ManageProductsScreen extends StatefulWidget {
 class _ManageProductsScreenState extends State<ManageProductsScreen> {
   final _searchController = TextEditingController();
 
+  // ==========================================================================
+  // PLANO DA LOJA
+  //
+  // Escutamos o documento da loja em tempo real.
+  // Se a assinatura mudar de PRO para Business com esta tela aberta,
+  // a permissão é atualizada automaticamente.
+  // ==========================================================================
+
+  StreamSubscription<DocumentSnapshot>? _storeSubscription;
+
+  bool _isBusiness = false;
+  bool _planLoaded = false;
+
+  // ==========================================================================
+  // INIT
+  // ==========================================================================
+
+  @override
+  void initState() {
+    super.initState();
+
+    _listenStorePlan();
+  }
+
+  // ==========================================================================
+  // ESCUTA O PLANO DA LOJA
+  // ==========================================================================
+
+  void _listenStorePlan() {
+    _storeSubscription = FirebaseFirestore.instance
+        .collection('stores')
+        .doc(widget.storeId)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            if (!snapshot.exists) {
+              if (mounted) {
+                setState(() {
+                  _isBusiness = false;
+                  _planLoaded = true;
+                });
+              }
+
+              return;
+            }
+
+            final data = snapshot.data() as Map<String, dynamic>;
+
+            final type = data['subscriptionType']?.toString() ?? 'free';
+
+            final status = data['subscriptionStatus']?.toString() ?? 'inactive';
+
+            final business = type == 'business' && status == 'active';
+
+            if (mounted) {
+              setState(() {
+                _isBusiness = business;
+
+                _planLoaded = true;
+              });
+            }
+
+            debugPrint('=== 📦 PRODUTOS / PLANO ===');
+
+            debugPrint('Tipo: $type');
+
+            debugPrint('Status: $status');
+
+            debugPrint('Business: $business');
+
+            debugPrint('============================');
+          },
+          onError: (error) {
+            debugPrint('Erro ao consultar plano da loja: $error');
+
+            if (mounted) {
+              setState(() {
+                _isBusiness = false;
+
+                _planLoaded = true;
+              });
+            }
+          },
+        );
+  }
+
+  // ==========================================================================
+  // DISPOSE
+  // ==========================================================================
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+
+    _storeSubscription?.cancel();
+
+    super.dispose();
+  }
+
+  // ==========================================================================
+  // ABRE O CADASTRO / EDIÇÃO
+  // ==========================================================================
+
   void _showProductDialog({DocumentSnapshot? product}) {
+    // Ainda não sabemos o plano.
+    if (!_planLoaded) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Carregando informações da assinatura...'),
+        ),
+      );
+
+      return;
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => _ProductDialog(storeId: widget.storeId, product: product),
+      builder: (ctx) => _ProductDialog(
+        storeId: widget.storeId,
+        product: product,
+        isBusiness: _isBusiness,
+      ),
     );
   }
+
+  // ==========================================================================
+  // EXCLUIR PRODUTO
+  // ==========================================================================
 
   void _deleteProduct(String productId) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirmar Exclusão'),
-        content: const Text('Tem certeza que deseja excluir este produto? A imagem associada será removida permanentemente.'),
+        content: const Text(
+          'Tem certeza que deseja excluir este produto? '
+          'A imagem associada será removida permanentemente.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              FirebaseFirestore.instance.collection('stores').doc(widget.storeId).collection('products').doc(productId).delete();
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              await FirebaseFirestore.instance
+                  .collection('stores')
+                  .doc(widget.storeId)
+                  .collection('products')
+                  .doc(productId)
+                  .delete();
+
+              if (!ctx.mounted) {
+                return;
+              }
+
               Navigator.of(ctx).pop();
             },
             child: const Text('Excluir'),
@@ -414,40 +1472,58 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     );
   }
 
+  // ==========================================================================
+  // BUILD
+  // ==========================================================================
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          const DynamicBackground(),
-          SafeArea(
-            child: Column(
-              children: [
-                _buildCustomHeader(isDarkMode),
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('stores')
-                        .doc(widget.storeId)
-                        .collection('products')
-                        .orderBy('name_lowercase')
-                        .snapshots(),
-                    builder: (context, snapshot) {
+
+        body: Stack(
+            children: [
+            const DynamicBackground(),
+
+        SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 1100,
+              ),
+              child: Column(
+                children: [
+                  _buildCustomHeader(isDarkMode),
+
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('stores')
+                          .doc(widget.storeId)
+                          .collection('products')
+                          .orderBy('name_lowercase')
+                          .snapshots(),
+                      builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
                       }
+
                       if (snapshot.hasError) {
                         return const Center(child: Text('Ocorreu um erro.'));
                       }
+
                       final allProducts = snapshot.data?.docs ?? [];
+
+                      final query = _searchController.text.trim().toLowerCase();
 
                       final filteredProducts = allProducts.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
-                        final name = (data['name_lowercase'] as String? ?? '').toLowerCase();
-                        final query = _searchController.text.toLowerCase();
+
+                        final name = (data['name_lowercase'] as String? ?? '')
+                            .toLowerCase();
+
                         return name.contains(query);
                       }).toList();
 
@@ -458,51 +1534,93 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                                 ? 'Nenhum produto cadastrado.'
                                 : 'Nenhum produto encontrado.',
                             style: TextStyle(
-                              color: isDarkMode ? Colors.white70 : Colors.black54,
+                              color: isDarkMode
+                                  ? Colors.white70
+                                  : Colors.black54,
                               fontSize: 16,
                             ),
                           ),
                         );
                       }
+
                       return LayoutBuilder(
                         builder: (context, constraints) {
                           if (constraints.maxWidth > 768) {
-                            return _buildProductDataTable(filteredProducts, isDarkMode, constraints);
-                          } else {
-                            return _buildProductListView(filteredProducts, isDarkMode);
+                            return _buildProductDataTable(
+                              filteredProducts,
+                              isDarkMode,
+                              constraints,
+                            );
                           }
+
+                          return _buildProductListView(
+                            filteredProducts,
+                            isDarkMode,
+                          );
                         },
                       );
                     },
                   ),
+
                 ),
               ],
             ),
           ),
+
+          ),
+        ),
         ],
       ),
+
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showProductDialog(),
-        child: const Icon(Icons.add),
+        onPressed: _planLoaded ? () => _showProductDialog() : null,
         tooltip: 'Adicionar Produto',
+        child: _planLoaded
+            ? const Icon(Icons.add)
+            : const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
       ),
+
     );
   }
 
-  Widget _buildProductListView(List<QueryDocumentSnapshot> products, bool isDarkMode) {
+  // ==========================================================================
+  // LISTA MOBILE
+  // ==========================================================================
+
+  Widget _buildProductListView(
+    List<QueryDocumentSnapshot> products,
+    bool isDarkMode,
+  ) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
       itemCount: products.length,
       itemBuilder: (ctx, index) {
         final productDoc = products[index];
+
         final productData = productDoc.data() as Map<String, dynamic>;
+
         return _buildProductCard(productDoc, productData, isDarkMode);
       },
     );
   }
 
-  Widget _buildProductDataTable(List<QueryDocumentSnapshot> products, bool isDarkMode, BoxConstraints constraints) {
-    final formatCurrency = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+  // ==========================================================================
+  // TABELA DESKTOP / WEB
+  // ==========================================================================
+
+  Widget _buildProductDataTable(
+    List<QueryDocumentSnapshot> products,
+    bool isDarkMode,
+    BoxConstraints constraints,
+  ) {
+    final formatCurrency = NumberFormat.currency(
+      locale: 'pt_BR',
+      symbol: 'R\$',
+    );
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -510,7 +1628,9 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         constraints: BoxConstraints(minWidth: constraints.maxWidth),
         child: DataTable(
           columnSpacing: 24,
-          headingRowColor: MaterialStateProperty.all(Theme.of(context).splashColor),
+          headingRowColor: MaterialStateProperty.all(
+            Theme.of(context).splashColor,
+          ),
           columns: const [
             DataColumn(label: Text('Produto')),
             DataColumn(label: Text('Estoque (Mín.)'), numeric: true),
@@ -519,63 +1639,98 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
           ],
           rows: products.map((productDoc) {
             final productData = productDoc.data() as Map<String, dynamic>;
+
             final imageUrl = productData['imageUrl'] as String?;
-            final quantidade = productData['quantidade'] as int? ?? 0;
-            final minimumStock = productData['minimumStock'] as int? ?? 0;
+
+            final quantidade = (productData['quantidade'] as num? ?? 0).toInt();
+
+            final minimumStock = (productData['minimumStock'] as num? ?? 0)
+                .toInt();
+
             final price = (productData['price'] as num? ?? 0).toDouble();
+
             final bool needsRestock = quantidade <= minimumStock;
 
             return DataRow(
-              color: MaterialStateProperty.resolveWith<Color?>(
-                    (Set<MaterialState> states) {
-                  if (needsRestock) return Colors.red.withOpacity(0.2);
-                  return null;
-                },
-              ),
+              color: MaterialStateProperty.resolveWith<Color?>((
+                Set<MaterialState> states,
+              ) {
+                if (needsRestock) {
+                  return Colors.red.withOpacity(0.2);
+                }
+
+                return null;
+              }),
               cells: [
-                DataCell(Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.grey.shade700,
-                      backgroundImage: (imageUrl != null && imageUrl.isNotEmpty) ? NetworkImage(imageUrl) : null,
-                      child: (imageUrl == null || imageUrl.isEmpty) ? const Icon(Icons.inventory_2, color: Colors.white, size: 20) : null,
-                    ),
-                    const SizedBox(width: 16),
-                    Text(productData['name'] ?? 'Sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ],
-                )),
+                DataCell(
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.grey.shade700,
+                        backgroundImage: imageUrl != null && imageUrl.isNotEmpty
+                            ? NetworkImage(imageUrl)
+                            : null,
+                        child: imageUrl == null || imageUrl.isEmpty
+                            ? const Icon(
+                                Icons.inventory_2,
+                                color: Colors.white,
+                                size: 20,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        productData['name'] ?? 'Sem nome',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+
                 DataCell(
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      if (needsRestock) const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 18),
+                      if (needsRestock)
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.redAccent,
+                          size: 18,
+                        ),
                       if (needsRestock) const SizedBox(width: 8),
                       Text(
                         '$quantidade ($minimumStock)',
                         style: TextStyle(
                           color: needsRestock ? Colors.red.shade800 : null,
-                          fontWeight: needsRestock ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: needsRestock
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                         ),
                       ),
                     ],
                   ),
                 ),
+
                 DataCell(Text(formatCurrency.format(price))),
-                DataCell(Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blueAccent),
-                      onPressed: () => _showProductDialog(product: productDoc),
-                      tooltip: 'Editar',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _deleteProduct(productDoc.id),
-                      tooltip: 'Excluir',
-                    ),
-                  ],
-                )),
+
+                DataCell(
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                        onPressed: () =>
+                            _showProductDialog(product: productDoc),
+                        tooltip: 'Editar',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _deleteProduct(productDoc.id),
+                        tooltip: 'Excluir',
+                      ),
+                    ],
+                  ),
+                ),
               ],
             );
           }).toList(),
@@ -583,6 +1738,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       ),
     );
   }
+
+  // ==========================================================================
+  // CABEÇALHO
+  // ==========================================================================
 
   Widget _buildCustomHeader(bool isDarkMode) {
     final headerColor = isDarkMode ? Colors.white : Colors.black;
@@ -593,27 +1752,103 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         children: [
           Row(
             children: [
+              // ================================================================
+              // VOLTAR
+              // ================================================================
               IconButton(
-                icon: Icon(Icons.arrow_back, color: headerColor),
+                icon: Icon(
+                  Icons.arrow_back,
+                  color: headerColor,
+                ),
                 onPressed: () => Navigator.of(context).pop(),
               ),
+
+              // ================================================================
+              // TÍTULO
+              // ================================================================
               Expanded(
-                child: Text('Gerenciar Produtos', style: TextStyle(color: headerColor, fontSize: 22, fontWeight: FontWeight.bold)),
+                child: Text(
+                  'Gerenciar Produtos',
+                  style: TextStyle(
+                    color: headerColor,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-              const SizedBox(width: 48),
+
+              // ================================================================
+              // IMPORTAR PRODUTOS
+              //
+              // Disponível tanto para PRO quanto para BUSINESS.
+              // Abre o assistente de importação XLSX / CSV.
+              // ================================================================
+              IconButton(
+                tooltip: 'Importar produtos',
+                icon: Icon(
+                  Icons.upload_file_outlined,
+                  color: headerColor,
+                ),
+                onPressed: _planLoaded
+                    ? () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) => ProductImportScreen(
+                        storeId: widget.storeId,
+                        isBusiness: _isBusiness,
+                      ),
+                    ),
+                  );
+                }
+                    : null,
+              ),
+
+              // ================================================================
+              // INDICADOR BUSINESS
+              // ================================================================
+              if (_isBusiness)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'BUSINESS',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.deepPurple,
+                    ),
+                  ),
+                )
+              else
+                const SizedBox(width: 8),
             ],
           ),
+
           const SizedBox(height: 8),
+
           TextField(
             controller: _searchController,
             onChanged: (value) => setState(() {}),
             style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
             decoration: InputDecoration(
               hintText: 'Buscar por nome...',
-              hintStyle: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54),
-              prefixIcon: Icon(Icons.search, color: isDarkMode ? Colors.white70 : Colors.black54),
+              hintStyle: TextStyle(
+                color: isDarkMode ? Colors.white70 : Colors.black54,
+              ),
+              prefixIcon: Icon(
+                Icons.search,
+                color: isDarkMode ? Colors.white70 : Colors.black54,
+              ),
               filled: true,
-              fillColor: Theme.of(context).cardColor.withOpacity(isDarkMode ? 0.1 : 0.5),
+              fillColor: Theme.of(
+                context,
+              ).cardColor.withOpacity(isDarkMode ? 0.1 : 0.5),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -626,18 +1861,41 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     );
   }
 
-  Widget _buildProductCard(DocumentSnapshot productDoc, Map<String, dynamic> productData, bool isDarkMode) {
+  // ==========================================================================
+  // CARD MOBILE
+  // ==========================================================================
+
+  Widget _buildProductCard(
+    DocumentSnapshot productDoc,
+    Map<String, dynamic> productData,
+    bool isDarkMode,
+  ) {
     final imageUrl = productData['imageUrl'] as String?;
-    final quantidade = productData['quantidade'] as int? ?? 0;
-    final minimumStock = productData['minimumStock'] as int? ?? 0;
+
+    final quantidade = (productData['quantidade'] as num? ?? 0).toInt();
+
+    final minimumStock = (productData['minimumStock'] as num? ?? 0).toInt();
+
     final bool needsRestock = quantidade <= minimumStock;
 
+    // Verifica apenas para mostrar um pequeno indicador.
+    final fiscal = productData['fiscal'];
+
+    final bool hasFiscalData =
+        fiscal is Map &&
+        fiscal['ncm'] != null &&
+        fiscal['ncm'].toString().isNotEmpty;
+
     return Card(
-      color: isDarkMode ? Colors.black.withOpacity(0.6) : Colors.white.withOpacity(0.8),
+      color: isDarkMode
+          ? Colors.black.withOpacity(0.6)
+          : Colors.white.withOpacity(0.8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
         side: BorderSide(
-          color: needsRestock ? Colors.redAccent.withOpacity(0.8) : Colors.transparent,
+          color: needsRestock
+              ? Colors.redAccent.withOpacity(0.8)
+              : Colors.transparent,
           width: 2,
         ),
       ),
@@ -647,26 +1905,58 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         leading: CircleAvatar(
           radius: 25,
           backgroundColor: Colors.grey.shade700,
-          backgroundImage: (imageUrl != null && imageUrl.isNotEmpty) ? NetworkImage(imageUrl) : null,
-          child: (imageUrl == null || imageUrl.isEmpty) ? const Icon(Icons.inventory_2, color: Colors.white) : null,
+          backgroundImage: imageUrl != null && imageUrl.isNotEmpty
+              ? NetworkImage(imageUrl)
+              : null,
+          child: imageUrl == null || imageUrl.isEmpty
+              ? const Icon(Icons.inventory_2, color: Colors.white)
+              : null,
         ),
-        title: Text(productData['name'] ?? 'Sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(
-          'Em estoque: $quantidade (Mín: $minimumStock)',
-          style: TextStyle(
-            color: needsRestock ? Colors.amber.shade600 : Theme.of(context).textTheme.bodySmall?.color,
-            fontWeight: needsRestock ? FontWeight.bold : FontWeight.normal,
-          ),
+        title: Text(
+          productData['name'] ?? 'Sem nome',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Em estoque: $quantidade (Mín: $minimumStock)',
+              style: TextStyle(
+                color: needsRestock
+                    ? Colors.amber.shade600
+                    : Theme.of(context).textTheme.bodySmall?.color,
+                fontWeight: needsRestock ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+
+            // Somente Business vê indicação fiscal.
+            if (_isBusiness)
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Text(
+                  hasFiscalData
+                      ? 'Fiscal configurado ✓'
+                      : 'Dados fiscais pendentes',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: hasFiscalData ? Colors.green : Colors.orange,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (needsRestock)
               const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.blueAccent),
               onPressed: () => _showProductDialog(product: productDoc),
             ),
+
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
               onPressed: () => _deleteProduct(productDoc.id),
