@@ -16,6 +16,32 @@ const functions = require("firebase-functions");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 
+// =============================================================================
+// 💰 SINCRONIZAÇÃO AUTOMÁTICA DE PREÇOS ASAAS
+//
+// Executada diariamente para garantir que nenhuma assinatura permaneça
+// com um preço antigo depois de uma alteração nos planos do Store Connect.
+// =============================================================================
+
+exports.syncAsaasSubscriptionPrices =
+  onSchedule(
+    {
+      schedule:
+        "0 3 * * *",
+
+      timeZone:
+        "America/Sao_Paulo",
+
+      timeoutSeconds:
+        540,
+    },
+
+    async () => {
+      return await syncAllAsaasSubscriptionPrices();
+    }
+  );
+
+
 
 // Inicializa o Firebase apenas UMA VEZ aqui no index principal
 admin.initializeApp();
@@ -27,17 +53,13 @@ const ASAAS_URL = ASAAS_ENV === "production"
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-const SUBSCRIPTION_PLANS = {
-  pro: {
-    price: 39.90,
-    name: "Store Connect Pro",
-  },
-
-  business: {
-      price: 99.90,
-    name: "Store Connect Business",
-  },
-};
+const {
+  SUBSCRIPTION_PLANS,
+  syncAsaasSubscriptionPrice,
+  syncAllAsaasSubscriptionPrices,
+} = require(
+  "./financeiro/subscriptionPricing"
+);
 
 /**
  * 🔵 FUNÇÃO: createAsaasSubscription
@@ -419,9 +441,18 @@ const SUBSCRIPTION_PLANS = {
            payments[0];
 
          const paymentLink =
-           payment?.billUrl ||
            payment?.invoiceUrl ||
+           payment?.billUrl ||
            null;
+
+         await syncAsaasSubscriptionPrice({
+           storeId,
+           subscriptionId:
+             existingSubscription.id,
+           plan:
+             storeData.subscriptionType ||
+             "pro",
+         });
 
          return {
            success: true,
@@ -508,6 +539,9 @@ const SUBSCRIPTION_PLANS = {
 
          subscriptionCreationStartedAt:
            admin.firestore.FieldValue.delete(),
+
+         subscriptionPlanPrice:
+           SUBSCRIPTION_PLANS.pro.price,
        });
 
        creationLockAcquired = false;
@@ -557,8 +591,8 @@ const SUBSCRIPTION_PLANS = {
              payments.data.data[0];
 
            const linkGerado =
-             payment.billUrl ||
-             payment.invoiceUrl;
+             payment.invoiceUrl ||
+             payment.billUrl;
 
            if (linkGerado) {
              finalPaymentLink =
@@ -976,16 +1010,83 @@ exports.changeAsaasPlan = onCall(
       };
     }
 
-    // Já está no plano solicitado
+    // ============================================================
+    // JÁ ESTÁ NO MESMO PLANO
+    //
+    // Mesmo que o Firestore diga que a loja já está no plano,
+    // ainda precisamos garantir que o valor real da assinatura
+    // no Asaas esteja sincronizado com o preço oficial.
+    //
+    // Exemplo:
+    //
+    // Firestore:
+    // subscriptionType = "pro"
+    //
+    // Asaas:
+    // assinatura antiga = R$ 15,90
+    //
+    // Preço oficial:
+    // PRO = R$ 39,90
+    //
+    // Nesse caso, NÃO podemos simplesmente retornar
+    // "já está no plano".
+    //
+    // Primeiro sincronizamos o preço.
+    // ============================================================
+
     if (currentPlan === newPlan) {
-      return {
-        success: true,
-        alreadyOnPlan: true,
-        plan: currentPlan,
-        subscriptionId,
-        message:
-          `A loja já está no plano ${currentPlan}.`,
-      };
+      try {
+        const syncResult =
+          await syncAsaasSubscriptionPrice({
+            storeId,
+
+            subscriptionId,
+
+            plan:
+              currentPlan,
+          });
+
+        return {
+          success: true,
+
+          alreadyOnPlan: true,
+
+          plan:
+            currentPlan,
+
+          subscriptionId,
+
+          // --------------------------------------------------------
+          // INFORMA SE O PREÇO PRECISOU SER CORRIGIDO
+          // --------------------------------------------------------
+
+          priceUpdated:
+            syncResult.updated,
+
+          oldPrice:
+            syncResult.oldPrice,
+
+          price:
+            syncResult.newPrice,
+
+          message:
+            syncResult.updated
+              ? `A loja já estava no plano ${currentPlan}, mas o valor da assinatura foi atualizado de R$ ${syncResult.oldPrice.toFixed(2)} para R$ ${syncResult.newPrice.toFixed(2)}.`
+              : `A loja já está no plano ${currentPlan} e o valor da assinatura está correto.`,
+        };
+      } catch (error) {
+        console.error(
+          `❌ Erro ao sincronizar preço da assinatura ${subscriptionId}:`,
+          error.response?.data ||
+            error.message ||
+            error
+        );
+
+        throw new HttpsError(
+          "internal",
+          "A loja já está neste plano, mas não foi possível verificar o valor da assinatura no Asaas."
+        );
+      }
     }
 
     const selectedPlan =

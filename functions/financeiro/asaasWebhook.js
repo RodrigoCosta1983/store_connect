@@ -1,6 +1,66 @@
+// =============================================================================
+// ARQUIVO: financeiro/asaasWebhook.js
+// =============================================================================
+//
+// OBJETIVO:
+//
+// Receber e processar os webhooks enviados pelo Asaas, mantendo o estado
+// financeiro das lojas sincronizado no Firestore e protegendo o acesso do
+// Store Connect contra eventos antigos, cobranças soltas e inconsistências.
+//
+// RESPONSABILIDADES:
+//
+// • Localizar a loja correta pelo ID da assinatura ou externalReference.
+// • Ignorar eventos pertencentes a assinaturas antigas.
+// • Detectar cobranças vencidas e pendentes da assinatura atual.
+// • Atualizar subscriptionStatus, nextDueDate e overdueSince no Firestore.
+// • Ativar a loja após pagamento confirmado quando não houver outro atraso.
+// • Inativar/remover o vínculo quando a assinatura oficial for excluída.
+// • Não alterar o acesso quando apenas uma cobrança individual for removida.
+// • Finalizar downgrade Business -> Pro após o pagamento Business previsto.
+//
+// INTEGRAÇÃO COM PREÇOS:
+//
+// Os preços NÃO devem ser definidos diretamente neste arquivo.
+// A fonte única de verdade é:
+//
+//   financeiro/subscriptionPricing.js
+//
+// Portanto, sempre utilizar:
+//
+//   SUBSCRIPTION_PLANS.pro.price
+//   SUBSCRIPTION_PLANS.business.price
+//
+// Isso evita que um reajuste futuro fique inconsistente entre criação de
+// assinatura, troca de plano, webhook e rotina automática de sincronização.
+//
+// FLUXO PRINCIPAL:
+//
+// Asaas -> webhook -> identifica assinatura -> identifica loja
+//       -> valida se é a assinatura oficial da loja
+//       -> consulta estado financeiro real
+//       -> processa evento
+//       -> atualiza Firestore
+//
+// CUIDADOS DE MANUTENÇÃO:
+//
+// • Não remover o "guardião da assinatura" sem revisar todo o fluxo.
+// • Não liberar uma loja apenas porque uma cobrança foi paga: primeiro deve ser
+//   confirmado que não existe outra cobrança OVERDUE na mesma assinatura.
+// • Não reiniciar overdueSince em eventos repetidos de atraso.
+// • Não voltar a declarar valores como const PRO_PRICE = 39.90.
+// • O downgrade Business -> Pro deve continuar alterando A MESMA assinatura.
+// • Falha ao concluir downgrade não deve apagar pendingPlanChange.
+//
+// =============================================================================
+
 const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const axios = require("axios");
+
+const {
+  SUBSCRIPTION_PLANS,
+} = require("./subscriptionPricing");
 
 // -----------------------------------------------------------------------------
 // AMBIENTE ASAAS
@@ -160,9 +220,11 @@ exports.asaasWebhook = onRequest(
     console.log(
       "\n\n╔════════════════════════════════════════════════════════════╗"
     );
+
     console.log(
       "║  🔔 WEBHOOK ASAAS RECEBIDO                                ║"
     );
+
     console.log(
       "╚════════════════════════════════════════════════════════════╝"
     );
@@ -214,11 +276,13 @@ exports.asaasWebhook = onRequest(
         null;
 
       console.log(`📌 Evento: ${event}`);
+
       console.log(
         `📌 Assinatura do evento: ${
           eventSubscriptionId || "SEM ID"
         }`
       );
+
       console.log(
         `📌 External Reference: ${
           targetId || "SEM REFERÊNCIA"
@@ -387,11 +451,15 @@ exports.asaasWebhook = onRequest(
 
         return res.json({
           received: true,
+
           status:
             "ignored_old_subscription",
+
           storeId:
             storeIdParaAtualizar,
+
           eventSubscriptionId,
+
           currentSubscriptionId,
         });
       }
@@ -415,6 +483,7 @@ exports.asaasWebhook = onRequest(
 
         return res.json({
           received: true,
+
           status:
             "ignored_payment_without_subscription",
         });
@@ -427,6 +496,7 @@ exports.asaasWebhook = onRequest(
       const headers = {
         access_token:
           ASAAS_API_KEY,
+
         "User-Agent":
           "StoreConnectApp/1.0",
       };
@@ -469,8 +539,10 @@ exports.asaasWebhook = onRequest(
 
         return res.json({
           received: true,
+
           status:
             "subscription_deleted",
+
           updatedStore:
             storeIdParaAtualizar,
         });
@@ -502,6 +574,7 @@ exports.asaasWebhook = onRequest(
 
         return res.json({
           received: true,
+
           status:
             "payment_deleted_no_access_change",
         });
@@ -612,7 +685,9 @@ exports.asaasWebhook = onRequest(
 
         return res.json({
           received: true,
+
           status: "overdue",
+
           updatedStore:
             storeIdParaAtualizar,
         });
@@ -666,22 +741,35 @@ exports.asaasWebhook = onRequest(
             updateData
           );
 
-          // =======================================================================
+          // ===================================================================
           // 🔄 FINALIZA DOWNGRADE BUSINESS -> PRO
           //
           // Se o cliente estava no Business,
           // pediu downgrade,
           // e agora acabou de pagar a mensalidade Business,
           // podemos reduzir a PRÓXIMA cobrança para o valor do PRO.
-          // =======================================================================
+          //
+          // IMPORTANTE:
+          //
+          // O preço NÃO é definido aqui.
+          //
+          // Utilizamos:
+          //
+          // SUBSCRIPTION_PLANS.pro.price
+          //
+          // cuja fonte oficial é subscriptionPricing.js.
+          // ===================================================================
 
           if (
             storeData.subscriptionType === "business" &&
             storeData.pendingPlanChange === "pro" &&
             eventSubscriptionId
           ) {
+
             try {
-              const PRO_PRICE = 39.90;
+
+              const PRO_PRICE =
+                SUBSCRIPTION_PLANS.pro.price;
 
               console.log(
                 `🔄 Pagamento Business confirmado. Efetivando downgrade para PRO da loja ${storeIdParaAtualizar}...`
@@ -690,28 +778,45 @@ exports.asaasWebhook = onRequest(
               // ---------------------------------------------------------------
               // Atualiza A MESMA assinatura.
               //
-              // Não usamos updatePendingPayments,
-              // portanto a cobrança Business que acabou de ser paga não muda.
-              // Próximas cobranças passam para R$ 39.90.
+              // Não usamos updatePendingPayments.
+              //
+              // Portanto:
+              //
+              // • a cobrança Business que acabou de ser paga não muda;
+              // • as próximas cobranças passam a utilizar o preço oficial
+              //   atual do Plano Pro.
               // ---------------------------------------------------------------
 
               await axios.put(
                 `${ASAAS_URL}/subscriptions/${eventSubscriptionId}`,
                 {
-                  value: PRO_PRICE,
-                  description: "Assinatura Store Connect Pro",
-                  externalReference: storeIdParaAtualizar,
+                  value:
+                    PRO_PRICE,
+
+                  description:
+                    "Assinatura Store Connect Pro",
+
+                  externalReference:
+                    storeIdParaAtualizar,
                 },
-                { headers }
+                {
+                  headers,
+                }
               );
 
               // ---------------------------------------------------------------
               // Agora sim altera o plano interno.
+              //
+              // Firestore só é atualizado depois que o Asaas respondeu
+              // com sucesso.
               // ---------------------------------------------------------------
 
               await storeRef.update({
-                subscriptionType: "pro",
-                subscriptionPlanPrice: PRO_PRICE,
+                subscriptionType:
+                  "pro",
+
+                subscriptionPlanPrice:
+                  PRO_PRICE,
 
                 pendingPlanChange:
                   admin.firestore.FieldValue.delete(),
@@ -720,24 +825,37 @@ exports.asaasWebhook = onRequest(
                   admin.firestore.FieldValue.delete(),
 
                 subscriptionPlanChangedAt:
-                  admin.firestore.FieldValue.serverTimestamp(),
+                  admin.firestore.FieldValue
+                    .serverTimestamp(),
               });
 
               console.log(
                 `✅ Downgrade concluído: BUSINESS -> PRO. Assinatura mantida: ${eventSubscriptionId}`
               );
 
+              console.log(
+                `💰 Novo preço PRO: R$ ${PRO_PRICE.toFixed(2)}`
+              );
+
             } catch (downgradeError) {
+
+              // ---------------------------------------------------------------
               // IMPORTANTE:
+              //
               // Se o Asaas falhar, NÃO removemos pendingPlanChange.
-              // Assim podemos tentar novamente em outro processamento.
+              //
+              // Assim o Firestore não diz que o cliente virou PRO enquanto
+              // a assinatura no Asaas ainda estiver como Business.
+              // ---------------------------------------------------------------
+
               console.error(
                 "⚠️ Pagamento confirmado, mas falhou ao concluir downgrade:",
                 downgradeError.response?.data ||
-                downgradeError.message
+                  downgradeError.message
               );
             }
           }
+
 
           console.log(
             "⚠️ Pagamento recebido, mas ainda existe cobrança vencida."
@@ -745,8 +863,10 @@ exports.asaasWebhook = onRequest(
 
           return res.json({
             received: true,
+
             status:
               "still_overdue",
+
             updatedStore:
               storeIdParaAtualizar,
           });
@@ -758,12 +878,16 @@ exports.asaasWebhook = onRequest(
         // ---------------------------------------------------------------------
 
         const updateData = {
-          subscriptionStatus: "active",
+          subscriptionStatus:
+            "active",
 
           // NÃO alteramos mais o plano aqui.
-          // O plano já está definido no Firestore pela contratação/upgrade.
+          //
+          // O plano já está definido no Firestore
+          // pela contratação/upgrade/downgrade.
           lastPaymentDate:
-            admin.firestore.FieldValue.serverTimestamp(),
+            admin.firestore.FieldValue
+              .serverTimestamp(),
 
           overdueSince:
             admin.firestore.FieldValue.delete(),
@@ -796,7 +920,10 @@ exports.asaasWebhook = onRequest(
 
         return res.json({
           received: true,
-          status: "active",
+
+          status:
+            "active",
+
           updatedStore:
             storeIdParaAtualizar,
         });
@@ -875,10 +1002,12 @@ exports.asaasWebhook = onRequest(
 
         return res.json({
           received: true,
+
           status:
             billingState.hasOverdue
               ? "date_synced_overdue"
               : "date_synced",
+
           updatedStore:
             storeIdParaAtualizar,
         });
@@ -895,8 +1024,10 @@ exports.asaasWebhook = onRequest(
 
       return res.json({
         received: true,
+
         status:
           "ignored_event",
+
         event,
       });
 
