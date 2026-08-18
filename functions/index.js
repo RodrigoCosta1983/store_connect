@@ -15,6 +15,9 @@ const functions = require("firebase-functions");
 
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 
+
+
+// Inicializa o Firebase apenas UMA VEZ aqui no index principal
 admin.initializeApp();
 
 const ASAAS_ENV = process.env.ASAAS_ENV || "sandbox";
@@ -24,8 +27,16 @@ const ASAAS_URL = ASAAS_ENV === "production"
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-const SUBSCRIPTION_PRICES = {
-  pro: 15.90
+const SUBSCRIPTION_PLANS = {
+  pro: {
+    price: 39.90,
+    name: "Store Connect Pro",
+  },
+
+  business: {
+      price: 99.90,
+    name: "Store Connect Business",
+  },
 };
 
 /**
@@ -51,207 +62,617 @@ const SUBSCRIPTION_PRICES = {
  * - "inactive" → Assinatura cancelada, vencida ou pagamento rejeitado (Bloqueia o app).
  */
 
- exports.createAsaasSubscription = onCall({ timeoutSeconds: 120 }, async (request) => {
-   console.log("\n\n╔════════════════════════════════════════════════════════════╗");
-   console.log("║  🟢 INICIANDO PROCESSO DE ASSINATURA NO ASAAS              ║");
-   console.log("╚════════════════════════════════════════════════════════════╝");
+ exports.createAsaasSubscription = onCall(
+   { timeoutSeconds: 120 },
+   async (request) => {
+     console.log(
+       "\n\n╔════════════════════════════════════════════════════════════╗"
+     );
+     console.log(
+       "║  🟢 INICIANDO PROCESSO DE ASSINATURA NO ASAAS              ║"
+     );
+     console.log(
+       "╚════════════════════════════════════════════════════════════╝"
+     );
 
-   const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
-   if (!request.auth) {
-     throw new HttpsError("unauthenticated", "Usuário não logado.");
-   }
+     const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
 
-   const userId = request.auth.uid;
-   const headers = {
-        "access_token": ASAAS_API_KEY,
-        "Content-Type": "application/json",
-        "User-Agent": "StoreConnectApp/1.0"
-      };
-   const db = admin.firestore();
+     if (!request.auth) {
+       throw new HttpsError(
+         "unauthenticated",
+         "Usuário não logado."
+       );
+     }
 
-   try {
-     // ✅ PASSO 1: Identifica a Loja
-     let storeId = request.data.storeId;
-     if (!storeId) {
-       const userDoc = await db.collection("users").doc(userId).get();
-       if (!userDoc.exists || !userDoc.data().storeId) {
-         throw new HttpsError("not-found", "Nenhuma loja vinculada a este usuário.");
+     const userId = request.auth.uid;
+
+     const headers = {
+       access_token: ASAAS_API_KEY,
+       "Content-Type": "application/json",
+       "User-Agent": "StoreConnectApp/1.0",
+     };
+
+     const db = admin.firestore();
+
+     let storeRef = null;
+     let creationLockAcquired = false;
+
+     try {
+       // ============================================================
+       // 1. IDENTIFICA A LOJA
+       // ============================================================
+
+       let storeId = request.data.storeId;
+
+       if (!storeId) {
+         const userDoc = await db
+           .collection("users")
+           .doc(userId)
+           .get();
+
+         if (
+           !userDoc.exists ||
+           !userDoc.data().storeId
+         ) {
+           throw new HttpsError(
+             "not-found",
+             "Nenhuma loja vinculada a este usuário."
+           );
+         }
+
+         storeId = userDoc.data().storeId;
        }
-       storeId = userDoc.data().storeId;
-     }
 
-     // ✅ PASSO 2: Busca os dados completos da loja no banco
-     const storeRef = db.collection("stores").doc(storeId);
-     const storeDoc = await storeRef.get();
-     const storeData = storeDoc.data() || {};
+       storeRef = db
+         .collection("stores")
+         .doc(storeId);
 
-     // 🚀 A MÁGICA AQUI: Pegamos o CPF e Nome direto do banco (pois o Flutter mandou só o storeId)
-     const cpfCnpj = request.data.cpfCnpj || storeData.document;
-     const name = request.data.name || storeData.name || "Cliente Store Connect";
-     const phone = request.data.phone || storeData.phone || "";
-     const email = request.data.email || request.auth.token?.email || `contato@${storeId}.com.br`;
+       // ============================================================
+       // 2. TRAVA CONTRA DUPLO CLIQUE / DUAS REQUISIÇÕES
+       //
+       // Apenas UMA chamada pode assumir o estado "creating".
+       // ============================================================
 
-     if (!cpfCnpj) {
-       throw new HttpsError("invalid-argument", "CPF/CNPJ não encontrado no cadastro da loja.");
-     }
+       await db.runTransaction(async (transaction) => {
+         const freshStoreDoc =
+           await transaction.get(storeRef);
 
-     const existingSubscriptionId = storeData.asaasSubscriptionId;
+         if (!freshStoreDoc.exists) {
+           throw new HttpsError(
+             "not-found",
+             "Loja não encontrada."
+           );
+         }
 
-     console.log(`\n📌 User ID: ${userId}`);
-     console.log(`📌 Store ID: ${storeId}`);
-     console.log(`📌 CPF/CNPJ: ${cpfCnpj}`);
-     console.log(`📌 Assinatura Existente: ${existingSubscriptionId || "NÃO"}`);
+         const freshData =
+           freshStoreDoc.data() || {};
 
-     // ✅ PASSO 3: Se há assinatura anterior, verifica status do pagamento
-     if (existingSubscriptionId && storeData.subscriptionStatus !== "inactive") {
-            console.log("\n🔍 VERIFICANDO ASSINATURA EXISTENTE");
+         const creationStatus =
+           freshData.subscriptionCreationStatus;
 
-       try {
-         const payments = await axios.get(
-           `${ASAAS_URL}/payments?subscription=${existingSubscriptionId}&limit=5`,
+         const creationStartedAt =
+           freshData.subscriptionCreationStartedAt;
+
+         // ----------------------------------------------------------
+         // Trava expirada:
+         // se por algum erro uma chamada morreu deixando "creating",
+         // liberamos automaticamente após 3 minutos.
+         // ----------------------------------------------------------
+
+         let lockStillValid = false;
+
+         if (
+           creationStatus === "creating" &&
+           creationStartedAt
+         ) {
+           const started =
+             creationStartedAt.toDate
+               ? creationStartedAt.toDate()
+               : new Date(creationStartedAt);
+
+           const ageMs =
+             Date.now() - started.getTime();
+
+           lockStillValid =
+             ageMs < 3 * 60 * 1000;
+         }
+
+         if (lockStillValid) {
+           throw new HttpsError(
+             "already-exists",
+             "Já existe uma assinatura sendo criada. Aguarde alguns segundos."
+           );
+         }
+
+         // Assume a trava.
+         transaction.update(storeRef, {
+           subscriptionCreationStatus: "creating",
+           subscriptionCreationStartedAt:
+             admin.firestore.FieldValue.serverTimestamp(),
+         });
+
+         creationLockAcquired = true;
+       });
+
+       console.log(
+         `🔒 Trava de criação adquirida para loja ${storeId}`
+       );
+
+       // ============================================================
+       // 3. BUSCA DADOS ATUALIZADOS DA LOJA
+       // ============================================================
+
+       const storeDoc =
+         await storeRef.get();
+
+       const storeData =
+         storeDoc.data() || {};
+
+       const cpfCnpj =
+         request.data.cpfCnpj ||
+         storeData.document;
+
+       const name =
+         request.data.name ||
+         storeData.name ||
+         "Cliente Store Connect";
+
+       const phone =
+         request.data.phone ||
+         storeData.phone ||
+         "";
+
+       const email =
+         request.data.email ||
+         request.auth.token?.email ||
+         `contato@${storeId}.com.br`;
+
+       if (!cpfCnpj) {
+         throw new HttpsError(
+           "invalid-argument",
+           "CPF/CNPJ não encontrado no cadastro da loja."
+         );
+       }
+
+       console.log(`📌 User ID: ${userId}`);
+       console.log(`📌 Store ID: ${storeId}`);
+       console.log(`📌 CPF/CNPJ: ${cpfCnpj}`);
+       console.log(
+         `📌 Assinatura salva atualmente: ${
+           storeData.asaasSubscriptionId || "NÃO"
+         }`
+       );
+
+       // ============================================================
+       // 4. LOCALIZA OU CRIA O CUSTOMER
+       // ============================================================
+
+       let customerId =
+         storeData.asaasCustomerId || null;
+
+       if (!customerId) {
+         const search =
+           await axios.get(
+             `${ASAAS_URL}/customers`,
+             {
+               headers,
+               params: {
+                 cpfCnpj,
+               },
+             }
+           );
+
+         if (
+           search.data.data?.length > 0
+         ) {
+           customerId =
+             search.data.data[0].id;
+
+           console.log(
+             `✅ Cliente encontrado: ${customerId}`
+           );
+         } else {
+           const create =
+             await axios.post(
+               `${ASAAS_URL}/customers`,
+               {
+                 name,
+                 email,
+                 cpfCnpj,
+                 phone,
+                 externalReference: storeId,
+               },
+               { headers }
+             );
+
+           customerId =
+             create.data.id;
+
+           console.log(
+             `✅ Novo cliente criado: ${customerId}`
+           );
+         }
+       }
+
+       // ============================================================
+       // 5. PROTEÇÃO 2:
+       // CONSULTA O ASAAS ANTES DE CRIAR UMA NOVA ASSINATURA
+       //
+       // Procura assinatura ACTIVE desta loja.
+       // ============================================================
+
+       console.log(
+         "🔎 Verificando se já existe assinatura ativa no Asaas..."
+       );
+
+       const subscriptionsRes =
+         await axios.get(
+           `${ASAAS_URL}/subscriptions`,
+           {
+             headers,
+             params: {
+               customer: customerId,
+               externalReference: storeId,
+               status: "ACTIVE",
+               limit: 100,
+             },
+           }
+         );
+
+       const activeSubscriptions =
+         subscriptionsRes.data?.data || [];
+
+       if (
+         activeSubscriptions.length > 0
+       ) {
+         // ----------------------------------------------------------
+         // Existe mais de uma?
+         // Não criamos outra.
+         // Escolhemos a mais recente apenas para reconciliar o
+         // Firestore, e registramos o problema no log.
+         // ----------------------------------------------------------
+
+         activeSubscriptions.sort(
+           (a, b) =>
+             new Date(b.dateCreated) -
+             new Date(a.dateCreated)
+         );
+
+         const existingSubscription =
+           activeSubscriptions[0];
+
+         if (
+           activeSubscriptions.length > 1
+         ) {
+           console.warn(
+             `⚠️ Foram encontradas ${activeSubscriptions.length} assinaturas ACTIVE para a loja ${storeId}.`
+           );
+
+           console.warn(
+             "⚠️ Nenhuma nova assinatura será criada."
+           );
+
+           console.warn(
+             `⚠️ Assinatura considerada oficial: ${existingSubscription.id}`
+           );
+         }
+
+         await storeRef.update({
+           asaasSubscriptionId:
+             existingSubscription.id,
+
+           asaasCustomerId:
+             customerId,
+
+           subscriptionType:
+             "pro",
+
+           // Não forçamos "active" aqui porque
+           // ACTIVE no objeto assinatura não significa
+           // necessariamente que a cobrança atual foi paga.
+           //
+           // Preservamos o status financeiro existente da loja.
+           nextDueDate:
+             existingSubscription.nextDueDate ||
+             storeData.nextDueDate ||
+             null,
+
+           subscriptionCreationStatus:
+             admin.firestore.FieldValue.delete(),
+
+           subscriptionCreationStartedAt:
+             admin.firestore.FieldValue.delete(),
+         });
+
+         creationLockAcquired = false;
+
+         // ----------------------------------------------------------
+         // Agora tenta encontrar uma cobrança utilizável dessa
+         // assinatura para devolver ao app.
+         // ----------------------------------------------------------
+
+         const paymentsRes =
+           await axios.get(
+             `${ASAAS_URL}/payments`,
+             {
+               headers,
+               params: {
+                 subscription:
+                   existingSubscription.id,
+                 limit: 100,
+               },
+             }
+           );
+
+         const payments =
+           paymentsRes.data?.data || [];
+
+         // Prioridade:
+         // OVERDUE -> PENDING -> qualquer outra
+         const payment =
+           payments.find(
+             (p) => p.status === "OVERDUE"
+           ) ||
+           payments.find(
+             (p) => p.status === "PENDING"
+           ) ||
+           payments[0];
+
+         const paymentLink =
+           payment?.billUrl ||
+           payment?.invoiceUrl ||
+           null;
+
+         return {
+           success: true,
+           alreadyExists: true,
+           subscriptionId:
+             existingSubscription.id,
+           paymentUrl: paymentLink,
+           nextDueDate:
+             existingSubscription.nextDueDate,
+           message:
+             activeSubscriptions.length > 1
+               ? "Já existiam assinaturas ativas no Asaas. Nenhuma nova assinatura foi criada."
+               : "Já existe uma assinatura ativa para esta loja.",
+         };
+       }
+
+       // ============================================================
+       // 6. NÃO EXISTE ASSINATURA ACTIVE:
+       // AGORA SIM PODE CRIAR UMA NOVA
+       // ============================================================
+
+       console.log(
+         "💳 Nenhuma assinatura ativa encontrada. Criando nova assinatura..."
+       );
+
+       const nextDueDate =
+         new Date();
+
+       const dueDateString =
+         nextDueDate
+           .toISOString()
+           .split("T")[0];
+
+       const subResponse =
+         await axios.post(
+           `${ASAAS_URL}/subscriptions`,
+           {
+             customer: customerId,
+             billingType: "UNDEFINED",
+             value:
+               SUBSCRIPTION_PLANS.pro.price,
+             nextDueDate:
+               dueDateString,
+             cycle: "MONTHLY",
+             description:
+               "Assinatura Store Connect Pro",
+             externalReference:
+               storeId,
+           },
            { headers }
          );
 
-         if (payments.data.data && payments.data.data.length > 0) {
-           const payment = payments.data.data[0];
+       const subscriptionId =
+         subResponse.data.id;
 
-           // ✅ Pagamento já foi confirmado
-           if (payment.status === "CONFIRMED" || payment.status === "RECEIVED") {
-             await storeRef.update({
-               subscriptionStatus: "active",
-               lastPaymentDate: admin.firestore.FieldValue.serverTimestamp()
-             });
+       console.log(
+         `✅ Nova assinatura criada: ${subscriptionId}`
+       );
 
-             return {
-               success: true,
-               alreadyActive: true,
-               message: "✅ Assinatura já está ativa!"
-             };
-           }
+       // ============================================================
+       // 7. SALVA IMEDIATAMENTE O ID
+       //
+       // Fazemos isso antes de esperar boleto.
+       // ============================================================
 
-           // ✅ Boleto ainda está pendente - retorna link
-           if (payment.status === "PENDING") {
-             const paymentLink = payment.billUrl || payment.invoiceUrl;
+       await storeRef.update({
+         asaasSubscriptionId:
+           subscriptionId,
 
-             if (!paymentLink) {
-               const fallbackUrl = `https://www.asaas.com/checkout/${existingSubscriptionId}`;
-               return {
-                 success: true,
-                 paymentUrl: fallbackUrl,
-                 subscriptionId: existingSubscriptionId,
-                 alreadyExists: true
-               };
+         asaasCustomerId:
+           customerId,
+
+         subscriptionStatus:
+           "pending",
+
+         subscriptionType:
+           "pro",
+
+         nextDueDate:
+           dueDateString,
+
+         subscriptionCreationStatus:
+           admin.firestore.FieldValue.delete(),
+
+         subscriptionCreationStartedAt:
+           admin.firestore.FieldValue.delete(),
+       });
+
+       creationLockAcquired = false;
+
+       console.log(
+         `✅ Assinatura salva imediatamente no Firestore: ${subscriptionId}`
+       );
+
+       // ============================================================
+       // 8. BUSCA LINK DA PRIMEIRA COBRANÇA
+       //
+       // Reduzi o loop para não encostar no timeout de 120s.
+       //
+       // 20 tentativas x 3s = no máximo ~60 segundos de espera.
+       // ============================================================
+
+       let finalPaymentLink =
+         null;
+
+       console.log(
+         `⏳ Aguardando Asaas gerar cobrança da assinatura ${subscriptionId}...`
+       );
+
+       for (
+         let i = 1;
+         i <= 20;
+         i++
+       ) {
+         const payments =
+           await axios.get(
+             `${ASAAS_URL}/payments`,
+             {
+               headers,
+               params: {
+                 subscription:
+                   subscriptionId,
+                 limit: 1,
+               },
              }
-             return {
-               success: true,
-               paymentUrl: paymentLink,
-               subscriptionId: existingSubscriptionId,
-               alreadyExists: true
-             };
+           );
+
+         if (
+           payments.data.data &&
+           payments.data.data.length > 0
+         ) {
+           const payment =
+             payments.data.data[0];
+
+           const linkGerado =
+             payment.billUrl ||
+             payment.invoiceUrl;
+
+           if (linkGerado) {
+             finalPaymentLink =
+               linkGerado;
+
+             console.log(
+               `✅ Link encontrado na tentativa ${i}`
+             );
+
+             break;
            }
          }
-       } catch (axiosError) {
-         console.error(`❌ ERRO ao buscar pagamentos:`, axiosError.response?.data || axiosError.message);
+
+         console.log(
+           `🔄 Aguardando cobrança... tentativa ${i}`
+         );
+
+         await delay(3000);
        }
-     }
 
-     // 💳 PASSO 4: CRIA ASSINATURA PAGA DIRETO (Se clicou no botão vermelho, ele quer assinar agora!)
-     console.log("\n💳 CRIANDO ASSINATURA PAGA NO ASAAS");
+       // ============================================================
+       // 9. A ASSINATURA JÁ EXISTE MESMO SE O LINK ATRASAR
+       //
+       // Não apagamos a assinatura e não permitimos criar outra.
+       // ============================================================
 
-     let customerId;
-     const search = await axios.get(`${ASAAS_URL}/customers?cpfCnpj=${cpfCnpj}`, { headers });
+       if (!finalPaymentLink) {
+         console.warn(
+           "⚠️ Assinatura criada, mas o link ainda não ficou disponível."
+         );
 
-     if (search.data.data?.length > 0) {
-       customerId = search.data.data[0].id;
-       console.log(`✅ Cliente encontrado: ${customerId}`);
-     } else {
-       const create = await axios.post(`${ASAAS_URL}/customers`, {
-         name,
-         email,
-         cpfCnpj,
-         phone,
-         externalReference: storeId
-       }, { headers });
-       customerId = create.data.id;
-       console.log(`✅ Novo cliente criado: ${customerId}`);
-     }
+         return {
+           success: true,
+           subscriptionCreated: true,
+           waitingPaymentLink: true,
+           subscriptionId,
+           paymentUrl: null,
+           isTrial: false,
+           price:
+               SUBSCRIPTION_PLANS.pro.price,
+           nextDueDate:
+             dueDateString,
+           message:
+             "Assinatura criada. O boleto ainda está sendo processado pelo Asaas. Tente abrir novamente em alguns segundos.",
+         };
+       }
 
-     // ✅ Calcula data de vencimento (próximo mês)
-     const nextDueDate = new Date();
-    // nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-     const dueDateString = nextDueDate.toISOString().split('T')[0];
+       return {
+         success: true,
+         paymentUrl:
+           finalPaymentLink,
+         subscriptionId,
+         isTrial: false,
+         price:
+           SUBSCRIPTION_PLANS.pro.price,
+         nextDueDate:
+           dueDateString,
+         message:
+           "📄 Boleto gerado com sucesso!",
+       };
 
-     // ✅ Cria assinatura no Asaas
-     const subResponse = await axios.post(`${ASAAS_URL}/subscriptions`, {
-       customer: customerId,
-       billingType: "UNDEFINED",
-       value: SUBSCRIPTION_PRICES.pro,
-       nextDueDate: dueDateString,
-       cycle: "MONTHLY",
-       description: "Assinatura Store Connect Pro",
-       externalReference: storeId
-     }, { headers });
+     } catch (error) {
+       console.error(
+         "❌ Erro na assinatura:",
+         error.response?.data ||
+         error.message ||
+         error
+       );
 
-     const subscriptionId = subResponse.data.id;
+       // ============================================================
+       // LIBERA A TRAVA EM CASO DE ERRO
+       // ============================================================
 
-     // ✅ ATUALIZA A LOJA no Firestore sem apagar o Trial
-     await storeRef.update({
-       asaasSubscriptionId: subscriptionId,
-       asaasCustomerId: customerId,
-       subscriptionStatus: "pending",
-       subscriptionType: "pro",
-       nextDueDate: dueDateString
-       // Note que não mexemos no trialEndDate, ele continua valendo!
-     });
+       if (
+         storeRef &&
+         creationLockAcquired
+       ) {
+         try {
+           await storeRef.update({
+             subscriptionCreationStatus:
+               admin.firestore.FieldValue.delete(),
 
-     console.log(`✅ Assinatura salva no Firestore: ${subscriptionId}`);
+             subscriptionCreationStartedAt:
+               admin.firestore.FieldValue.delete(),
+           });
 
-     // ✅ PASSO 5: Busca o link do boleto (com delay inteligente real)
-         let finalPaymentLink = null;
-
-         console.log(`⏳ Aguardando Asaas gerar o boleto para a assinatura ${subscriptionId}...`);
-
-         for (let i = 1; i <= 40; i++) {
-           const payments = await axios.get(`${ASAAS_URL}/payments?subscription=${subscriptionId}&limit=1`, { headers });
-
-           if (payments.data.data && payments.data.data.length > 0) {
-             const payment = payments.data.data[0];
-             const linkGerado = payment.billUrl || payment.invoiceUrl;
-
-             // SÓ PARA O LOOP SE O LINK REALMENTE EXISTIR AGORA!
-             if (linkGerado) {
-               finalPaymentLink = linkGerado;
-               console.log(`✅ Boleto encontrado na tentativa ${i}`);
-               break;
-             } else {
-               console.log(`🔄 Pagamento criado, aguardando URL do banco... Tentativa ${i}`);
-             }
-           }
-           // Espera 2 segundos antes de tentar de novo
-           await delay(3000);
+           console.log(
+             "🔓 Trava de criação liberada após erro."
+           );
+         } catch (unlockError) {
+           console.error(
+             "⚠️ Não foi possível liberar a trava:",
+             unlockError.message
+           );
          }
+       }
 
-         if (!finalPaymentLink) {
-           throw new HttpsError("unavailable", "Asaas demorou a gerar o link do boleto.");
-         }
+       // Mantém HttpsError original quando possível.
+       if (
+         error instanceof HttpsError
+       ) {
+         throw error;
+       }
 
-         console.log(`✅ Boleto retornado para o celular com sucesso!`);
-
-     return {
-       success: true,
-       paymentUrl: finalPaymentLink,
-       subscriptionId: subscriptionId,
-       isTrial: false,
-       price: SUBSCRIPTION_PRICES.pro,
-       nextDueDate: dueDateString,
-       message: "📄 Boleto gerado com sucesso!"
-     };
-
-   } catch (error) {
-     console.error(`\n❌ Erro na assinatura: ${error.message}`);
-     throw new HttpsError("internal", `Erro na assinatura: ${error.message}`);
+       throw new HttpsError(
+         "internal",
+         `Erro na assinatura: ${
+           error.message ||
+           "erro desconhecido"
+         }`
+       );
+     }
    }
- });
+ );
 
 /**
  * 🔔 WEBHOOK DO ASAAS
@@ -263,140 +684,47 @@ const SUBSCRIPTION_PRICES = {
  * - SUBSCRIPTION_DELETED → desativa assinatura
  */
 
-   /**
-      * 🔔 WEBHOOK DO ASAAS
-      */
-     exports.asaasWebhook = onRequest(async (req, res) => {
-       console.log("\n\n╔════════════════════════════════════════════════════════════╗");
-       console.log("║  🔔 WEBHOOK ASAAS RECEBIDO                                ║");
-       console.log("╚════════════════════════════════════════════════════════════╝");
 
-       if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
 
-       try {
-         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
 
-         const event = body.event;
-         const payment = body.payment || {};
+ // =======================================================================
+ // 🧾 MÓDULO FISCAL - FOCUS NFE
+ // =======================================================================
 
-         const asaasSubscriptionId = payment.subscription;
-         let targetId = payment.externalReference;
+ // Cadastro / validação da empresa
+ const {
+   registerFocusCompany,
+ } = require("./fiscal/registerFocusCompany");
 
-         console.log(`📌 Evento: ${event}`);
-         console.log(`📌 ID Assinatura: ${asaasSubscriptionId}`);
-         console.log(`📌 External Reference: ${targetId}`);
+ exports.registerFocusCompany =
+   registerFocusCompany;
 
-         const db = admin.firestore();
-         let storeIdParaAtualizar = null;
+ // Emissão NFC-e
+ const {
+   emitirNfce,
+ } = require("./fiscal/emitirNfce");
 
-         // 🔍 1ª Tentativa: Busca pelo ID da assinatura
-         if (asaasSubscriptionId) {
-             const snapshot = await db.collection("stores").where("asaasSubscriptionId", "==", asaasSubscriptionId).get();
-             if (!snapshot.empty) {
-                 storeIdParaAtualizar = snapshot.docs[0].id;
-                 console.log(`✅ Loja encontrada pela Assinatura: ${storeIdParaAtualizar}`);
-             }
-         }
+ exports.emitirNfce =
+   emitirNfce;
 
-         // 🔍 2ª Tentativa: Busca pela referência externa
-         if (!storeIdParaAtualizar && targetId) {
-             const userDoc = await db.collection("users").doc(targetId).get();
-             if (userDoc.exists && userDoc.data().storeId) {
-                 storeIdParaAtualizar = userDoc.data().storeId;
-                 console.log(`✅ Convertido de UID para StoreID: ${storeIdParaAtualizar}`);
-             } else {
-                 storeIdParaAtualizar = targetId;
-                 console.log(`✅ Usando targetId direto como StoreID: ${storeIdParaAtualizar}`);
-             }
-         }
+ // Pesquisa NCM
+ const {
+   searchNcm,
+ } = require("./fiscal/ncm/searchNcm");
 
-         if (!storeIdParaAtualizar) {
-             console.log(`⚠️ Nenhuma loja encontrada! Ignorando.`);
-             return res.json({ received: true, status: "ignored_no_store" });
-         }
+ exports.searchNcm =
+   searchNcm;
 
-         const storeRef = db.collection("stores").doc(storeIdParaAtualizar);
-         const storeSnap = await storeRef.get();
+ // -----------------------------------------------------------------------
+ // Sincronização da tabela NCM oficial
+ // -----------------------------------------------------------------------
 
-         if (!storeSnap.exists) {
-             console.log(`⚠️ O documento da loja ${storeIdParaAtualizar} não existe no Firestore.`);
-             return res.json({ received: true, status: "ignored_not_found" });
-         }
+ const {
+   syncNcmTable,
+ } = require("./fiscal/ncm/syncNcmTable");
 
-         // -------------------------------------------------------------------------
-         // 🧠 A MÁGICA NOVA EVOLUÍDA: Consulta a próxima data real no Asaas
-         // -------------------------------------------------------------------------
-         let realNextDueDate = null;
-         if (asaasSubscriptionId) {
-             try {
-                 const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
-                 const headers = { "access_token": ASAAS_API_KEY, "User-Agent": "StoreConnectApp/1.0" };
-
-                 // 1. Tenta achar a fatura pendente mais antiga
-                 const pendingRes = await axios.get(`${ASAAS_URL}/payments?subscription=${asaasSubscriptionId}&status=PENDING&limit=5`, { headers });
-
-                 if (pendingRes.data && pendingRes.data.data && pendingRes.data.data.length > 0) {
-                     const faturasPendentes = pendingRes.data.data.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-                     realNextDueDate = faturasPendentes[0].dueDate;
-                     console.log(`📅 Próximo vencimento via Fatura Pendente: ${realNextDueDate}`);
-                 } else {
-                     // 2. O PLANO B: Se NÃO TEM fatura pendente, busca a data do próximo ciclo direto na Assinatura
-                     const subRes = await axios.get(`${ASAAS_URL}/subscriptions/${asaasSubscriptionId}`, { headers });
-                     if (subRes.data && subRes.data.nextDueDate) {
-                         realNextDueDate = subRes.data.nextDueDate;
-                         console.log(`📅 Próximo vencimento via Assinatura (Tudo pago!): ${realNextDueDate}`);
-                     }
-                 }
-             } catch (err) {
-                 console.error("⚠️ Erro ao buscar a próxima data no Asaas:", err.message);
-             }
-         }
-
-         // Preparamos um objeto flexível para atualizar o Firebase (agora sem duplicidade!)
-         let updateData = {};
-         if (realNextDueDate) {
-             updateData.nextDueDate = realNextDueDate;
-         }
-
-         // 🔄 ATUALIZA O STATUS E APLICA A GUILHOTINA
-         if (event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED") {
-             updateData.subscriptionStatus = "active";
-             updateData.lastPaymentDate = admin.firestore.FieldValue.serverTimestamp();
-             updateData.subscriptionType = "pro";
-
-             await storeRef.update(updateData);
-             console.log(`🎉 Sucesso! Loja ${storeIdParaAtualizar} ATIVADA e vencimento atualizado.`);
-         }
-         else if (event === "PAYMENT_OVERDUE") {
-             updateData.subscriptionStatus = "overdue";
-             updateData.overdueSince = admin.firestore.FieldValue.serverTimestamp();
-
-             await storeRef.update(updateData);
-             console.log(`⚠️ Loja ${storeIdParaAtualizar} entrou em ATRASO (Grace Period iniciado).`);
-         }
-         else if (event === "SUBSCRIPTION_DELETED" || event === "PAYMENT_DELETED") {
-             await storeRef.update({ subscriptionStatus: "inactive" });
-             console.log(`🚫 Loja ${storeIdParaAtualizar} INATIVADA (Assinatura ou pagamento deletado no painel).`);
-         }
-         else if (event === "PAYMENT_CREATED") {
-             if (Object.keys(updateData).length > 0) {
-                 await storeRef.update(updateData);
-                 console.log(`ℹ️ Loja ${storeIdParaAtualizar}: Data de vencimento corrigida pelo PAYMENT_CREATED.`);
-             }
-             res.json({ received: true, status: "date_synced" });
-             return;
-         }
-         else {
-             console.log(`ℹ️ Evento ${event} ignorado pois não afeta o status da loja.`);
-         }
-
-         res.json({ received: true, updatedStore: storeIdParaAtualizar });
-
-       } catch (error) {
-         console.error(`❌ Erro crítico no webhook:`, error);
-         res.status(500).send("Erro interno");
-       }
-     });
+ exports.syncNcmTable =
+   syncNcmTable;
 
 
   /**
@@ -480,132 +808,333 @@ exports.onProductDelete = onDocumentDeleted("stores/{storeId}/products/{productI
 
 
 
+// -----------------------------------------------------------------------
+// 💰 MÓDULO FINANCEIRO (ASAAS)
+// -----------------------------------------------------------------------
+const webhook = require("./financeiro/asaasWebhook");
+exports.asaasWebhook = webhook.asaasWebhook;
+
+const faturas = require("./financeiro/faturas");
+exports.listAsaasInvoices = faturas.listAsaasInvoices;
+exports.getAsaasPortalUrl = faturas.getAsaasPortalUrl;
+
+
+
+// -----------------------------------------------------------------------
+// 👥 MÓDULO DE USUÁRIOS E PERMISSÕES
+// -----------------------------------------------------------------------
+const { convidarFuncionario } = require("./usuarios/convidarFuncionario");
+exports.convidarFuncionario = convidarFuncionario;
+
 /**
- * --- PORTAL DO CLIENTE (ASAAS) ---
- * --- FUNÇÃO PARA PEGAR O LINK DO PORTAL DO CLIENTE (ASAAS) ---
+ * 🔄 ALTERAR PLANO DA ASSINATURA
+ *
+ * PRO -> BUSINESS
+ * BUSINESS -> PRO
+ *
+ * IMPORTANTE:
+ * Não cria uma nova assinatura.
+ * Atualiza a assinatura existente no Asaas.
  */
-exports.getAsaasPortalUrl = onCall(async (request) => {
-  // 1. Verificação de segurança (Sintaxe V2 usando request.auth)
-  if (!request.auth) {
-    throw new HttpsError(
-      "unauthenticated",
-      "O usuário deve estar logado."
-    );
-  }
-
-  // Na V2, os dados ficam dentro de request.data
-  const storeId = request.data.storeId;
-  if (!storeId) {
-    throw new HttpsError(
-      "invalid-argument",
-      "O ID da loja é obrigatório."
-    );
-  }
-
-  const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
-
-  try {
-    const storeDoc = await admin.firestore().collection("stores").doc(storeId).get();
-    if (!storeDoc.exists) {
-      throw new HttpsError("not-found", "Loja não encontrada.");
+exports.changeAsaasPlan = onCall(
+  { timeoutSeconds: 60 },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Usuário não logado."
+      );
     }
 
-    const storeData = storeDoc.data();
-    const asaasCustomerId = storeData.asaasCustomerId;
+    const db = admin.firestore();
 
-    if (!asaasCustomerId) {
+    const storeId = request.data.storeId;
+    const newPlan = request.data.plan;
+
+    // ------------------------------------------------------------
+    // 1. VALIDAÇÃO
+    // ------------------------------------------------------------
+
+    if (!storeId) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Store ID não informado."
+      );
+    }
+
+    if (
+      !newPlan ||
+      !SUBSCRIPTION_PLANS[newPlan]
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Plano inválido."
+      );
+    }
+
+    const storeRef = db
+      .collection("stores")
+      .doc(storeId);
+
+    const storeDoc =
+      await storeRef.get();
+
+    if (!storeDoc.exists) {
+      throw new HttpsError(
+        "not-found",
+        "Loja não encontrada."
+      );
+    }
+
+    const storeData =
+      storeDoc.data();
+
+    // ------------------------------------------------------------
+    // 2. SEGURANÇA:
+    // Somente dono/admin da própria loja
+    // ------------------------------------------------------------
+
+    const userId =
+      request.auth.uid;
+
+    const ownerId =
+      storeData.ownerId;
+
+    const authorizedUsers =
+      storeData.authorizedUsers || [];
+
+    if (
+      ownerId !== userId &&
+      !authorizedUsers.includes(userId)
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "Você não tem permissão para alterar este plano."
+      );
+    }
+
+    // ------------------------------------------------------------
+    // 3. VERIFICA ASSINATURA ATUAL
+    // ------------------------------------------------------------
+
+    const subscriptionId =
+      storeData.asaasSubscriptionId;
+
+    if (!subscriptionId) {
       throw new HttpsError(
         "failed-precondition",
-        "Esta loja ainda não possui um cadastro financeiro."
+        "A loja ainda não possui uma assinatura ativa no Asaas."
       );
     }
 
-    const response = await axios.get(`${ASAAS_URL}/payments`, {
-      headers: {
-        "access_token": ASAAS_API_KEY,
-        "User-Agent": "StoreConnectApp/1.0"
-      },
-      params: {
-        customer: asaasCustomerId,
-        limit: 1
+    const currentPlan =
+      storeData.subscriptionType || "pro";
+
+    // ============================================================
+    // REGRA ESPECIAL:
+    // BUSINESS -> PRO NÃO ACONTECE IMEDIATAMENTE
+    //
+    // O cliente solicita o downgrade,
+    // mas continua Business até pagar a próxima mensalidade de R$ 99.90.
+    // ============================================================
+
+    if (
+      currentPlan === "business" &&
+      newPlan === "pro"
+    ) {
+      // Se já existe pedido de downgrade, não duplica.
+      if (storeData.pendingPlanChange === "pro") {
+        return {
+          success: true,
+          downgradePending: true,
+          currentPlan: "business",
+          requestedPlan: "pro",
+          subscriptionId,
+          message:
+            "Seu downgrade para o Plano Pro já está agendado. Ele será aplicado após o próximo pagamento do Plano Business.",
+        };
       }
-    });
 
-    const payments = response.data.data;
+      await storeRef.update({
+        pendingPlanChange: "pro",
+        pendingPlanChangeRequestedAt:
+          admin.firestore.FieldValue.serverTimestamp(),
+      });
 
-    if (!payments || payments.length === 0) {
-       throw new HttpsError(
-        "not-found",
-        "Nenhuma fatura encontrada para este cliente."
+      console.log(
+        `📌 Downgrade BUSINESS -> PRO agendado para a loja ${storeId}`
+      );
+
+      return {
+        success: true,
+        downgradePending: true,
+        currentPlan: "business",
+        requestedPlan: "pro",
+        subscriptionId,
+        message:
+          "Downgrade agendado. Você continuará no Plano Business até o próximo pagamento de R$ 99.90. Depois disso, sua assinatura passará para o Plano Pro.",
+      };
+    }
+
+    // Já está no plano solicitado
+    if (currentPlan === newPlan) {
+      return {
+        success: true,
+        alreadyOnPlan: true,
+        plan: currentPlan,
+        subscriptionId,
+        message:
+          `A loja já está no plano ${currentPlan}.`,
+      };
+    }
+
+    const selectedPlan =
+      SUBSCRIPTION_PLANS[newPlan];
+
+    const ASAAS_API_KEY =
+      process.env.ASAAS_API_KEY;
+
+    const headers = {
+      access_token: ASAAS_API_KEY,
+      "Content-Type": "application/json",
+      "User-Agent":
+        "StoreConnectApp/1.0",
+    };
+
+    try {
+      console.log(
+        `🔄 Alterando plano da loja ${storeId}`
+      );
+
+      console.log(
+        `📦 ${currentPlan} -> ${newPlan}`
+      );
+
+      console.log(
+        `💰 Novo valor: R$ ${selectedPlan.price}`
+      );
+
+      console.log(
+        `🔗 Assinatura: ${subscriptionId}`
+      );
+
+      // ----------------------------------------------------------
+      // 4. CONFIRMA QUE A ASSINATURA EXISTE NO ASAAS
+      // ----------------------------------------------------------
+
+      const currentSubscription =
+        await axios.get(
+          `${ASAAS_URL}/subscriptions/${subscriptionId}`,
+          { headers }
+        );
+
+      if (
+        !currentSubscription.data ||
+        currentSubscription.data.deleted === true
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "A assinatura atual não está mais disponível no Asaas."
+        );
+      }
+
+      // ----------------------------------------------------------
+      // 5. ALTERA A MESMA ASSINATURA
+      //
+      // NÃO usamos updatePendingPayments.
+      //
+      // Portanto:
+      // cobrança já criada continua como está;
+      // próximas cobranças usam o novo valor.
+      // ----------------------------------------------------------
+
+      const updateResponse =
+        await axios.put(
+          `${ASAAS_URL}/subscriptions/${subscriptionId}`,
+          {
+            value:
+              selectedPlan.price,
+
+            description:
+              `Assinatura ${selectedPlan.name}`,
+
+            externalReference:
+              storeId,
+          },
+          { headers }
+        );
+
+      console.log(
+        `✅ Assinatura atualizada no Asaas: ${subscriptionId}`
+      );
+
+      // ----------------------------------------------------------
+      // 6. SOMENTE DEPOIS DO SUCESSO NO ASAAS
+      // ATUALIZA O FIRESTORE
+      // ----------------------------------------------------------
+
+      await storeRef.update({
+        subscriptionType:
+          newPlan,
+
+        subscriptionPlanPrice:
+          selectedPlan.price,
+
+        subscriptionPlanChangedAt:
+          admin.firestore.FieldValue
+            .serverTimestamp(),
+      });
+
+      console.log(
+        `✅ Firestore atualizado para plano ${newPlan}`
+      );
+
+      return {
+        success: true,
+
+        oldPlan:
+          currentPlan,
+
+        newPlan:
+          newPlan,
+
+        subscriptionId:
+          subscriptionId,
+
+        price:
+          selectedPlan.price,
+
+        nextDueDate:
+          updateResponse.data?.nextDueDate ||
+          currentSubscription.data?.nextDueDate ||
+          null,
+
+        message:
+          `Plano alterado para ${selectedPlan.name} com sucesso.`,
+      };
+
+    } catch (error) {
+      console.error(
+        "❌ Erro ao alterar plano:",
+        error.response?.data ||
+        error.message ||
+        error
+      );
+
+      if (
+        error instanceof HttpsError
+      ) {
+        throw error;
+      }
+
+      throw new HttpsError(
+        "internal",
+        `Não foi possível alterar o plano: ${
+          error.response?.data?.errors?.[0]
+            ?.description ||
+          error.message
+        }`
       );
     }
-
-    const invoiceUrl = payments[0].invoiceUrl;
-    return { portalUrl: invoiceUrl };
-
-  } catch (error) {
-    console.error("Erro ao buscar portal Asaas:", error);
-    throw new HttpsError("internal", "Erro ao conectar com o financeiro.");
   }
-});
-
-/**
- * --- LISTAR FATURAS DO ASAAS ---
- * Busca o histórico de cobranças de uma loja para exibir no app.
- */
-exports.listAsaasInvoices = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "O usuário deve estar logado.");
-  }
-
-  const storeId = request.data.storeId;
-  if (!storeId) {
-    throw new HttpsError("invalid-argument", "O ID da loja é obrigatório.");
-  }
-
-  const db = admin.firestore();
-
-  try {
-    const storeDoc = await db.collection("stores").doc(storeId).get();
-    if (!storeDoc.exists) {
-      throw new HttpsError("not-found", "Loja não encontrada.");
-    }
-
-    const asaasCustomerId = storeDoc.data().asaasCustomerId;
-    if (!asaasCustomerId) {
-      throw new HttpsError("failed-precondition", "Loja sem cadastro financeiro.");
-    }
-
-    const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
-
-    // Busca até 12 faturas do cliente no Asaas
-    const response = await axios.get(`${ASAAS_URL}/payments?customer=${asaasCustomerId}&limit=12`, {
-      headers: {
-        "access_token": ASAAS_API_KEY,
-        "User-Agent": "StoreConnectApp/1.0"
-      }
-    });
-
-    if (!response.data || !response.data.data) {
-      return { invoices: [] };
-    }
-
-    // Mapeia apenas os dados que o Flutter precisa
-    const invoices = response.data.data.map(p => ({
-      id: p.id,
-      dueDate: p.dueDate,
-      value: p.value,
-      status: p.status,
-      invoiceUrl: p.invoiceUrl || p.billUrl || ""
-    }));
-
-    // Ordena da mais antiga para a mais nova, para as faturas atrasadas/atuais aparecerem primeiro
-    invoices.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-
-    return { invoices: invoices };
-
-  } catch (error) {
-    console.error("Erro ao listar faturas:", error.message);
-    throw new HttpsError("internal", "Erro ao conectar com o servidor financeiro.");
-  }
-});
+);
