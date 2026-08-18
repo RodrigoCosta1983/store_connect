@@ -113,14 +113,31 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
             return const Center(child: Text('Nenhuma venda encontrada para este período.'));
           }
 
-          return ListView.builder(
-            itemCount: salesDocs.length,
-            itemBuilder: (ctx, index) {
-              // MODIFICADO: Usa 'fromFirestore' para consistência
-              final order = SaleOrder.fromFirestore(salesDocs[index]);
-              return OrderItemWidget(
-                storeId: widget.storeId,
-                order: order,
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final bool isDesktop = constraints.maxWidth > 900;
+
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 1250,
+                  ),
+                  child: ListView.builder(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isDesktop ? 32 : 12,
+                      vertical: 12,
+                    ),
+                    itemCount: salesDocs.length,
+                    itemBuilder: (ctx, index) {
+                      final order = SaleOrder.fromFirestore(salesDocs[index]);
+
+                      return OrderItemWidget(
+                        storeId: widget.storeId,
+                        order: order,
+                      );
+                    },
+                  ),
+                ),
               );
             },
           );

@@ -1,163 +1,528 @@
+// ============================================================================
+// ARQUIVO: manage_customers_screen.dart
+// ============================================================================
+//
+// RESPONSABILIDADE DESTE ARQUIVO:
+//
+// Gerencia os clientes cadastrados da loja.
+//
+// PRINCIPAIS RESPONSABILIDADES:
+//
+// • Listar clientes cadastrados
+// • Buscar clientes por nome
+// • Criar novos clientes
+// • Editar clientes existentes
+// • Excluir clientes
+// • Buscar dados de contato diretamente da agenda do dispositivo
+// • Acessar a conta / saldo devedor do cliente
+// • Permitir seleção de cliente durante uma venda
+// • Permitir vender sem cliente quando utilizado em modo de seleção
+//
+// FIRESTORE:
+//
+// stores/{storeId}/customers/{customerId}
+//
+// CAMPOS PRINCIPAIS:
+//
+// {
+//   name,
+//   name_lowercase,
+//   phone,
+//   createdAt
+// }
+//
+// MODOS DE USO:
+//
+// 1. MODO GERENCIAMENTO:
+//
+//    ManageCustomersScreen(
+//      storeId: "...",
+//    )
+//
+//    Permite:
+//    • adicionar
+//    • editar
+//    • excluir
+//    • abrir conta do cliente
+//
+// 2. MODO SELEÇÃO:
+//
+//    ManageCustomersScreen(
+//      storeId: "...",
+//      isSelectionMode: true,
+//    )
+//
+//    Permite selecionar um cliente durante a venda.
+//    Também permite continuar a venda sem cliente.
+//
+// RESPONSIVIDADE:
+//
+// • Mobile:
+//   Utiliza normalmente a largura disponível da tela.
+//
+// • Web / Desktop:
+//   Cabeçalho, busca e lista ficam centralizados com largura máxima
+//   de 1100px.
+//
+// COMPATIBILIDADE:
+//
+// • Android / Mobile
+// • Web
+//
+// OBSERVAÇÃO SOBRE CONTATOS:
+//
+// O acesso à agenda depende do suporte da plataforma e das permissões
+// disponibilizadas pelo plugin flutter_native_contact_picker.
+//
+// CUIDADOS EM FUTURAS ALTERAÇÕES:
+//
+// • Não quebrar o modo seleção utilizado pela tela de vendas.
+// • Não remover o retorno Navigator.pop(customer) no modo seleção.
+// • Não remover a opção de venda sem cliente.
+// • Manter name_lowercase para preservar a busca atual.
+// • A exclusão de cliente não deve apagar vendas já realizadas.
+// • Manter o acesso à conta do cliente separado da edição.
+// • O FloatingActionButton só aparece no modo gerenciamento.
+//
+// ============================================================================
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:flutter_native_contact_picker/model/contact.dart';
+
 import 'package:store_connect/models/customer_model.dart';
 import 'package:store_connect/widgets/dynamic_background.dart';
 
-// --- Diálogo de Adicionar/Editar Cliente (sem alterações) ---
+import 'package:store_connect/screens/management/customer_receivables_screen.dart';
+
+// ============================================================================
+// DIÁLOGO DE ADICIONAR / EDITAR CLIENTE
+// ============================================================================
+//
+// Utilizado tanto para criação quanto edição.
+//
+// Se "customer" for null:
+// cria um novo cliente.
+//
+// Se "customer" possuir documento:
+// carrega e edita o cliente existente.
+//
+// ============================================================================
+
 class _CustomerDialog extends StatefulWidget {
   final String storeId;
   final DocumentSnapshot? customer;
-  const _CustomerDialog({required this.storeId, this.customer});
+
+  const _CustomerDialog({
+    required this.storeId,
+    this.customer,
+  });
 
   @override
-  _CustomerDialogState createState() => _CustomerDialogState();
+  State<_CustomerDialog> createState() =>
+      _CustomerDialogState();
 }
 
 class _CustomerDialogState extends State<_CustomerDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  var _isLoading = false;
+  // ==========================================================================
+  // FORMULÁRIO
+  // ==========================================================================
 
-  // Instância do picker nativo
-  final FlutterNativeContactPicker _contactPicker = FlutterNativeContactPicker();
+  final _formKey =
+  GlobalKey<FormState>();
 
-  bool get _isEditing => widget.customer != null;
+  final _nameController =
+  TextEditingController();
+
+  final _phoneController =
+  TextEditingController();
+
+  // ==========================================================================
+  // ESTADO
+  // ==========================================================================
+
+  bool _isLoading = false;
+
+  // ==========================================================================
+  // PICKER NATIVO DE CONTATOS
+  // ==========================================================================
+
+  final FlutterNativeContactPicker _contactPicker =
+  FlutterNativeContactPicker();
+
+  // ==========================================================================
+  // INDICA SE ESTAMOS EDITANDO
+  // ==========================================================================
+
+  bool get _isEditing =>
+      widget.customer != null;
+
+  // ==========================================================================
+  // INIT
+  // ==========================================================================
 
   @override
   void initState() {
     super.initState();
+
     if (_isEditing) {
-      final customerData = widget.customer!.data() as Map<String, dynamic>;
-      _nameController.text = customerData['name'];
-      _phoneController.text = customerData['phone'] ?? '';
+      final customerData =
+      widget.customer!.data()
+      as Map<String, dynamic>;
+
+      _nameController.text =
+          customerData['name']?.toString() ?? '';
+
+      _phoneController.text =
+          customerData['phone']?.toString() ?? '';
     }
   }
+
+  // ==========================================================================
+  // DISPOSE
+  // ==========================================================================
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+
     super.dispose();
   }
 
-  // Função para limpar o número que vem da agenda
-  String _limparNumeroTelefone(String numeroBruto) {
-    String numeroLimpo = numeroBruto.replaceAll(RegExp(r'\D'), '');
+  // ==========================================================================
+  // LIMPA TELEFONE DA AGENDA
+  //
+  // Remove:
+  // • espaços
+  // • parênteses
+  // • traços
+  // • símbolos
+  //
+  // Também remove o código internacional 55 quando presente.
+  // ==========================================================================
 
-    // Remove o código do Brasil (55) se estiver presente
-    if (numeroLimpo.startsWith('55') && numeroLimpo.length >= 12) {
-      numeroLimpo = numeroLimpo.substring(2);
+  String _limparNumeroTelefone(
+      String numeroBruto,
+      ) {
+    String numeroLimpo =
+    numeroBruto.replaceAll(
+      RegExp(r'\D'),
+      '',
+    );
+
+    if (numeroLimpo.startsWith('55') &&
+        numeroLimpo.length >= 12) {
+      numeroLimpo =
+          numeroLimpo.substring(2);
     }
+
     return numeroLimpo;
   }
 
-  // Função para abrir a agenda e capturar os dados
-  Future<void> _buscarContatoNaAgenda() async {
+  // ==========================================================================
+  // BUSCAR CONTATO NA AGENDA
+  // ==========================================================================
+
+  Future<void>
+  _buscarContatoNaAgenda() async {
     try {
-      Contact? contatoSelecionado = await _contactPicker.selectContact();
+      final Contact? contatoSelecionado =
+      await _contactPicker
+          .selectContact();
 
-      if (contatoSelecionado != null) {
-        setState(() {
-          // Preenche o nome (se o campo estiver vazio, para não sobrescrever edições intencionais)
-          if (_nameController.text.isEmpty) {
-            _nameController.text = contatoSelecionado.fullName ?? '';
-          }
-
-          // Preenche o telefone com higienização
-          if (contatoSelecionado.phoneNumbers != null && contatoSelecionado.phoneNumbers!.isNotEmpty) {
-            String numeroOriginal = contatoSelecionado.phoneNumbers!.first;
-            _phoneController.text = _limparNumeroTelefone(numeroOriginal);
-          }
-        });
+      if (contatoSelecionado == null) {
+        return;
       }
+
+      setState(() {
+        // --------------------------------------------------------------------
+        // NOME
+        //
+        // Só preenche automaticamente se o campo estiver vazio.
+        // --------------------------------------------------------------------
+
+        if (_nameController.text.isEmpty) {
+          _nameController.text =
+              contatoSelecionado.fullName ?? '';
+        }
+
+        // --------------------------------------------------------------------
+        // TELEFONE
+        // --------------------------------------------------------------------
+
+        if (contatoSelecionado
+            .phoneNumbers !=
+            null &&
+            contatoSelecionado
+                .phoneNumbers!
+                .isNotEmpty) {
+          final numeroOriginal =
+              contatoSelecionado
+                  .phoneNumbers!
+                  .first;
+
+          _phoneController.text =
+              _limparNumeroTelefone(
+                numeroOriginal,
+              );
+        }
+      });
     } catch (e) {
-      debugPrint("Erro ao buscar contato: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Não foi possível acessar a agenda: $e')),
-        );
+      debugPrint(
+        'Erro ao buscar contato: $e',
+      );
+
+      if (!mounted) {
+        return;
       }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            'Não foi possível acessar a agenda: $e',
+          ),
+        ),
+      );
     }
   }
 
-  Future<void> _saveCustomer() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+  // ==========================================================================
+  // SALVAR CLIENTE
+  // ==========================================================================
 
-    final collectionRef = FirebaseFirestore.instance.collection('stores').doc(widget.storeId).collection('customers');
+  Future<void> _saveCustomer() async {
+    if (!_formKey.currentState!
+        .validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    final collectionRef =
+    FirebaseFirestore.instance
+        .collection('stores')
+        .doc(widget.storeId)
+        .collection('customers');
+
+    final name =
+    _nameController.text.trim();
+
     final customerData = {
-      'name': _nameController.text,
-      'name_lowercase': _nameController.text.toLowerCase(),
-      'phone': _phoneController.text,
+      'name': name,
+
+      // Mantido para a busca atual.
+      'name_lowercase':
+      name.toLowerCase(),
+
+      'phone':
+      _phoneController.text.trim(),
     };
 
     try {
+      // ======================================================================
+      // EDIÇÃO
+      // ======================================================================
+
       if (_isEditing) {
-        await collectionRef.doc(widget.customer!.id).update(customerData);
-      } else {
+        await collectionRef
+            .doc(
+          widget.customer!.id,
+        )
+            .update(
+          customerData,
+        );
+      }
+
+      // ======================================================================
+      // NOVO CLIENTE
+      // ======================================================================
+
+      else {
         await collectionRef.add({
           ...customerData,
-          'createdAt': Timestamp.now(),
+          'createdAt':
+          Timestamp.now(),
         });
       }
-      if (mounted) Navigator.of(context).pop();
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        SnackBar(
+          content: Text(
+            'Erro ao salvar: $e',
+          ),
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
+  // ==========================================================================
+  // BUILD DO DIÁLOGO
+  // ==========================================================================
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+      BuildContext context,
+      ) {
     return AlertDialog(
-      title: Text(_isEditing ? 'Editar Cliente' : 'Adicionar Cliente'),
+      title: Text(
+        _isEditing
+            ? 'Editar Cliente'
+            : 'Adicionar Cliente',
+      ),
+
       content: Form(
         key: _formKey,
+
         child: SingleChildScrollView(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize:
+            MainAxisSize.min,
+
             children: [
+              // ==============================================================
+              // NOME
+              // ==============================================================
+
               TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Nome do Cliente'),
-                validator: (value) => value!.trim().isEmpty ? 'Insira um nome.' : null,
+                controller:
+                _nameController,
+
+                decoration:
+                const InputDecoration(
+                  labelText:
+                  'Nome do Cliente',
+                ),
+
+                validator: (value) {
+                  if (value == null ||
+                      value
+                          .trim()
+                          .isEmpty) {
+                    return 'Insira um nome.';
+                  }
+
+                  return null;
+                },
               ),
-              // Adicionado o sufixIcon para chamar a agenda
+
+              // ==============================================================
+              // TELEFONE
+              // ==============================================================
+
               TextFormField(
-                controller: _phoneController,
-                decoration: InputDecoration(
-                  labelText: 'Telefone (opcional)',
-                  suffixIcon: IconButton(
-                    icon: Icon(Icons.perm_contact_calendar_rounded, color: Theme.of(context).primaryColor),
-                    tooltip: 'Buscar na agenda',
-                    onPressed: _buscarContatoNaAgenda,
+                controller:
+                _phoneController,
+
+                decoration:
+                InputDecoration(
+                  labelText:
+                  'Telefone (opcional)',
+
+                  suffixIcon:
+                  IconButton(
+                    icon: Icon(
+                      Icons
+                          .perm_contact_calendar_rounded,
+                      color:
+                      Theme.of(
+                        context,
+                      ).primaryColor,
+                    ),
+
+                    tooltip:
+                    'Buscar na agenda',
+
+                    onPressed:
+                    _buscarContatoNaAgenda,
                   ),
                 ),
-                keyboardType: TextInputType.phone,
+
+                keyboardType:
+                TextInputType.phone,
               ),
             ],
           ),
         ),
       ),
+
+      // ======================================================================
+      // AÇÕES
+      // ======================================================================
+
       actions: [
-        TextButton(onPressed: _isLoading ? null : () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+        TextButton(
+          onPressed:
+          _isLoading
+              ? null
+              : () =>
+              Navigator.of(
+                context,
+              ).pop(),
+
+          child:
+          const Text(
+            'Cancelar',
+          ),
+        ),
+
         ElevatedButton(
-          onPressed: _isLoading ? null : _saveCustomer,
-          child: _isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Salvar'),
+          onPressed:
+          _isLoading
+              ? null
+              : _saveCustomer,
+
+          child:
+          _isLoading
+              ? const SizedBox(
+            height: 20,
+            width: 20,
+            child:
+            CircularProgressIndicator(
+              strokeWidth: 2,
+            ),
+          )
+              : const Text(
+            'Salvar',
+          ),
         ),
       ],
     );
   }
 }
 
-// --- Tela Principal de Gerenciamento de Clientes com Novo Design ---
-class ManageCustomersScreen extends StatefulWidget {
+// ============================================================================
+// TELA PRINCIPAL - GERENCIAR / SELECIONAR CLIENTES
+// ============================================================================
+
+class ManageCustomersScreen
+    extends StatefulWidget {
   final String storeId;
+
+  // Quando true:
+  // a tela passa a funcionar como seletor para a venda.
   final bool isSelectionMode;
 
   const ManageCustomersScreen({
@@ -167,161 +532,571 @@ class ManageCustomersScreen extends StatefulWidget {
   });
 
   @override
-  State<ManageCustomersScreen> createState() => _ManageCustomersScreenState();
+  State<ManageCustomersScreen>
+  createState() =>
+      _ManageCustomersScreenState();
 }
 
-class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
-  final _searchController = TextEditingController();
+class _ManageCustomersScreenState
+    extends State<
+        ManageCustomersScreen> {
+  // ==========================================================================
+  // BUSCA
+  // ==========================================================================
+
+  final _searchController =
+  TextEditingController();
+
+  // ==========================================================================
+  // DISPOSE
+  // ==========================================================================
 
   @override
   void dispose() {
     _searchController.dispose();
+
     super.dispose();
   }
 
-  void _showCustomerDialog({DocumentSnapshot? customer}) {
+  // ==========================================================================
+  // ABRIR DIÁLOGO
+  // ==========================================================================
+
+  void _showCustomerDialog({
+    DocumentSnapshot? customer,
+  }) {
     showDialog(
       context: context,
+
       barrierDismissible: false,
-      builder: (ctx) => _CustomerDialog(storeId: widget.storeId, customer: customer),
+
+      builder: (ctx) =>
+          _CustomerDialog(
+            storeId: widget.storeId,
+            customer: customer,
+          ),
     );
   }
 
-  void _deleteCustomer(String customerId) {
+  // ==========================================================================
+  // EXCLUIR CLIENTE
+  // ==========================================================================
+
+  void _deleteCustomer(
+      String customerId,
+      ) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: const Text('Tem certeza que deseja excluir este cliente?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              FirebaseFirestore.instance.collection('stores').doc(widget.storeId).collection('customers').doc(customerId).delete();
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Excluir'),
+
+      builder: (ctx) =>
+          AlertDialog(
+            title:
+            const Text(
+              'Confirmar Exclusão',
+            ),
+
+            content:
+            const Text(
+              'Tem certeza que deseja excluir este cliente?',
+            ),
+
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.of(ctx)
+                        .pop(),
+
+                child:
+                const Text(
+                  'Cancelar',
+                ),
+              ),
+
+              ElevatedButton(
+                style:
+                ElevatedButton
+                    .styleFrom(
+                  backgroundColor:
+                  Colors.red,
+
+                  foregroundColor:
+                  Colors.white,
+                ),
+
+                onPressed: () async {
+                  await FirebaseFirestore
+                      .instance
+                      .collection(
+                    'stores',
+                  )
+                      .doc(
+                    widget.storeId,
+                  )
+                      .collection(
+                    'customers',
+                  )
+                      .doc(
+                    customerId,
+                  )
+                      .delete();
+
+                  if (!ctx.mounted) {
+                    return;
+                  }
+
+                  Navigator.of(ctx)
+                      .pop();
+                },
+
+                child:
+                const Text(
+                  'Excluir',
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
+
+  // ==========================================================================
+  // BUILD
+  // ==========================================================================
 
   @override
-  Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+  Widget build(
+      BuildContext context,
+      ) {
+    final isDarkMode =
+        Theme.of(context)
+            .brightness ==
+            Brightness.dark;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      floatingActionButton: widget.isSelectionMode
+
+      // ======================================================================
+      // BOTÃO ADICIONAR
+      //
+      // Não aparece no modo seleção.
+      // ======================================================================
+
+      floatingActionButton:
+      widget.isSelectionMode
           ? null
           : FloatingActionButton(
-        onPressed: () => _showCustomerDialog(),
-        child: const Icon(Icons.add),
-        tooltip: 'Adicionar Cliente',
+        onPressed: () =>
+            _showCustomerDialog(),
+
+        tooltip:
+        'Adicionar Cliente',
+
+        child:
+        const Icon(
+          Icons.add,
+        ),
       ),
+
+      // ======================================================================
+      // CONTEÚDO
+      // ======================================================================
+
       body: Stack(
         children: [
+          // ================================================================
+          // FUNDO
+          // ================================================================
+
           const DynamicBackground(),
-          Column(
-            children: [
-              _buildCustomHeader(isDarkMode),
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('stores')
-                      .doc(widget.storeId)
-                      .collection('customers')
-                      .orderBy('name_lowercase')
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return const Center(child: Text('Ocorreu um erro.'));
-                    }
-                    final allCustomers = snapshot.data?.docs ?? [];
 
-                    final filteredCustomers = allCustomers.where((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final name = (data['name_lowercase'] as String? ?? '').toLowerCase();
-                      final query = _searchController.text.toLowerCase();
-                      return name.contains(query);
-                    }).toList();
+          // ================================================================
+          // ÁREA SEGURA + CONTEÚDO CENTRALIZADO
+          //
+          // MOBILE:
+          // utiliza toda a largura disponível.
+          //
+          // WEB/DESKTOP:
+          // limita a largura a 1100px.
+          // ================================================================
 
-                    if (filteredCustomers.isEmpty) {
-                      return Center(
-                        child: Text(
-                          _searchController.text.isEmpty
-                              ? 'Nenhum cliente cadastrado.'
-                              : 'Nenhum cliente encontrado.',
-                          style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54, fontSize: 16),
-                        ),
-                      );
-                    }
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints:
+                const BoxConstraints(
+                  maxWidth: 1100,
+                ),
 
-                    return ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
-                      itemCount: filteredCustomers.length,
-                      itemBuilder: (ctx, index) {
-                        final customerDoc = filteredCustomers[index];
-                        final customer = Customer.fromFirestore(customerDoc);
-                        return _buildCustomerCard(customer, customerDoc, isDarkMode);
-                      },
-                    );
-                  },
+                child: Column(
+                  children: [
+                    // ========================================================
+                    // CABEÇALHO + BUSCA
+                    // ========================================================
+
+                    _buildCustomHeader(
+                      isDarkMode,
+                    ),
+
+                    // ========================================================
+                    // LISTA
+                    // ========================================================
+
+                    Expanded(
+                      child:
+                      StreamBuilder<
+                          QuerySnapshot>(
+                        stream:
+                        FirebaseFirestore
+                            .instance
+                            .collection(
+                          'stores',
+                        )
+                            .doc(
+                          widget
+                              .storeId,
+                        )
+                            .collection(
+                          'customers',
+                        )
+                            .orderBy(
+                          'name_lowercase',
+                        )
+                            .snapshots(),
+
+                        builder: (
+                            context,
+                            snapshot,
+                            ) {
+                          // ==================================================
+                          // CARREGANDO
+                          // ==================================================
+
+                          if (snapshot
+                              .connectionState ==
+                              ConnectionState
+                                  .waiting) {
+                            return const Center(
+                              child:
+                              CircularProgressIndicator(),
+                            );
+                          }
+
+                          // ==================================================
+                          // ERRO
+                          // ==================================================
+
+                          if (snapshot
+                              .hasError) {
+                            return const Center(
+                              child:
+                              Text(
+                                'Ocorreu um erro.',
+                              ),
+                            );
+                          }
+
+                          final allCustomers =
+                              snapshot.data
+                                  ?.docs ??
+                                  [];
+
+                          // ==================================================
+                          // FILTRO LOCAL
+                          // ==================================================
+
+                          final query =
+                          _searchController
+                              .text
+                              .trim()
+                              .toLowerCase();
+
+                          final filteredCustomers =
+                          allCustomers
+                              .where(
+                                (doc) {
+                              final data =
+                              doc.data()
+                              as Map<
+                                  String,
+                                  dynamic>;
+
+                              final name =
+                              (data['name_lowercase']
+                              as String? ??
+                                  '')
+                                  .toLowerCase();
+
+                              return name
+                                  .contains(
+                                query,
+                              );
+                            },
+                          ).toList();
+
+                          // ==================================================
+                          // LISTA VAZIA
+                          // ==================================================
+
+                          if (filteredCustomers
+                              .isEmpty) {
+                            return Center(
+                              child:
+                              Text(
+                                _searchController
+                                    .text
+                                    .isEmpty
+                                    ? 'Nenhum cliente cadastrado.'
+                                    : 'Nenhum cliente encontrado.',
+                                style:
+                                TextStyle(
+                                  color:
+                                  isDarkMode
+                                      ? Colors
+                                      .white70
+                                      : Colors
+                                      .black54,
+                                  fontSize:
+                                  16,
+                                ),
+                              ),
+                            );
+                          }
+
+                          // ==================================================
+                          // LISTA DE CLIENTES
+                          // ==================================================
+
+                          return ListView
+                              .builder(
+                            padding:
+                            const EdgeInsets
+                                .fromLTRB(
+                              8,
+                              0,
+                              8,
+                              80,
+                            ),
+
+                            itemCount:
+                            filteredCustomers
+                                .length,
+
+                            itemBuilder: (
+                                ctx,
+                                index,
+                                ) {
+                              final customerDoc =
+                              filteredCustomers[
+                              index];
+
+                              final customer =
+                              Customer
+                                  .fromFirestore(
+                                customerDoc,
+                              );
+
+                              return _buildCustomerCard(
+                                customer,
+                                customerDoc,
+                                isDarkMode,
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCustomHeader(bool isDarkMode) {
+  // ==========================================================================
+  // CABEÇALHO PERSONALIZADO
+  // ==========================================================================
+
+  Widget _buildCustomHeader(
+      bool isDarkMode,
+      ) {
+    final headerColor =
+    isDarkMode
+        ? Colors.white
+        : Colors.black;
+
     return Padding(
-      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top, left: 8, right: 8, bottom: 16),
+      // ----------------------------------------------------------------------
+      // SafeArea já trata o topo.
+      //
+      // Por isso não usamos novamente MediaQuery.padding.top.
+      // ----------------------------------------------------------------------
+
+      padding:
+      const EdgeInsets.fromLTRB(
+        8,
+        8,
+        8,
+        16,
+      ),
+
       child: Column(
         children: [
+          // ================================================================
+          // LINHA SUPERIOR
+          // ================================================================
+
           Row(
             children: [
+              // ============================================================
+              // VOLTAR
+              // ============================================================
+
               IconButton(
-                icon: Icon(Icons.arrow_back, color: isDarkMode ? Colors.white : Colors.black),
-                onPressed: () => Navigator.of(context).pop(),
+                icon: Icon(
+                  Icons.arrow_back,
+                  color: headerColor,
+                ),
+
+                onPressed: () =>
+                    Navigator.of(
+                      context,
+                    ).pop(),
               ),
+
+              // ============================================================
+              // TÍTULO
+              // ============================================================
+
               Expanded(
                 child: Text(
-                  widget.isSelectionMode ? 'Selecionar Cliente' : 'Gerenciar Clientes',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black),
+                  widget.isSelectionMode
+                      ? 'Selecionar Cliente'
+                      : 'Gerenciar Clientes',
+
+                  style:
+                  TextStyle(
+                    fontSize: 22,
+                    fontWeight:
+                    FontWeight.bold,
+                    color:
+                    headerColor,
+                  ),
                 ),
               ),
-              if (!widget.isSelectionMode)
-                const SizedBox(width: 48) // Espaço vazio para alinhar
-              else // Botão de "check" para confirmar seleção sem cliente
+
+              // ============================================================
+              // MODO GERENCIAMENTO
+              //
+              // Espaço usado apenas para manter o título visualmente alinhado.
+              // ============================================================
+
+              if (!widget
+                  .isSelectionMode)
+                const SizedBox(
+                  width: 48,
+                )
+
+              // ============================================================
+              // MODO SELEÇÃO
+              //
+              // Permite continuar venda sem cliente.
+              // ============================================================
+
+              else
                 IconButton(
-                  icon: Icon(Icons.person_off, color: isDarkMode ? Colors.white : Colors.black),
-                  tooltip: 'Vender sem cliente',
-                  onPressed: () => Navigator.of(context).pop(null),
+                  icon: Icon(
+                    Icons.person_off,
+                    color:
+                    headerColor,
+                  ),
+
+                  tooltip:
+                  'Vender sem cliente',
+
+                  onPressed: () =>
+                      Navigator.of(
+                        context,
+                      ).pop(null),
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+
+          const SizedBox(
+            height: 8,
+          ),
+
+          // ================================================================
+          // BUSCA
+          // ================================================================
+
           TextField(
-            controller: _searchController,
-            onChanged: (value) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: 'Buscar por nome...',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: Theme.of(context).cardColor.withOpacity(0.8),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+            controller:
+            _searchController,
+
+            onChanged: (value) {
+              setState(() {});
+            },
+
+            style:
+            TextStyle(
+              color:
+              headerColor,
+            ),
+
+            decoration:
+            InputDecoration(
+              hintText:
+              'Buscar por nome...',
+
+              hintStyle:
+              TextStyle(
+                color:
+                isDarkMode
+                    ? Colors
+                    .white70
+                    : Colors
+                    .black54,
               ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+
+              prefixIcon:
+              Icon(
+                Icons.search,
+
+                color:
+                isDarkMode
+                    ? Colors
+                    .white70
+                    : Colors
+                    .black54,
+              ),
+
+              filled: true,
+
+              fillColor:
+              Theme.of(context)
+                  .cardColor
+                  .withOpacity(
+                0.8,
+              ),
+
+              border:
+              OutlineInputBorder(
+                borderRadius:
+                BorderRadius.circular(
+                  12,
+                ),
+
+                borderSide:
+                BorderSide.none,
+              ),
+
+              contentPadding:
+              const EdgeInsets
+                  .symmetric(
+                vertical: 0,
+              ),
             ),
           ),
         ],
@@ -329,34 +1104,228 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
     );
   }
 
-  Widget _buildCustomerCard(Customer customer, DocumentSnapshot customerDoc, bool isDarkMode) {
+  // ==========================================================================
+  // CARD DO CLIENTE
+  // ==========================================================================
+
+  Widget _buildCustomerCard(
+      Customer customer,
+      DocumentSnapshot customerDoc,
+      bool isDarkMode,
+      ) {
     return Card(
-      color: isDarkMode ? Colors.black.withOpacity(0.6) : Colors.white.withOpacity(0.8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Theme.of(context).primaryColor,
-          foregroundColor: Colors.white,
-          child: Text(customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?'),
+      color:
+      isDarkMode
+          ? Colors.black
+          .withOpacity(
+        0.6,
+      )
+          : Colors.white
+          .withOpacity(
+        0.8,
+      ),
+
+      shape:
+      RoundedRectangleBorder(
+        borderRadius:
+        BorderRadius.circular(
+          15,
         ),
-        title: Text(customer.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(customer.phone ?? 'Sem telefone'),
-        onTap: widget.isSelectionMode
-            ? () => Navigator.of(context).pop(customer)
-            : null,
-        trailing: widget.isSelectionMode
+      ),
+
+      margin:
+      const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 5,
+      ),
+
+      child:
+      ListTile(
+        // ====================================================================
+        // AVATAR
+        // ====================================================================
+
+        leading:
+        CircleAvatar(
+          backgroundColor:
+          Theme.of(context)
+              .primaryColor,
+
+          foregroundColor:
+          Colors.white,
+
+          child:
+          Text(
+            customer.name.isNotEmpty
+                ? customer.name[0]
+                .toUpperCase()
+                : '?',
+          ),
+        ),
+
+        // ====================================================================
+        // NOME
+        // ====================================================================
+
+        title:
+        Text(
+          customer.name,
+
+          style:
+          const TextStyle(
+            fontWeight:
+            FontWeight.bold,
+          ),
+        ),
+
+        // ====================================================================
+        // TELEFONE
+        // ====================================================================
+
+        subtitle:
+        Text(
+          customer.phone ??
+              'Sem telefone',
+        ),
+
+        // ====================================================================
+        // CLIQUE NO CARD
+        //
+        // MODO SELEÇÃO:
+        // retorna o cliente selecionado.
+        //
+        // MODO NORMAL:
+        // abre a conta do cliente.
+        // ====================================================================
+
+        onTap:
+        widget.isSelectionMode
+            ? () =>
+            Navigator.of(
+              context,
+            ).pop(
+              customer,
+            )
+            : () {
+          Navigator.of(
+            context,
+          ).push(
+            MaterialPageRoute(
+              builder:
+                  (context) =>
+                  CustomerReceivablesScreen(
+                    storeId:
+                    widget
+                        .storeId,
+                    customerId:
+                    customer.id,
+                    customerName:
+                    customer.name,
+                  ),
+            ),
+          );
+        },
+
+        // ====================================================================
+        // AÇÕES
+        // ====================================================================
+
+        trailing:
+        widget.isSelectionMode
             ? null
             : Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize:
+          MainAxisSize.min,
+
           children: [
+            // ======================================================
+            // CONTA DO CLIENTE
+            // ======================================================
+
             IconButton(
-              icon: Icon(Icons.edit, color: Theme.of(context).primaryColor),
-              onPressed: () => _showCustomerDialog(customer: customerDoc),
+              icon:
+              const Icon(
+                Icons
+                    .account_balance_wallet_outlined,
+              ),
+
+              tooltip:
+              'Conta do cliente',
+
+              color:
+              Colors.green,
+
+              onPressed: () {
+                Navigator.of(
+                  context,
+                ).push(
+                  MaterialPageRoute(
+                    builder:
+                        (context) =>
+                        CustomerReceivablesScreen(
+                          storeId:
+                          widget
+                              .storeId,
+                          customerId:
+                          customer
+                              .id,
+                          customerName:
+                          customer
+                              .name,
+                        ),
+                  ),
+                );
+              },
             ),
+
+            // ======================================================
+            // EDITAR
+            // ======================================================
+
             IconButton(
-              icon: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
-              onPressed: () => _deleteCustomer(customer.id),
+              icon:
+              Icon(
+                Icons.edit,
+                color:
+                Theme.of(
+                  context,
+                ).primaryColor,
+              ),
+
+              tooltip:
+              'Editar cliente',
+
+              onPressed: () =>
+                  _showCustomerDialog(
+                    customer:
+                    customerDoc,
+                  ),
+            ),
+
+            // ======================================================
+            // EXCLUIR
+            // ======================================================
+
+            IconButton(
+              icon:
+              Icon(
+                Icons.delete,
+
+                color:
+                Theme.of(
+                  context,
+                )
+                    .colorScheme
+                    .error,
+              ),
+
+              tooltip:
+              'Excluir cliente',
+
+              onPressed: () =>
+                  _deleteCustomer(
+                    customer.id,
+                  ),
             ),
           ],
         ),
