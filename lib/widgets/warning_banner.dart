@@ -85,6 +85,12 @@ class _WarningBannerState extends State<WarningBanner> {
     final status = storeData['subscriptionStatus'] as String? ?? 'trial';
     final type = storeData['subscriptionType'] as String? ?? 'free';
 
+    // Planos pagos válidos
+    final bool isPaidPlan = type == 'pro' || type == 'business';
+
+    // Data final do período de teste
+    final trialEndDateStr = storeData['trialEndDate'] as String?;
+
     // 🔴 1. LÓGICA PARA FATURA EM ATRASO (OVERDUE)
     if (status == 'overdue') {
       final overdueSince = storeData['overdueSince'];
@@ -147,8 +153,9 @@ class _WarningBannerState extends State<WarningBanner> {
     }
 
     // 🟠 2. LÓGICA PARA PERÍODO DE TESTE (TRIAL)
-    final trialEndDateStr = storeData['trialEndDate'] as String?;
-    if ((status == 'trial' || status == 'active') && type != 'pro' && trialEndDateStr != null) {
+    if ((status == 'trial' || status == 'active') &&
+        !isPaidPlan &&
+        trialEndDateStr != null) {
       try {
         DateTime dataFimTrial = DateTime.parse(trialEndDateStr);
         DateTime hoje = DateTime.now();
@@ -213,7 +220,7 @@ class _WarningBannerState extends State<WarningBanner> {
     }
 
     // 🔵 3. LÓGICA PARA FATURA A VENCER (PLANO PRO)
-    if (status == 'active' && type == 'pro') {
+    if (status == 'active' && isPaidPlan) {
       // ATENÇÃO: Substitua 'nextDueDate' pelo nome exato do campo onde você salva o vencimento no Firestore
       final nextDueDateStr = storeData['nextDueDate'] as String?;
 

@@ -60,7 +60,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         // 2. A MESMA REGRA DO AUTHGATE:
         bool hasAccess = false;
         if (status == 'active') {
-          if (type == 'pro' || isTrialActive) {
+          if (type == 'pro' || type == 'business' || isTrialActive) {
             hasAccess = true;
           }
         }

@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
+import 'package:store_connect/providers/user_role_provider.dart';
 
 import 'package:store_connect/providers/cart_provider.dart';
 import 'package:store_connect/providers/sales_provider.dart';
@@ -81,6 +82,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     final List<SingleChildWidget> appProviders = <SingleChildWidget>[
+      ChangeNotifierProvider(create: (ctx) => UserRoleProvider()),
       ChangeNotifierProvider(create: (ctx) => ThemeProvider()),
       ChangeNotifierProvider(create: (ctx) => CartProvider()),
       ChangeNotifierProvider(create: (ctx) => CashFlowProvider()),
