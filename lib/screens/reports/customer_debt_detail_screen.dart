@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:store_connect/models/sale_order_model.dart';
 import 'package:store_connect/widgets/order_item_widget.dart';
+import 'package:provider/provider.dart';
+import 'package:store_connect/providers/sales_provider.dart';
+
 
 class CustomerDebtDetailScreen extends StatefulWidget {
   final String storeId;
@@ -28,12 +31,53 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
   // Calcula a dívida total somando o que falta pagar em cada nota
   double get _totalDebt {
     double total = 0.0;
+
     for (var doc in _salesDocs) {
       final data = doc.data() as Map<String, dynamic>;
-      final amount = (data['totalAmount'] as num).toDouble();
-      final paid = (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
-      total += (amount - paid);
+
+      final installments =
+      data['installments'] as List<dynamic>?;
+
+      // ------------------------------------------------------------
+      // VENDA NOVA PARCELADA
+      // ------------------------------------------------------------
+      if (installments != null && installments.isNotEmpty) {
+        for (final installment in installments) {
+          final installmentData =
+          installment as Map<String, dynamic>;
+
+          final amount =
+          (installmentData['amount'] as num? ?? 0).toDouble();
+
+          final paidAmount =
+          (installmentData['paidAmount'] as num? ?? 0).toDouble();
+
+          final remaining = amount - paidAmount;
+
+          if (remaining > 0) {
+            total += remaining;
+          }
+        }
+
+        continue;
+      }
+
+      // ------------------------------------------------------------
+      // VENDA ANTIGA
+      // ------------------------------------------------------------
+      final amount =
+      (data['totalAmount'] as num? ?? 0).toDouble();
+
+      final paid =
+          (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
+
+      final remaining = amount - paid;
+
+      if (remaining > 0) {
+        total += remaining;
+      }
     }
+
     return total;
   }
 
@@ -89,43 +133,28 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
 
   // Algoritmo de Pagamento em Cascata
   Future<void> _processCascadingPayment(double amountToPay) async {
+    if (amountToPay <= 0) return;
+
     setState(() => _isLoading = true);
 
     try {
-      final firestore = FirebaseFirestore.instance;
-      final batch = firestore.batch();
-      double remainingAmount = amountToPay;
+      final salesProvider = Provider.of<SalesProvider>(
+        context,
+        listen: false,
+      );
 
-      for (var doc in _salesDocs) {
-        if (remainingAmount <= 0.001) break; // Acabou o dinheiro do pagamento
-
-        final data = doc.data() as Map<String, dynamic>;
-        final totalAmount = (data['totalAmount'] as num).toDouble();
-        final alreadyPaid = (data['paidAmount'] as num?)?.toDouble() ?? 0.0;
-        final debtForThisSale = totalAmount - alreadyPaid;
-
-        if (remainingAmount >= debtForThisSale) {
-          // O dinheiro dá para quitar essa venda inteira
-          batch.update(doc.reference, {
-            'isPaid': true,
-            'paidAmount': totalAmount, // Fica 100% pago
-          });
-          remainingAmount -= debtForThisSale; // Subtrai o que gastou e vai pra próxima
-        } else {
-          // O dinheiro NÃO dá para quitar inteira. Faz pagamento parcial.
-          batch.update(doc.reference, {
-            'paidAmount': alreadyPaid + remainingAmount,
-          });
-          remainingAmount = 0; // Dinheiro acabou
-        }
-      }
-
-      await batch.commit();
+      await salesProvider.receiveCustomerDebtPayment(
+        customerId: widget.customerId,
+        customerName: widget.customerName,
+        amountToPay: amountToPay,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Pagamento de R\$ ${amountToPay.toStringAsFixed(2)} abatido com sucesso!'),
+            content: Text(
+              'Pagamento de R\$ ${amountToPay.toStringAsFixed(2)} abatido com sucesso!',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -134,7 +163,9 @@ class _CustomerDebtDetailScreenState extends State<CustomerDebtDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao processar pagamento: $e'),
+            content: Text(
+              'Erro ao processar pagamento: ${e.toString()}',
+            ),
             backgroundColor: Colors.red,
           ),
         );
