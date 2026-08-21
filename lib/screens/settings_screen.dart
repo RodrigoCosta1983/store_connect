@@ -1,3 +1,39 @@
+// ============================================================================
+// STORE CONNECT - SETTINGS / PROTEÇÃO DO MÓDULO FISCAL
+// ============================================================================
+//
+// Arquivo:
+//   lib/screens/settings_screen.dart
+//
+// Objetivo:
+//   Centralizar as configurações da loja e proteger o acesso à área fiscal.
+//
+// Proteção fiscal:
+//   - o acesso à FiscalSettingsScreen exige autenticação local do aparelho;
+//   - usa local_auth, já presente no pubspec do projeto;
+//   - não exige senha Firebase para abrir a tela;
+//   - funciona independentemente de login por senha ou Google;
+//   - não altera a sessão Firebase e evita reconstruções do Auth Gate causadas
+//     por reauthenticateWithCredential apenas para abrir a tela;
+//   - se o usuário cancelar ou falhar a autenticação, a tela fiscal não abre.
+//
+// Segurança:
+//   Este gate protege a interface local, mas NÃO substitui as validações das
+//   Cloud Functions. O backend deve continuar validando uid, storeId, plano,
+//   permissões e credenciais antes de qualquer operação fiscal crítica.
+//
+// Web:
+//   local_auth é um mecanismo de autenticação local de dispositivo. No Web,
+//   esta implementação não libera automaticamente a tela; exibe uma mensagem
+//   informando que a confirmação protegida está disponível no aplicativo.
+//
+// Manutenção:
+//   Se futuramente quisermos exigir reautenticação Firebase em uma ação de
+//   alto risco (por exemplo, substituir token de produção), isso deve ser feito
+//   na ação específica, tratando corretamente password/google.com.
+//
+// ============================================================================
+
 // lib/screens/settings_screen.dart
 
 import 'dart:io';
@@ -10,6 +46,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -43,6 +80,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _isLoading = true;
   bool _biometricEnabled = false;
+
+  final LocalAuthentication _localAuth = LocalAuthentication();
+  bool _isValidatingFiscalAccess = false;
 
   // ===========================================================================
   // DADOS DA LOJA
@@ -890,6 +930,101 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ===========================================================================
+  // ACESSO PROTEGIDO À CONFIGURAÇÃO FISCAL
+  // ===========================================================================
+
+  Future<void> _openFiscalSettingsProtected() async {
+    if (_isValidatingFiscalAccess) {
+      return;
+    }
+
+    if (kIsWeb) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'A confirmação protegida da área fiscal está disponível '
+                'no aplicativo instalado.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+
+      return;
+    }
+
+    setState(() {
+      _isValidatingFiscalAccess = true;
+    });
+
+    try {
+      final canCheckBiometrics = await _localAuth.canCheckBiometrics;
+      final isDeviceSupported = await _localAuth.isDeviceSupported();
+
+      if (!canCheckBiometrics && !isDeviceSupported) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Este aparelho não possui um método de autenticação '
+                  'local configurado.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+
+        return;
+      }
+
+      final authenticated = await _localAuth.authenticate(
+        localizedReason:
+        'Confirme sua identidade para acessar as configurações fiscais.',
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
+          useErrorDialogs: true,
+        ),
+      );
+
+      if (!authenticated || !mounted) {
+        return;
+      }
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (ctx) => FiscalSettingsScreen(
+            storeId: widget.storeId,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint(
+        '❌ Erro ao autenticar acesso fiscal: $e',
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Não foi possível confirmar sua identidade. '
+                'A área fiscal continua bloqueada.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isValidatingFiscalAccess = false;
+        });
+      }
+    }
+  }
+
+  // ===========================================================================
   // BUILD
   // ===========================================================================
 
@@ -1288,26 +1423,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'Dados fiscais, certificado digital '
                         'e emissão de notas',
                   ),
-                  trailing:
-                  const Icon(
-                    Icons
-                        .chevron_right,
-                  ),
-                  onTap: () {
-                    Navigator.of(
-                      context,
-                    ).push(
-                      MaterialPageRoute(
-                        builder:
-                            (ctx) =>
-                            FiscalSettingsScreen(
-                              storeId:
-                              widget
-                                  .storeId,
-                            ),
-                      ),
-                    );
-                  },
+                  trailing: _isValidatingFiscalAccess
+                      ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                    ),
+                  )
+                      : const Icon(Icons.chevron_right),
+                  onTap: _isValidatingFiscalAccess
+                      ? null
+                      : _openFiscalSettingsProtected,
                 ),
               ],
 
