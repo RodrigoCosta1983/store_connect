@@ -13,7 +13,7 @@
 // - Vincular categoria.
 // - Controlar estoque mínimo.
 // - Exibir dados fiscais exclusivamente para lojas Business.
-// - Salvar NCM, CFOP, origem, unidade e CEST no mapa "fiscal".
+// - Salvar NCM, CFOP, origem, unidade, CEST e tributação no mapa "fiscal".
 //
 // REGRAS DE PLANO:
 // - PRO/TRIAL:
@@ -31,6 +31,9 @@
 //   cfop,
 //   unidade,
 //   cest,
+//   icmsSituacaoTributaria,
+//   pisSituacaoTributaria,
+//   cofinsSituacaoTributaria,
 //   updatedAt
 // }
 //
@@ -98,6 +101,12 @@ class _ProductDialogState extends State<_ProductDialog> {
   // Unidade comercial padrão.
   String _selectedUnidade = 'UN';
 
+  // Tributação padrão apenas para facilitar testes em homologação.
+  // Em produção, os códigos devem ser confirmados com o contador.
+  String _selectedIcmsSituacaoTributaria = '102';
+  String _selectedPisSituacaoTributaria = '49';
+  String _selectedCofinsSituacaoTributaria = '49';
+
   // ==========================================================================
   // ESTADO
   // ==========================================================================
@@ -155,6 +164,33 @@ class _ProductDialogState extends State<_ProductDialog> {
     'M2': 'M² - Metro quadrado',
     'LT': 'LT - Litro',
     'ML': 'ML - Mililitro',
+  };
+
+  static const Map<String, String> _icmsSituacoes = {
+    '101': '101 - Tributada com permissão de crédito',
+    '102': '102 - Tributada sem permissão de crédito',
+    '103': '103 - Isenção para faixa de receita bruta',
+    '201': '201 - Com crédito e com ST',
+    '202': '202 - Sem crédito e com ST',
+    '203': '203 - Isenção e com ST',
+    '300': '300 - Imune',
+    '400': '400 - Não tributada',
+    '500': '500 - ICMS cobrado anteriormente por ST',
+    '900': '900 - Outros',
+  };
+
+  static const Map<String, String> _pisCofinsSituacoes = {
+    '01': '01 - Operação tributável com alíquota básica',
+    '02': '02 - Operação tributável com alíquota diferenciada',
+    '03': '03 - Operação tributável por unidade de medida',
+    '04': '04 - Operação monofásica - alíquota zero',
+    '05': '05 - Operação por substituição tributária',
+    '06': '06 - Operação tributável - alíquota zero',
+    '07': '07 - Operação isenta',
+    '08': '08 - Operação sem incidência',
+    '09': '09 - Operação com suspensão',
+    '49': '49 - Outras operações de saída',
+    '99': '99 - Outras operações',
   };
 
 
@@ -237,13 +273,13 @@ class _ProductDialogState extends State<_ProductDialog> {
 
             return rawResults
                 .map((item) {
-                  final map = Map<String, dynamic>.from(item as Map);
+              final map = Map<String, dynamic>.from(item as Map);
 
-                  return NcmSearchResult(
-                    codigo: map['codigo']?.toString() ?? '',
-                    descricao: map['descricao']?.toString() ?? '',
-                  );
-                })
+              return NcmSearchResult(
+                codigo: map['codigo']?.toString() ?? '',
+                descricao: map['descricao']?.toString() ?? '',
+              );
+            })
                 .where((item) => item.codigo.isNotEmpty)
                 .toList();
           } on FirebaseFunctionsException catch (e) {
@@ -375,6 +411,21 @@ class _ProductDialogState extends State<_ProductDialog> {
         if (unidade != null && _unidades.containsKey(unidade)) {
           _selectedUnidade = unidade;
         }
+
+        final icmsSituacao = fiscal['icmsSituacaoTributaria']?.toString();
+        if (icmsSituacao != null && _icmsSituacoes.containsKey(icmsSituacao)) {
+          _selectedIcmsSituacaoTributaria = icmsSituacao;
+        }
+
+        final pisSituacao = fiscal['pisSituacaoTributaria']?.toString();
+        if (pisSituacao != null && _pisCofinsSituacoes.containsKey(pisSituacao)) {
+          _selectedPisSituacaoTributaria = pisSituacao;
+        }
+
+        final cofinsSituacao = fiscal['cofinsSituacaoTributaria']?.toString();
+        if (cofinsSituacao != null && _pisCofinsSituacoes.containsKey(cofinsSituacao)) {
+          _selectedCofinsSituacaoTributaria = cofinsSituacao;
+        }
       }
     }
   }
@@ -386,7 +437,7 @@ class _ProductDialogState extends State<_ProductDialog> {
   void _sincronizarTotalManual() {
     final somaLotes = _lotes.fold<int>(
       0,
-      (sum, item) => sum + ((item['quantidade'] as num?)?.toInt() ?? 0),
+          (sum, item) => sum + ((item['quantidade'] as num?)?.toInt() ?? 0),
     );
 
     _quantidadeController.text = somaLotes.toString();
@@ -530,7 +581,7 @@ class _ProductDialogState extends State<_ProductDialog> {
 
       final int somaLotes = lotesFiltrados.fold<int>(
         0,
-        (sum, item) => sum + ((item['quantidade'] as num?)?.toInt() ?? 0),
+            (sum, item) => sum + ((item['quantidade'] as num?)?.toInt() ?? 0),
       );
 
       final int finalQuantidade = _lotes.isEmpty ? manualQuantidade : somaLotes;
@@ -578,6 +629,10 @@ class _ProductDialogState extends State<_ProductDialog> {
 
           // CEST é opcional.
           'cest': cest.isEmpty ? null : cest,
+
+          'icmsSituacaoTributaria': _selectedIcmsSituacaoTributaria,
+          'pisSituacaoTributaria': _selectedPisSituacaoTributaria,
+          'cofinsSituacaoTributaria': _selectedCofinsSituacaoTributaria,
 
           // Ajuda futuramente em auditoria / sincronização.
           'updatedAt': Timestamp.now(),
@@ -673,10 +728,10 @@ class _ProductDialogState extends State<_ProductDialog> {
                       backgroundImage: provider,
                       child: provider == null
                           ? const Icon(
-                              Icons.add_a_photo,
-                              size: 40,
-                              color: Colors.grey,
-                            )
+                        Icons.add_a_photo,
+                        size: 40,
+                        color: Colors.grey,
+                      )
                           : null,
                     ),
                   ),
@@ -738,13 +793,13 @@ class _ProductDialogState extends State<_ProductDialog> {
                       items: categories
                           .map(
                             (doc) => DropdownMenuItem<String>(
-                              value: doc.id,
-                              child: Text(
-                                doc['name'].toString(),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
+                          value: doc.id,
+                          child: Text(
+                            doc['name'].toString(),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
                           .toList(),
                       onChanged: (value) {
                         if (value == null) {
@@ -752,7 +807,7 @@ class _ProductDialogState extends State<_ProductDialog> {
                         }
 
                         final selectedCat = categories.firstWhere(
-                          (doc) => doc.id == value,
+                              (doc) => doc.id == value,
                         );
 
                         setState(() {
@@ -848,8 +903,8 @@ class _ProductDialogState extends State<_ProductDialog> {
                         _dataValidadeSelecionada == null
                             ? 'Data'
                             : DateFormat(
-                                'dd/MM/yyyy',
-                              ).format(_dataValidadeSelecionada!),
+                          'dd/MM/yyyy',
+                        ).format(_dataValidadeSelecionada!),
                       ),
                     ),
 
@@ -1083,13 +1138,13 @@ class _ProductDialogState extends State<_ProductDialog> {
                     items: _origens.entries
                         .map(
                           (entry) => DropdownMenuItem<String>(
-                            value: entry.key,
-                            child: Text(
-                              entry.value,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
+                        value: entry.key,
+                        child: Text(
+                          entry.value,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
                         .toList(),
                     onChanged: (value) {
                       if (value == null) {
@@ -1154,13 +1209,13 @@ class _ProductDialogState extends State<_ProductDialog> {
                     items: _unidades.entries
                         .map(
                           (entry) => DropdownMenuItem<String>(
-                            value: entry.key,
-                            child: Text(
-                              entry.value,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
+                        value: entry.key,
+                        child: Text(
+                          entry.value,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
                         .toList(),
                     onChanged: (value) {
                       if (value == null) {
@@ -1206,6 +1261,57 @@ class _ProductDialogState extends State<_ProductDialog> {
 
                       return null;
                     },
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  DropdownButtonFormField<String>(
+                    value: _selectedIcmsSituacaoTributaria,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'CSOSN / ICMS',
+                      helperText: 'Situação tributária do ICMS',
+                      prefixIcon: Icon(Icons.account_balance_outlined),
+                    ),
+                    items: _icmsSituacoes.entries.map((entry) => DropdownMenuItem<String>(
+                      value: entry.key,
+                      child: Text(entry.value, overflow: TextOverflow.ellipsis),
+                    )).toList(),
+                    onChanged: (value) { if (value != null) setState(() => _selectedIcmsSituacaoTributaria = value); },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  DropdownButtonFormField<String>(
+                    value: _selectedPisSituacaoTributaria,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'CST PIS',
+                      helperText: 'Situação tributária do PIS',
+                      prefixIcon: Icon(Icons.receipt_outlined),
+                    ),
+                    items: _pisCofinsSituacoes.entries.map((entry) => DropdownMenuItem<String>(
+                      value: entry.key,
+                      child: Text(entry.value, overflow: TextOverflow.ellipsis),
+                    )).toList(),
+                    onChanged: (value) { if (value != null) setState(() => _selectedPisSituacaoTributaria = value); },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  DropdownButtonFormField<String>(
+                    value: _selectedCofinsSituacaoTributaria,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'CST COFINS',
+                      helperText: 'Situação tributária da COFINS',
+                      prefixIcon: Icon(Icons.receipt_long_outlined),
+                    ),
+                    items: _pisCofinsSituacoes.entries.map((entry) => DropdownMenuItem<String>(
+                      value: entry.key,
+                      child: Text(entry.value, overflow: TextOverflow.ellipsis),
+                    )).toList(),
+                    onChanged: (value) { if (value != null) setState(() => _selectedCofinsSituacaoTributaria = value); },
                   ),
 
                   const SizedBox(height: 12),
@@ -1254,10 +1360,10 @@ class _ProductDialogState extends State<_ProductDialog> {
           onPressed: _isLoading ? null : _saveProduct,
           child: _isLoading
               ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
               : const Text('Salvar'),
         ),
       ],
@@ -1337,55 +1443,55 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         .snapshots()
         .listen(
           (snapshot) {
-            if (!snapshot.exists) {
-              if (mounted) {
-                setState(() {
-                  _isBusiness = false;
-                  _planLoaded = true;
-                });
-              }
+        if (!snapshot.exists) {
+          if (mounted) {
+            setState(() {
+              _isBusiness = false;
+              _planLoaded = true;
+            });
+          }
 
-              return;
-            }
+          return;
+        }
 
-            final data = snapshot.data() as Map<String, dynamic>;
+        final data = snapshot.data() as Map<String, dynamic>;
 
-            final type = data['subscriptionType']?.toString() ?? 'free';
+        final type = data['subscriptionType']?.toString() ?? 'free';
 
-            final status = data['subscriptionStatus']?.toString() ?? 'inactive';
+        final status = data['subscriptionStatus']?.toString() ?? 'inactive';
 
-            final business = type == 'business' && status == 'active';
+        final business = type == 'business' && status == 'active';
 
-            if (mounted) {
-              setState(() {
-                _isBusiness = business;
+        if (mounted) {
+          setState(() {
+            _isBusiness = business;
 
-                _planLoaded = true;
-              });
-            }
+            _planLoaded = true;
+          });
+        }
 
-            debugPrint('=== 📦 PRODUTOS / PLANO ===');
+        debugPrint('=== 📦 PRODUTOS / PLANO ===');
 
-            debugPrint('Tipo: $type');
+        debugPrint('Tipo: $type');
 
-            debugPrint('Status: $status');
+        debugPrint('Status: $status');
 
-            debugPrint('Business: $business');
+        debugPrint('Business: $business');
 
-            debugPrint('============================');
-          },
-          onError: (error) {
-            debugPrint('Erro ao consultar plano da loja: $error');
+        debugPrint('============================');
+      },
+      onError: (error) {
+        debugPrint('Erro ao consultar plano da loja: $error');
 
-            if (mounted) {
-              setState(() {
-                _isBusiness = false;
+        if (mounted) {
+          setState(() {
+            _isBusiness = false;
 
-                _planLoaded = true;
-              });
-            }
-          },
-        );
+            _planLoaded = true;
+          });
+        }
+      },
+    );
   }
 
   // ==========================================================================
@@ -1439,7 +1545,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         title: const Text('Confirmar Exclusão'),
         content: const Text(
           'Tem certeza que deseja excluir este produto? '
-          'A imagem associada será removida permanentemente.',
+              'A imagem associada será removida permanentemente.',
         ),
         actions: [
           TextButton(
@@ -1483,92 +1589,92 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
 
-        body: Stack(
-            children: [
-            const DynamicBackground(),
+      body: Stack(
+        children: [
+          const DynamicBackground(),
 
-        SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 1100,
-              ),
-              child: Column(
-                children: [
-                  _buildCustomHeader(isDarkMode),
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 1100,
+                ),
+                child: Column(
+                  children: [
+                    _buildCustomHeader(isDarkMode),
 
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('stores')
-                          .doc(widget.storeId)
-                          .collection('products')
-                          .orderBy('name_lowercase')
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
+                    Expanded(
+                      child: StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('stores')
+                            .doc(widget.storeId)
+                            .collection('products')
+                            .orderBy('name_lowercase')
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
 
-                      if (snapshot.hasError) {
-                        return const Center(child: Text('Ocorreu um erro.'));
-                      }
+                          if (snapshot.hasError) {
+                            return const Center(child: Text('Ocorreu um erro.'));
+                          }
 
-                      final allProducts = snapshot.data?.docs ?? [];
+                          final allProducts = snapshot.data?.docs ?? [];
 
-                      final query = _searchController.text.trim().toLowerCase();
+                          final query = _searchController.text.trim().toLowerCase();
 
-                      final filteredProducts = allProducts.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
+                          final filteredProducts = allProducts.where((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
 
-                        final name = (data['name_lowercase'] as String? ?? '')
-                            .toLowerCase();
+                            final name = (data['name_lowercase'] as String? ?? '')
+                                .toLowerCase();
 
-                        return name.contains(query);
-                      }).toList();
+                            return name.contains(query);
+                          }).toList();
 
-                      if (filteredProducts.isEmpty) {
-                        return Center(
-                          child: Text(
-                            _searchController.text.isEmpty
-                                ? 'Nenhum produto cadastrado.'
-                                : 'Nenhum produto encontrado.',
-                            style: TextStyle(
-                              color: isDarkMode
-                                  ? Colors.white70
-                                  : Colors.black54,
-                              fontSize: 16,
-                            ),
-                          ),
-                        );
-                      }
-
-                      return LayoutBuilder(
-                        builder: (context, constraints) {
-                          if (constraints.maxWidth > 768) {
-                            return _buildProductDataTable(
-                              filteredProducts,
-                              isDarkMode,
-                              constraints,
+                          if (filteredProducts.isEmpty) {
+                            return Center(
+                              child: Text(
+                                _searchController.text.isEmpty
+                                    ? 'Nenhum produto cadastrado.'
+                                    : 'Nenhum produto encontrado.',
+                                style: TextStyle(
+                                  color: isDarkMode
+                                      ? Colors.white70
+                                      : Colors.black54,
+                                  fontSize: 16,
+                                ),
+                              ),
                             );
                           }
 
-                          return _buildProductListView(
-                            filteredProducts,
-                            isDarkMode,
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              if (constraints.maxWidth > 768) {
+                                return _buildProductDataTable(
+                                  filteredProducts,
+                                  isDarkMode,
+                                  constraints,
+                                );
+                              }
+
+                              return _buildProductListView(
+                                filteredProducts,
+                                isDarkMode,
+                              );
+                            },
                           );
                         },
-                      );
-                    },
-                  ),
+                      ),
 
+                    ),
+                  ],
                 ),
-              ],
+              ),
+
             ),
           ),
-
-          ),
-        ),
         ],
       ),
 
@@ -1578,10 +1684,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         child: _planLoaded
             ? const Icon(Icons.add)
             : const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
       ),
 
     );
@@ -1592,9 +1698,9 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   // ==========================================================================
 
   Widget _buildProductListView(
-    List<QueryDocumentSnapshot> products,
-    bool isDarkMode,
-  ) {
+      List<QueryDocumentSnapshot> products,
+      bool isDarkMode,
+      ) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
       itemCount: products.length,
@@ -1613,10 +1719,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   // ==========================================================================
 
   Widget _buildProductDataTable(
-    List<QueryDocumentSnapshot> products,
-    bool isDarkMode,
-    BoxConstraints constraints,
-  ) {
+      List<QueryDocumentSnapshot> products,
+      bool isDarkMode,
+      BoxConstraints constraints,
+      ) {
     final formatCurrency = NumberFormat.currency(
       locale: 'pt_BR',
       symbol: 'R\$',
@@ -1653,8 +1759,8 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
             return DataRow(
               color: MaterialStateProperty.resolveWith<Color?>((
-                Set<MaterialState> states,
-              ) {
+                  Set<MaterialState> states,
+                  ) {
                 if (needsRestock) {
                   return Colors.red.withOpacity(0.2);
                 }
@@ -1673,10 +1779,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                             : null,
                         child: imageUrl == null || imageUrl.isEmpty
                             ? const Icon(
-                                Icons.inventory_2,
-                                color: Colors.white,
-                                size: 20,
-                              )
+                          Icons.inventory_2,
+                          color: Colors.white,
+                          size: 20,
+                        )
                             : null,
                       ),
                       const SizedBox(width: 16),
@@ -1866,10 +1972,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   // ==========================================================================
 
   Widget _buildProductCard(
-    DocumentSnapshot productDoc,
-    Map<String, dynamic> productData,
-    bool isDarkMode,
-  ) {
+      DocumentSnapshot productDoc,
+      Map<String, dynamic> productData,
+      bool isDarkMode,
+      ) {
     final imageUrl = productData['imageUrl'] as String?;
 
     final quantidade = (productData['quantidade'] as num? ?? 0).toInt();
@@ -1883,8 +1989,8 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
     final bool hasFiscalData =
         fiscal is Map &&
-        fiscal['ncm'] != null &&
-        fiscal['ncm'].toString().isNotEmpty;
+            fiscal['ncm'] != null &&
+            fiscal['ncm'].toString().isNotEmpty;
 
     return Card(
       color: isDarkMode

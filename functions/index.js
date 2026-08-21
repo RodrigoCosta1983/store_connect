@@ -16,6 +16,7 @@ const functions = require("firebase-functions");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 
+
 // =============================================================================
 // 💰 SINCRONIZAÇÃO AUTOMÁTICA DE PREÇOS ASAAS
 //
@@ -266,54 +267,371 @@ const {
        );
 
        // ============================================================
-       // 4. LOCALIZA OU CRIA O CUSTOMER
+       // 4. VALIDA CPF/CNPJ NA BASE INTERNA DO STORE CONNECT
+       //
+       // OBJETIVO:
+       //
+       // Impedir que um CPF/CNPJ pertencente a outra conta/loja
+       // seja reutilizado antes mesmo de consultar o Asaas.
+       //
+       // REGRA:
+       //
+       // cpfs_cadastrados/{documentoLimpo}
+       //
+       // • mesmo UID -> permitido;
+       // • mesma storeId -> permitido;
+       // • UID/storeId diferente -> bloqueia.
+       //
+       // IMPORTANTE:
+       //
+       // Esta validação acontece ANTES de qualquer chamada ao Asaas.
+       // ============================================================
+
+       const cleanDocument =
+         String(cpfCnpj)
+           .replace(/\D/g, "");
+
+       if (!cleanDocument) {
+         throw new HttpsError(
+           "invalid-argument",
+           "CPF/CNPJ inválido."
+         );
+       }
+
+       const cpfRegistryRef =
+         db
+           .collection("cpfs_cadastrados")
+           .doc(cleanDocument);
+
+       const cpfRegistryDoc =
+         await cpfRegistryRef.get();
+
+       if (cpfRegistryDoc.exists) {
+         const cpfRegistryData =
+           cpfRegistryDoc.data() || {};
+
+         const registeredUid =
+           cpfRegistryData.uid || null;
+
+         const registeredStoreId =
+           cpfRegistryData.storeId || null;
+
+         const sameUser =
+           registeredUid === userId;
+
+         const sameStore =
+           registeredStoreId === storeId;
+
+         console.log(
+           `🔎 Documento encontrado em cpfs_cadastrados: ${cleanDocument}`
+         );
+
+         console.log(
+           `📌 UID cadastrado: ${registeredUid || "NÃO INFORMADO"}`
+         );
+
+         console.log(
+           `📌 Store cadastrada: ${registeredStoreId || "NÃO INFORMADA"}`
+         );
+
+         if (
+           !sameUser &&
+           !sameStore
+         ) {
+           console.warn(
+             `🚫 CPF/CNPJ ${cleanDocument} já pertence a outra conta.`
+           );
+
+           throw new HttpsError(
+             "already-exists",
+             "Este CPF/CNPJ já está vinculado a outra conta do Store Connect."
+           );
+         }
+
+         console.log(
+           `✅ CPF/CNPJ ${cleanDocument} pertence à própria conta.`
+         );
+
+       } else {
+
+         await cpfRegistryRef.set({
+           uid:
+             userId,
+
+           storeId:
+             storeId,
+
+           document:
+             cleanDocument,
+
+           createdAt:
+             admin.firestore.FieldValue
+               .serverTimestamp(),
+
+           motivo:
+             "Cadastro financeiro Store Connect",
+         });
+
+         console.log(
+           `✅ CPF/CNPJ ${cleanDocument} reservado para a loja ${storeId}.`
+         );
+       }
+
+
+       // ============================================================
+       // 4.1 LOCALIZA OU CRIA O CUSTOMER NO ASAAS
+       //
+       // SEGUNDA CAMADA DE PROTEÇÃO:
+       //
+       // Mesmo que exista um customer no Asaas com o mesmo CPF/CNPJ,
+       // ele NÃO é automaticamente reutilizado.
+       //
+       // Para reutilizar, exigimos:
+       //
+       // customer.externalReference === storeId
+       //
+       // Isso impede que:
+       //
+       // Loja A -> CPF 123 -> customer cus_A
+       //
+       // seja reutilizado acidentalmente por:
+       //
+       // Loja B -> CPF 123
+       //
+       // Mesmo CPF/CNPJ NÃO significa mesma loja.
+       //
+       // O vínculo oficial Store Connect <-> Asaas é:
+       //
+       // asaasCustomerId + externalReference/storeId
        // ============================================================
 
        let customerId =
          storeData.asaasCustomerId || null;
 
+
+       // ============================================================
+       // 4.2 SE A LOJA JÁ TEM CUSTOMER SALVO
+       //
+       // Confirma que esse customer realmente pertence à loja atual.
+       // ============================================================
+
+       if (customerId) {
+         try {
+           const existingCustomerResponse =
+             await axios.get(
+               `${ASAAS_URL}/customers/${customerId}`,
+               {
+                 headers,
+               }
+             );
+
+           const existingCustomer =
+             existingCustomerResponse.data;
+
+           const externalReference =
+             existingCustomer?.externalReference ||
+             null;
+
+           if (
+             externalReference &&
+             externalReference !== storeId
+           ) {
+             console.error(
+               `🚨 CUSTOMER ASAAS INCONSISTENTE. ` +
+               `Customer ${customerId} pertence a "${externalReference}", ` +
+               `mas a loja atual é "${storeId}".`
+             );
+
+             throw new HttpsError(
+               "failed-precondition",
+               "O cadastro financeiro desta loja está inconsistente. Entre em contato com o suporte."
+             );
+           }
+
+           // Customer antigo pode não ter externalReference.
+           //
+           // Se o ID já estava salvo NA PRÓPRIA loja,
+           // podemos corrigir o externalReference com segurança.
+
+           if (!externalReference) {
+             console.log(
+               `🔧 Customer ${customerId} sem externalReference. Vinculando à loja ${storeId}.`
+             );
+
+             await axios.put(
+               `${ASAAS_URL}/customers/${customerId}`,
+               {
+                 externalReference:
+                   storeId,
+               },
+               {
+                 headers,
+               }
+             );
+           }
+
+           console.log(
+             `✅ Customer Asaas salvo na loja validado: ${customerId}`
+           );
+
+         } catch (error) {
+           if (
+             error instanceof HttpsError
+           ) {
+             throw error;
+           }
+
+           console.error(
+             `❌ Falha ao validar customer ${customerId}:`,
+             error.response?.data ||
+             error.message ||
+             error
+           );
+
+           throw new HttpsError(
+             "internal",
+             "Não foi possível validar o cadastro financeiro existente."
+           );
+         }
+       }
+
+
+       // ============================================================
+       // 4.3 LOJA AINDA NÃO TEM CUSTOMER ASAAS
+       // ============================================================
+
        if (!customerId) {
+         console.log(
+           `🔎 Procurando CPF/CNPJ ${cleanDocument} no Asaas...`
+         );
+
          const search =
            await axios.get(
              `${ASAAS_URL}/customers`,
              {
                headers,
+
                params: {
-                 cpfCnpj,
+                 cpfCnpj:
+                   cleanDocument,
+
+                 limit:
+                   100,
                },
              }
            );
 
-         if (
-           search.data.data?.length > 0
-         ) {
+         const customers =
+           search.data?.data || [];
+
+         // ==========================================================
+         // PROCURA SOMENTE CUSTOMER QUE PERTENCE À LOJA ATUAL
+         //
+         // Não usamos mais customers[0].
+         // ==========================================================
+
+         const customerDaLoja =
+           customers.find(
+             (customer) =>
+               customer.externalReference ===
+               storeId
+           );
+
+         if (customerDaLoja) {
+
            customerId =
-             search.data.data[0].id;
+             customerDaLoja.id;
 
            console.log(
-             `✅ Cliente encontrado: ${customerId}`
+             `✅ Customer correto encontrado no Asaas: ${customerId}`
            );
+
+           console.log(
+             `🔗 externalReference confirmado: ${storeId}`
+           );
+
          } else {
+
+           // ========================================================
+           // EXISTE O MESMO CPF NO ASAAS, MAS PERTENCE A OUTRA LOJA
+           //
+           // NÃO reutilizamos.
+           // NÃO alteramos.
+           // NÃO sobrescrevemos.
+           //
+           // Criamos um customer próprio para a loja atual.
+           // ========================================================
+
+           if (customers.length > 0) {
+             console.warn(
+               `⚠️ Existem ${customers.length} customer(s) no Asaas ` +
+               `com o CPF/CNPJ ${cleanDocument}, mas nenhum pertence ` +
+               `à loja atual ${storeId}.`
+             );
+
+             for (const customer of customers) {
+               console.warn(
+                 `   Customer: ${customer.id} | ` +
+                 `externalReference: ${customer.externalReference || "SEM REFERÊNCIA"}`
+               );
+             }
+
+             console.warn(
+               "🛡️ Nenhum customer de outra loja será reutilizado."
+             );
+           }
+
+
+           // ========================================================
+           // CRIA CUSTOMER EXCLUSIVO PARA ESTA LOJA
+           // ========================================================
+
            const create =
              await axios.post(
                `${ASAAS_URL}/customers`,
                {
                  name,
+
                  email,
-                 cpfCnpj,
+
+                 cpfCnpj:
+                   cleanDocument,
+
                  phone,
-                 externalReference: storeId,
+
+                 externalReference:
+                   storeId,
                },
-               { headers }
+               {
+                 headers,
+               }
              );
 
            customerId =
              create.data.id;
 
            console.log(
-             `✅ Novo cliente criado: ${customerId}`
+             `✅ Novo customer criado no Asaas: ${customerId}`
+           );
+
+           console.log(
+             `🔗 Vinculado exclusivamente à loja: ${storeId}`
            );
          }
+
+
+         // ==========================================================
+         // SALVA O CUSTOMER CORRETO IMEDIATAMENTE NO FIRESTORE
+         // ==========================================================
+
+         await storeRef.update({
+           asaasCustomerId:
+             customerId,
+         });
+
+         console.log(
+           `✅ asaasCustomerId ${customerId} salvo na loja ${storeId}.`
+         );
        }
 
        // ============================================================
@@ -721,25 +1039,33 @@ const {
 
 
 
- // =======================================================================
- // 🧾 MÓDULO FISCAL - FOCUS NFE
- // =======================================================================
+ /// =======================================================================
+  // 🧾 MÓDULO FISCAL - FOCUS NFE
+  // =======================================================================
 
- // Cadastro / validação da empresa
- const {
-   registerFocusCompany,
- } = require("./fiscal/registerFocusCompany");
+  // Cadastro / validação da empresa
+  const {
+    registerFocusCompany,
+  } = require("./fiscal/registerFocusCompany");
 
- exports.registerFocusCompany =
-   registerFocusCompany;
+  exports.registerFocusCompany =
+    registerFocusCompany;
 
- // Emissão NFC-e
- const {
-   emitirNfce,
- } = require("./fiscal/emitirNfce");
+  // Credenciais individuais Focus
+  const {
+    saveFocusCredentials,
+  } = require("./fiscal/saveFocusCredentials");
 
- exports.emitirNfce =
-   emitirNfce;
+  exports.saveFocusCredentials =
+    saveFocusCredentials;
+
+  // Emissão NFC-e
+  const {
+    emitirNfce,
+  } = require("./fiscal/emitirNfce");
+
+  exports.emitirNfce =
+    emitirNfce;
 
  // Pesquisa NCM
  const {
@@ -759,6 +1085,9 @@ const {
 
  exports.syncNcmTable =
    syncNcmTable;
+
+
+ exports.saveFocusCredentials = saveFocusCredentials;
 
 
   /**
