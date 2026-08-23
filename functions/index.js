@@ -1075,6 +1075,14 @@ const {
  exports.searchNcm =
    searchNcm;
 
+ // Certificado Digital A1
+ const {
+   vincularCertificadoA1,
+ } = require("./fiscal/vincularCertificadoA1");
+
+ exports.vincularCertificadoA1 =
+   vincularCertificadoA1;
+
  // -----------------------------------------------------------------------
  // Sincronização da tabela NCM oficial
  // -----------------------------------------------------------------------

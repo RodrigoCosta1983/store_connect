@@ -12,15 +12,20 @@
 /// Responsabilidades principais:
 ///   - carregar e salvar o perfil fiscal da loja;
 ///   - validar/cadastrar os dados da empresa na Focus NFe;
-///   - exibir o estado do certificado digital;
+///   - exibir o estado do certificado digital A1;
+///   - selecionar certificado .pfx/.p12 e enviá-lo somente em memória ao backend;
 ///   - permitir a vinculação dos tokens individuais de homologação e produção;
-///   - enviar os tokens somente para a Cloud Function saveFocusCredentials;
-///   - nunca persistir token Focus em texto puro no Flutter/Firestore.
+///   - enviar tokens somente para a Cloud Function saveFocusCredentials;
+///   - enviar certificado/senha somente para a Cloud Function vincularCertificadoA1;
+///   - nunca persistir token, senha ou Base64 do certificado em texto puro
+///     no Flutter/Firestore.
 ///
 /// Segurança:
-///   Os campos de token desta tela são temporários. Depois do envio bem-sucedido,
-///   o conteúdo é apagado do controller. O backend valida o token, criptografa
-///   com AES-256-GCM e armazena apenas a versão criptografada.
+///   Os campos de token e senha desta tela são temporários. Depois do envio
+///   bem-sucedido, o conteúdo sensível é apagado dos controllers e o arquivo
+///   selecionado é removido da memória da tela. O backend valida o token,
+///   criptografa credenciais Focus e envia o certificado A1 diretamente à Focus.
+///   O app não grava senha nem certificado Base64 no Firestore.
 ///
 /// Atenção de manutenção:
 ///   O perfil fiscal NÃO pode ser sobrescrito por inteiro ao salvar os dados
@@ -29,15 +34,22 @@
 ///   ("perfilFiscal.campo") para preservar o bloco Focus.
 ///
 /// Fluxo:
+///   Credenciais:
 ///   Flutter -> saveFocusCredentials -> validação Focus -> criptografia backend
 ///   -> Firestore (somente ciphertext/iv/authTag).
+///
+///   Certificado A1:
+///   Flutter -> file_picker (.pfx/.p12) -> bytes/Base64 em memória
+///   -> vincularCertificadoA1 -> Focus NFe -> Firestore (somente metadados).
 ///
 /// ============================================================================
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
 
 class FiscalSettingsScreen extends StatefulWidget {
   final String storeId;
@@ -54,6 +66,7 @@ class _FiscalSettingsScreenState extends State<FiscalSettingsScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isSavingFocusCredential = false;
+  bool _isLinkingCertificate = false;
 
   bool _focusHomologacaoConfigurado = false;
   bool _focusProducaoConfigurado = false;
@@ -82,6 +95,14 @@ class _FiscalSettingsScreenState extends State<FiscalSettingsScreen> {
   String _ambiente = 'homologacao';
 
   bool _certificadoVinculado = false;
+  String? _certificadoNomeArquivo;
+  int? _certificadoTamanhoBytes;
+
+  final _certificatePasswordController = TextEditingController();
+  bool _obscureCertificatePassword = true;
+
+  Uint8List? _selectedCertificateBytes;
+  String? _selectedCertificateFileName;
 
   final List<String> _ufs = const [
     'AC',
@@ -136,6 +157,7 @@ class _FiscalSettingsScreenState extends State<FiscalSettingsScreen> {
 
     _focusHomologacaoTokenController.dispose();
     _focusProducaoTokenController.dispose();
+    _certificatePasswordController.dispose();
 
     super.dispose();
   }
@@ -218,6 +240,10 @@ class _FiscalSettingsScreenState extends State<FiscalSettingsScreen> {
         final certificado = fiscal['certificado'] as Map<String, dynamic>?;
 
         _certificadoVinculado = certificado?['vinculado'] == true;
+        _certificadoNomeArquivo = certificado?['nomeArquivo']?.toString();
+        _certificadoTamanhoBytes = certificado?['tamanhoBytes'] is num
+            ? (certificado?['tamanhoBytes'] as num).toInt()
+            : null;
 
         final focus = fiscal['focus'] is Map
             ? Map<String, dynamic>.from(fiscal['focus'] as Map)
@@ -453,7 +479,8 @@ class _FiscalSettingsScreenState extends State<FiscalSettingsScreen> {
         'perfilFiscal.codigoMunicipioIbge':
         _digitsOnly(_codigoMunicipioController.text),
         'perfilFiscal.uf': _uf,
-        'perfilFiscal.certificado.vinculado': _certificadoVinculado,
+        // O estado do certificado é controlado exclusivamente pelo backend
+        // vincularCertificadoA1. Nunca sobrescrever vinculado aqui.
         'perfilFiscal.configurado': true,
         'perfilFiscal.updatedAt': FieldValue.serverTimestamp(),
       });
@@ -578,6 +605,446 @@ class _FiscalSettingsScreenState extends State<FiscalSettingsScreen> {
         });
       }
     }
+  }
+
+
+  // ============================================================================
+  // CERTIFICADO DIGITAL A1
+  // ============================================================================
+
+  String _formatBytes(int? bytes) {
+    if (bytes == null || bytes <= 0) {
+      return '';
+    }
+
+    const kb = 1024;
+    const mb = kb * 1024;
+
+    if (bytes >= mb) {
+      return '${(bytes / mb).toStringAsFixed(2)} MB';
+    }
+
+    if (bytes >= kb) {
+      return '${(bytes / kb).toStringAsFixed(1)} KB';
+    }
+
+    return '$bytes bytes';
+  }
+
+  Future<void> _selectCertificateFile() async {
+    if (_isLinkingCertificate) {
+      return;
+    }
+
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['pfx', 'p12'],
+        allowMultiple: false,
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final file = result.files.single;
+      final bytes = file.bytes;
+      final fileName = file.name.trim();
+
+      if (bytes == null || bytes.isEmpty) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível ler o certificado selecionado.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final lowerName = fileName.toLowerCase();
+      final extension = (file.extension ?? '').toLowerCase();
+
+      final isValidCertificate =
+          extension == 'pfx' ||
+              extension == 'p12' ||
+              lowerName.endsWith('.pfx') ||
+              lowerName.endsWith('.p12');
+
+      debugPrint('=== 📄 CERTIFICADO SELECIONADO ===');
+      debugPrint('Nome: $fileName');
+      debugPrint('Extensão detectada: $extension');
+      debugPrint('Tamanho: ${bytes.length} bytes');
+      debugPrint('=================================');
+
+      if (!isValidCertificate) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Arquivo selecionado: $fileName\n'
+                  'Selecione um certificado A1 nos formatos .pfx ou .p12.',
+            ),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+
+        return;
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _selectedCertificateBytes = bytes;
+        _selectedCertificateFileName = fileName;
+        _certificatePasswordController.clear();
+      });
+    } catch (e) {
+      debugPrint('Erro ao selecionar certificado A1: $e');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Não foi possível selecionar o certificado: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _clearSelectedCertificate() {
+    _certificatePasswordController.clear();
+
+    setState(() {
+      _selectedCertificateBytes = null;
+      _selectedCertificateFileName = null;
+      _obscureCertificatePassword = true;
+    });
+  }
+
+  Future<void> _linkCertificateA1() async {
+    final bytes = _selectedCertificateBytes;
+    final fileName = _selectedCertificateFileName?.trim() ?? '';
+    final password = _certificatePasswordController.text.trim();
+
+    if (bytes == null || bytes.isEmpty || fileName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Selecione primeiro o certificado A1 (.pfx ou .p12).',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Informe a senha do certificado A1.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLinkingCertificate = true;
+    });
+
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'vincularCertificadoA1',
+      );
+
+      final result = await callable.call({
+        'storeId': widget.storeId,
+        'fileName': fileName,
+        'certificateBase64': base64Encode(bytes),
+        'password': password,
+      });
+
+      final data = Map<String, dynamic>.from(result.data);
+
+      // Limpa imediatamente os dados sensíveis mantidos pela tela.
+      _certificatePasswordController.clear();
+
+      if (!mounted) return;
+
+      setState(() {
+        _certificadoVinculado = data['vinculado'] == true;
+        _certificadoNomeArquivo =
+            data['fileName']?.toString() ?? fileName;
+        _certificadoTamanhoBytes = data['sizeBytes'] is num
+            ? (data['sizeBytes'] as num).toInt()
+            : bytes.length;
+        _selectedCertificateBytes = null;
+        _selectedCertificateFileName = null;
+        _obscureCertificatePassword = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            data['message']?.toString() ??
+                'Certificado digital A1 vinculado com sucesso.',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 6),
+        ),
+      );
+
+      await _loadFiscalProfile();
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('Erro vincularCertificadoA1: ${e.code}');
+      debugPrint('Mensagem: ${e.message}');
+      debugPrint('Detalhes: ${e.details}');
+
+      _certificatePasswordController.clear();
+
+      if (!mounted) return;
+
+      final rawMessage = (e.message ?? '').trim();
+
+      final normalizedMessage = rawMessage.toLowerCase();
+
+      final bool isGenericValidationError =
+          rawMessage.isEmpty ||
+              normalizedMessage == 'erro de validação' ||
+              normalizedMessage == 'erro de validacao';
+
+      final String userMessage = isGenericValidationError
+          ? 'Não foi possível validar o certificado digital. '
+          'Verifique se o arquivo é um certificado A1 válido '
+          'e se a senha informada está correta.'
+          : rawMessage;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(userMessage),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Erro inesperado ao vincular certificado A1: $e');
+
+      _certificatePasswordController.clear();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Erro inesperado ao vincular certificado A1: $e',
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLinkingCertificate = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildCertificateSection() {
+    final selectedFileName =
+    _selectedCertificateFileName?.trim();
+
+    final storedSize =
+    _formatBytes(_certificadoTamanhoBytes);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  _certificadoVinculado
+                      ? Icons.verified_user
+                      : Icons.gpp_maybe_outlined,
+                  color: _certificadoVinculado
+                      ? Colors.green
+                      : Colors.orange,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _certificadoVinculado
+                            ? 'Certificado A1 vinculado'
+                            : 'Certificado A1 não vinculado',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _certificadoVinculado
+                            ? [
+                          if ((_certificadoNomeArquivo ?? '')
+                              .isNotEmpty)
+                            _certificadoNomeArquivo!,
+                          if (storedSize.isNotEmpty)
+                            storedSize,
+                        ].join(' • ')
+                            : 'Selecione um arquivo .pfx ou .p12 e informe a senha.',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.shield_outlined, size: 20),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: const Text(
+                      'Seus dados são protegidos durante o envio e utilizados '
+                          'somente para validar e vincular o certificado à sua empresa.',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed:
+              _isLinkingCertificate ? null : _selectCertificateFile,
+              icon: const Icon(Icons.upload_file_outlined),
+              label: Text(
+                _certificadoVinculado
+                    ? 'SELECIONAR NOVO CERTIFICADO'
+                    : 'SELECIONAR CERTIFICADO .PFX / .P12',
+              ),
+            ),
+            if (selectedFileName != null && selectedFileName.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.green.withOpacity(0.25),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.description_outlined,
+                      color: Colors.green,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '$selectedFileName • '
+                            '${_formatBytes(_selectedCertificateBytes?.length)}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _isLinkingCertificate
+                          ? null
+                          : _clearSelectedCertificate,
+                      tooltip: 'Remover seleção',
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _certificatePasswordController,
+                obscureText: _obscureCertificatePassword,
+                enableSuggestions: false,
+                autocorrect: false,
+                decoration: _inputDecoration(
+                  'Senha do certificado A1',
+                  icon: Icons.password_outlined,
+                ).copyWith(
+                  suffixIcon: IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _obscureCertificatePassword =
+                        !_obscureCertificatePassword;
+                      });
+                    },
+                    tooltip: _obscureCertificatePassword
+                        ? 'Mostrar senha'
+                        : 'Ocultar senha',
+                    icon: Icon(
+                      _obscureCertificatePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                  ),
+                ),
+                onSubmitted: (_) {
+                  if (!_isLinkingCertificate) {
+                    _linkCertificateA1();
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed:
+                _isLinkingCertificate ? null : _linkCertificateA1,
+                icon: _isLinkingCertificate
+                    ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                )
+                    : const Icon(Icons.verified_user_outlined),
+                label: Text(
+                  _isLinkingCertificate
+                      ? 'Vinculando...'
+                      : _certificadoVinculado
+                      ? 'SUBSTITUIR CERTIFICADO A1'
+                      : 'VINCULAR CERTIFICADO A1',
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildFocusCredentialField({
@@ -1035,28 +1502,9 @@ class _FiscalSettingsScreenState extends State<FiscalSettingsScreen> {
               },
             ),
 
-            _sectionTitle('Certificado Digital'),
+            _sectionTitle('Certificado Digital A1'),
 
-            Card(
-              child: ListTile(
-                leading: Icon(
-                  _certificadoVinculado
-                      ? Icons.verified_user
-                      : Icons.gpp_maybe_outlined,
-                  color: _certificadoVinculado
-                      ? Colors.green
-                      : Colors.orange,
-                ),
-                title: Text(
-                  _certificadoVinculado
-                      ? 'Certificado vinculado'
-                      : 'Certificado ainda não vinculado',
-                ),
-                subtitle: const Text(
-                  'O certificado A1 será configurado na próxima etapa.',
-                ),
-              ),
-            ),
+            _buildCertificateSection(),
 
             _sectionTitle('Credenciais Focus NFe'),
 
