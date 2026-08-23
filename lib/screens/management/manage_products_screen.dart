@@ -14,6 +14,8 @@
 // - Controlar estoque mínimo.
 // - Exibir dados fiscais exclusivamente para lojas Business.
 // - Salvar NCM, CFOP, origem, unidade, CEST e tributação no mapa "fiscal".
+// - Salvar os códigos IBS/CBS exigidos pela Reforma Tributária, sem assumir
+//   códigos padrão que dependam do enquadramento fiscal do produto.
 //
 // REGRAS DE PLANO:
 // - PRO/TRIAL:
@@ -34,6 +36,8 @@
 //   icmsSituacaoTributaria,
 //   pisSituacaoTributaria,
 //   cofinsSituacaoTributaria,
+//   ibsCbsSituacaoTributaria,
+//   ibsCbsClassificacaoTributaria,
 //   updatedAt
 // }
 //
@@ -41,6 +45,9 @@
 // - Não apagar dados fiscais quando houver downgrade Business -> PRO.
 // - Não quebrar a sincronização entre lotes e quantidade total.
 // - Dados fiscais serão utilizados posteriormente na emissão da NFC-e.
+// - O cadastro/edição comercial NÃO deve ser bloqueado por dados fiscais
+//   ainda incompletos. A Cloud Function emitirNfce faz a validação fiscal
+//   obrigatória antes de qualquer tentativa de emissão.
 //
 // ============================================================================
 
@@ -94,6 +101,15 @@ class _ProductDialogState extends State<_ProductDialog> {
   final _ncmController = TextEditingController();
   final _cfopController = TextEditingController();
   final _cestController = TextEditingController();
+
+  // Reforma Tributária 2026:
+  // campos obrigatórios no item fiscal da Focus NFe.
+  //
+  // Não definimos valor padrão porque CST IBS/CBS e cClassTrib dependem
+  // da tributação real do produto/operação e devem ser confirmados pelo
+  // responsável fiscal/contador.
+  final _ibsCbsSituacaoTributariaController = TextEditingController();
+  final _ibsCbsClassificacaoTributariaController = TextEditingController();
 
   // Origem padrão: mercadoria nacional.
   String _selectedOrigem = '0';
@@ -192,7 +208,6 @@ class _ProductDialogState extends State<_ProductDialog> {
     '49': '49 - Outras operações de saída',
     '99': '99 - Outras operações',
   };
-
 
   // ============================================================================
   // ABRE A PESQUISA DE NCM
@@ -418,14 +433,22 @@ class _ProductDialogState extends State<_ProductDialog> {
         }
 
         final pisSituacao = fiscal['pisSituacaoTributaria']?.toString();
-        if (pisSituacao != null && _pisCofinsSituacoes.containsKey(pisSituacao)) {
+        if (pisSituacao != null &&
+            _pisCofinsSituacoes.containsKey(pisSituacao)) {
           _selectedPisSituacaoTributaria = pisSituacao;
         }
 
         final cofinsSituacao = fiscal['cofinsSituacaoTributaria']?.toString();
-        if (cofinsSituacao != null && _pisCofinsSituacoes.containsKey(cofinsSituacao)) {
+        if (cofinsSituacao != null &&
+            _pisCofinsSituacoes.containsKey(cofinsSituacao)) {
           _selectedCofinsSituacaoTributaria = cofinsSituacao;
         }
+
+        _ibsCbsSituacaoTributariaController.text =
+            fiscal['ibsCbsSituacaoTributaria']?.toString() ?? '';
+
+        _ibsCbsClassificacaoTributariaController.text =
+            fiscal['ibsCbsClassificacaoTributaria']?.toString() ?? '';
       }
     }
   }
@@ -459,6 +482,8 @@ class _ProductDialogState extends State<_ProductDialog> {
     _ncmController.dispose();
     _cfopController.dispose();
     _cestController.dispose();
+    _ibsCbsSituacaoTributariaController.dispose();
+    _ibsCbsClassificacaoTributariaController.dispose();
 
     super.dispose();
   }
@@ -516,6 +541,16 @@ class _ProductDialogState extends State<_ProductDialog> {
 
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Revise os campos destacados antes de salvar o produto.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
       return;
     }
 
@@ -621,6 +656,16 @@ class _ProductDialogState extends State<_ProductDialog> {
 
         final cest = _cestController.text.replaceAll(RegExp(r'\D'), '');
 
+        final ibsCbsSituacaoTributaria = _ibsCbsSituacaoTributariaController
+            .text
+            .replaceAll(RegExp(r'\D'), '');
+
+        final ibsCbsClassificacaoTributaria =
+        _ibsCbsClassificacaoTributariaController.text.replaceAll(
+          RegExp(r'\D'),
+          '',
+        );
+
         productData['fiscal'] = {
           'ncm': ncm,
           'origem': _selectedOrigem,
@@ -633,6 +678,15 @@ class _ProductDialogState extends State<_ProductDialog> {
           'icmsSituacaoTributaria': _selectedIcmsSituacaoTributaria,
           'pisSituacaoTributaria': _selectedPisSituacaoTributaria,
           'cofinsSituacaoTributaria': _selectedCofinsSituacaoTributaria,
+
+          // Reforma Tributária 2026.
+          //
+          // Esses nomes são internos do Store Connect. Na montagem do payload
+          // Focus serão convertidos para:
+          // - ibs_cbs_situacao_tributaria
+          // - ibs_cbs_classificacao_tributaria
+          'ibsCbsSituacaoTributaria': ibsCbsSituacaoTributaria,
+          'ibsCbsClassificacaoTributaria': ibsCbsClassificacaoTributaria,
 
           // Ajuda futuramente em auditoria / sincronização.
           'updatedAt': Timestamp.now(),
@@ -1111,8 +1165,10 @@ class _ProductDialogState extends State<_ProductDialog> {
 
                       final clean = (value ?? '').replaceAll(RegExp(r'\D'), '');
 
+                      // O produto pode ser salvo com o fiscal ainda pendente.
+                      // A emissão NFC-e fará a validação obrigatória depois.
                       if (clean.isEmpty) {
-                        return 'Informe o NCM.';
+                        return null;
                       }
 
                       if (clean.length != 8) {
@@ -1183,7 +1239,7 @@ class _ProductDialogState extends State<_ProductDialog> {
                       final clean = (value ?? '').replaceAll(RegExp(r'\D'), '');
 
                       if (clean.isEmpty) {
-                        return 'Informe o CFOP.';
+                        return null;
                       }
 
                       if (clean.length != 4) {
@@ -1273,11 +1329,21 @@ class _ProductDialogState extends State<_ProductDialog> {
                       helperText: 'Situação tributária do ICMS',
                       prefixIcon: Icon(Icons.account_balance_outlined),
                     ),
-                    items: _icmsSituacoes.entries.map((entry) => DropdownMenuItem<String>(
-                      value: entry.key,
-                      child: Text(entry.value, overflow: TextOverflow.ellipsis),
-                    )).toList(),
-                    onChanged: (value) { if (value != null) setState(() => _selectedIcmsSituacaoTributaria = value); },
+                    items: _icmsSituacoes.entries
+                        .map(
+                          (entry) => DropdownMenuItem<String>(
+                        value: entry.key,
+                        child: Text(
+                          entry.value,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null)
+                        setState(() => _selectedIcmsSituacaoTributaria = value);
+                    },
                   ),
 
                   const SizedBox(height: 16),
@@ -1290,11 +1356,21 @@ class _ProductDialogState extends State<_ProductDialog> {
                       helperText: 'Situação tributária do PIS',
                       prefixIcon: Icon(Icons.receipt_outlined),
                     ),
-                    items: _pisCofinsSituacoes.entries.map((entry) => DropdownMenuItem<String>(
-                      value: entry.key,
-                      child: Text(entry.value, overflow: TextOverflow.ellipsis),
-                    )).toList(),
-                    onChanged: (value) { if (value != null) setState(() => _selectedPisSituacaoTributaria = value); },
+                    items: _pisCofinsSituacoes.entries
+                        .map(
+                          (entry) => DropdownMenuItem<String>(
+                        value: entry.key,
+                        child: Text(
+                          entry.value,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null)
+                        setState(() => _selectedPisSituacaoTributaria = value);
+                    },
                   ),
 
                   const SizedBox(height: 16),
@@ -1307,11 +1383,98 @@ class _ProductDialogState extends State<_ProductDialog> {
                       helperText: 'Situação tributária da COFINS',
                       prefixIcon: Icon(Icons.receipt_long_outlined),
                     ),
-                    items: _pisCofinsSituacoes.entries.map((entry) => DropdownMenuItem<String>(
-                      value: entry.key,
-                      child: Text(entry.value, overflow: TextOverflow.ellipsis),
-                    )).toList(),
-                    onChanged: (value) { if (value != null) setState(() => _selectedCofinsSituacaoTributaria = value); },
+                    items: _pisCofinsSituacoes.entries
+                        .map(
+                          (entry) => DropdownMenuItem<String>(
+                        value: entry.key,
+                        child: Text(
+                          entry.value,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null)
+                        setState(
+                              () => _selectedCofinsSituacaoTributaria = value,
+                        );
+                    },
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ==========================================================
+                  // IBS / CBS - REFORMA TRIBUTÁRIA 2026
+                  //
+                  // Não oferecemos valores padrão. Os dois códigos precisam
+                  // corresponder ao enquadramento fiscal real do produto.
+                  // ==========================================================
+                  TextFormField(
+                    controller: _ibsCbsSituacaoTributariaController,
+                    decoration: const InputDecoration(
+                      labelText: 'CST IBS/CBS',
+                      hintText: '3 dígitos',
+                      helperText:
+                      'Obrigatório para emitir NFC-e; pode ficar pendente no cadastro',
+                      prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(3),
+                    ],
+                    validator: (value) {
+                      if (!widget.isBusiness) {
+                        return null;
+                      }
+
+                      final clean = (value ?? '').replaceAll(RegExp(r'\D'), '');
+
+                      if (clean.isEmpty) {
+                        return null;
+                      }
+
+                      if (clean.length != 3) {
+                        return 'O CST IBS/CBS deve possuir 3 dígitos.';
+                      }
+
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  TextFormField(
+                    controller: _ibsCbsClassificacaoTributariaController,
+                    decoration: const InputDecoration(
+                      labelText: 'Classificação Tributária IBS/CBS',
+                      hintText: 'cClassTrib - 6 dígitos',
+                      helperText: 'Obrigatório para emitir NFC-e; pode ficar pendente no cadastro',
+                      prefixIcon: Icon(Icons.rule_folder_outlined),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(6),
+                    ],
+                    validator: (value) {
+                      if (!widget.isBusiness) {
+                        return null;
+                      }
+
+                      final clean = (value ?? '').replaceAll(RegExp(r'\D'), '');
+
+                      if (clean.isEmpty) {
+                        return null;
+                      }
+
+                      if (clean.length != 6) {
+                        return 'A classificação tributária deve possuir 6 dígitos.';
+                      }
+
+                      return null;
+                    },
                   ),
 
                   const SizedBox(height: 12),
@@ -1333,7 +1496,7 @@ class _ProductDialogState extends State<_ProductDialog> {
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Confirme NCM, CFOP e demais informações fiscais com o responsável fiscal ou contador da empresa.',
+                            'Você pode salvar o produto com dados fiscais pendentes. Para emitir NFC-e, NCM, CFOP, CST IBS/CBS, cClassTrib e os demais campos fiscais deverão estar válidos.',
                             style: TextStyle(fontSize: 12),
                           ),
                         ),
@@ -1596,9 +1759,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
           SafeArea(
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: 1100,
-                ),
+                constraints: const BoxConstraints(maxWidth: 1100),
                 child: Column(
                   children: [
                     _buildCustomHeader(isDarkMode),
@@ -1612,22 +1773,30 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                             .orderBy('name_lowercase')
                             .snapshots(),
                         builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
                           }
 
                           if (snapshot.hasError) {
-                            return const Center(child: Text('Ocorreu um erro.'));
+                            return const Center(
+                              child: Text('Ocorreu um erro.'),
+                            );
                           }
 
                           final allProducts = snapshot.data?.docs ?? [];
 
-                          final query = _searchController.text.trim().toLowerCase();
+                          final query = _searchController.text
+                              .trim()
+                              .toLowerCase();
 
                           final filteredProducts = allProducts.where((doc) {
                             final data = doc.data() as Map<String, dynamic>;
 
-                            final name = (data['name_lowercase'] as String? ?? '')
+                            final name =
+                            (data['name_lowercase'] as String? ?? '')
                                 .toLowerCase();
 
                             return name.contains(query);
@@ -1667,12 +1836,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                           );
                         },
                       ),
-
                     ),
                   ],
                 ),
               ),
-
             ),
           ),
         ],
@@ -1689,7 +1856,6 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
       ),
-
     );
   }
 
@@ -1862,10 +2028,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
               // VOLTAR
               // ================================================================
               IconButton(
-                icon: Icon(
-                  Icons.arrow_back,
-                  color: headerColor,
-                ),
+                icon: Icon(Icons.arrow_back, color: headerColor),
                 onPressed: () => Navigator.of(context).pop(),
               ),
 
@@ -1891,10 +2054,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
               // ================================================================
               IconButton(
                 tooltip: 'Importar produtos',
-                icon: Icon(
-                  Icons.upload_file_outlined,
-                  color: headerColor,
-                ),
+                icon: Icon(Icons.upload_file_outlined, color: headerColor),
                 onPressed: _planLoaded
                     ? () {
                   Navigator.of(context).push(

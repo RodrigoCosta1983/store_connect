@@ -1,5 +1,55 @@
-// payment_options_sheet.dart
+// ============================================================================
+// STORE CONNECT - OPÇÕES DE PAGAMENTO / REGISTRO DE VENDA
+// ============================================================================
+//
+// Arquivo:
+//   lib/widgets/payment_options_sheet.dart
+//
+// Objetivo:
+//   Exibir as formas de pagamento disponíveis no fechamento da venda e
+//   registrar a venda paga no Firestore com o método escolhido.
+//
+// Responsabilidades principais:
+//   - validar o status da assinatura antes de concluir a venda;
+//   - baixar estoque manual ou por lotes em transação;
+//   - registrar o recibo em stores/{storeId}/sales/{saleId};
+//   - abrir o fluxo de PIX;
+//   - abrir o fluxo de venda a prazo;
+//   - distinguir cartão de crédito e cartão de débito.
+//
+// Motivo da separação de cartões:
+//   O antigo valor "Cartão" era ambíguo para emissão fiscal. NFC-e diferencia
+//   crédito e débito, portanto as vendas novas passam a gravar:
+//
+//     paymentMethod: "Cartão de crédito"
+//     paymentMethod: "Cartão de débito"
+//
+// Compatibilidade:
+//   Vendas antigas que já possuem paymentMethod == "Cartão" permanecem como
+//   histórico legado e não são alteradas por este arquivo.
+//
+// Integração fiscal:
+//   Após a venda instantânea ser confirmada no Firestore, o saleId criado é
+//   enviado para a Cloud Function emitirNfce quando a loja estiver no plano
+//   Business e com perfilFiscal.configurado == true.
+//
+//   Importante:
+//   - a venda NÃO é desfeita se a emissão fiscal falhar;
+//   - o backend fiscal registra o motivo no próprio documento da venda;
+//   - a interface informa o usuário, mas preserva a venda comercial;
+//   - a Cloud Function continua sendo responsável por validar owner, plano,
+//     credencial Focus, produtos, tributos, certificado e demais requisitos.
+//
+// Cuidados:
+//   - não alterar a lógica de estoque sem revisar o fluxo transacional;
+//   - manter quantidade de produto como inteiro;
+//   - não unificar crédito/débito novamente em um único valor;
+//   - "Crédito / A Prazo" é venda fiada e NÃO é cartão de crédito.
+//
+// ============================================================================
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -71,6 +121,109 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     }
   }
 
+  bool _shouldRequestNfce(Map<String, dynamic> storeData) {
+    final subscriptionType = (
+        storeData['subscriptionType'] ??
+            storeData['plan'] ??
+            storeData['plano'] ??
+            storeData['subscriptionPlan'] ??
+            ''
+    ).toString().trim().toLowerCase();
+
+    final perfilFiscal = storeData['perfilFiscal'];
+
+    if (perfilFiscal is! Map) {
+      return false;
+    }
+
+    final fiscalData = Map<String, dynamic>.from(perfilFiscal);
+
+    return subscriptionType == 'business' &&
+        fiscalData['configurado'] == true;
+  }
+
+  String _friendlyFiscalError(Object error) {
+    if (error is FirebaseFunctionsException) {
+      final message = error.message?.trim();
+
+      if (message != null && message.isNotEmpty) {
+        return message;
+      }
+    }
+
+    return 'A venda foi concluída, mas não foi possível validar/emissão da NFC-e.';
+  }
+
+  Future<void> _requestNfceForSale(String saleId) async {
+    try {
+      debugPrint(
+        '🧾 NFC-e: solicitando emissão/validação para venda $saleId',
+      );
+
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'emitirNfce',
+      );
+
+      final result = await callable.call<Map<String, dynamic>>({
+        'storeId': widget.storeId,
+        'vendaId': saleId,
+      });
+
+      final data = result.data;
+      final status = data['status']?.toString() ?? 'processado';
+
+      debugPrint(
+        '✅ NFC-e: retorno recebido para venda $saleId | status=$status',
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Venda concluída. NFC-e: $status.',
+          ),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      final message = _friendlyFiscalError(e);
+
+      debugPrint(
+        '⚠️ NFC-e não concluída | '
+            'code=${e.code} | message=${e.message} | details=${e.details}',
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Venda concluída. NFC-e pendente: $message',
+          ),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    } catch (e) {
+      debugPrint(
+        '❌ Erro inesperado ao solicitar NFC-e: $e',
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Venda concluída, mas ocorreu um erro ao iniciar a NFC-e.',
+          ),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 8),
+        ),
+      );
+    }
+  }
+
   Future<void> _handleInstantSale(String paymentMethod) async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
@@ -91,6 +244,8 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
 
       final storeData = storeDoc.data() as Map<String, dynamic>;
       final status = storeData['subscriptionStatus'] as String? ?? 'trial';
+      final shouldRequestNfce = _shouldRequestNfce(storeData);
+      String? saleId;
 
       // 🚪 Nova Regra: Permite 'active', 'trial' e 'overdue' (período de tolerância)
       if (status != 'active' && status != 'trial' && status != 'overdue') {
@@ -112,8 +267,16 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
         return; // ⛔ Interrompe a função AQUI.
       }
 
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final firestore = FirebaseFirestore.instance;
+      final firestore = FirebaseFirestore.instance;
+      final saleDocRef = firestore
+          .collection('stores')
+          .doc(widget.storeId)
+          .collection('sales')
+          .doc();
+
+      saleId = saleDocRef.id;
+
+      await firestore.runTransaction((transaction) async {
 
         // =================================================================
         // FASE 1: APENAS LEITURAS (READS)
@@ -161,7 +324,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
                 .where((l) => l['quantidade'] > 0)
                 .toList();
             lotesAtivos.sort(
-              (a, b) => (a['validade'] as Timestamp).compareTo(
+                  (a, b) => (a['validade'] as Timestamp).compareTo(
                 b['validade'] as Timestamp,
               ),
             );
@@ -198,7 +361,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
             // Recalcula o estoque total com base no que sobrou
             final int novoTotalEstoque = lotesAtualizados.fold(
               0,
-              (sum, item) => sum + (item['quantidade'] as int),
+                  (total, item) => total + (item['quantidade'] as int),
             );
 
             // Atualiza o produto no banco sincronizando a quantidade e a lista de lotes
@@ -212,12 +375,6 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
         // =================================================================
         // FASE 3: REGISTRAR O RECIBO DA VENDA
         // =================================================================
-        final saleDocRef = firestore
-            .collection('stores')
-            .doc(widget.storeId)
-            .collection('sales')
-            .doc();
-
         transaction.set(saleDocRef, {
           'totalAmount': cart.totalAmount,
           'products': cart.items.values.map((item) => item.toMap()).toList(),
@@ -231,16 +388,32 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
         });
       });
 
-      // 4. Finaliza a venda limpando o carrinho
+      // 4. A venda comercial já está confirmada neste ponto.
+      // A emissão fiscal é uma segunda etapa e NÃO deve desfazer a venda.
       cart.clear();
+
+      final createdSaleId = saleId;
+
+      if (shouldRequestNfce) {
+        await _requestNfceForSale(createdSaleId);
+      } else {
+        debugPrint(
+          'ℹ️ NFC-e não solicitada automaticamente: '
+              'loja sem Business fiscal configurado.',
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Venda finalizada e estoque atualizado!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+
       if (mounted) {
         Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Venda finalizada e estoque atualizado!'),
-            backgroundColor: Colors.green,
-          ),
-        );
       }
     } catch (e) {
       debugPrint('❌ Erro na transação de venda: $e');
@@ -252,7 +425,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
           SnackBar(
             content: Text(
               e.toString().contains('UNAVAILABLE') ||
-                      e.toString().contains('socket')
+                  e.toString().contains('socket')
                   ? 'Sem conexão. Verifique sua internet e tente de novo.'
                   : 'Erro: ${e.toString()}',
             ),
@@ -292,7 +465,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (_pixQrCodeUrl != null && _pixQrCodeUrl!.isNotEmpty)
-              // Exibe a imagem do Firebase Storage com tratamento de erro e fit
+            // Exibe a imagem do Firebase Storage com tratamento de erro e fit
               Image.network(
                 _pixQrCodeUrl!,
                 height: 150,
@@ -441,8 +614,23 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
                 size: 30,
                 color: Colors.blueAccent,
               ),
-              title: const Text('Cartão', style: TextStyle(fontSize: 18)),
-              onTap: () => _handleInstantSale('Cartão'),
+              title: const Text(
+                'Cartão de crédito',
+                style: TextStyle(fontSize: 18),
+              ),
+              onTap: () => _handleInstantSale('Cartão de crédito'),
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.credit_card_outlined,
+                size: 30,
+                color: Colors.indigo,
+              ),
+              title: const Text(
+                'Cartão de débito',
+                style: TextStyle(fontSize: 18),
+              ),
+              onTap: () => _handleInstantSale('Cartão de débito'),
             ),
             ListTile(
               leading: const Icon(Icons.pix, size: 30, color: Colors.cyan),
