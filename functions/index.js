@@ -1094,8 +1094,16 @@ const {
  exports.syncNcmTable =
    syncNcmTable;
 
+// -----------------------------------------------------------------------
+// 📴 VENDAS OFFLINE - SINCRONIZAÇÃO IDEMPOTENTE
+// -----------------------------------------------------------------------
 
- exports.saveFocusCredentials = saveFocusCredentials;
+const {
+  syncOfflineSale,
+} = require("./sales/syncOfflineSale");
+
+exports.syncOfflineSale =
+  syncOfflineSale;
 
 
   /**

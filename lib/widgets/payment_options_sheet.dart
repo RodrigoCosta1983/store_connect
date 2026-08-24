@@ -7,7 +7,7 @@
 //
 // Objetivo:
 //   Exibir as formas de pagamento disponíveis no fechamento da venda e
-//   registrar a venda paga no Firestore com o método escolhido.
+//   registrar vendas instantâneas com estratégia online + fallback local.
 //
 // Responsabilidades principais:
 //   - validar o status da assinatura antes de concluir a venda;
@@ -15,7 +15,9 @@
 //   - registrar o recibo em stores/{storeId}/sales/{saleId};
 //   - abrir o fluxo de PIX;
 //   - abrir o fluxo de venda a prazo;
-//   - distinguir cartão de crédito e cartão de débito.
+//   - distinguir cartão de crédito e cartão de débito;
+//   - quando o servidor estiver indisponível, salvar a venda no SQLite;
+//   - manter um localSaleId estável para futura sincronização idempotente.
 //
 // Motivo da separação de cartões:
 //   O antigo valor "Cartão" era ambíguo para emissão fiscal. NFC-e diferencia
@@ -44,7 +46,11 @@
 //   - não alterar a lógica de estoque sem revisar o fluxo transacional;
 //   - manter quantidade de produto como inteiro;
 //   - não unificar crédito/débito novamente em um único valor;
-//   - "Crédito / A Prazo" é venda fiada e NÃO é cartão de crédito.
+//   - "Crédito / A Prazo" é venda fiada e NÃO é cartão de crédito;
+//   - o modo offline desta etapa cobre apenas vendas instantâneas;
+//   - venda offline NÃO altera o estoque Firestore imediatamente; o estoque
+//     definitivo será reconciliado pelo backend quando o SyncService existir;
+//   - NFC-e não é emitida offline nesta etapa: será solicitada após o sync.
 //
 // ============================================================================
 
@@ -55,6 +61,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:store_connect/models/customer_model.dart';
 import 'package:store_connect/providers/cart_provider.dart';
+import 'package:store_connect/data/local/offline_sales_repository.dart';
 import 'package:store_connect/widgets/confirm_fiado_dialog.dart';
 
 import '../screens/auth/auth_gate.dart';
@@ -74,6 +81,9 @@ class PaymentOptionsSheet extends StatefulWidget {
 }
 
 class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
+  final OfflineSalesRepository _offlineSalesRepository =
+  OfflineSalesRepository();
+
   var _isLoading = false;
   bool _fiadoIsEnabled = false;
 
@@ -224,64 +234,92 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     }
   }
 
+  // ============================================================================
+  // VENDA INSTANTÂNEA - ONLINE COM FALLBACK OFFLINE
+  // ============================================================================
+  //
+  // Estratégia desta fase:
+  //
+  //   1. Um localSaleId é criado ANTES de acessar a rede.
+  //   2. Online: o mesmo ID é usado como ID do documento da venda no Firestore.
+  //   3. Se o servidor ficar indisponível: a venda é gravada no SQLite usando
+  //      exatamente o mesmo ID e recebe status pending.
+  //   4. A NFC-e continua exclusiva do fluxo online por enquanto.
+  //   5. O SyncService futuro reutilizará esse ID para evitar duplicidade.
+  //
+  // Importante:
+  //   - nesta fase o estoque não é abatido localmente no SQLite;
+  //   - portanto o estoque exibido offline ainda representa o último estado
+  //     conhecido do servidor;
+  //   - a reconciliação idempotente de estoque será feita no backend na fase
+  //     de sincronização.
+  // ============================================================================
+
   Future<void> _handleInstantSale(String paymentMethod) async {
     if (_isLoading) return;
+
     setState(() => _isLoading = true);
 
     final cart = Provider.of<CartProvider>(context, listen: false);
 
+    // O ID nasce antes da tentativa de rede e nunca muda durante esse fluxo.
+    final localSaleId = _offlineSalesRepository.createLocalSaleId();
+
     try {
       // ------------------------------------------------------------------
-      // 🚨 A TRAVA DE SEGURANÇA (O GUARDA DA VENDA) ATUALIZADA
-      // Fazemos uma verificação direto no servidor, ignorando o cache offline
+      // TRAVA ONLINE DE ASSINATURA
+      // ------------------------------------------------------------------
+      // Enquanto há internet, continuamos exigindo leitura direta do servidor.
+      // Não relaxamos a regra de assinatura do fluxo atual.
       // ------------------------------------------------------------------
       final storeDoc = await FirebaseFirestore.instance
           .collection('stores')
           .doc(widget.storeId)
           .get(const GetOptions(source: Source.server));
 
-      if (!storeDoc.exists) throw Exception("Loja não encontrada.");
+      if (!storeDoc.exists) {
+        throw Exception('Loja não encontrada.');
+      }
 
       final storeData = storeDoc.data() as Map<String, dynamic>;
       final status = storeData['subscriptionStatus'] as String? ?? 'trial';
       final shouldRequestNfce = _shouldRequestNfce(storeData);
-      String? saleId;
 
-      // 🚪 Nova Regra: Permite 'active', 'trial' e 'overdue' (período de tolerância)
-      if (status != 'active' && status != 'trial' && status != 'overdue') {
+      if (!_isAllowedSubscriptionStatus(status)) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                "Venda bloqueada! Sua assinatura está inativa ou expirada.",
+                'Venda bloqueada! Sua assinatura está inativa ou expirada.',
               ),
               backgroundColor: Colors.red,
               duration: Duration(seconds: 8),
             ),
           );
+
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (ctx) => const AuthGate()),
                 (route) => false,
           );
         }
-        return; // ⛔ Interrompe a função AQUI.
+        return;
       }
 
       final firestore = FirebaseFirestore.instance;
+
+      // Usamos o MESMO ID gerado localmente. Isso prepara a venda para
+      // sincronização idempotente caso a resposta da rede se perca.
       final saleDocRef = firestore
           .collection('stores')
           .doc(widget.storeId)
           .collection('sales')
-          .doc();
-
-      saleId = saleDocRef.id;
+          .doc(localSaleId);
 
       await firestore.runTransaction((transaction) async {
-
         // =================================================================
-        // FASE 1: APENAS LEITURAS (READS)
+        // FASE 1: APENAS LEITURAS
         // =================================================================
-        Map<String, DocumentSnapshot> productSnapshots = {};
+        final Map<String, DocumentSnapshot> productSnapshots = {};
 
         for (final cartItem in cart.items.values) {
           final productRef = firestore
@@ -291,38 +329,41 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
               .doc(cartItem.productId);
 
           final productSnapshot = await transaction.get(productRef);
+
           if (!productSnapshot.exists) {
-            throw Exception("Produto ${cartItem.name} não encontrado.");
+            throw Exception('Produto ${cartItem.name} não encontrado.');
           }
+
           productSnapshots[cartItem.productId] = productSnapshot;
         }
 
         // =================================================================
-        // FASE 2: APENAS ESCRITAS (WRITES / UPDATES)
+        // FASE 2: APENAS ESCRITAS / ESTOQUE
         // =================================================================
         for (final cartItem in cart.items.values) {
           final productSnapshot = productSnapshots[cartItem.productId]!;
           final data = productSnapshot.data() as Map<String, dynamic>;
           final productRef = productSnapshot.reference;
 
-          // VERIFICAÇÃO 1: Produto SEM lotes (Apenas Estoque Manual)
+          // Produto SEM lotes: estoque manual.
           if (!data.containsKey('lotes') || (data['lotes'] as List).isEmpty) {
-            int qtdAtual = data['quantidade'] ?? 0;
+            final int qtdAtual = data['quantidade'] ?? 0;
+
             if (qtdAtual < cartItem.quantity) {
-              throw Exception("Estoque insuficiente para ${cartItem.name}");
+              throw Exception('Estoque insuficiente para ${cartItem.name}');
             }
+
             transaction.update(productRef, {
               'quantidade': FieldValue.increment(-cartItem.quantity),
             });
-          }
-          // VERIFICAÇÃO 2: Produto COM lotes (Estoque Automático - FIFO)
-          else {
-            List<dynamic> lotesBrutos = List.from(data['lotes'] ?? []);
+          } else {
+            // Produto COM lotes: baixa FIFO.
+            final List<dynamic> lotesBrutos = List.from(data['lotes'] ?? []);
 
-            // Pega apenas lotes com quantidade > 0 e ordena por validade
-            List<dynamic> lotesAtivos = lotesBrutos
+            final List<dynamic> lotesAtivos = lotesBrutos
                 .where((l) => l['quantidade'] > 0)
                 .toList();
+
             lotesAtivos.sort(
                   (a, b) => (a['validade'] as Timestamp).compareTo(
                 b['validade'] as Timestamp,
@@ -330,41 +371,38 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
             );
 
             int qtdParaBaixar = cartItem.quantity;
-            List<Map<String, dynamic>> lotesAtualizados = [];
+            final List<Map<String, dynamic>> lotesAtualizados = [];
 
-            for (var lote in lotesAtivos) {
-              Map<String, dynamic> loteMap = Map<String, dynamic>.from(
-                lote as Map,
-              );
+            for (final lote in lotesAtivos) {
+              final loteMap = Map<String, dynamic>.from(lote as Map);
 
               if (qtdParaBaixar <= 0) {
                 lotesAtualizados.add(loteMap);
+                continue;
+              }
+
+              final int qtdNoLote = loteMap['quantidade'] as int;
+
+              if (qtdNoLote <= qtdParaBaixar) {
+                qtdParaBaixar -= qtdNoLote;
               } else {
-                int qtdNoLote = loteMap['quantidade'] as int;
-                if (qtdNoLote <= qtdParaBaixar) {
-                  qtdParaBaixar -=
-                      qtdNoLote; // Lote esgotou, não entra na nova lista
-                } else {
-                  loteMap['quantidade'] = qtdNoLote - qtdParaBaixar;
-                  lotesAtualizados.add(loteMap);
-                  qtdParaBaixar = 0;
-                }
+                loteMap['quantidade'] = qtdNoLote - qtdParaBaixar;
+                lotesAtualizados.add(loteMap);
+                qtdParaBaixar = 0;
               }
             }
 
             if (qtdParaBaixar > 0) {
               throw Exception(
-                "Estoque insuficiente para ${cartItem.name} nos lotes.",
+                'Estoque insuficiente para ${cartItem.name} nos lotes.',
               );
             }
 
-            // Recalcula o estoque total com base no que sobrou
             final int novoTotalEstoque = lotesAtualizados.fold(
               0,
                   (total, item) => total + (item['quantidade'] as int),
             );
 
-            // Atualiza o produto no banco sincronizando a quantidade e a lista de lotes
             transaction.update(productRef, {
               'quantidade': novoTotalEstoque,
               'lotes': lotesAtualizados,
@@ -373,7 +411,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
         }
 
         // =================================================================
-        // FASE 3: REGISTRAR O RECIBO DA VENDA
+        // FASE 3: REGISTRAR A VENDA
         // =================================================================
         transaction.set(saleDocRef, {
           'totalAmount': cart.totalAmount,
@@ -385,17 +423,16 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
           'isPaid': true,
           'customerId': cart.selectedCustomer?.id,
           'customerName': cart.selectedCustomer?.name,
+          'localSaleId': localSaleId,
+          'syncOrigin': 'online',
         });
       });
 
-      // 4. A venda comercial já está confirmada neste ponto.
-      // A emissão fiscal é uma segunda etapa e NÃO deve desfazer a venda.
+      // A venda comercial já foi confirmada no servidor.
       cart.clear();
 
-      final createdSaleId = saleId;
-
       if (shouldRequestNfce) {
-        await _requestNfceForSale(createdSaleId);
+        await _requestNfceForSale(localSaleId);
       } else {
         debugPrint(
           'ℹ️ NFC-e não solicitada automaticamente: '
@@ -418,17 +455,19 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     } catch (e) {
       debugPrint('❌ Erro na transação de venda: $e');
 
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (_isNetworkUnavailable(e)) {
+        await _saveInstantSaleOffline(
+          localSaleId: localSaleId,
+          paymentMethod: paymentMethod,
+          cart: cart,
+        );
+        return;
+      }
 
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              e.toString().contains('UNAVAILABLE') ||
-                  e.toString().contains('socket')
-                  ? 'Sem conexão. Verifique sua internet e tente de novo.'
-                  : 'Erro: ${e.toString()}',
-            ),
+            content: Text('Erro: ${e.toString()}'),
             backgroundColor: Colors.red,
             action: SnackBarAction(
               label: 'Tentar Novamente',
@@ -442,6 +481,120 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  bool _isAllowedSubscriptionStatus(String status) {
+    return status == 'active' || status == 'trial' || status == 'overdue';
+  }
+
+  bool _isNetworkUnavailable(Object error) {
+    if (error is FirebaseException && error.code == 'unavailable') {
+      return true;
+    }
+
+    final text = error.toString().toLowerCase();
+
+    return text.contains('unavailable') ||
+        text.contains('socket') ||
+        text.contains('unknownhost') ||
+        text.contains('failed host lookup') ||
+        text.contains('unable to resolve host');
+  }
+
+  Future<void> _saveInstantSaleOffline({
+    required String localSaleId,
+    required String paymentMethod,
+    required CartProvider cart,
+  }) async {
+    try {
+      // ------------------------------------------------------------------
+      // TRAVA OFFLINE
+      // ------------------------------------------------------------------
+      // Sem rede não conseguimos consultar o servidor. Portanto exigimos que
+      // exista uma cópia da loja no cache do Firestore e reaplicamos a mesma
+      // regra de status. Isso é deliberadamente mais restritivo do que
+      // simplesmente ignorar a assinatura.
+      //
+      // Na fase de produção adicionaremos também uma política explícita de
+      // validade temporal para essa autorização offline.
+      // ------------------------------------------------------------------
+      final cachedStoreDoc = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(widget.storeId)
+          .get(const GetOptions(source: Source.cache));
+
+      if (!cachedStoreDoc.exists) {
+        throw Exception(
+          'Não foi possível validar a loja offline. Conecte-se à internet '
+              'ao menos uma vez antes de usar vendas offline.',
+        );
+      }
+
+      final cachedStoreData = cachedStoreDoc.data() as Map<String, dynamic>;
+      final cachedStatus =
+          cachedStoreData['subscriptionStatus'] as String? ?? 'trial';
+
+      if (!_isAllowedSubscriptionStatus(cachedStatus)) {
+        throw Exception(
+          'Venda offline bloqueada: a última assinatura conhecida não está '
+              'ativa.',
+        );
+      }
+
+      final products = cart.items.values
+          .map(
+            (item) => Map<String, dynamic>.from(item.toMap()),
+      )
+          .toList();
+
+      await _offlineSalesRepository.saveSale(
+        localId: localSaleId,
+        storeId: widget.storeId,
+        totalAmount: cart.totalAmount,
+        products: products,
+        paymentMethod: paymentMethod,
+        notes: widget.notes,
+        customerId: cart.selectedCustomer?.id,
+        customerName: cart.selectedCustomer?.name,
+      );
+
+      debugPrint(
+        '💾 Venda salva offline | localSaleId=$localSaleId | '
+            'paymentMethod=$paymentMethod',
+      );
+
+      // A venda foi preservada localmente. O carrinho pode ser liberado para
+      // que o caixa continue operando.
+      cart.clear();
+
+      if (!mounted) return;
+
+      final messenger = ScaffoldMessenger.of(context);
+
+      Navigator.of(context).pop(true);
+
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Venda salva offline. Ela será sincronizada quando a internet voltar.',
+          ),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 6),
+        ),
+      );
+    } catch (offlineError) {
+      debugPrint('❌ Não foi possível salvar a venda offline: $offlineError');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Não foi possível salvar offline: $offlineError'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 8),
+        ),
+      );
     }
   }
 

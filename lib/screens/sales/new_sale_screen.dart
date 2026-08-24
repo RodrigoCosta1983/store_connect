@@ -1,34 +1,72 @@
-/* ==============================================================================================
- * 📝 RESUMO DO ARQUIVO: new_sale_screen.dart (TELA DE FRENTE DE CAIXA / PDV)
- * ==============================================================================================
- * 📌 Função Principal:
- * É a tela principal de operação (PDV) do Store & Connect. Onde o usuário visualiza
- * os produtos, realiza pesquisas, filtra por categorias e adiciona itens ao carrinho.
- *
- * ⚙️ Principais Componentes e Lógicas:
- * 1. AppBar Inteligente: Contém a barra de pesquisa que alterna com o título (lupa) e o
- *    ícone do carrinho de compras integrado ao [CartProvider] mostrando a quantidade de itens.
- *
- * 2. Menu Lateral (Drawer): Concentra a navegação principal do aplicativo. Utiliza o
- *    [UserRoleProvider] de forma ativa para ocultar telas gerenciais (Dashboard, Relatórios,
- *    Configurações) caso o usuário logado seja apenas um 'vendedor' ou 'caixa'.
- *
- * 3. Filtro de Categorias (_buildCategoryFilter e _showCategoriesModal): Busca as categorias
- *    no Firestore em tempo real. Permite filtrar os produtos por botões horizontais (Chips)
- *    ou por um menu inferior (BottomSheet) com imagens.
- *
- * 4. Grade de Produtos: Um StreamBuilder que lê os produtos do Firestore, cruza com o texto
- *    pesquisado na lupa e com a categoria selecionada.
- *    - É responsivo (muda a quantidade de colunas dependendo do tamanho da tela).
- *    - Possui travas visuais para produtos sem estoque (desabilita botão, fica transparente)
- *      ou com estoque baixo.
- * ============================================================================================== */
-
+// ============================================================================
+// STORE CONNECT - NOVA VENDA / PDV / EXPERIÊNCIA OFFLINE
+// ============================================================================
+//
+// Arquivo:
+//   lib/screens/sales/new_sale_screen.dart
+//
+// Objetivo:
+//   Tela principal de frente de caixa (PDV) do Store Connect. Exibe produtos,
+//   pesquisa, categorias, carrinho e atalhos de navegação utilizados durante
+//   uma venda.
+//
+// Responsabilidades principais:
+//   - exibir produtos recebidos do Firestore e permitir inclusão no carrinho;
+//   - pesquisar e filtrar produtos por categoria;
+//   - respeitar estoque disponível e sinalizar estoque baixo/esgotado;
+//   - abrir o carrinho e as áreas administrativas permitidas pelo aplicativo;
+//   - manter imagens de produtos/categorias em cache persistente para que o PDV
+//     continue visualmente utilizável durante quedas de conexão;
+//   - exibir um indicador discreto de conectividade na AppBar.
+//
+// Fluxo offline desta etapa:
+//
+//   ONLINE
+//     -> imagens remotas são carregadas
+//     -> cached_network_image mantém cópia local
+//     -> indicador mostra "Online"
+//
+//   OFFLINE
+//     -> imagens previamente carregadas continuam disponíveis pelo cache
+//     -> imagens nunca carregadas usam placeholder local
+//     -> indicador mostra "Offline"
+//
+// IMPORTANTE SOBRE O INDICADOR:
+//   O indicador usa internet_connection_checker_plus para testar acesso real
+//   à Internet, em vez de apenas verificar se existe Wi-Fi/dados habilitados.
+//   A fila SQLite continua sendo a fonte de verdade para vendas pendentes.
+//
+// Sincronização offline:
+//   - OfflineSalesRepository observa vendas pending/failed;
+//   - OfflineSalesSyncService envia a fila para a callable syncOfflineSale;
+//   - ao iniciar online, a tela tenta sincronizar pendências existentes;
+//   - na transição OFFLINE -> ONLINE, uma nova sincronização é disparada;
+//   - durante o envio o indicador mostra "Sincronizando • N";
+//   - o contador reage ao SQLite e cai conforme as vendas viram synced;
+//   - idempotência e baixa definitiva de estoque são garantidas no backend
+//     pelo mesmo localSaleId.
+//
+// Integração fiscal:
+//   - a venda comercial é sincronizada primeiro;
+//   - NFC-e é solicitada depois, separadamente;
+//   - falha fiscal não devolve a venda ao estado pending.
+//
+// Cuidados de manutenção:
+//   - não remover o cache das imagens sem revisar a experiência offline;
+//   - não usar o indicador de conectividade como autorização para gravar venda;
+//   - não alterar a lógica de estoque sem revisar o fluxo transacional;
+//   - quantidades permanecem inteiras;
+//   - venda fiscal/NFC-e offline será tratada separadamente em contingência.
+//
+// ============================================================================
 
 // lib/screens/sales/new_sale_screen.dart
 
+import 'dart:async';
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -38,6 +76,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:store_connect/data/local/offline_sales_repository.dart';
+import 'package:store_connect/services/offline_sales_sync_service.dart';
 import 'package:store_connect/models/product_model.dart';
 import 'package:store_connect/providers/cart_provider.dart';
 import 'package:store_connect/screens/cart/cart_screen.dart';
@@ -47,8 +87,6 @@ import 'package:store_connect/screens/reports/reports_hub_screen.dart';
 import 'package:store_connect/screens/sales/sales_history_screen.dart';
 import 'package:store_connect/screens/settings_screen.dart';
 import 'package:store_connect/screens/dashboard_screen.dart';
-import 'package:store_connect/providers/user_role_provider.dart';
-import 'package:provider/provider.dart';
 
 import '../management/category_management_screen.dart';
 
@@ -72,16 +110,285 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
   String _selectedCategoryId = '';
 
+  // --------------------------------------------------------------------------
+  // INTERNET REAL
+  // --------------------------------------------------------------------------
+  //
+  // Diferente de um verificador de interface de rede, este monitor testa se o
+  // aparelho consegue realmente alcançar a Internet. Isso evita o falso
+  // "Online" quando Wi-Fi/dados estão ativos, mas sem acesso externo.
+  // --------------------------------------------------------------------------
+
+  final InternetConnection _internetConnection = InternetConnection();
+  StreamSubscription<InternetStatus>? _internetSubscription;
+
+  bool _isOnline = true;
+
+  // --------------------------------------------------------------------------
+  // FILA LOCAL + SINCRONIZAÇÃO
+  // --------------------------------------------------------------------------
+  //
+  // O repositório observa o SQLite compartilhado.
+  // O serviço envia pending/failed para a callable syncOfflineSale.
+  //
+  // A sincronização é disparada:
+  //   1. quando a tela inicia e já existe Internet;
+  //   2. quando a conexão muda de OFFLINE para ONLINE.
+  //
+  // O próprio OfflineSalesSyncService impede duas varreduras simultâneas.
+  // --------------------------------------------------------------------------
+
+  final OfflineSalesRepository _offlineSalesRepository =
+  OfflineSalesRepository();
+
+  late final OfflineSalesSyncService _offlineSalesSyncService =
+  OfflineSalesSyncService(
+    repository: _offlineSalesRepository,
+  );
+
+  late final Stream<int> _waitingSalesCountStream =
+  _offlineSalesRepository.watchWaitingSalesCount();
+
+  bool _isSyncingOfflineSales = false;
+
   @override
   void initState() {
     super.initState();
     _loadAppVersion();
+    _startConnectivityMonitoring();
   }
 
   @override
   void dispose() {
+    _internetSubscription?.cancel();
+
+    // O repositório usa o banco compartilhado do aplicativo.
+    // Portanto, a tela não deve encerrar o SQLite ao ser destruída.
     _searchController.dispose();
+
     super.dispose();
+  }
+
+  Future<void> _startConnectivityMonitoring() async {
+    try {
+      final hasInternet =
+      await _internetConnection.hasInternetAccess;
+
+      if (!mounted) {
+        return;
+      }
+
+      if (hasInternet != _isOnline) {
+        setState(() {
+          _isOnline = hasInternet;
+        });
+      }
+
+      // A tela pode nascer já ONLINE com vendas persistidas de uma execução
+      // anterior. Nesse caso não esperamos uma mudança de conectividade.
+      if (hasInternet) {
+        unawaited(
+          _syncPendingOfflineSales(),
+        );
+      }
+
+      await _internetSubscription?.cancel();
+
+      _internetSubscription =
+          _internetConnection.onStatusChange.listen(
+                (InternetStatus status) {
+              final online =
+                  status == InternetStatus.connected;
+
+              debugPrint(
+                '🌐 INTERNET: ${online ? "ONLINE" : "OFFLINE"}',
+              );
+
+              if (!mounted) {
+                return;
+              }
+
+              final wasOnline = _isOnline;
+
+              if (online != _isOnline) {
+                setState(() {
+                  _isOnline = online;
+                });
+              }
+
+              // Sincroniza somente na transição real OFFLINE -> ONLINE.
+              if (!wasOnline && online) {
+                unawaited(
+                  _syncPendingOfflineSales(),
+                );
+              }
+            },
+            onError: (Object error) {
+              debugPrint(
+                '⚠️ Erro ao monitorar Internet: $error',
+              );
+
+              if (mounted && _isOnline) {
+                setState(() {
+                  _isOnline = false;
+                });
+              }
+            },
+          );
+    } catch (error) {
+      debugPrint(
+        '⚠️ Erro ao verificar Internet: $error',
+      );
+
+      if (mounted && _isOnline) {
+        setState(() {
+          _isOnline = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _syncPendingOfflineSales() async {
+    if (_isSyncingOfflineSales ||
+        _offlineSalesSyncService.isSyncing) {
+      return;
+    }
+
+    if (!_isOnline) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isSyncingOfflineSales = true;
+      });
+    }
+
+    try {
+      final result =
+      await _offlineSalesSyncService.syncPendingSales();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result.skippedBecauseAlreadyRunning) {
+        return;
+      }
+
+      if (result.hasSyncedSales) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.syncedCount == 1
+                  ? '1 venda offline sincronizada com sucesso.'
+                  : '${result.syncedCount} vendas offline sincronizadas com sucesso.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+
+      if (result.hasFailures &&
+          !result.stoppedBecauseNetworkUnavailable) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.failedCount == 1
+                  ? '1 venda continua pendente de sincronização.'
+                  : '${result.failedCount} vendas continuam pendentes de sincronização.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
+      if (result.stoppedBecauseNetworkUnavailable) {
+        debugPrint(
+          '📴 SYNC OFFLINE: conexão indisponível durante o envio. '
+              'A fila será retomada quando a Internet voltar.',
+        );
+      }
+    } catch (error) {
+      debugPrint(
+        '❌ SYNC OFFLINE: erro ao executar fila: $error',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSyncingOfflineSales = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildConnectivityIndicator(
+      bool isDarkMode,
+      int pendingCount,
+      ) {
+    final online = _isOnline;
+    final hasPendingSales = pendingCount > 0;
+
+    final statusText =
+    _isSyncingOfflineSales ? 'Sincronizando' : (online ? 'Online' : 'Offline');
+
+    final indicatorText = hasPendingSales
+        ? '$statusText • $pendingCount ${pendingCount == 1 ? 'pendente' : 'pendentes'}'
+        : statusText;
+
+    final foregroundColor = online
+        ? (isDarkMode ? Colors.greenAccent.shade100 : Colors.green.shade800)
+        : (isDarkMode ? Colors.orangeAccent.shade100 : Colors.orange.shade900);
+
+    final backgroundColor = foregroundColor.withValues(alpha: 0.12);
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Tooltip(
+        message: hasPendingSales
+            ? '$pendingCount ${pendingCount == 1 ? 'venda aguardando' : 'vendas aguardando'} sincronização'
+            : (online ? 'Internet disponível' : 'Sem acesso à Internet'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: foregroundColor.withValues(alpha: 0.35),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_isSyncingOfflineSales)
+                SizedBox(
+                  width: 13,
+                  height: 13,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: foregroundColor,
+                  ),
+                )
+              else
+                Icon(
+                  online ? Icons.circle : Icons.cloud_off_outlined,
+                  size: online ? 9 : 15,
+                  color: foregroundColor,
+                ),
+              const SizedBox(width: 5),
+              Text(
+                indicatorText,
+                style: TextStyle(
+                  color: foregroundColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadAppVersion() async {
@@ -111,7 +418,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
-    final roleProvider = Provider.of<UserRoleProvider>(context);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -140,6 +446,20 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          if (!_isSearching)
+            StreamBuilder<int>(
+              stream: _waitingSalesCountStream,
+              initialData: 0,
+              builder: (context, snapshot) {
+                final pendingCount = snapshot.data ?? 0;
+
+                return _buildConnectivityIndicator(
+                  isDarkMode,
+                  pendingCount,
+                );
+              },
+            ),
+
           // --- ÍCONE DA LUPA OU DO X ---
           if (_isSearching)
             IconButton(
@@ -348,124 +668,52 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 );
               },
             ),
-            // ============================================================================
-// SOBRE O STORE CONNECT
-//
-// Exibe:
-// • Descrição resumida da plataforma
-// • Link para o site oficial
-// • Versão e build atualmente instalados
-//
-// O conteúdo do diálogo possui largura máxima de 500px para manter uma
-// leitura confortável principalmente na versão Web/Desktop.
-// ============================================================================
-
             ListTile(
-              leading: const Icon(
-                Icons.info_outline,
-              ),
-              title: const Text(
-                'Sobre',
-              ),
+              leading: const Icon(Icons.info_outline),
+              title: const Text("Sobre"),
               onTap: () {
                 showDialog(
                   context: context,
-                  builder: (context) {
-                    return AlertDialog(
-                      title: const Text(
-                        'Sobre',
-                      ),
-
-                      // ================================================================
-                      // CONTEÚDO CENTRALIZADO / RESPONSIVO
-                      // ================================================================
-
-                      content: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: 500,
+                  builder: (context) => AlertDialog(
+                    title: const Text("Sobre"),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "O Store Connect é o motor do seu negócio. Um PDV inteligente e sistema de gestão completo, criado para simplificar suas vendas, controlar seu estoque e impulsionar o seu crescimento em um só lugar.",
                         ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // ==========================================================
-                            // DESCRIÇÃO
-                            // ==========================================================
-
-                            const Text(
-                              'O Store Connect é o motor do seu negócio. '
-                                  'Um PDV inteligente e sistema de gestão completo, '
-                                  'criado para simplificar suas vendas, controlar seu '
-                                  'estoque e impulsionar o seu crescimento em um só lugar.',
-                            ),
-
-                            const SizedBox(
-                              height: 20,
-                            ),
-
-                            // ==========================================================
-                            // SITE
-                            // ==========================================================
-
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: const Icon(
-                                Icons.link,
-                              ),
-                              title: const Text(
-                                'Store&Connect',
-                              ),
-                              subtitle: const Text(
-                                'Acessar nosso site',
-                              ),
-                              trailing: const Icon(
-                                Icons.open_in_new,
-                                size: 18,
-                              ),
-                              onTap: () => _launchURL(
-                                'https://www.storeconnect.com.br',
-                              ),
-                            ),
-
-                            const SizedBox(
-                              height: 8,
-                            ),
-
-                            // ==========================================================
-                            // VERSÃO
-                            // ==========================================================
-
-                            Center(
-                              child: Text(
-                                'Versão do App: $_appVersion+$_buildNumber',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: isDarkMode
-                                      ? Colors.white70
-                                      : Colors.black54,
-                                ),
-                              ),
-                            ),
-                          ],
+                        const SizedBox(height: 20),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.link),
+                          title: const Text("Store&Connect"),
+                          onTap: () =>
+                              _launchURL('https://www.storeconnect.com.br'),
                         ),
-                      ),
-
-                      // ================================================================
-                      // AÇÕES
-                      // ================================================================
-
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                          },
-                          child: const Text(
-                            'Fechar',
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 12.0),
+                            child: Text(
+                              'Versão do App: $_appVersion+$_buildNumber',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDarkMode
+                                    ? Colors.white70
+                                    : Colors.black54,
+                              ),
+                            ),
                           ),
                         ),
                       ],
-                    );
-                  },
+                    ),
+                    actions: [
+                      TextButton(
+                        child: const Text("Fechar"),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
@@ -648,9 +896,39 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                             opacity: isOutOfStock ? 0.4 : 1.0,
                                             child: (product.imageUrl != null &&
                                                 product.imageUrl!.isNotEmpty)
-                                                ? Image.network(
-                                              product.imageUrl!,
+                                                ? CachedNetworkImage(
+                                              imageUrl: product.imageUrl!,
                                               fit: BoxFit.cover,
+                                              placeholder: (context, url) =>
+                                                  Container(
+                                                    alignment: Alignment.center,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .surfaceContainerHighest,
+                                                    child: const SizedBox(
+                                                      width: 24,
+                                                      height: 24,
+                                                      child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              errorWidget:
+                                                  (context, url, error) =>
+                                                  Container(
+                                                    alignment: Alignment.center,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .surfaceContainerHighest,
+                                                    child: Icon(
+                                                      Icons.inventory_2_outlined,
+                                                      size: 48,
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                                    ),
+                                                  ),
                                             )
                                                 : Center(
                                               child: Icon(
@@ -983,7 +1261,27 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                               ),
                               clipBehavior: Clip.antiAlias,
                               child: imageUrl != null && imageUrl.isNotEmpty
-                                  ? Image.network(imageUrl, fit: BoxFit.cover)
+                                  ? CachedNetworkImage(
+                                imageUrl: imageUrl,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => const Center(
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) =>
+                                const Center(
+                                  child: Icon(
+                                    Icons.category_outlined,
+                                    size: 28,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              )
                                   : const Icon(Icons.category, size: 28, color: Colors.grey),
                             ),
                           ],
