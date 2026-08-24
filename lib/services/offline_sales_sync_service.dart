@@ -20,12 +20,21 @@
 //      ↓
 //   sucesso
 //      ↓
+//   atualiza cache local dos produtos com Source.server
+//      ↓
 //   markAsSynced()
 //
 // IDEMPOTÊNCIA:
 //   O mesmo localId é enviado em toda tentativa.
 //   O backend usa esse ID como documentId da venda e não baixa estoque novamente
 //   quando a venda já foi processada.
+//
+// ESTOQUE LOCAL:
+//   Uma venda permanece reservando estoque no SQLite enquanto estiver
+//   pending/syncing/failed. Após o backend confirmar a venda, este serviço força
+//   uma leitura Source.server dos produtos envolvidos ANTES de marcar a venda
+//   como synced. Assim o cache Firestore recebe o saldo definitivo antes de a
+//   reserva local desaparecer, evitando um salto temporário para estoque antigo.
 //
 // CONTROLE DE CONCORRÊNCIA:
 //   O campo _isSyncing evita duas varreduras simultâneas dentro da mesma
@@ -49,6 +58,7 @@
 //
 // ============================================================================
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
@@ -58,24 +68,23 @@ import 'package:store_connect/data/local/offline_sales_repository.dart';
 class OfflineSalesSyncService {
   final OfflineSalesRepository _repository;
   final FirebaseFunctions _functions;
+  final FirebaseFirestore _firestore;
 
   bool _isSyncing = false;
 
   OfflineSalesSyncService({
     OfflineSalesRepository? repository,
     FirebaseFunctions? functions,
-  })  : _repository =
-      repository ?? OfflineSalesRepository(),
-        _functions =
-            functions ?? FirebaseFunctions.instance;
+    FirebaseFirestore? firestore,
+  }) : _repository = repository ?? OfflineSalesRepository(),
+       _functions = functions ?? FirebaseFunctions.instance,
+       _firestore = firestore ?? FirebaseFirestore.instance;
 
   bool get isSyncing => _isSyncing;
 
   Future<OfflineSyncResult> syncPendingSales() async {
     if (_isSyncing) {
-      return const OfflineSyncResult(
-        skippedBecauseAlreadyRunning: true,
-      );
+      return const OfflineSyncResult(skippedBecauseAlreadyRunning: true);
     }
 
     _isSyncing = true;
@@ -88,8 +97,7 @@ class OfflineSalesSyncService {
       // syncing volta para pending antes da nova varredura.
       await _repository.recoverInterruptedSyncs();
 
-      final waitingSales =
-      await _repository.getWaitingSales();
+      final waitingSales = await _repository.getWaitingSales();
 
       if (waitingSales.isEmpty) {
         return const OfflineSyncResult();
@@ -133,70 +141,61 @@ class OfflineSalesSyncService {
     }
   }
 
-  Future<_SyncOneSaleOutcome> _syncOneSale(
-      PendingSale sale,
-      ) async {
-    await _repository.markAsSyncing(
-      sale.localId,
-    );
+  Future<_SyncOneSaleOutcome> _syncOneSale(PendingSale sale) async {
+    await _repository.markAsSyncing(sale.localId);
 
     try {
-      final products =
-      _repository.decodeProducts(sale);
+      final products = _repository.decodeProducts(sale);
 
-      final callable =
-      _functions.httpsCallable(
-        'syncOfflineSale',
-      );
+      final callable = _functions.httpsCallable('syncOfflineSale');
 
-      final response =
-      await callable.call<Map<String, dynamic>>(
-        {
-          'storeId': sale.storeId,
-          'localSaleId': sale.localId,
-          'totalAmount': sale.totalAmount,
-          'products': products,
-          'paymentMethod': sale.paymentMethod,
-          'notes': sale.notes,
-          'customerId': sale.customerId,
-          'customerName': sale.customerName,
-          'createdAt':
-          sale.createdAt.toUtc().toIso8601String(),
-        },
-      );
+      final response = await callable.call<Map<String, dynamic>>({
+        'storeId': sale.storeId,
+        'localSaleId': sale.localId,
+        'totalAmount': sale.totalAmount,
+        'products': products,
+        'paymentMethod': sale.paymentMethod,
+        'notes': sale.notes,
+        'customerId': sale.customerId,
+        'customerName': sale.customerName,
+        'createdAt': sale.createdAt.toUtc().toIso8601String(),
+      });
 
-      final data = Map<String, dynamic>.from(
-        response.data,
-      );
+      final data = Map<String, dynamic>.from(response.data);
 
-      final success =
-          data['success'] == true;
+      final success = data['success'] == true;
 
-      final serverSaleId =
-          data['serverSaleId']?.toString().trim() ?? '';
+      final serverSaleId = data['serverSaleId']?.toString().trim() ?? '';
 
       if (!success || serverSaleId.isEmpty) {
-        throw StateError(
-          'Backend não confirmou a sincronização da venda.',
-        );
+        throw StateError('Backend não confirmou a sincronização da venda.');
       }
 
-      // A venda comercial já está definitivamente registrada.
+      // --------------------------------------------------------------
+      // Antes de remover a reserva local, trazemos do servidor o novo saldo
+      // dos produtos envolvidos. Se a rede cair exatamente aqui, a venda fica
+      // `failed` localmente e continua reservando estoque. Na próxima tentativa
+      // o backend reconhecerá o mesmo localSaleId e NÃO baixará estoque de novo.
+      // --------------------------------------------------------------
+
+      await _refreshProductStocksFromServer(
+        storeId: sale.storeId,
+        products: products,
+      );
+
+      // Só agora retiramos a venda da reserva local.
       await _repository.markAsSynced(
         localId: sale.localId,
         serverSaleId: serverSaleId,
       );
 
-      debugPrint(
-        '✅ SYNC OFFLINE: ${sale.localId} → $serverSaleId',
-      );
+      debugPrint('✅ SYNC OFFLINE: ${sale.localId} → $serverSaleId');
 
       // --------------------------------------------------------------
       // NFC-e é uma segunda etapa.
       // --------------------------------------------------------------
 
-      final shouldRequestNfce =
-          data['shouldRequestNfce'] == true;
+      final shouldRequestNfce = data['shouldRequestNfce'] == true;
 
       if (shouldRequestNfce) {
         await _requestNfceBestEffort(
@@ -207,14 +206,11 @@ class OfflineSalesSyncService {
 
       return _SyncOneSaleOutcome.synced;
     } on FirebaseFunctionsException catch (error) {
-      await _repository.markAsFailed(
-        localId: sale.localId,
-        error: error,
-      );
+      await _repository.markAsFailed(localId: sale.localId, error: error);
 
       debugPrint(
         '❌ SYNC OFFLINE: ${sale.localId} | '
-            'code=${error.code} | message=${error.message}',
+        'code=${error.code} | message=${error.message}',
       );
 
       if (_isNetworkUnavailable(error)) {
@@ -223,17 +219,36 @@ class OfflineSalesSyncService {
 
       return _SyncOneSaleOutcome.failed;
     } catch (error) {
-      await _repository.markAsFailed(
-        localId: sale.localId,
-        error: error,
-      );
+      await _repository.markAsFailed(localId: sale.localId, error: error);
 
-      debugPrint(
-        '❌ SYNC OFFLINE: ${sale.localId} | $error',
-      );
+      debugPrint('❌ SYNC OFFLINE: ${sale.localId} | $error');
 
       return _SyncOneSaleOutcome.failed;
     }
+  }
+
+  Future<void> _refreshProductStocksFromServer({
+    required String storeId,
+    required List<Map<String, dynamic>> products,
+  }) async {
+    final productIds = products
+        .map((product) => product['productId']?.toString().trim() ?? '')
+        .where((productId) => productId.isNotEmpty)
+        .toSet();
+
+    for (final productId in productIds) {
+      await _firestore
+          .collection('stores')
+          .doc(storeId)
+          .collection('products')
+          .doc(productId)
+          .get(const GetOptions(source: Source.server));
+    }
+
+    debugPrint(
+      '📦 SYNC OFFLINE: estoque definitivo atualizado no cache '
+      'para ${productIds.length} produto(s).',
+    );
   }
 
   Future<void> _requestNfceBestEffort({
@@ -241,42 +256,32 @@ class OfflineSalesSyncService {
     required String serverSaleId,
   }) async {
     try {
-      final callable =
-      _functions.httpsCallable(
-        'emitirNfce',
-      );
+      final callable = _functions.httpsCallable('emitirNfce');
 
-      await callable.call<Map<String, dynamic>>(
-        {
-          'storeId': storeId,
-          'vendaId': serverSaleId,
-        },
-      );
+      await callable.call<Map<String, dynamic>>({
+        'storeId': storeId,
+        'vendaId': serverSaleId,
+      });
 
-      debugPrint(
-        '🧾 SYNC OFFLINE: NFC-e solicitada para $serverSaleId.',
-      );
+      debugPrint('🧾 SYNC OFFLINE: NFC-e solicitada para $serverSaleId.');
     } on FirebaseFunctionsException catch (error) {
       // A venda permanece synced.
       debugPrint(
         '⚠️ SYNC OFFLINE: venda sincronizada, '
-            'mas NFC-e ficou pendente | '
-            'code=${error.code} | message=${error.message}',
+        'mas NFC-e ficou pendente | '
+        'code=${error.code} | message=${error.message}',
       );
     } catch (error) {
       // A venda permanece synced.
       debugPrint(
         '⚠️ SYNC OFFLINE: venda sincronizada, '
-            'mas houve erro ao iniciar NFC-e | $error',
+        'mas houve erro ao iniciar NFC-e | $error',
       );
     }
   }
 
-  bool _isNetworkUnavailable(
-      FirebaseFunctionsException error,
-      ) {
-    final code =
-    error.code.trim().toLowerCase();
+  bool _isNetworkUnavailable(FirebaseFunctionsException error) {
+    final code = error.code.trim().toLowerCase();
 
     return code == 'unavailable' ||
         code == 'deadline-exceeded' ||
@@ -284,11 +289,7 @@ class OfflineSalesSyncService {
   }
 }
 
-enum _SyncOneSaleOutcome {
-  synced,
-  failed,
-  networkUnavailable,
-}
+enum _SyncOneSaleOutcome { synced, failed, networkUnavailable }
 
 class OfflineSyncResult {
   final int syncedCount;
@@ -303,12 +304,9 @@ class OfflineSyncResult {
     this.skippedBecauseAlreadyRunning = false,
   });
 
-  int get processedCount =>
-      syncedCount + failedCount;
+  int get processedCount => syncedCount + failedCount;
 
-  bool get hasFailures =>
-      failedCount > 0;
+  bool get hasFailures => failedCount > 0;
 
-  bool get hasSyncedSales =>
-      syncedCount > 0;
+  bool get hasSyncedSales => syncedCount > 0;
 }

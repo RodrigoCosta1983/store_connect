@@ -16,8 +16,9 @@
 //   - abrir o fluxo de PIX;
 //   - abrir o fluxo de venda a prazo;
 //   - distinguir cartão de crédito e cartão de débito;
-//   - quando o servidor estiver indisponível, salvar a venda no SQLite;
-//   - manter um localSaleId estável para futura sincronização idempotente.
+//   - quando o servidor estiver indisponível, revalidar o estoque local;
+//   - salvar no SQLite somente quando houver saldo suficiente;
+//   - manter um localSaleId estável para sincronização idempotente.
 //
 // Motivo da separação de cartões:
 //   O antigo valor "Cartão" era ambíguo para emissão fiscal. NFC-e diferencia
@@ -48,9 +49,13 @@
 //   - não unificar crédito/débito novamente em um único valor;
 //   - "Crédito / A Prazo" é venda fiada e NÃO é cartão de crédito;
 //   - o modo offline desta etapa cobre apenas vendas instantâneas;
-//   - venda offline NÃO altera o estoque Firestore imediatamente; o estoque
-//     definitivo será reconciliado pelo backend quando o SyncService existir;
-//   - NFC-e não é emitida offline nesta etapa: será solicitada após o sync.
+//   - venda offline NÃO altera o estoque Firestore imediatamente;
+//   - pending/syncing/failed reservam estoque no SQLite;
+//   - antes de persistir uma venda offline, o cache Firestore fornece o último
+//     saldo conhecido e o repository executa uma validação transacional;
+//   - se faltar saldo, a venda NÃO é criada e o carrinho NÃO é limpo;
+//   - o backend continua sendo a autoridade definitiva multi-dispositivo;
+//   - NFC-e é solicitada somente depois da sincronização comercial.
 //
 // ============================================================================
 
@@ -82,7 +87,7 @@ class PaymentOptionsSheet extends StatefulWidget {
 
 class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
   final OfflineSalesRepository _offlineSalesRepository =
-  OfflineSalesRepository();
+      OfflineSalesRepository();
 
   var _isLoading = false;
   bool _fiadoIsEnabled = false;
@@ -132,13 +137,15 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
   }
 
   bool _shouldRequestNfce(Map<String, dynamic> storeData) {
-    final subscriptionType = (
-        storeData['subscriptionType'] ??
-            storeData['plan'] ??
-            storeData['plano'] ??
-            storeData['subscriptionPlan'] ??
-            ''
-    ).toString().trim().toLowerCase();
+    final subscriptionType =
+        (storeData['subscriptionType'] ??
+                storeData['plan'] ??
+                storeData['plano'] ??
+                storeData['subscriptionPlan'] ??
+                '')
+            .toString()
+            .trim()
+            .toLowerCase();
 
     final perfilFiscal = storeData['perfilFiscal'];
 
@@ -148,8 +155,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
 
     final fiscalData = Map<String, dynamic>.from(perfilFiscal);
 
-    return subscriptionType == 'business' &&
-        fiscalData['configurado'] == true;
+    return subscriptionType == 'business' && fiscalData['configurado'] == true;
   }
 
   String _friendlyFiscalError(Object error) {
@@ -166,13 +172,9 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
 
   Future<void> _requestNfceForSale(String saleId) async {
     try {
-      debugPrint(
-        '🧾 NFC-e: solicitando emissão/validação para venda $saleId',
-      );
+      debugPrint('🧾 NFC-e: solicitando emissão/validação para venda $saleId');
 
-      final callable = FirebaseFunctions.instance.httpsCallable(
-        'emitirNfce',
-      );
+      final callable = FirebaseFunctions.instance.httpsCallable('emitirNfce');
 
       final result = await callable.call<Map<String, dynamic>>({
         'storeId': widget.storeId,
@@ -190,9 +192,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Venda concluída. NFC-e: $status.',
-          ),
+          content: Text('Venda concluída. NFC-e: $status.'),
           backgroundColor: Colors.green,
         ),
       );
@@ -201,24 +201,20 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
 
       debugPrint(
         '⚠️ NFC-e não concluída | '
-            'code=${e.code} | message=${e.message} | details=${e.details}',
+        'code=${e.code} | message=${e.message} | details=${e.details}',
       );
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Venda concluída. NFC-e pendente: $message',
-          ),
+          content: Text('Venda concluída. NFC-e pendente: $message'),
           backgroundColor: Colors.orange,
           duration: const Duration(seconds: 8),
         ),
       );
     } catch (e) {
-      debugPrint(
-        '❌ Erro inesperado ao solicitar NFC-e: $e',
-      );
+      debugPrint('❌ Erro inesperado ao solicitar NFC-e: $e');
 
       if (!mounted) return;
 
@@ -299,7 +295,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
 
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (ctx) => const AuthGate()),
-                (route) => false,
+            (route) => false,
           );
         }
         return;
@@ -365,7 +361,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
                 .toList();
 
             lotesAtivos.sort(
-                  (a, b) => (a['validade'] as Timestamp).compareTo(
+              (a, b) => (a['validade'] as Timestamp).compareTo(
                 b['validade'] as Timestamp,
               ),
             );
@@ -400,7 +396,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
 
             final int novoTotalEstoque = lotesAtualizados.fold(
               0,
-                  (total, item) => total + (item['quantidade'] as int),
+              (total, item) => total + (item['quantidade'] as int),
             );
 
             transaction.update(productRef, {
@@ -436,7 +432,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
       } else {
         debugPrint(
           'ℹ️ NFC-e não solicitada automaticamente: '
-              'loja sem Business fiscal configurado.',
+          'loja sem Business fiscal configurado.',
         );
 
         if (mounted) {
@@ -502,6 +498,61 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
         text.contains('unable to resolve host');
   }
 
+  Future<Map<String, int>> _loadCachedStockForCart(CartProvider cart) async {
+    final firestore = FirebaseFirestore.instance;
+
+    final knownStockByProduct = <String, int>{};
+
+    for (final cartItem in cart.items.values) {
+      final cachedProduct = await firestore
+          .collection('stores')
+          .doc(widget.storeId)
+          .collection('products')
+          .doc(cartItem.productId)
+          .get(const GetOptions(source: Source.cache));
+
+      if (!cachedProduct.exists) {
+        throw Exception(
+          'Não foi possível validar o estoque offline de '
+          '${cartItem.name}. Conecte-se à internet ao menos uma vez '
+          'com esse produto carregado antes de vendê-lo offline.',
+        );
+      }
+
+      final data = cachedProduct.data() as Map<String, dynamic>;
+
+      final lotes = data['lotes'];
+
+      int knownStock;
+
+      if (lotes is List && lotes.isNotEmpty) {
+        knownStock = lotes.fold<int>(0, (total, rawLote) {
+          if (rawLote is! Map) {
+            return total;
+          }
+
+          final rawQuantity = rawLote['quantidade'];
+
+          final quantity = rawQuantity is num
+              ? rawQuantity.toInt()
+              : int.tryParse(rawQuantity?.toString() ?? '') ?? 0;
+
+          return quantity > 0 ? total + quantity : total;
+        });
+      } else {
+        final rawQuantity = data['quantidade'];
+
+        knownStock = rawQuantity is num
+            ? rawQuantity.toInt()
+            : int.tryParse(rawQuantity?.toString() ?? '') ?? 0;
+      }
+
+      knownStockByProduct[cartItem.productId] = knownStock < 0 ? 0 : knownStock;
+    }
+
+    return knownStockByProduct;
+  }
+
   Future<void> _saveInstantSaleOffline({
     required String localSaleId,
     required String paymentMethod,
@@ -527,7 +578,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
       if (!cachedStoreDoc.exists) {
         throw Exception(
           'Não foi possível validar a loja offline. Conecte-se à internet '
-              'ao menos uma vez antes de usar vendas offline.',
+          'ao menos uma vez antes de usar vendas offline.',
         );
       }
 
@@ -538,30 +589,31 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
       if (!_isAllowedSubscriptionStatus(cachedStatus)) {
         throw Exception(
           'Venda offline bloqueada: a última assinatura conhecida não está '
-              'ativa.',
+          'ativa.',
         );
       }
 
       final products = cart.items.values
-          .map(
-            (item) => Map<String, dynamic>.from(item.toMap()),
-      )
+          .map((item) => Map<String, dynamic>.from(item.toMap()))
           .toList();
 
-      await _offlineSalesRepository.saveSale(
+      final knownStockByProduct = await _loadCachedStockForCart(cart);
+
+      await _offlineSalesRepository.validateStockAndSaveSale(
         localId: localSaleId,
         storeId: widget.storeId,
         totalAmount: cart.totalAmount,
         products: products,
         paymentMethod: paymentMethod,
+        knownStockByProduct: knownStockByProduct,
         notes: widget.notes,
         customerId: cart.selectedCustomer?.id,
         customerName: cart.selectedCustomer?.name,
       );
 
       debugPrint(
-        '💾 Venda salva offline | localSaleId=$localSaleId | '
-            'paymentMethod=$paymentMethod',
+        '💾 Venda salva offline após validação de estoque | '
+        'localSaleId=$localSaleId | paymentMethod=$paymentMethod',
       );
 
       // A venda foi preservada localmente. O carrinho pode ser liberado para
@@ -581,6 +633,21 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
           ),
           backgroundColor: Colors.orange,
           duration: Duration(seconds: 6),
+        ),
+      );
+    } on OfflineStockValidationException catch (offlineStockError) {
+      debugPrint(
+        '⛔ VENDA OFFLINE BLOQUEADA POR ESTOQUE: '
+        '${offlineStockError.friendlyMessage}',
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(offlineStockError.friendlyMessage),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 6),
         ),
       );
     } catch (offlineError) {
@@ -618,7 +685,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (_pixQrCodeUrl != null && _pixQrCodeUrl!.isNotEmpty)
-            // Exibe a imagem do Firebase Storage com tratamento de erro e fit
+              // Exibe a imagem do Firebase Storage com tratamento de erro e fit
               Image.network(
                 _pixQrCodeUrl!,
                 height: 150,

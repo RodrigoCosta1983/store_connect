@@ -139,15 +139,13 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   // --------------------------------------------------------------------------
 
   final OfflineSalesRepository _offlineSalesRepository =
-  OfflineSalesRepository();
+      OfflineSalesRepository();
 
   late final OfflineSalesSyncService _offlineSalesSyncService =
-  OfflineSalesSyncService(
-    repository: _offlineSalesRepository,
-  );
+      OfflineSalesSyncService(repository: _offlineSalesRepository);
 
-  late final Stream<int> _waitingSalesCountStream =
-  _offlineSalesRepository.watchWaitingSalesCount();
+  late final Stream<int> _waitingSalesCountStream = _offlineSalesRepository
+      .watchWaitingSalesCount();
 
   bool _isSyncingOfflineSales = false;
 
@@ -171,8 +169,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
   Future<void> _startConnectivityMonitoring() async {
     try {
-      final hasInternet =
-      await _internetConnection.hasInternetAccess;
+      final hasInternet = await _internetConnection.hasInternetAccess;
 
       if (!mounted) {
         return;
@@ -187,58 +184,46 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       // A tela pode nascer já ONLINE com vendas persistidas de uma execução
       // anterior. Nesse caso não esperamos uma mudança de conectividade.
       if (hasInternet) {
-        unawaited(
-          _syncPendingOfflineSales(),
-        );
+        unawaited(_syncPendingOfflineSales());
       }
 
       await _internetSubscription?.cancel();
 
-      _internetSubscription =
-          _internetConnection.onStatusChange.listen(
-                (InternetStatus status) {
-              final online =
-                  status == InternetStatus.connected;
+      _internetSubscription = _internetConnection.onStatusChange.listen(
+        (InternetStatus status) {
+          final online = status == InternetStatus.connected;
 
-              debugPrint(
-                '🌐 INTERNET: ${online ? "ONLINE" : "OFFLINE"}',
-              );
+          debugPrint('🌐 INTERNET: ${online ? "ONLINE" : "OFFLINE"}');
 
-              if (!mounted) {
-                return;
-              }
+          if (!mounted) {
+            return;
+          }
 
-              final wasOnline = _isOnline;
+          final wasOnline = _isOnline;
 
-              if (online != _isOnline) {
-                setState(() {
-                  _isOnline = online;
-                });
-              }
+          if (online != _isOnline) {
+            setState(() {
+              _isOnline = online;
+            });
+          }
 
-              // Sincroniza somente na transição real OFFLINE -> ONLINE.
-              if (!wasOnline && online) {
-                unawaited(
-                  _syncPendingOfflineSales(),
-                );
-              }
-            },
-            onError: (Object error) {
-              debugPrint(
-                '⚠️ Erro ao monitorar Internet: $error',
-              );
+          // Sincroniza somente na transição real OFFLINE -> ONLINE.
+          if (!wasOnline && online) {
+            unawaited(_syncPendingOfflineSales());
+          }
+        },
+        onError: (Object error) {
+          debugPrint('⚠️ Erro ao monitorar Internet: $error');
 
-              if (mounted && _isOnline) {
-                setState(() {
-                  _isOnline = false;
-                });
-              }
-            },
-          );
-    } catch (error) {
-      debugPrint(
-        '⚠️ Erro ao verificar Internet: $error',
+          if (mounted && _isOnline) {
+            setState(() {
+              _isOnline = false;
+            });
+          }
+        },
       );
+    } catch (error) {
+      debugPrint('⚠️ Erro ao verificar Internet: $error');
 
       if (mounted && _isOnline) {
         setState(() {
@@ -249,8 +234,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   }
 
   Future<void> _syncPendingOfflineSales() async {
-    if (_isSyncingOfflineSales ||
-        _offlineSalesSyncService.isSyncing) {
+    if (_isSyncingOfflineSales || _offlineSalesSyncService.isSyncing) {
       return;
     }
 
@@ -265,8 +249,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     }
 
     try {
-      final result =
-      await _offlineSalesSyncService.syncPendingSales();
+      final result = await _offlineSalesSyncService.syncPendingSales();
 
       if (!mounted) {
         return;
@@ -289,8 +272,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         );
       }
 
-      if (result.hasFailures &&
-          !result.stoppedBecauseNetworkUnavailable) {
+      if (result.hasFailures && !result.stoppedBecauseNetworkUnavailable) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -306,13 +288,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       if (result.stoppedBecauseNetworkUnavailable) {
         debugPrint(
           '📴 SYNC OFFLINE: conexão indisponível durante o envio. '
-              'A fila será retomada quando a Internet voltar.',
+          'A fila será retomada quando a Internet voltar.',
         );
       }
     } catch (error) {
-      debugPrint(
-        '❌ SYNC OFFLINE: erro ao executar fila: $error',
-      );
+      debugPrint('❌ SYNC OFFLINE: erro ao executar fila: $error');
     } finally {
       if (mounted) {
         setState(() {
@@ -322,15 +302,13 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     }
   }
 
-  Widget _buildConnectivityIndicator(
-      bool isDarkMode,
-      int pendingCount,
-      ) {
+  Widget _buildConnectivityIndicator(bool isDarkMode, int pendingCount) {
     final online = _isOnline;
     final hasPendingSales = pendingCount > 0;
 
-    final statusText =
-    _isSyncingOfflineSales ? 'Sincronizando' : (online ? 'Online' : 'Offline');
+    final statusText = _isSyncingOfflineSales
+        ? 'Sincronizando'
+        : (online ? 'Online' : 'Offline');
 
     final indicatorText = hasPendingSales
         ? '$statusText • $pendingCount ${pendingCount == 1 ? 'pendente' : 'pendentes'}'
@@ -353,9 +331,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: foregroundColor.withValues(alpha: 0.35),
-            ),
+            border: Border.all(color: foregroundColor.withValues(alpha: 0.35)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -418,30 +394,31 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
-
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         // --- LÓGICA DO TÍTULO VS BARRA DE PESQUISA ---
         title: _isSearching
             ? TextField(
-          controller: _searchController,
-          autofocus: true, // Abre o teclado automaticamente
-          style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.black87,
-              fontSize: 18),
-          decoration: InputDecoration(
-            hintText: 'Pesquisar produtos...',
-            hintStyle: TextStyle(
-                color: isDarkMode ? Colors.white54 : Colors.black54),
-            border: InputBorder.none, // Remove a linha de baixo do campo
-          ),
-          onChanged: (value) {
-            setState(() {
-              _searchQuery = value;
-            });
-          },
-        )
+                controller: _searchController,
+                autofocus: true, // Abre o teclado automaticamente
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                  fontSize: 18,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Pesquisar produtos...',
+                  hintStyle: TextStyle(
+                    color: isDarkMode ? Colors.white54 : Colors.black54,
+                  ),
+                  border: InputBorder.none, // Remove a linha de baixo do campo
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+              )
             : const Text('Nova Venda'),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -453,10 +430,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               builder: (context, snapshot) {
                 final pendingCount = snapshot.data ?? 0;
 
-                return _buildConnectivityIndicator(
-                  isDarkMode,
-                  pendingCount,
-                );
+                return _buildConnectivityIndicator(isDarkMode, pendingCount);
               },
             ),
 
@@ -516,14 +490,22 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator(color: Colors.white));
+                    return const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    );
                   }
 
                   if (!snapshot.hasData || !snapshot.data!.exists) {
-                    return const Center(child: Text('Store Connect', style: TextStyle(color: Colors.white, fontSize: 24)));
+                    return const Center(
+                      child: Text(
+                        'Store Connect',
+                        style: TextStyle(color: Colors.white, fontSize: 24),
+                      ),
+                    );
                   }
 
-                  final storeData = snapshot.data!.data() as Map<String, dynamic>;
+                  final storeData =
+                      snapshot.data!.data() as Map<String, dynamic>;
                   final storeName = storeData['name'] ?? 'Minha Loja';
                   final logoUrl = storeData['logoUrl'] as String?;
 
@@ -535,27 +517,58 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           alignment: Alignment.center,
                           children: [
                             (logoUrl != null && logoUrl.isNotEmpty)
-                                ? CircleAvatar(radius: 35, backgroundImage: NetworkImage(logoUrl), backgroundColor: Colors.white)
-                                : const Icon(Icons.storefront, color: Colors.white, size: 45),
+                                ? CircleAvatar(
+                                    radius: 35,
+                                    backgroundImage: NetworkImage(logoUrl),
+                                    backgroundColor: Colors.white,
+                                  )
+                                : const Icon(
+                                    Icons.storefront,
+                                    color: Colors.white,
+                                    size: 45,
+                                  ),
                             Positioned.fill(
                               child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(35),
                                   onTap: () async {
-                                    final pickedImage = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
+                                    final pickedImage = await ImagePicker()
+                                        .pickImage(
+                                          source: ImageSource.gallery,
+                                          imageQuality: 50,
+                                        );
                                     if (pickedImage == null) return;
 
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Atualizando logo...")));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text("Atualizando logo..."),
+                                      ),
+                                    );
 
                                     try {
-                                      final ref = FirebaseStorage.instance.ref('store_logos/${widget.storeId}/logo.jpg');
+                                      final ref = FirebaseStorage.instance.ref(
+                                        'store_logos/${widget.storeId}/logo.jpg',
+                                      );
                                       await ref.putFile(File(pickedImage.path));
                                       final newUrl = await ref.getDownloadURL();
-                                      await FirebaseFirestore.instance.collection('stores').doc(widget.storeId).update({'logoUrl': newUrl});
-                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Logo atualizada!")));
+                                      await FirebaseFirestore.instance
+                                          .collection('stores')
+                                          .doc(widget.storeId)
+                                          .update({'logoUrl': newUrl});
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text("Logo atualizada!"),
+                                        ),
+                                      );
                                     } catch (e) {
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(content: Text("Erro: $e")),
+                                      );
                                     }
                                   },
                                 ),
@@ -564,7 +577,16 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Text(storeName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(
+                          storeName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ),
                   );
@@ -624,7 +646,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.category_outlined), // Ícone que lembra organização/departamentos
+              leading: const Icon(
+                Icons.category_outlined,
+              ), // Ícone que lembra organização/departamentos
               title: const Text('Gerenciar Categorias'),
               onTap: () {
                 // 1. Fecha o menu lateral suavemente
@@ -634,9 +658,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => CategoryManagementScreen(
-                      storeId: widget.storeId,
-                    ),
+                    builder: (context) =>
+                        CategoryManagementScreen(storeId: widget.storeId),
                   ),
                 );
               },
@@ -782,12 +805,15 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           if (productSnapshot.connectionState ==
                               ConnectionState.waiting) {
                             return const Center(
-                                child: CircularProgressIndicator());
+                              child: CircularProgressIndicator(),
+                            );
                           }
                           if (productSnapshot.hasError) {
                             return const Center(
-                                child: Text(
-                                    'Ocorreu um erro ao carregar produtos.'));
+                              child: Text(
+                                'Ocorreu um erro ao carregar produtos.',
+                              ),
+                            );
                           }
 
                           final allProductDocs =
@@ -809,15 +835,18 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           // --- LÓGICA DE FILTRO ATUALIZADA (PESQUISA + CATEGORIA) ---
                           final productDocs = allProductDocs.where((doc) {
                             final productData =
-                            doc.data() as Map<String, dynamic>;
-                            final product =
-                            Product.fromMap(doc.id, productData);
+                                doc.data() as Map<String, dynamic>;
+                            final product = Product.fromMap(
+                              doc.id,
+                              productData,
+                            );
 
                             // 1. Filtra pelo que foi digitado na Lupa
                             final productName = product.name.toLowerCase();
                             final searchLower = _searchQuery.toLowerCase();
-                            final matchesSearch =
-                            productName.contains(searchLower);
+                            final matchesSearch = productName.contains(
+                              searchLower,
+                            );
 
                             // 2. Filtra pelo Botão da Categoria
                             bool matchesCategory = true;
@@ -837,12 +866,15 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.search_off,
-                                      size: 60,
-                                      color: Colors.grey.withOpacity(0.5)),
+                                  Icon(
+                                    Icons.search_off,
+                                    size: 60,
+                                    color: Colors.grey.withOpacity(0.5),
+                                  ),
                                   const SizedBox(height: 16),
                                   const Text(
-                                      'Nenhum produto encontrado nesta categoria.'),
+                                    'Nenhum produto encontrado nesta categoria.',
+                                  ),
                                 ],
                               ),
                             );
@@ -852,22 +884,23 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                             padding: const EdgeInsets.all(10.0),
                             itemCount: productDocs.length,
                             gridDelegate:
-                            SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: crossAxisCount,
-                              childAspectRatio: childAspectRatio,
-                              crossAxisSpacing: 10,
-                              mainAxisSpacing: 10,
-                            ),
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  childAspectRatio: childAspectRatio,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 10,
+                                ),
                             itemBuilder: (ctx, i) {
-                              final productData = productDocs[i].data()
-                              as Map<String, dynamic>;
+                              final productData =
+                                  productDocs[i].data() as Map<String, dynamic>;
                               final product = Product.fromMap(
                                 productDocs[i].id,
                                 productData,
                               );
 
                               final bool isOutOfStock = product.quantidade <= 0;
-                              final bool isLowStock = product.quantidade > 0 &&
+                              final bool isLowStock =
+                                  product.quantidade > 0 &&
                                   product.quantidade <= 5;
 
                               final cardColor = isOutOfStock
@@ -875,7 +908,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                   : theme.cardColor.withOpacity(0.9);
                               final textColor = isOutOfStock
                                   ? theme.textTheme.bodyMedium?.color
-                                  ?.withOpacity(0.5)
+                                        ?.withOpacity(0.5)
                                   : theme.textTheme.bodyMedium?.color;
 
                               return Card(
@@ -889,54 +922,67 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                   children: [
                                     Column(
                                       crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
+                                          CrossAxisAlignment.stretch,
                                       children: <Widget>[
                                         Expanded(
                                           child: Opacity(
                                             opacity: isOutOfStock ? 0.4 : 1.0,
-                                            child: (product.imageUrl != null &&
-                                                product.imageUrl!.isNotEmpty)
+                                            child:
+                                                (product.imageUrl != null &&
+                                                    product
+                                                        .imageUrl!
+                                                        .isNotEmpty)
                                                 ? CachedNetworkImage(
-                                              imageUrl: product.imageUrl!,
-                                              fit: BoxFit.cover,
-                                              placeholder: (context, url) =>
-                                                  Container(
-                                                    alignment: Alignment.center,
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .surfaceContainerHighest,
-                                                    child: const SizedBox(
-                                                      width: 24,
-                                                      height: 24,
-                                                      child:
-                                                      CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                      ),
-                                                    ),
-                                                  ),
-                                              errorWidget:
-                                                  (context, url, error) =>
-                                                  Container(
-                                                    alignment: Alignment.center,
-                                                    color: Theme.of(context)
-                                                        .colorScheme
-                                                        .surfaceContainerHighest,
-                                                    child: Icon(
-                                                      Icons.inventory_2_outlined,
-                                                      size: 48,
-                                                      color: Theme.of(context)
-                                                          .colorScheme
-                                                          .onSurfaceVariant,
-                                                    ),
-                                                  ),
-                                            )
+                                                    imageUrl: product.imageUrl!,
+                                                    fit: BoxFit.cover,
+                                                    placeholder:
+                                                        (
+                                                          context,
+                                                          url,
+                                                        ) => Container(
+                                                          alignment:
+                                                              Alignment.center,
+                                                          color: Theme.of(context)
+                                                              .colorScheme
+                                                              .surfaceContainerHighest,
+                                                          child: const SizedBox(
+                                                            width: 24,
+                                                            height: 24,
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                                  strokeWidth:
+                                                                      2,
+                                                                ),
+                                                          ),
+                                                        ),
+                                                    errorWidget:
+                                                        (
+                                                          context,
+                                                          url,
+                                                          error,
+                                                        ) => Container(
+                                                          alignment:
+                                                              Alignment.center,
+                                                          color: Theme.of(context)
+                                                              .colorScheme
+                                                              .surfaceContainerHighest,
+                                                          child: Icon(
+                                                            Icons
+                                                                .inventory_2_outlined,
+                                                            size: 48,
+                                                            color: Theme.of(context)
+                                                                .colorScheme
+                                                                .onSurfaceVariant,
+                                                          ),
+                                                        ),
+                                                  )
                                                 : Center(
-                                              child: Icon(
-                                                Icons.inventory_2,
-                                                size: 50,
-                                                color: textColor,
-                                              ),
-                                            ),
+                                                    child: Icon(
+                                                      Icons.inventory_2,
+                                                      size: 50,
+                                                      color: textColor,
+                                                    ),
+                                                  ),
                                           ),
                                         ),
                                         Padding(
@@ -957,7 +1003,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                         ),
                                         Padding(
                                           padding: const EdgeInsets.fromLTRB(
-                                              8, 0, 8, 8),
+                                            8,
+                                            0,
+                                            8,
+                                            8,
+                                          ),
                                           child: Text(
                                             'R\$ ${product.price.toStringAsFixed(2)}',
                                             textAlign: TextAlign.center,
@@ -972,7 +1022,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                         ),
                                         Padding(
                                           padding: const EdgeInsets.fromLTRB(
-                                              8, 0, 8, 8),
+                                            8,
+                                            0,
+                                            8,
+                                            8,
+                                          ),
                                           child: ElevatedButton.icon(
                                             icon: const Icon(
                                               Icons.add_shopping_cart,
@@ -984,11 +1038,13 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                                   : 'Adicionar',
                                             ),
                                             style: ElevatedButton.styleFrom(
-                                              padding: const EdgeInsets.symmetric(
-                                                vertical: 8,
-                                              ),
-                                              tapTargetSize: MaterialTapTargetSize
-                                                  .shrinkWrap,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 8,
+                                                  ),
+                                              tapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
                                               backgroundColor: isOutOfStock
                                                   ? Colors.grey.withOpacity(0.3)
                                                   : Colors.deepPurple,
@@ -996,8 +1052,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                             ),
                                             onPressed: isOutOfStock
                                                 ? null
-                                                : () => cartProvider
-                                                .addItem(product),
+                                                : () => cartProvider.addItem(
+                                                    product,
+                                                  ),
                                           ),
                                         ),
                                       ],
@@ -1015,8 +1072,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                             color: isOutOfStock
                                                 ? Colors.red.shade700
                                                 : Colors.orange.shade700,
-                                            borderRadius:
-                                            BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                           child: Text(
                                             isOutOfStock
@@ -1079,15 +1137,28 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ActionChip(
-                  avatar: Icon(Icons.grid_view, size: 18, color: isDarkMode ? Colors.white : Colors.black87),
+                  avatar: Icon(
+                    Icons.grid_view,
+                    size: 18,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                  ),
                   label: Text(
                     'Categorias',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black87),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode ? Colors.white : Colors.black87,
+                    ),
                   ),
-                  backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+                  backgroundColor: isDarkMode
+                      ? Colors.grey.shade800
+                      : Colors.grey.shade200,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
+                    side: BorderSide(
+                      color: isDarkMode
+                          ? Colors.grey.shade700
+                          : Colors.grey.shade300,
+                    ),
                   ),
                   onPressed: () => _showCategoriesModal(context, categories),
                 ),
@@ -1097,14 +1168,19 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: ChoiceChip(
-                  label: const Text('Todos', style: TextStyle(fontWeight: FontWeight.bold)),
+                  label: const Text(
+                    'Todos',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   selected: _selectedCategoryId.isEmpty,
                   onSelected: (selected) {
                     if (selected) setState(() => _selectedCategoryId = '');
                   },
                   selectedColor: Colors.deepPurple.shade100,
                   labelStyle: TextStyle(
-                    color: _selectedCategoryId.isEmpty ? Colors.deepPurple.shade900 : null,
+                    color: _selectedCategoryId.isEmpty
+                        ? Colors.deepPurple.shade900
+                        : null,
                   ),
                 ),
               ),
@@ -1137,17 +1213,22 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   }
 
   // --- NOVO MÉTODO: GAVETA (BOTTOM SHEET) DE CATEGORIAS ---
-  void _showCategoriesModal(BuildContext context, List<QueryDocumentSnapshot> categories) {
+  void _showCategoriesModal(
+    BuildContext context,
+    List<QueryDocumentSnapshot> categories,
+  ) {
     final theme = Theme.of(context);
     final isDarkMode = theme.brightness == Brightness.dark;
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Permite que a gaveta ocupe mais espaço na tela
+      isScrollControlled:
+          true, // Permite que a gaveta ocupe mais espaço na tela
       backgroundColor: Colors.transparent,
       builder: (BuildContext ctx) {
         return Container(
-          height: MediaQuery.of(context).size.height * 0.75, // Ocupa 75% da tela
+          height:
+              MediaQuery.of(context).size.height * 0.75, // Ocupa 75% da tela
           decoration: BoxDecoration(
             color: theme.scaffoldBackgroundColor,
             borderRadius: BorderRadius.only(
@@ -1179,7 +1260,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           color: Colors.grey.shade200,
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(Icons.close, size: 20, color: isDarkMode ? Colors.white70 : Colors.black54),
+                        child: Icon(
+                          Icons.close,
+                          size: 20,
+                          color: isDarkMode ? Colors.white70 : Colors.black54,
+                        ),
                       ),
                       onPressed: () => Navigator.of(ctx).pop(),
                     ),
@@ -1194,7 +1279,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Categorias',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDarkMode ? Colors.white : Colors.black87),
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode ? Colors.white : Colors.black87,
+                    ),
                   ),
                 ),
               ),
@@ -1226,16 +1315,25 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: isDarkMode ? Colors.white10 : Colors.grey.shade100,
+                          color: isDarkMode
+                              ? Colors.white10
+                              : Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: isDarkMode ? Colors.white24 : Colors.grey.shade200),
+                          border: Border.all(
+                            color: isDarkMode
+                                ? Colors.white24
+                                : Colors.grey.shade200,
+                          ),
                         ),
                         child: Row(
                           children: [
                             // Título da Categoria
                             Expanded(
                               child: Padding(
-                                padding: const EdgeInsets.only(left: 12, right: 4),
+                                padding: const EdgeInsets.only(
+                                  left: 12,
+                                  right: 4,
+                                ),
                                 child: Text(
                                   doc['name'],
                                   style: const TextStyle(
@@ -1252,7 +1350,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                             // Imagem da Categoria centralizada à direita
                             Container(
                               width: 60, // Largura da imagem
-                              height: double.infinity, // Ocupa a altura total do card
+                              height: double
+                                  .infinity, // Ocupa a altura total do card
                               decoration: const BoxDecoration(
                                 borderRadius: BorderRadius.only(
                                   topRight: Radius.circular(12),
@@ -1262,27 +1361,32 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                               clipBehavior: Clip.antiAlias,
                               child: imageUrl != null && imageUrl.isNotEmpty
                                   ? CachedNetworkImage(
-                                imageUrl: imageUrl,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => const Center(
-                                  child: SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                                      imageUrl: imageUrl,
+                                      fit: BoxFit.cover,
+                                      placeholder: (context, url) =>
+                                          const Center(
+                                            child: SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                          ),
+                                      errorWidget: (context, url, error) =>
+                                          const Center(
+                                            child: Icon(
+                                              Icons.category_outlined,
+                                              size: 28,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                    )
+                                  : const Icon(
+                                      Icons.category,
+                                      size: 28,
+                                      color: Colors.grey,
                                     ),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) =>
-                                const Center(
-                                  child: Icon(
-                                    Icons.category_outlined,
-                                    size: 28,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              )
-                                  : const Icon(Icons.category, size: 28, color: Colors.grey),
                             ),
                           ],
                         ),
