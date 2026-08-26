@@ -1,4 +1,45 @@
-// lib/screens/auth/auth_gate.dart
+// ============================================================================
+// ARQUIVO: auth_gate.dart
+// ============================================================================
+//
+// OBJETIVO:
+//
+// Controlar a entrada principal do Store&Connect após autenticação.
+//
+// RESPONSABILIDADES:
+//
+// • Observar o estado de autenticação do Firebase.
+// • Redirecionar usuários não autenticados para LoginScreen.
+// • Criar a loja quando o usuário ainda não possui storeId.
+// • Registrar versão/último login sem repetir a operação em reconstruções.
+// • Atualizar SalesProvider quando o storeId muda.
+// • Validar status da assinatura, plano pago e validade do trial.
+// • Encaminhar contas sem acesso para SubscriptionScreen.
+// • Encaminhar contas autorizadas para SmartHomeScreen.
+//
+// NOVO FLUXO PRINCIPAL:
+//
+// AuthGate
+//    ↓
+// autenticação + loja + assinatura válidas
+//    ↓
+// SmartHomeScreen
+//    ↓
+// Radar da Loja / leitura inteligente do negócio
+//    ↓
+// Nova Venda → NewSaleScreen
+//
+// IMPORTANTE:
+//
+// • A antiga Home operacional não é mais a tela inicial após o AuthGate.
+// • NewSaleScreen continua existindo e é acessada pela ação "Nova venda".
+// • Dashboard continua sendo uma visão quantitativa separada.
+// • Não remover as validações de assinatura existentes neste arquivo.
+// • As validações críticas de segurança no backend continuam obrigatórias.
+// • Evitar navegação imperativa dentro do build quando um retorno de Widget
+//   resolve o fluxo declarativamente.
+//
+// ============================================================================
 
 import 'dart:async';
 
@@ -11,8 +52,10 @@ import 'package:provider/provider.dart';
 import 'package:store_connect/providers/sales_provider.dart';
 import 'package:store_connect/screens/auth/create_store_screen.dart';
 import 'package:store_connect/screens/auth/login_screen.dart';
-import 'package:store_connect/screens/home_screen.dart';
+import 'package:store_connect/services/home/smart_home_screen.dart';
 import 'package:store_connect/screens/subscription_screen.dart';
+
+import '../home_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -38,27 +81,16 @@ class _AuthGateState extends State<AuthGate> {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
 
-      final versaoAtual =
-          '${packageInfo.version}+${packageInfo.buildNumber}';
+      final versaoAtual = '${packageInfo.version}+${packageInfo.buildNumber}';
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .set(
-        {
-          'versao_app': versaoAtual,
-          'ultimo_login': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'versao_app': versaoAtual,
+        'ultimo_login': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-      debugPrint(
-        '🚀 Info de login/versão sincronizada para: $uid',
-      );
+      debugPrint('🚀 Info de login/versão sincronizada para: $uid');
     } catch (e) {
-      debugPrint(
-        '❌ Erro ao registrar versão: $e',
-      );
+      debugPrint('❌ Erro ao registrar versão: $e');
     }
   }
 
@@ -71,12 +103,9 @@ class _AuthGateState extends State<AuthGate> {
         // AGUARDANDO FIREBASE AUTH
         // -----------------------------------------------------------------
 
-        if (authSnapshot.connectionState ==
-            ConnectionState.waiting) {
+        if (authSnapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -98,7 +127,7 @@ class _AuthGateState extends State<AuthGate> {
         // -----------------------------------------------------------------
 
         WidgetsBinding.instance.addPostFrameCallback(
-              (_) => _registrarLoginEVersao(user.uid),
+          (_) => _registrarLoginEVersao(user.uid),
         );
 
         // -----------------------------------------------------------------
@@ -111,21 +140,16 @@ class _AuthGateState extends State<AuthGate> {
               .doc(user.uid)
               .snapshots(),
           builder: (context, userDocSnapshot) {
-            if (userDocSnapshot.connectionState ==
-                ConnectionState.waiting) {
+            if (userDocSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
-                body: Center(
-                  child: CircularProgressIndicator(),
-                ),
+                body: Center(child: CircularProgressIndicator()),
               );
             }
 
             final userData =
-            userDocSnapshot.data?.data()
-            as Map<String, dynamic>?;
+                userDocSnapshot.data?.data() as Map<String, dynamic>?;
 
-            final storeId =
-            userData?['storeId'] as String?;
+            final storeId = userData?['storeId'] as String?;
 
             // -----------------------------------------------------------------
             // USUÁRIO AINDA NÃO POSSUI LOJA
@@ -142,14 +166,12 @@ class _AuthGateState extends State<AuthGate> {
             if (_lastStoreIdProcessed != storeId) {
               _lastStoreIdProcessed = storeId;
 
-              WidgetsBinding.instance.addPostFrameCallback(
-                    (_) {
-                  Provider.of<SalesProvider>(
-                    context,
-                    listen: false,
-                  ).updateStoreId(storeId);
-                },
-              );
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                Provider.of<SalesProvider>(
+                  context,
+                  listen: false,
+                ).updateStoreId(storeId);
+              });
             }
 
             // -----------------------------------------------------------------
@@ -162,27 +184,21 @@ class _AuthGateState extends State<AuthGate> {
                   .doc(storeId)
                   .snapshots(),
               builder: (context, storeSnapshot) {
-                if (storeSnapshot.connectionState ==
-                    ConnectionState.waiting) {
+                if (storeSnapshot.connectionState == ConnectionState.waiting) {
                   return const Scaffold(
-                    body: Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    body: Center(child: CircularProgressIndicator()),
                   );
                 }
 
                 final storeData =
-                storeSnapshot.data?.data()
-                as Map<String, dynamic>?;
+                    storeSnapshot.data?.data() as Map<String, dynamic>?;
 
                 // -----------------------------------------------------------------
                 // LOJA NÃO ENCONTRADA
                 // -----------------------------------------------------------------
 
                 if (storeData == null) {
-                  return SubscriptionScreen(
-                    storeId: storeId,
-                  );
+                  return SubscriptionScreen(storeId: storeId);
                 }
 
                 // =================================================================
@@ -190,26 +206,17 @@ class _AuthGateState extends State<AuthGate> {
                 // =================================================================
 
                 final status =
-                    storeData['subscriptionStatus']
-                    as String? ??
-                        'trial';
+                    storeData['subscriptionStatus'] as String? ?? 'trial';
 
-                final type =
-                    storeData['subscriptionType']
-                    as String? ??
-                        'free';
+                final type = storeData['subscriptionType'] as String? ?? 'free';
 
-                final trialEndDate =
-                storeData['trialEndDate']
-                as String?;
+                final trialEndDate = storeData['trialEndDate'] as String?;
 
                 // =================================================================
                 // PLANOS PAGOS VÁLIDOS
                 // =================================================================
 
-                final bool isPaidPlan =
-                    type == 'pro' ||
-                        type == 'business';
+                final bool isPaidPlan = type == 'pro' || type == 'business';
 
                 // =================================================================
                 // VERIFICA SE O TRIAL AINDA É VÁLIDO
@@ -221,22 +228,19 @@ class _AuthGateState extends State<AuthGate> {
                   try {
                     String normalizedTrialDate = trialEndDate.trim();
 
-                    final fractionalMatch = RegExp(
-                      r'(\.\d{3})\d+',
-                    );
+                    final fractionalMatch = RegExp(r'(\.\d{3})\d+');
 
-                    normalizedTrialDate = normalizedTrialDate.replaceFirstMapped(
-                      fractionalMatch,
+                    normalizedTrialDate = normalizedTrialDate
+                        .replaceFirstMapped(
+                          fractionalMatch,
                           (match) => match.group(1)!,
-                    );
+                        );
 
                     isTrialValid = DateTime.now().isBefore(
                       DateTime.parse(normalizedTrialDate),
                     );
                   } catch (e) {
-                    debugPrint(
-                      '⚠️ Erro ao interpretar trialEndDate: $e',
-                    );
+                    debugPrint('⚠️ Erro ao interpretar trialEndDate: $e');
                   }
                 }
 
@@ -244,65 +248,40 @@ class _AuthGateState extends State<AuthGate> {
                 // DEBUG
                 // =================================================================
 
-                debugPrint(
-                  '=== 🔐 AUTH GATE ===',
-                );
+                debugPrint('=== 🔐 AUTH GATE ===');
 
-                debugPrint(
-                  'Status: $status',
-                );
+                debugPrint('Status: $status');
 
-                debugPrint(
-                  'Tipo: $type',
-                );
+                debugPrint('Tipo: $type');
 
-                debugPrint(
-                  'Plano pago: $isPaidPlan',
-                );
+                debugPrint('Plano pago: $isPaidPlan');
 
-                debugPrint(
-                  'Trial válido: $isTrialValid',
-                );
+                debugPrint('Trial válido: $isTrialValid');
 
-                debugPrint(
-                  '====================',
-                );
+                debugPrint('====================');
 
                 // =================================================================
                 // EXPIRAÇÃO DE LOJA SEM PLANO PAGO
                 // =================================================================
 
-                if (status == 'active' &&
-                    !isPaidPlan &&
-                    !isTrialValid) {
-                  WidgetsBinding.instance
-                      .addPostFrameCallback(
-                        (_) async {
-                      try {
-                        await FirebaseFirestore
-                            .instance
-                            .collection('stores')
-                            .doc(storeId)
-                            .update({
-                          'subscriptionStatus':
-                          'inactive',
-                        });
+                if (status == 'active' && !isPaidPlan && !isTrialValid) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) async {
+                    try {
+                      await FirebaseFirestore.instance
+                          .collection('stores')
+                          .doc(storeId)
+                          .update({'subscriptionStatus': 'inactive'});
 
-                        debugPrint(
-                          '🔒 Loja $storeId inativada: '
-                              'trial expirado e sem plano pago.',
-                        );
-                      } catch (e) {
-                        debugPrint(
-                          '❌ Erro ao inativar loja: $e',
-                        );
-                      }
-                    },
-                  );
+                      debugPrint(
+                        '🔒 Loja $storeId inativada: '
+                        'trial expirado e sem plano pago.',
+                      );
+                    } catch (e) {
+                      debugPrint('❌ Erro ao inativar loja: $e');
+                    }
+                  });
 
-                  return SubscriptionScreen(
-                    storeId: storeId,
-                  );
+                  return SubscriptionScreen(storeId: storeId);
                 }
 
                 // =================================================================
@@ -311,36 +290,24 @@ class _AuthGateState extends State<AuthGate> {
 
                 if (!isPaidPlan &&
                     !isTrialValid &&
-                    (status == 'active' ||
-                        status == 'trial')) {
-                  WidgetsBinding.instance
-                      .addPostFrameCallback(
-                        (_) async {
-                      try {
-                        await FirebaseFirestore
-                            .instance
-                            .collection('stores')
-                            .doc(storeId)
-                            .update({
-                          'subscriptionStatus':
-                          'inactive',
-                        });
+                    (status == 'active' || status == 'trial')) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) async {
+                    try {
+                      await FirebaseFirestore.instance
+                          .collection('stores')
+                          .doc(storeId)
+                          .update({'subscriptionStatus': 'inactive'});
 
-                        debugPrint(
-                          '🔒 Trial encerrado. '
-                              'Loja $storeId marcada como inactive.',
-                        );
-                      } catch (e) {
-                        debugPrint(
-                          '❌ Erro ao finalizar trial: $e',
-                        );
-                      }
-                    },
-                  );
+                      debugPrint(
+                        '🔒 Trial encerrado. '
+                        'Loja $storeId marcada como inactive.',
+                      );
+                    } catch (e) {
+                      debugPrint('❌ Erro ao finalizar trial: $e');
+                    }
+                  });
 
-                  return SubscriptionScreen(
-                    storeId: storeId,
-                  );
+                  return SubscriptionScreen(storeId: storeId);
                 }
 
                 // =================================================================
@@ -359,18 +326,14 @@ class _AuthGateState extends State<AuthGate> {
                 if (status == 'active' ||
                     status == 'trial' ||
                     status == 'overdue') {
-                  return HomeScreen(
-                    storeId: storeId,
-                  );
+                  return HomeScreen(storeId: storeId);
                 }
 
                 // =================================================================
                 // INACTIVE / PENDING / OUTROS STATUS
                 // =================================================================
 
-                return SubscriptionScreen(
-                  storeId: storeId,
-                );
+                return HomeScreen(storeId: storeId);
               },
             );
           },
