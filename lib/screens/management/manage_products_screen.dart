@@ -3,10 +3,11 @@
 // ============================================================================
 //
 // OBJETIVO:
-// Gerenciar o cadastro, edição, exclusão e visualização dos produtos da loja.
+// Gerenciar o cadastro, edição, arquivamento e visualização dos produtos da loja.
 //
 // PRINCIPAIS RESPONSABILIDADES:
 // - Cadastrar e editar produtos.
+// - Arquivar produtos sem exclusão física, preservando histórico e referências.
 // - Controlar quantidade manual ou por lotes.
 // - Gerenciar validade dos lotes.
 // - Fazer upload da imagem do produto.
@@ -48,6 +49,8 @@
 // - O cadastro/edição comercial NÃO deve ser bloqueado por dados fiscais
 //   ainda incompletos. A Cloud Function emitirNfce faz a validação fiscal
 //   obrigatória antes de qualquer tentativa de emissão.
+// - Produtos arquivados permanecem no Firestore e não são exibidos nesta tela.
+// - O arquivamento crítico é autorizado somente para admin e executado no backend.
 //
 // ============================================================================
 
@@ -64,8 +67,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:store_connect/providers/user_role_provider.dart';
 import 'package:store_connect/widgets/dynamic_background.dart';
 import 'package:store_connect/screens/fiscal/widgets/ncm_search_dialog.dart';
 
@@ -288,13 +293,13 @@ class _ProductDialogState extends State<_ProductDialog> {
 
             return rawResults
                 .map((item) {
-              final map = Map<String, dynamic>.from(item as Map);
+                  final map = Map<String, dynamic>.from(item as Map);
 
-              return NcmSearchResult(
-                codigo: map['codigo']?.toString() ?? '',
-                descricao: map['descricao']?.toString() ?? '',
-              );
-            })
+                  return NcmSearchResult(
+                    codigo: map['codigo']?.toString() ?? '',
+                    descricao: map['descricao']?.toString() ?? '',
+                  );
+                })
                 .where((item) => item.codigo.isNotEmpty)
                 .toList();
           } on FirebaseFunctionsException catch (e) {
@@ -460,7 +465,7 @@ class _ProductDialogState extends State<_ProductDialog> {
   void _sincronizarTotalManual() {
     final somaLotes = _lotes.fold<int>(
       0,
-          (sum, item) => sum + ((item['quantidade'] as num?)?.toInt() ?? 0),
+      (sum, item) => sum + ((item['quantidade'] as num?)?.toInt() ?? 0),
     );
 
     _quantidadeController.text = somaLotes.toString();
@@ -616,7 +621,7 @@ class _ProductDialogState extends State<_ProductDialog> {
 
       final int somaLotes = lotesFiltrados.fold<int>(
         0,
-            (sum, item) => sum + ((item['quantidade'] as num?)?.toInt() ?? 0),
+        (sum, item) => sum + ((item['quantidade'] as num?)?.toInt() ?? 0),
       );
 
       final int finalQuantidade = _lotes.isEmpty ? manualQuantidade : somaLotes;
@@ -661,10 +666,10 @@ class _ProductDialogState extends State<_ProductDialog> {
             .replaceAll(RegExp(r'\D'), '');
 
         final ibsCbsClassificacaoTributaria =
-        _ibsCbsClassificacaoTributariaController.text.replaceAll(
-          RegExp(r'\D'),
-          '',
-        );
+            _ibsCbsClassificacaoTributariaController.text.replaceAll(
+              RegExp(r'\D'),
+              '',
+            );
 
         productData['fiscal'] = {
           'ncm': ncm,
@@ -706,6 +711,7 @@ class _ProductDialogState extends State<_ProductDialog> {
             .update(productData);
       } else {
         productData['createdAt'] = Timestamp.now();
+        productData['isArchived'] = false;
 
         await FirebaseFirestore.instance
             .collection('stores')
@@ -782,10 +788,10 @@ class _ProductDialogState extends State<_ProductDialog> {
                       backgroundImage: provider,
                       child: provider == null
                           ? const Icon(
-                        Icons.add_a_photo,
-                        size: 40,
-                        color: Colors.grey,
-                      )
+                              Icons.add_a_photo,
+                              size: 40,
+                              color: Colors.grey,
+                            )
                           : null,
                     ),
                   ),
@@ -847,13 +853,13 @@ class _ProductDialogState extends State<_ProductDialog> {
                       items: categories
                           .map(
                             (doc) => DropdownMenuItem<String>(
-                          value: doc.id,
-                          child: Text(
-                            doc['name'].toString(),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
+                              value: doc.id,
+                              child: Text(
+                                doc['name'].toString(),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
                           .toList(),
                       onChanged: (value) {
                         if (value == null) {
@@ -861,7 +867,7 @@ class _ProductDialogState extends State<_ProductDialog> {
                         }
 
                         final selectedCat = categories.firstWhere(
-                              (doc) => doc.id == value,
+                          (doc) => doc.id == value,
                         );
 
                         setState(() {
@@ -957,8 +963,8 @@ class _ProductDialogState extends State<_ProductDialog> {
                         _dataValidadeSelecionada == null
                             ? 'Data'
                             : DateFormat(
-                          'dd/MM/yyyy',
-                        ).format(_dataValidadeSelecionada!),
+                                'dd/MM/yyyy',
+                              ).format(_dataValidadeSelecionada!),
                       ),
                     ),
 
@@ -1194,13 +1200,13 @@ class _ProductDialogState extends State<_ProductDialog> {
                     items: _origens.entries
                         .map(
                           (entry) => DropdownMenuItem<String>(
-                        value: entry.key,
-                        child: Text(
-                          entry.value,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
+                            value: entry.key,
+                            child: Text(
+                              entry.value,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
                         .toList(),
                     onChanged: (value) {
                       if (value == null) {
@@ -1265,13 +1271,13 @@ class _ProductDialogState extends State<_ProductDialog> {
                     items: _unidades.entries
                         .map(
                           (entry) => DropdownMenuItem<String>(
-                        value: entry.key,
-                        child: Text(
-                          entry.value,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
+                            value: entry.key,
+                            child: Text(
+                              entry.value,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
                         .toList(),
                     onChanged: (value) {
                       if (value == null) {
@@ -1332,13 +1338,13 @@ class _ProductDialogState extends State<_ProductDialog> {
                     items: _icmsSituacoes.entries
                         .map(
                           (entry) => DropdownMenuItem<String>(
-                        value: entry.key,
-                        child: Text(
-                          entry.value,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
+                            value: entry.key,
+                            child: Text(
+                              entry.value,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
                         .toList(),
                     onChanged: (value) {
                       if (value != null)
@@ -1359,13 +1365,13 @@ class _ProductDialogState extends State<_ProductDialog> {
                     items: _pisCofinsSituacoes.entries
                         .map(
                           (entry) => DropdownMenuItem<String>(
-                        value: entry.key,
-                        child: Text(
-                          entry.value,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
+                            value: entry.key,
+                            child: Text(
+                              entry.value,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
                         .toList(),
                     onChanged: (value) {
                       if (value != null)
@@ -1386,18 +1392,18 @@ class _ProductDialogState extends State<_ProductDialog> {
                     items: _pisCofinsSituacoes.entries
                         .map(
                           (entry) => DropdownMenuItem<String>(
-                        value: entry.key,
-                        child: Text(
-                          entry.value,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
+                            value: entry.key,
+                            child: Text(
+                              entry.value,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
                         .toList(),
                     onChanged: (value) {
                       if (value != null)
                         setState(
-                              () => _selectedCofinsSituacaoTributaria = value,
+                          () => _selectedCofinsSituacaoTributaria = value,
                         );
                     },
                   ),
@@ -1416,7 +1422,7 @@ class _ProductDialogState extends State<_ProductDialog> {
                       labelText: 'CST IBS/CBS',
                       hintText: '3 dígitos',
                       helperText:
-                      'Obrigatório para emitir NFC-e; pode ficar pendente no cadastro',
+                          'Obrigatório para emitir NFC-e; pode ficar pendente no cadastro',
                       prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                     ),
                     keyboardType: TextInputType.number,
@@ -1450,7 +1456,8 @@ class _ProductDialogState extends State<_ProductDialog> {
                     decoration: const InputDecoration(
                       labelText: 'Classificação Tributária IBS/CBS',
                       hintText: 'cClassTrib - 6 dígitos',
-                      helperText: 'Obrigatório para emitir NFC-e; pode ficar pendente no cadastro',
+                      helperText:
+                          'Obrigatório para emitir NFC-e; pode ficar pendente no cadastro',
                       prefixIcon: Icon(Icons.rule_folder_outlined),
                     ),
                     keyboardType: TextInputType.number,
@@ -1523,10 +1530,10 @@ class _ProductDialogState extends State<_ProductDialog> {
           onPressed: _isLoading ? null : _saveProduct,
           child: _isLoading
               ? const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : const Text('Salvar'),
         ),
       ],
@@ -1606,55 +1613,55 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         .snapshots()
         .listen(
           (snapshot) {
-        if (!snapshot.exists) {
-          if (mounted) {
-            setState(() {
-              _isBusiness = false;
-              _planLoaded = true;
-            });
-          }
+            if (!snapshot.exists) {
+              if (mounted) {
+                setState(() {
+                  _isBusiness = false;
+                  _planLoaded = true;
+                });
+              }
 
-          return;
-        }
+              return;
+            }
 
-        final data = snapshot.data() as Map<String, dynamic>;
+            final data = snapshot.data() as Map<String, dynamic>;
 
-        final type = data['subscriptionType']?.toString() ?? 'free';
+            final type = data['subscriptionType']?.toString() ?? 'free';
 
-        final status = data['subscriptionStatus']?.toString() ?? 'inactive';
+            final status = data['subscriptionStatus']?.toString() ?? 'inactive';
 
-        final business = type == 'business' && status == 'active';
+            final business = type == 'business' && status == 'active';
 
-        if (mounted) {
-          setState(() {
-            _isBusiness = business;
+            if (mounted) {
+              setState(() {
+                _isBusiness = business;
 
-            _planLoaded = true;
-          });
-        }
+                _planLoaded = true;
+              });
+            }
 
-        debugPrint('=== 📦 PRODUTOS / PLANO ===');
+            debugPrint('=== 📦 PRODUTOS / PLANO ===');
 
-        debugPrint('Tipo: $type');
+            debugPrint('Tipo: $type');
 
-        debugPrint('Status: $status');
+            debugPrint('Status: $status');
 
-        debugPrint('Business: $business');
+            debugPrint('Business: $business');
 
-        debugPrint('============================');
-      },
-      onError: (error) {
-        debugPrint('Erro ao consultar plano da loja: $error');
+            debugPrint('============================');
+          },
+          onError: (error) {
+            debugPrint('Erro ao consultar plano da loja: $error');
 
-        if (mounted) {
-          setState(() {
-            _isBusiness = false;
+            if (mounted) {
+              setState(() {
+                _isBusiness = false;
 
-            _planLoaded = true;
-          });
-        }
-      },
-    );
+                _planLoaded = true;
+              });
+            }
+          },
+        );
   }
 
   // ==========================================================================
@@ -1698,47 +1705,131 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   }
 
   // ==========================================================================
-  // EXCLUIR PRODUTO
+  // ARQUIVAR PRODUTO
+  // ==========================================================================
+  //
+  // O produto NÃO é excluído fisicamente.
+  //
+  // A Cloud Function archiveProduct:
+  // - valida Firebase Auth;
+  // - valida role == admin;
+  // - valida a loja do usuário;
+  // - marca isArchived = true;
+  // - grava archivedAt / archivedBy;
+  // - registra auditLogs;
+  // - preserva dados comerciais, estoque, lotes, imagem e dados fiscais.
   // ==========================================================================
 
-  void _deleteProduct(String productId) {
-    showDialog(
+  Future<void> _archiveProduct(String productId, String productName) async {
+    final reasonController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: const Text(
-          'Tem certeza que deseja excluir este produto? '
-              'A imagem associada será removida permanentemente.',
+        title: const Text('Arquivar Produto?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'O produto "$productName" deixará de aparecer nas listas '
+              'operacionais, mas seu cadastro e histórico serão preservados.',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Motivo (opcional)',
+                hintText: 'Ex.: produto fora de linha',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Cancelar'),
           ),
-          ElevatedButton(
+          ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: Colors.orange.shade700,
               foregroundColor: Colors.white,
             ),
-            onPressed: () async {
-              await FirebaseFirestore.instance
-                  .collection('stores')
-                  .doc(widget.storeId)
-                  .collection('products')
-                  .doc(productId)
-                  .delete();
-
-              if (!ctx.mounted) {
-                return;
-              }
-
-              Navigator.of(ctx).pop();
-            },
-            child: const Text('Excluir'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            icon: const Icon(Icons.archive_outlined),
+            label: const Text('Arquivar'),
           ),
         ],
       ),
     );
+
+    final reason = reasonController.text.trim();
+    reasonController.dispose();
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'archiveProduct',
+      );
+
+      final response = await callable.call({
+        'storeId': widget.storeId,
+        'productId': productId,
+        'reason': reason.isEmpty ? null : reason,
+      });
+
+      final responseData = response.data;
+      final alreadyArchived =
+          responseData is Map && responseData['alreadyArchived'] == true;
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              alreadyArchived
+                  ? 'Este produto já estava arquivado.'
+                  : '$productName foi arquivado com sucesso.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'Não foi possível arquivar o produto.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Erro ao arquivar produto: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+    }
   }
 
   // ==========================================================================
@@ -1748,6 +1839,9 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    final roleProvider = context.watch<UserRoleProvider>();
+    final canArchiveProducts = roleProvider.canPerformCriticalActions;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -1786,7 +1880,20 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                             );
                           }
 
-                          final allProducts = snapshot.data?.docs ?? [];
+                          // ---------------------------------------------------------
+                          // COMPATIBILIDADE COM PRODUTOS LEGADOS
+                          //
+                          // Documentos antigos podem não possuir isArchived.
+                          // Somente isArchived == true é considerado arquivado.
+                          // ---------------------------------------------------------
+
+                          final allProducts = (snapshot.data?.docs ?? []).where(
+                            (doc) {
+                              final data = doc.data() as Map<String, dynamic>;
+
+                              return data['isArchived'] != true;
+                            },
+                          ).toList();
 
                           final query = _searchController.text
                               .trim()
@@ -1796,8 +1903,8 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                             final data = doc.data() as Map<String, dynamic>;
 
                             final name =
-                            (data['name_lowercase'] as String? ?? '')
-                                .toLowerCase();
+                                (data['name_lowercase'] as String? ?? '')
+                                    .toLowerCase();
 
                             return name.contains(query);
                           }).toList();
@@ -1825,12 +1932,14 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                                   filteredProducts,
                                   isDarkMode,
                                   constraints,
+                                  canArchiveProducts,
                                 );
                               }
 
                               return _buildProductListView(
                                 filteredProducts,
                                 isDarkMode,
+                                canArchiveProducts,
                               );
                             },
                           );
@@ -1851,10 +1960,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         child: _planLoaded
             ? const Icon(Icons.add)
             : const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
       ),
     );
   }
@@ -1864,9 +1973,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   // ==========================================================================
 
   Widget _buildProductListView(
-      List<QueryDocumentSnapshot> products,
-      bool isDarkMode,
-      ) {
+    List<QueryDocumentSnapshot> products,
+    bool isDarkMode,
+    bool canArchiveProducts,
+  ) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 80),
       itemCount: products.length,
@@ -1875,7 +1985,12 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
         final productData = productDoc.data() as Map<String, dynamic>;
 
-        return _buildProductCard(productDoc, productData, isDarkMode);
+        return _buildProductCard(
+          productDoc,
+          productData,
+          isDarkMode,
+          canArchiveProducts,
+        );
       },
     );
   }
@@ -1885,10 +2000,11 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   // ==========================================================================
 
   Widget _buildProductDataTable(
-      List<QueryDocumentSnapshot> products,
-      bool isDarkMode,
-      BoxConstraints constraints,
-      ) {
+    List<QueryDocumentSnapshot> products,
+    bool isDarkMode,
+    BoxConstraints constraints,
+    bool canArchiveProducts,
+  ) {
     final formatCurrency = NumberFormat.currency(
       locale: 'pt_BR',
       symbol: 'R\$',
@@ -1925,8 +2041,8 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
             return DataRow(
               color: MaterialStateProperty.resolveWith<Color?>((
-                  Set<MaterialState> states,
-                  ) {
+                Set<MaterialState> states,
+              ) {
                 if (needsRestock) {
                   return Colors.red.withOpacity(0.2);
                 }
@@ -1945,10 +2061,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                             : null,
                         child: imageUrl == null || imageUrl.isEmpty
                             ? const Icon(
-                          Icons.inventory_2,
-                          color: Colors.white,
-                          size: 20,
-                        )
+                                Icons.inventory_2,
+                                color: Colors.white,
+                                size: 20,
+                              )
                             : null,
                       ),
                       const SizedBox(width: 16),
@@ -1995,11 +2111,18 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                             _showProductDialog(product: productDoc),
                         tooltip: 'Editar',
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteProduct(productDoc.id),
-                        tooltip: 'Excluir',
-                      ),
+                      if (canArchiveProducts)
+                        IconButton(
+                          icon: Icon(
+                            Icons.archive_outlined,
+                            color: Colors.orange.shade700,
+                          ),
+                          onPressed: () => _archiveProduct(
+                            productDoc.id,
+                            productData['name']?.toString() ?? 'Produto',
+                          ),
+                          tooltip: 'Arquivar',
+                        ),
                     ],
                   ),
                 ),
@@ -2057,15 +2180,15 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                 icon: Icon(Icons.upload_file_outlined, color: headerColor),
                 onPressed: _planLoaded
                     ? () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (ctx) => ProductImportScreen(
-                        storeId: widget.storeId,
-                        isBusiness: _isBusiness,
-                      ),
-                    ),
-                  );
-                }
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (ctx) => ProductImportScreen(
+                              storeId: widget.storeId,
+                              isBusiness: _isBusiness,
+                            ),
+                          ),
+                        );
+                      }
                     : null,
               ),
 
@@ -2132,10 +2255,11 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   // ==========================================================================
 
   Widget _buildProductCard(
-      DocumentSnapshot productDoc,
-      Map<String, dynamic> productData,
-      bool isDarkMode,
-      ) {
+    DocumentSnapshot productDoc,
+    Map<String, dynamic> productData,
+    bool isDarkMode,
+    bool canArchiveProducts,
+  ) {
     final imageUrl = productData['imageUrl'] as String?;
 
     final quantidade = (productData['quantidade'] as num? ?? 0).toInt();
@@ -2149,8 +2273,8 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
     final bool hasFiscalData =
         fiscal is Map &&
-            fiscal['ncm'] != null &&
-            fiscal['ncm'].toString().isNotEmpty;
+        fiscal['ncm'] != null &&
+        fiscal['ncm'].toString().isNotEmpty;
 
     return Card(
       color: isDarkMode
@@ -2223,10 +2347,18 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
               onPressed: () => _showProductDialog(product: productDoc),
             ),
 
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _deleteProduct(productDoc.id),
-            ),
+            if (canArchiveProducts)
+              IconButton(
+                tooltip: 'Arquivar',
+                icon: Icon(
+                  Icons.archive_outlined,
+                  color: Colors.orange.shade700,
+                ),
+                onPressed: () => _archiveProduct(
+                  productDoc.id,
+                  productData['name']?.toString() ?? 'Produto',
+                ),
+              ),
           ],
         ),
       ),

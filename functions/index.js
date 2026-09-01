@@ -1037,6 +1037,23 @@ const {
  */
 
 
+// ============================================================================
+// STORE CONNECT - EXPORT: ARQUIVAMENTO SEGURO DE CLIENTE
+// ============================================================================
+//
+// Arquivo de destino:
+//   functions/index.js
+//
+// Adicione este bloco junto aos demais módulos exportados.
+//
+// ============================================================================
+
+const {
+  archiveCustomer,
+} = require("./customers/archiveCustomer");
+
+exports.archiveCustomer =
+  archiveCustomer;
 
 
  /// =======================================================================
@@ -1202,8 +1219,34 @@ exports.getAsaasPortalUrl = faturas.getAsaasPortalUrl;
 // -----------------------------------------------------------------------
 // 👥 MÓDULO DE USUÁRIOS E PERMISSÕES
 // -----------------------------------------------------------------------
-const { convidarFuncionario } = require("./usuarios/convidarFuncionario");
-exports.convidarFuncionario = convidarFuncionario;
+
+const {
+  convidarFuncionario,
+} = require(
+  "./usuarios/convidarFuncionario"
+);
+
+exports.convidarFuncionario =
+  convidarFuncionario;
+
+const {
+  revogarAcessoFuncionario,
+} = require(
+  "./usuarios/revogarAcessoFuncionario"
+);
+
+exports.revogarAcessoFuncionario =
+  revogarAcessoFuncionario;
+
+// -----------------------------------------------------------------------
+// 👥 MÓDULO PRODUTOS
+// -----------------------------------------------------------------------
+
+const {
+  archiveProduct,
+} = require("./products/archiveProduct");
+
+exports.archiveProduct = archiveProduct;
 
 /**
  * 🔄 ALTERAR PLANO DA ASSINATURA

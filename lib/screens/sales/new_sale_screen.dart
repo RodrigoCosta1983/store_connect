@@ -816,15 +816,43 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                             );
                           }
 
+                          // ==========================================================================
+// PRODUTOS ATIVOS
+// ==========================================================================
+//
+// Compatibilidade com produtos legados:
+//
+// isArchived ausente → ativo
+// isArchived false   → ativo
+// isArchived true    → arquivado / não aparece no PDV
+//
+// O filtro é feito localmente de propósito neste momento para que produtos
+// antigos, que ainda não possuem o campo isArchived, continuem normalmente
+// disponíveis.
+//
+// IMPORTANTE:
+//
+// Esta é a proteção visual/operacional do PDV. A validação definitiva da
+// venda também precisa existir no backend, especialmente para vendas offline.
+// ==========================================================================
+
                           final allProductDocs =
                               productSnapshot.data?.docs ?? [];
 
-                          if (allProductDocs.isEmpty) {
+                          final activeProductDocs =
+                          allProductDocs.where((doc) {
+                            final productData =
+                            doc.data() as Map<String, dynamic>;
+
+                            return productData['isArchived'] != true;
+                          }).toList();
+
+                          if (activeProductDocs.isEmpty) {
                             return const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(16.0),
                                 child: Text(
-                                  'Nenhum produto cadastrado. Adicione produtos em "Gerenciar Produtos".',
+                                  'Nenhum produto ativo disponível para venda.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(fontSize: 16),
                                 ),
@@ -832,33 +860,54 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                             );
                           }
 
-                          // --- LÓGICA DE FILTRO ATUALIZADA (PESQUISA + CATEGORIA) ---
-                          final productDocs = allProductDocs.where((doc) {
+// ==========================================================================
+// PESQUISA + CATEGORIA
+// ==========================================================================
+
+                          final productDocs =
+                          activeProductDocs.where((doc) {
                             final productData =
-                                doc.data() as Map<String, dynamic>;
+                            doc.data() as Map<String, dynamic>;
+
                             final product = Product.fromMap(
                               doc.id,
                               productData,
                             );
 
-                            // 1. Filtra pelo que foi digitado na Lupa
-                            final productName = product.name.toLowerCase();
-                            final searchLower = _searchQuery.toLowerCase();
-                            final matchesSearch = productName.contains(
+                            // ------------------------------------------------------------------------
+                            // 1. PESQUISA
+                            // ------------------------------------------------------------------------
+
+                            final productName =
+                            product.name.toLowerCase();
+
+                            final searchLower =
+                            _searchQuery.toLowerCase();
+
+                            final matchesSearch =
+                            productName.contains(
                               searchLower,
                             );
 
-                            // 2. Filtra pelo Botão da Categoria
+                            // ------------------------------------------------------------------------
+                            // 2. CATEGORIA
+                            // ------------------------------------------------------------------------
+
                             bool matchesCategory = true;
+
                             if (_selectedCategoryId.isNotEmpty) {
                               final prodCatId =
-                                  productData['categoryId'] as String? ?? '';
+                                  productData['categoryId']
+                                  as String? ??
+                                      '';
+
                               matchesCategory =
-                                  prodCatId == _selectedCategoryId;
+                                  prodCatId ==
+                                      _selectedCategoryId;
                             }
 
-                            // Só exibe se bater com os dois filtros
-                            return matchesSearch && matchesCategory;
+                            return matchesSearch &&
+                                matchesCategory;
                           }).toList();
 
                           if (productDocs.isEmpty) {
