@@ -75,6 +75,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:store_connect/data/local/offline_sales_repository.dart';
 import 'package:store_connect/services/offline_sales_sync_service.dart';
@@ -87,6 +88,7 @@ import 'package:store_connect/screens/reports/reports_hub_screen.dart';
 import 'package:store_connect/screens/sales/sales_history_screen.dart';
 import 'package:store_connect/screens/settings_screen.dart';
 import 'package:store_connect/screens/dashboard_screen.dart';
+
 
 import '../management/category_management_screen.dart';
 
@@ -138,20 +140,31 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   // O próprio OfflineSalesSyncService impede duas varreduras simultâneas.
   // --------------------------------------------------------------------------
 
-  final OfflineSalesRepository _offlineSalesRepository =
-      OfflineSalesRepository();
+  OfflineSalesRepository? _offlineSalesRepository;
+  OfflineSalesSyncService? _offlineSalesSyncService;
 
-  late final OfflineSalesSyncService _offlineSalesSyncService =
-      OfflineSalesSyncService(repository: _offlineSalesRepository);
-
-  late final Stream<int> _waitingSalesCountStream = _offlineSalesRepository
-      .watchWaitingSalesCount();
+  late final Stream<int> _waitingSalesCountStream;
 
   bool _isSyncingOfflineSales = false;
 
   @override
   void initState() {
     super.initState();
+
+    if (kIsWeb) {
+      // A versão Web opera online e não inicializa o banco SQLite local.
+      _waitingSalesCountStream = Stream<int>.value(0);
+    } else {
+      _offlineSalesRepository = OfflineSalesRepository();
+
+      _offlineSalesSyncService = OfflineSalesSyncService(
+        repository: _offlineSalesRepository!,
+      );
+
+      _waitingSalesCountStream =
+          _offlineSalesRepository!.watchWaitingSalesCount();
+    }
+
     _loadAppVersion();
     _startConnectivityMonitoring();
   }
@@ -234,7 +247,17 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   }
 
   Future<void> _syncPendingOfflineSales() async {
-    if (_isSyncingOfflineSales || _offlineSalesSyncService.isSyncing) {
+    if (kIsWeb) {
+      return;
+    }
+
+    final syncService = _offlineSalesSyncService;
+
+    if (syncService == null) {
+      return;
+    }
+
+    if (_isSyncingOfflineSales || syncService.isSyncing) {
       return;
     }
 
@@ -249,7 +272,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     }
 
     try {
-      final result = await _offlineSalesSyncService.syncPendingSales();
+      final result = await syncService.syncPendingSales();
 
       if (!mounted) {
         return;

@@ -64,10 +64,13 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'package:store_connect/models/customer_model.dart';
 import 'package:store_connect/providers/cart_provider.dart';
 import 'package:store_connect/data/local/offline_sales_repository.dart';
 import 'package:store_connect/widgets/confirm_fiado_dialog.dart';
+
 
 import '../screens/auth/auth_gate.dart';
 
@@ -86,8 +89,10 @@ class PaymentOptionsSheet extends StatefulWidget {
 }
 
 class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
-  final OfflineSalesRepository _offlineSalesRepository =
-      OfflineSalesRepository();
+  final OfflineSalesRepository? _offlineSalesRepository =
+  kIsWeb
+      ? null
+      : OfflineSalesRepository();
 
   var _isLoading = false;
   bool _fiadoIsEnabled = false;
@@ -259,7 +264,14 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     final cart = Provider.of<CartProvider>(context, listen: false);
 
     // O ID nasce antes da tentativa de rede e nunca muda durante esse fluxo.
-    final localSaleId = _offlineSalesRepository.createLocalSaleId();
+    final localSaleId = kIsWeb
+        ? FirebaseFirestore.instance
+        .collection('stores')
+        .doc(widget.storeId)
+        .collection('sales')
+        .doc()
+        .id
+        : _offlineSalesRepository!.createLocalSaleId();
 
     try {
       // ------------------------------------------------------------------
@@ -452,11 +464,29 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
       debugPrint('❌ Erro na transação de venda: $e');
 
       if (_isNetworkUnavailable(e)) {
+        if (kIsWeb) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'A venda offline ainda não está disponível na versão Web. '
+                      'Verifique sua conexão com a internet.',
+                ),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 6),
+              ),
+            );
+          }
+
+          return;
+        }
+
         await _saveInstantSaleOffline(
           localSaleId: localSaleId,
           paymentMethod: paymentMethod,
           cart: cart,
         );
+
         return;
       }
 
@@ -558,6 +588,9 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
     required String paymentMethod,
     required CartProvider cart,
   }) async {
+    if (kIsWeb) {
+      return;
+    }
     try {
       // ------------------------------------------------------------------
       // TRAVA OFFLINE
@@ -574,6 +607,8 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
           .collection('stores')
           .doc(widget.storeId)
           .get(const GetOptions(source: Source.cache));
+
+
 
       if (!cachedStoreDoc.exists) {
         throw Exception(
@@ -599,7 +634,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
 
       final knownStockByProduct = await _loadCachedStockForCart(cart);
 
-      await _offlineSalesRepository.validateStockAndSaveSale(
+      await _offlineSalesRepository!.validateStockAndSaveSale(
         localId: localSaleId,
         storeId: widget.storeId,
         totalAmount: cart.totalAmount,
