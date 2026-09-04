@@ -63,6 +63,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -597,6 +598,54 @@ class _CategoryManagementScreenState
     extends State<
         CategoryManagementScreen> {
   // ==========================================================================
+  // PAPEL DO USUÁRIO / PERMISSÃO DE EXCLUSÃO
+  // ==========================================================================
+
+  String _currentRole = 'operador';
+
+  bool get _canDelete =>
+      _currentRole == 'admin' || _currentRole == 'gerente';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentUserRole();
+  }
+
+  Future<void> _loadCurrentUserRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return;
+    }
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final data = snapshot.data();
+      final rawRole =
+          data?['role']?.toString().trim().toLowerCase() ?? 'operador';
+
+      // Compatibilidade com papéis antigos.
+      final normalizedRole =
+          rawRole == 'caixa' || rawRole == 'vendedor'
+              ? 'operador'
+              : rawRole;
+
+      if (mounted) {
+        setState(() {
+          _currentRole = normalizedRole;
+        });
+      }
+    } catch (e) {
+      debugPrint('Erro ao carregar papel do usuário: $e');
+    }
+  }
+
+  // ==========================================================================
   // ABRIR DIÁLOGO
   // ==========================================================================
 
@@ -662,28 +711,58 @@ class _CategoryManagementScreenState
                 ),
 
                 onPressed: () async {
-                  await FirebaseFirestore
-                      .instance
-                      .collection(
-                    'stores',
-                  )
-                      .doc(
-                    widget.storeId,
-                  )
-                      .collection(
-                    'categories',
-                  )
-                      .doc(
-                    categoryId,
-                  )
-                      .delete();
+                  try {
+                    await FirebaseFirestore.instance
+                        .collection('stores')
+                        .doc(widget.storeId)
+                        .collection('categories')
+                        .doc(categoryId)
+                        .delete();
 
-                  if (!ctx.mounted) {
-                    return;
+                    if (!ctx.mounted) {
+                      return;
+                    }
+
+                    Navigator.of(ctx).pop();
+                  } on FirebaseException catch (e) {
+                    if (!ctx.mounted) {
+                      return;
+                    }
+
+                    Navigator.of(ctx).pop();
+
+                    if (!mounted) {
+                      return;
+                    }
+
+                    final message = e.code == 'permission-denied'
+                        ? 'Você não possui permissão para excluir categorias.'
+                        : 'Não foi possível excluir a categoria.';
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(message),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  } catch (e) {
+                    debugPrint('Erro ao excluir categoria: $e');
+
+                    if (ctx.mounted) {
+                      Navigator.of(ctx).pop();
+                    }
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Não foi possível excluir a categoria.',
+                          ),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
                   }
-
-                  Navigator.of(ctx)
-                      .pop();
                 },
 
                 child:
@@ -981,26 +1060,16 @@ class _CategoryManagementScreenState
                           // EXCLUIR
                           // ==================================================
 
-                          IconButton(
-                            icon:
-                            const Icon(
-                              Icons
-                                  .delete_outline,
-                              color:
-                              Colors
-                                  .redAccent,
+                          if (_canDelete)
+                            IconButton(
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.redAccent,
+                              ),
+                              tooltip: 'Eliminar Categoria',
+                              onPressed: () =>
+                                  _deleteCategory(categoryDoc.id),
                             ),
-
-                            tooltip:
-                            'Eliminar Categoria',
-
-                            onPressed:
-                                () =>
-                                _deleteCategory(
-                                  categoryDoc
-                                      .id,
-                                ),
-                          ),
                         ],
                       ),
                     ),

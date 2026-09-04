@@ -1,47 +1,83 @@
 // ============================================================================
-// ARQUIVO: auth_gate.dart
+// STORE CONNECT - AUTH GATE / CONTROLE DE ACESSO PRINCIPAL
 // ============================================================================
+//
+// Arquivo:
+//   lib/screens/auth/auth_gate.dart
 //
 // OBJETIVO:
 //
-// Controlar a entrada principal do Store&Connect após autenticação.
+// Controlar a entrada principal do Store&Connect após a autenticação.
 //
 // RESPONSABILIDADES:
 //
-// • Observar o estado de autenticação do Firebase.
-// • Redirecionar usuários não autenticados para LoginScreen.
-// • Criar a loja quando o usuário ainda não possui storeId.
-// • Registrar versão/último login sem repetir a operação em reconstruções.
-// • Atualizar SalesProvider quando o storeId muda.
-// • Validar status da assinatura, plano pago e validade do trial.
-// • Encaminhar contas sem acesso para SubscriptionScreen.
-// • Encaminhar contas autorizadas para SmartHomeScreen.
+// • observar o estado de autenticação do Firebase;
+// • redirecionar usuários não autenticados para LoginScreen;
+// • encaminhar usuários sem storeId para CreateStoreScreen;
+// • registrar versão/último login sem repetir a operação em rebuilds;
+// • atualizar SalesProvider quando o storeId muda;
+// • LER o estado da assinatura da loja;
+// • validar localmente a validade visual/operacional do trial;
+// • encaminhar contas autorizadas para SmartHomeScreen;
+// • encaminhar contas sem acesso para SubscriptionScreen.
 //
-// NOVO FLUXO PRINCIPAL:
+// P6 - AUTORIDADE DE ASSINATURA:
 //
-// AuthGate
-//    ↓
-// autenticação + loja + assinatura válidas
-//    ↓
+// Este arquivo NÃO possui mais autoridade para alterar subscriptionStatus.
+//
+// O Flutter pode:
+//   - ler subscriptionStatus;
+//   - ler subscriptionType;
+//   - ler trialEndDate;
+//   - decidir qual tela deve ser exibida.
+//
+// O Flutter NÃO pode:
+//   - mudar trial -> inactive;
+//   - mudar active -> inactive;
+//   - ativar plano;
+//   - alterar estado financeiro da assinatura.
+//
+// A expiração persistente do trial é responsabilidade do backend, através da
+// função agendada expireTrials, usando o relógio do servidor.
+//
+// IMPORTANTE SOBRE SEGURANÇA:
+//
+// A remoção das escritas deste arquivo elimina a autoridade legítima do cliente
+// sobre subscriptionStatus, mas o bloqueio técnico definitivo dessas escritas
+// será feito no P7 através das Firestore Rules.
+//
+// FLUXO PRINCIPAL:
+//
+// Firebase Auth
+//      ↓
+// users/{uid}
+//      ↓
+// storeId
+//      ↓
+// stores/{storeId}
+//      ↓
+// assinatura válida? ── não ──> SubscriptionScreen
+//      │
+//     sim
+//      ↓
 // SmartHomeScreen
-//    ↓
-// Radar da Loja / leitura inteligente do negócio
-//    ↓
-// Nova Venda → NewSaleScreen
 //
-// IMPORTANTE:
+// COMPATIBILIDADE DO TRIAL:
 //
-// • A antiga Home operacional não é mais a tela inicial após o AuthGate.
-// • NewSaleScreen continua existindo e é acessada pela ação "Nova venda".
-// • Dashboard continua sendo uma visão quantitativa separada.
-// • Não remover as validações de assinatura existentes neste arquivo.
-// • As validações críticas de segurança no backend continuam obrigatórias.
+// trialEndDate historicamente é salvo como String ISO-8601. O parser também
+// aceita Timestamp para permitir uma migração futura sem quebrar contas antigas.
+//
+// CUIDADOS DE MANUTENÇÃO:
+//
+// • Não reintroduzir update/set de subscriptionStatus neste arquivo.
+// • Não confiar no relógio do dispositivo para persistir estado financeiro.
+// • O cálculo local do trial serve apenas para roteamento imediato da interface.
+// • A fonte persistente de autoridade é o backend + Firestore.
+// • A proteção final contra writes indevidos depende das Firestore Rules (P7).
 // • Evitar navegação imperativa dentro do build quando um retorno de Widget
 //   resolve o fluxo declarativamente.
 //
 // ============================================================================
-
-import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -52,10 +88,8 @@ import 'package:provider/provider.dart';
 import 'package:store_connect/providers/sales_provider.dart';
 import 'package:store_connect/screens/auth/create_store_screen.dart';
 import 'package:store_connect/screens/auth/login_screen.dart';
-import 'package:store_connect/services/home/smart_home_screen.dart';
 import 'package:store_connect/screens/subscription_screen.dart';
-
-import '../home_screen.dart';
+import 'package:store_connect/screens/home_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -65,12 +99,21 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  // 🛡️ TRAVAS DE SEGURANÇA CONTRA LOOPS
+  // ===========================================================================
+  // TRAVAS CONTRA OPERAÇÕES REPETIDAS EM REBUILDS
+  // ===========================================================================
+
   String? _lastUidProcessed;
   String? _lastStoreIdProcessed;
 
-  /// Registra a versão apenas se o UID mudar,
-  /// ou seja, somente em um novo login nesta sessão.
+  // ===========================================================================
+  // LOGIN / VERSÃO
+  // ===========================================================================
+
+  /// Registra a versão apenas se o UID mudar nesta sessão.
+  ///
+  /// Esta escrita ocorre em users/{uid} e não altera qualquer campo financeiro
+  /// ou de assinatura da loja.
   Future<void> _registrarLoginEVersao(String uid) async {
     if (_lastUidProcessed == uid) {
       return;
@@ -80,7 +123,6 @@ class _AuthGateState extends State<AuthGate> {
 
     try {
       final packageInfo = await PackageInfo.fromPlatform();
-
       final versaoAtual = '${packageInfo.version}+${packageInfo.buildNumber}';
 
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
@@ -94,14 +136,58 @@ class _AuthGateState extends State<AuthGate> {
     }
   }
 
+  // ===========================================================================
+  // PARSER DE trialEndDate
+  // ===========================================================================
+
+  DateTime? _parseTrialEndDate(dynamic rawValue) {
+    if (rawValue == null) {
+      return null;
+    }
+
+    if (rawValue is Timestamp) {
+      return rawValue.toDate();
+    }
+
+    if (rawValue is DateTime) {
+      return rawValue;
+    }
+
+    if (rawValue is! String || rawValue.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      String normalizedTrialDate = rawValue.trim();
+
+      // Mantém compatibilidade com strings antigas que possuam precisão de
+      // frações de segundo maior que a esperada pelo parser em alguns runtimes.
+      final fractionalMatch = RegExp(r'(\.\d{3})\d+');
+
+      normalizedTrialDate = normalizedTrialDate.replaceFirstMapped(
+        fractionalMatch,
+        (match) => match.group(1)!,
+      );
+
+      return DateTime.parse(normalizedTrialDate);
+    } catch (e) {
+      debugPrint('⚠️ Erro ao interpretar trialEndDate: $e');
+      return null;
+    }
+  }
+
+  // ===========================================================================
+  // BUILD
+  // ===========================================================================
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, authSnapshot) {
-        // -----------------------------------------------------------------
+        // -----------------------------------------------------------------------
         // AGUARDANDO FIREBASE AUTH
-        // -----------------------------------------------------------------
+        // -----------------------------------------------------------------------
 
         if (authSnapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
@@ -109,9 +195,9 @@ class _AuthGateState extends State<AuthGate> {
           );
         }
 
-        // -----------------------------------------------------------------
+        // -----------------------------------------------------------------------
         // USUÁRIO NÃO LOGADO
-        // -----------------------------------------------------------------
+        // -----------------------------------------------------------------------
 
         final user = authSnapshot.data;
 
@@ -122,17 +208,17 @@ class _AuthGateState extends State<AuthGate> {
           return const LoginScreen();
         }
 
-        // -----------------------------------------------------------------
+        // -----------------------------------------------------------------------
         // REGISTRA LOGIN / VERSÃO
-        // -----------------------------------------------------------------
+        // -----------------------------------------------------------------------
 
         WidgetsBinding.instance.addPostFrameCallback(
           (_) => _registrarLoginEVersao(user.uid),
         );
 
-        // -----------------------------------------------------------------
+        // -----------------------------------------------------------------------
         // BUSCA DADOS DO USUÁRIO
-        // -----------------------------------------------------------------
+        // -----------------------------------------------------------------------
 
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
@@ -151,17 +237,17 @@ class _AuthGateState extends State<AuthGate> {
 
             final storeId = userData?['storeId'] as String?;
 
-            // -----------------------------------------------------------------
+            // ---------------------------------------------------------------------
             // USUÁRIO AINDA NÃO POSSUI LOJA
-            // -----------------------------------------------------------------
+            // ---------------------------------------------------------------------
 
             if (storeId == null || storeId.isEmpty) {
               return const CreateStoreScreen();
             }
 
-            // -----------------------------------------------------------------
+            // ---------------------------------------------------------------------
             // ATUALIZA PROVIDER SOMENTE QUANDO O STORE ID MUDAR
-            // -----------------------------------------------------------------
+            // ---------------------------------------------------------------------
 
             if (_lastStoreIdProcessed != storeId) {
               _lastStoreIdProcessed = storeId;
@@ -174,9 +260,9 @@ class _AuthGateState extends State<AuthGate> {
               });
             }
 
-            // -----------------------------------------------------------------
+            // ---------------------------------------------------------------------
             // ESCUTA DADOS DA LOJA
-            // -----------------------------------------------------------------
+            // ---------------------------------------------------------------------
 
             return StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance
@@ -193,145 +279,97 @@ class _AuthGateState extends State<AuthGate> {
                 final storeData =
                     storeSnapshot.data?.data() as Map<String, dynamic>?;
 
-                // -----------------------------------------------------------------
+                // -------------------------------------------------------------------
                 // LOJA NÃO ENCONTRADA
-                // -----------------------------------------------------------------
+                // -------------------------------------------------------------------
 
                 if (storeData == null) {
                   return SubscriptionScreen(storeId: storeId);
                 }
 
-                // =================================================================
-                // DADOS DA ASSINATURA
-                // =================================================================
+                // ===================================================================
+                // DADOS DA ASSINATURA - SOMENTE LEITURA
+                // ===================================================================
 
                 final status =
-                    storeData['subscriptionStatus'] as String? ?? 'trial';
+                    (storeData['subscriptionStatus']?.toString() ?? 'trial')
+                        .trim()
+                        .toLowerCase();
 
-                final type = storeData['subscriptionType'] as String? ?? 'free';
+                final type =
+                    (storeData['subscriptionType']?.toString() ?? 'free')
+                        .trim()
+                        .toLowerCase();
 
-                final trialEndDate = storeData['trialEndDate'] as String?;
+                final trialEndDate = _parseTrialEndDate(
+                  storeData['trialEndDate'],
+                );
 
-                // =================================================================
-                // PLANOS PAGOS VÁLIDOS
-                // =================================================================
+                final now = DateTime.now();
 
-                final bool isPaidPlan = type == 'pro' || type == 'business';
+                final bool isTrialValid =
+                    trialEndDate != null && now.isBefore(trialEndDate);
 
-                // =================================================================
-                // VERIFICA SE O TRIAL AINDA É VÁLIDO
-                // =================================================================
+                final bool isPaidPlanType = type == 'pro' || type == 'business';
 
-                bool isTrialValid = false;
+                // ===================================================================
+                // MATRIZ DE ACESSO
+                // ===================================================================
+                //
+                // active + pro/business
+                //   → plano pago ativo
+                //
+                // trial + trial válido
+                //   → teste gratuito ativo
+                //
+                // active + free + trial válido
+                //   → compatibilidade com lojas legadas que usavam active durante
+                //     o período de teste
+                //
+                // overdue
+                //   → permanece com acesso durante a tolerância financeira
+                //
+                // pending / inactive / trial vencido / combinações inválidas
+                //   → SubscriptionScreen
+                // ===================================================================
 
-                if (trialEndDate != null) {
-                  try {
-                    String normalizedTrialDate = trialEndDate.trim();
+                final bool hasPaidAccess = status == 'active' && isPaidPlanType;
 
-                    final fractionalMatch = RegExp(r'(\.\d{3})\d+');
+                final bool hasTrialAccess =
+                    (status == 'trial' ||
+                        (status == 'active' && !isPaidPlanType)) &&
+                    isTrialValid;
 
-                    normalizedTrialDate = normalizedTrialDate
-                        .replaceFirstMapped(
-                          fractionalMatch,
-                          (match) => match.group(1)!,
-                        );
+                final bool hasOverdueGraceAccess = status == 'overdue';
 
-                    isTrialValid = DateTime.now().isBefore(
-                      DateTime.parse(normalizedTrialDate),
-                    );
-                  } catch (e) {
-                    debugPrint('⚠️ Erro ao interpretar trialEndDate: $e');
-                  }
-                }
+                final bool hasAccess =
+                    hasPaidAccess || hasTrialAccess || hasOverdueGraceAccess;
 
-                // =================================================================
+                // ===================================================================
                 // DEBUG
-                // =================================================================
+                // ===================================================================
 
-                debugPrint('=== 🔐 AUTH GATE ===');
-
+                debugPrint('=== 🔐 AUTH GATE / P6 ===');
                 debugPrint('Status: $status');
-
                 debugPrint('Tipo: $type');
-
-                debugPrint('Plano pago: $isPaidPlan');
-
+                debugPrint('Plano pago ativo: $hasPaidAccess');
                 debugPrint('Trial válido: $isTrialValid');
+                debugPrint('Acesso por trial: $hasTrialAccess');
+                debugPrint('Tolerância overdue: $hasOverdueGraceAccess');
+                debugPrint('Acesso final: $hasAccess');
+                debugPrint('=========================');
 
-                debugPrint('====================');
+                // ===================================================================
+                // P6 - NENHUMA ESCRITA EM subscriptionStatus
+                // ===================================================================
+                //
+                // Mesmo quando o trial está vencido, o AuthGate apenas bloqueia a
+                // interface. A persistência de `inactive` é feita pelo backend.
+                // ===================================================================
 
-                // =================================================================
-                // EXPIRAÇÃO DE LOJA SEM PLANO PAGO
-                // =================================================================
-
-                if (status == 'active' && !isPaidPlan && !isTrialValid) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) async {
-                    try {
-                      await FirebaseFirestore.instance
-                          .collection('stores')
-                          .doc(storeId)
-                          .update({'subscriptionStatus': 'inactive'});
-
-                      debugPrint(
-                        '🔒 Loja $storeId inativada: '
-                        'trial expirado e sem plano pago.',
-                      );
-                    } catch (e) {
-                      debugPrint('❌ Erro ao inativar loja: $e');
-                    }
-                  });
-
+                if (!hasAccess) {
                   return SubscriptionScreen(storeId: storeId);
                 }
-
-                // =================================================================
-                // EXPIRAÇÃO DO TRIAL
-                // =================================================================
-
-                if (!isPaidPlan &&
-                    !isTrialValid &&
-                    (status == 'active' || status == 'trial')) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) async {
-                    try {
-                      await FirebaseFirestore.instance
-                          .collection('stores')
-                          .doc(storeId)
-                          .update({'subscriptionStatus': 'inactive'});
-
-                      debugPrint(
-                        '🔒 Trial encerrado. '
-                        'Loja $storeId marcada como inactive.',
-                      );
-                    } catch (e) {
-                      debugPrint('❌ Erro ao finalizar trial: $e');
-                    }
-                  });
-
-                  return SubscriptionScreen(storeId: storeId);
-                }
-
-                // =================================================================
-                // ACESSO AO SISTEMA
-                //
-                // ACTIVE
-                // → PRO ou BUSINESS
-                //
-                // TRIAL
-                // → enquanto estiver dentro do período válido
-                //
-                // OVERDUE
-                // → permanece com acesso durante o período de tolerância
-                // =================================================================
-
-                if (status == 'active' ||
-                    status == 'trial' ||
-                    status == 'overdue') {
-                  return HomeScreen(storeId: storeId);
-                }
-
-                // =================================================================
-                // INACTIVE / PENDING / OUTROS STATUS
-                // =================================================================
 
                 return HomeScreen(storeId: storeId);
               },

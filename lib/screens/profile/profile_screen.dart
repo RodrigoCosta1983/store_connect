@@ -83,7 +83,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // 2. Prepara os dados do Firestore
     final profileData = {
       'fullName': _nameController.text,
-      'documentNumber': _documentController.text,
       'phone': _phoneController.text,
       'lastUpdated': Timestamp.now(),
     };
@@ -261,7 +260,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _documentController,
-                      decoration: const InputDecoration(labelText: 'CPF / CNPJ'),
+                      readOnly: true,
+                      decoration: const InputDecoration(
+                        labelText: 'CPF / CNPJ',
+                        helperText: 'O CPF/CNPJ não pode ser alterado após o cadastro.',
+                        suffixIcon: Icon(Icons.lock_outline),
+                      ),
                       keyboardType: TextInputType.number,
                     ),
                     const SizedBox(height: 16),

@@ -1,0 +1,1428 @@
+﻿
+  lib\main.dart:87:      ChangeNotifierProvider(create: (ctx) => CartProvider()),
+  lib\main.dart:88:      ChangeNotifierProvider(create: (ctx) => CashFlowProvider()),
+  lib\main.dart:89:      ChangeNotifierProvider(create: (ctx) => SalesProvider()),
+  lib\main.dart:90:    ];
+  lib\main.dart:91:
+  lib\main.dart:92:    if (!kIsWeb) {
+> lib\main.dart:93:      appProviders.add(ChangeNotifierProvider(create: (ctx) => 
+SubscriptionProvider()));
+  lib\main.dart:94:    }
+  lib\main.dart:95:
+  lib\main.dart:96:    return MultiProvider(
+  lib\main.dart:97:      providers: appProviders,
+  lib\main.dart:98:      child: Consumer<ThemeProvider>(
+  lib\main.dart:99:        builder: (context, themeProvider, child) {
+  lib\data\local\offline_sales_repository.dart:188:
+  lib\data\local\offline_sales_repository.dart:189:        if (productId.isEmpty || requested <= 0) {
+  lib\data\local\offline_sales_repository.dart:190:          throw const FormatException('Produto 
+inválido no carrinho offline.');
+  lib\data\local\offline_sales_repository.dart:191:        }
+  lib\data\local\offline_sales_repository.dart:192:
+  lib\data\local\offline_sales_repository.dart:193:        if 
+(!knownStockByProduct.containsKey(productId)) {
+> lib\data\local\offline_sales_repository.dart:194:          conflicts.add(
+  lib\data\local\offline_sales_repository.dart:195:            OfflineStockConflict(
+  lib\data\local\offline_sales_repository.dart:196:              productId: productId,
+  lib\data\local\offline_sales_repository.dart:197:              productName: productName,
+  lib\data\local\offline_sales_repository.dart:198:              requestedQuantity: requested,
+  lib\data\local\offline_sales_repository.dart:199:              availableQuantity: 0,
+  lib\data\local\offline_sales_repository.dart:200:            ),
+  lib\data\local\offline_sales_repository.dart:208:
+  lib\data\local\offline_sales_repository.dart:209:        final available = knownStock - alreadyReserved;
+  lib\data\local\offline_sales_repository.dart:210:
+  lib\data\local\offline_sales_repository.dart:211:        final safeAvailable = available < 0 ? 0 : 
+available;
+  lib\data\local\offline_sales_repository.dart:212:
+  lib\data\local\offline_sales_repository.dart:213:        if (requested > safeAvailable) {
+> lib\data\local\offline_sales_repository.dart:214:          conflicts.add(
+  lib\data\local\offline_sales_repository.dart:215:            OfflineStockConflict(
+  lib\data\local\offline_sales_repository.dart:216:              productId: productId,
+  lib\data\local\offline_sales_repository.dart:217:              productName: productName,
+  lib\data\local\offline_sales_repository.dart:218:              requestedQuantity: requested,
+  lib\data\local\offline_sales_repository.dart:219:              availableQuantity: safeAvailable,
+  lib\data\local\offline_sales_repository.dart:220:            ),
+  lib\data\local\offline_sales_repository.dart:345:            : int.tryParse(rawQuantity?.toString() ?? 
+'') ?? 0;
+  lib\data\local\offline_sales_repository.dart:346:
+  lib\data\local\offline_sales_repository.dart:347:        if (productId.isEmpty || quantity <= 0) {
+  lib\data\local\offline_sales_repository.dart:348:          continue;
+  lib\data\local\offline_sales_repository.dart:349:        }
+  lib\data\local\offline_sales_repository.dart:350:
+> lib\data\local\offline_sales_repository.dart:351:        reserved.update(
+  lib\data\local\offline_sales_repository.dart:352:          productId,
+  lib\data\local\offline_sales_repository.dart:353:          (current) => current + quantity,
+  lib\data\local\offline_sales_repository.dart:354:          ifAbsent: () => quantity,
+  lib\data\local\offline_sales_repository.dart:355:        );
+  lib\data\local\offline_sales_repository.dart:356:      }
+  lib\data\local\offline_sales_repository.dart:357:    }
+  lib\providers\cart_provider.dart:26:    if (existingQuantity >= product.quantidade) {
+  lib\providers\cart_provider.dart:27:      print('Não é possível adicionar mais. Estoque máximo atingido 
+no carrinho.');
+  lib\providers\cart_provider.dart:28:      return;
+  lib\providers\cart_provider.dart:29:    }
+  lib\providers\cart_provider.dart:30:
+  lib\providers\cart_provider.dart:31:    if (_items.containsKey(product.id)) {
+> lib\providers\cart_provider.dart:32:      _items.update(
+  lib\providers\cart_provider.dart:33:        product.id,
+  lib\providers\cart_provider.dart:34:            (existing) => CartItem(
+  lib\providers\cart_provider.dart:35:          productId: existing.productId,
+  lib\providers\cart_provider.dart:36:          name: existing.name,
+  lib\providers\cart_provider.dart:37:          price: existing.price,
+  lib\providers\cart_provider.dart:38:          quantity: existing.quantity + 1,
+  lib\providers\cart_provider.dart:55:  // --- NOVO MÉTODO PARA O BOTÃO '-' ---
+  lib\providers\cart_provider.dart:56:  void removeSingleItem(String productId) {
+  lib\providers\cart_provider.dart:57:    if (!_items.containsKey(productId)) {
+  lib\providers\cart_provider.dart:58:      return;
+  lib\providers\cart_provider.dart:59:    }
+  lib\providers\cart_provider.dart:60:    if (_items[productId]!.quantity > 1) {
+> lib\providers\cart_provider.dart:61:      _items.update(
+  lib\providers\cart_provider.dart:62:        productId,
+  lib\providers\cart_provider.dart:63:            (existing) => CartItem(
+  lib\providers\cart_provider.dart:64:          productId: existing.productId,
+  lib\providers\cart_provider.dart:65:          name: existing.name,
+  lib\providers\cart_provider.dart:66:          price: existing.price,
+  lib\providers\cart_provider.dart:67:          quantity: existing.quantity - 1,
+  lib\providers\cash_flow_provider.dart:15:  }) async {
+  lib\providers\cash_flow_provider.dart:16:    try {
+  lib\providers\cash_flow_provider.dart:17:      await FirebaseFirestore.instance
+  lib\providers\cash_flow_provider.dart:18:          .collection('stores')
+  lib\providers\cash_flow_provider.dart:19:          .doc(storeId)
+  lib\providers\cash_flow_provider.dart:20:          .collection('cash_flow')
+> lib\providers\cash_flow_provider.dart:21:          .add({
+  lib\providers\cash_flow_provider.dart:22:        'description': description,
+  lib\providers\cash_flow_provider.dart:23:        'amount': amount,
+  lib\providers\cash_flow_provider.dart:24:        'type': type,
+  lib\providers\cash_flow_provider.dart:25:        'createdAt': Timestamp.now(),
+  lib\providers\cash_flow_provider.dart:26:      });
+  lib\providers\cash_flow_provider.dart:27:
+  lib\providers\sales_provider.dart:39:    isLoading = true;
+  lib\providers\sales_provider.dart:40:    notifyListeners();
+  lib\providers\sales_provider.dart:41:
+  lib\providers\sales_provider.dart:42:    try {
+  lib\providers\sales_provider.dart:43:      await FirebaseFirestore.instance
+  lib\providers\sales_provider.dart:44:          .collection('stores').doc(_storeId) // Usa a variável 
+interna
+> lib\providers\sales_provider.dart:45:          .collection('sales').add({
+  lib\providers\sales_provider.dart:46:        'totalAmount': total,
+  lib\providers\sales_provider.dart:47:        'products': cartProducts.map((cp) => cp.toMap()).toList(),
+  lib\providers\sales_provider.dart:48:        'createdAt': Timestamp.now(),
+  lib\providers\sales_provider.dart:49:        'storeId': _storeId,
+  lib\providers\sales_provider.dart:50:        'notes': notes,
+  lib\providers\sales_provider.dart:51:        'paymentMethod': 'A prazo',
+  lib\providers\sales_provider.dart:141:    // e somente depois realizar as gravações.
+  lib\providers\sales_provider.dart:142:    await firestore.runTransaction((transaction) async {
+  lib\providers\sales_provider.dart:143:      final snapshots = <DocumentSnapshot>[];
+  lib\providers\sales_provider.dart:144:
+  lib\providers\sales_provider.dart:145:      for (final doc in querySnapshot.docs) {
+  lib\providers\sales_provider.dart:146:        final snapshot = await transaction.get(doc.reference);
+> lib\providers\sales_provider.dart:147:        snapshots.add(snapshot);
+  lib\providers\sales_provider.dart:148:      }
+  lib\providers\sales_provider.dart:149:
+  lib\providers\sales_provider.dart:150:      // 
+------------------------------------------------------------
+  lib\providers\sales_provider.dart:151:      // MONTA TODAS AS OBRIGAÇÕES ABERTAS DO CLIENTE
+  lib\providers\sales_provider.dart:152:      // 
+------------------------------------------------------------
+  lib\providers\sales_provider.dart:153:
+  lib\providers\sales_provider.dart:183:
+  lib\providers\sales_provider.dart:184:            final dueDate =
+  lib\providers\sales_provider.dart:185:            installment['dueDate'] is Timestamp
+  lib\providers\sales_provider.dart:186:                ? (installment['dueDate'] as Timestamp).toDate()
+  lib\providers\sales_provider.dart:187:                : DateTime(2100);
+  lib\providers\sales_provider.dart:188:
+> lib\providers\sales_provider.dart:189:            obligations.add({
+  lib\providers\sales_provider.dart:190:              'type': 'installment',
+  lib\providers\sales_provider.dart:191:              'saleSnapshot': snapshot,
+  lib\providers\sales_provider.dart:192:              'installmentIndex': i,
+  lib\providers\sales_provider.dart:193:              'dueDate': dueDate,
+  lib\providers\sales_provider.dart:194:            });
+  lib\providers\sales_provider.dart:195:          }
+  lib\providers\sales_provider.dart:216:        final dueDate = data['dueDate'] is Timestamp
+  lib\providers\sales_provider.dart:217:            ? (data['dueDate'] as Timestamp).toDate()
+  lib\providers\sales_provider.dart:218:            : (data['createdAt'] is Timestamp
+  lib\providers\sales_provider.dart:219:            ? (data['createdAt'] as Timestamp).toDate()
+  lib\providers\sales_provider.dart:220:            : DateTime(2100));
+  lib\providers\sales_provider.dart:221:
+> lib\providers\sales_provider.dart:222:        obligations.add({
+  lib\providers\sales_provider.dart:223:          'type': 'legacy',
+  lib\providers\sales_provider.dart:224:          'saleSnapshot': snapshot,
+  lib\providers\sales_provider.dart:225:          'dueDate': dueDate,
+  lib\providers\sales_provider.dart:226:        });
+  lib\providers\sales_provider.dart:227:      }
+  lib\providers\sales_provider.dart:228:
+  lib\providers\sales_provider.dart:442:
+  lib\providers\sales_provider.dart:443:          saleData['isPaid'] = allPaid;
+  lib\providers\sales_provider.dart:444:        }
+  lib\providers\sales_provider.dart:445:
+  lib\providers\sales_provider.dart:446:        final snapshot = saleSnapshots[saleId]!;
+  lib\providers\sales_provider.dart:447:
+> lib\providers\sales_provider.dart:448:        transaction.update(
+  lib\providers\sales_provider.dart:449:          snapshot.reference,
+  lib\providers\sales_provider.dart:450:          saleData,
+  lib\providers\sales_provider.dart:451:        );
+  lib\providers\sales_provider.dart:452:      }
+  lib\providers\sales_provider.dart:453:
+  lib\providers\sales_provider.dart:454:      // 
+------------------------------------------------------------
+  lib\providers\sales_provider.dart:458:      final cashFlowRef = firestore
+  lib\providers\sales_provider.dart:459:          .collection('stores')
+  lib\providers\sales_provider.dart:460:          .doc(_storeId)
+  lib\providers\sales_provider.dart:461:          .collection('cash_flow')
+  lib\providers\sales_provider.dart:462:          .doc();
+  lib\providers\sales_provider.dart:463:
+> lib\providers\sales_provider.dart:464:      transaction.set(cashFlowRef, {
+  lib\providers\sales_provider.dart:465:        'description':
+  lib\providers\sales_provider.dart:466:        'Recebimento de $customerName',
+  lib\providers\sales_provider.dart:467:        'amount': amountToPay,
+  lib\providers\sales_provider.dart:468:        'type': 'Entrada',
+  lib\providers\sales_provider.dart:469:        'createdAt': Timestamp.now(),
+  lib\providers\sales_provider.dart:470:      });
+  lib\providers\sales_provider.dart:476:  // --- MÉTODO ADICIONADO QUE ESTAVA FALTANDO ---
+  lib\providers\sales_provider.dart:477:  Future<void> markOrderAsPaid(String orderId, double amount, 
+CashFlowProvider cashFlowProvider) async {
+  lib\providers\sales_provider.dart:478:    if (_storeId == null) throw Exception("Store ID não definido 
+no SalesProvider.");
+  lib\providers\sales_provider.dart:479:
+  lib\providers\sales_provider.dart:480:    try {
+  lib\providers\sales_provider.dart:481:      final orderRef = 
+FirebaseFirestore.instance.collection('stores').doc(_storeId).collection('sales').doc(orderId);
+> lib\providers\sales_provider.dart:482:      await orderRef.update({'isPaid': true});
+  lib\providers\sales_provider.dart:483:
+  lib\providers\sales_provider.dart:484:      await cashFlowProvider.addCashFlowEntry(
+  lib\providers\sales_provider.dart:485:        description: 'Recebimento Venda #${orderId.substring(0, 
+6)}',
+  lib\providers\sales_provider.dart:486:        amount: amount,
+  lib\providers\sales_provider.dart:487:        type: 'Entrada',
+  lib\providers\sales_provider.dart:488:        storeId: _storeId!,
+  lib\providers\subscription_provider.dart:124:      print('   Atualizando documento da loja...');
+  lib\providers\subscription_provider.dart:125:      print('   Dados: $updateData');
+  lib\providers\subscription_provider.dart:126:
+  lib\providers\subscription_provider.dart:127:      await FirebaseFirestore.instance
+  lib\providers\subscription_provider.dart:128:          .collection('stores')
+  lib\providers\subscription_provider.dart:129:          .doc(storeId)
+> lib\providers\subscription_provider.dart:130:          .set(updateData, SetOptions(merge: true));
+  lib\providers\subscription_provider.dart:131:
+  lib\providers\subscription_provider.dart:132:      print('✅ Assinatura ativada com sucesso!');
+  lib\providers\subscription_provider.dart:133:      print('   Store ID: $storeId');
+  lib\providers\subscription_provider.dart:134:      print('   Status: active');
+  lib\providers\subscription_provider.dart:135:
+  lib\providers\subscription_provider.dart:136:      notifyListeners();
+  lib\screens\dashboard_screen.dart:68:
+  lib\screens\dashboard_screen.dart:69:      // Busca os lotes e conta os vencimentos
+  lib\screens\dashboard_screen.dart:70:      final productsSnapshot = await 
+storeRef.collection('products').get();
+  lib\screens\dashboard_screen.dart:71:      int expiringCount = 0;
+  lib\screens\dashboard_screen.dart:72:
+  lib\screens\dashboard_screen.dart:73:      // O limite agora é dinâmico com base na configuração do 
+cliente
+> lib\screens\dashboard_screen.dart:74:      final limit = DateTime.now().add(Duration(days: 
+expiryThresholdDays));
+  lib\screens\dashboard_screen.dart:75:
+  lib\screens\dashboard_screen.dart:76:      for (var doc in productsSnapshot.docs) {
+  lib\screens\dashboard_screen.dart:77:        final lotes = doc.data()['lotes'] as List<dynamic>? ?? [];
+  lib\screens\dashboard_screen.dart:78:
+  lib\screens\dashboard_screen.dart:79:        bool temLoteVencendo = lotes.any((lote) {
+  lib\screens\dashboard_screen.dart:80:          final validade = (lote['validade'] as 
+Timestamp).toDate();
+  lib\screens\settings_screen.dart:187:      final newUrl =
+  lib\screens\settings_screen.dart:188:      await ref.getDownloadURL();
+  lib\screens\settings_screen.dart:189:
+  lib\screens\settings_screen.dart:190:      await FirebaseFirestore.instance
+  lib\screens\settings_screen.dart:191:          .collection('stores')
+  lib\screens\settings_screen.dart:192:          .doc(widget.storeId)
+> lib\screens\settings_screen.dart:193:          .update({
+  lib\screens\settings_screen.dart:194:        'logoUrl': newUrl,
+  lib\screens\settings_screen.dart:195:      });
+  lib\screens\settings_screen.dart:196:
+  lib\screens\settings_screen.dart:197:      if (mounted) {
+  lib\screens\settings_screen.dart:198:        setState(() {
+  lib\screens\settings_screen.dart:199:          _storeLogoUrl = newUrl;
+  lib\screens\settings_screen.dart:879:                    }
+  lib\screens\settings_screen.dart:880:
+  lib\screens\settings_screen.dart:881:                    await FirebaseFirestore
+  lib\screens\settings_screen.dart:882:                        .instance
+  lib\screens\settings_screen.dart:883:                        .collection('stores')
+  lib\screens\settings_screen.dart:884:                        .doc(widget.storeId)
+> lib\screens\settings_screen.dart:885:                        .set(
+  lib\screens\settings_screen.dart:886:                      {
+  lib\screens\settings_screen.dart:887:                        'lowStockThreshold':
+  lib\screens\settings_screen.dart:888:                        newStock,
+  lib\screens\settings_screen.dart:889:                        'expiryThreshold':
+  lib\screens\settings_screen.dart:890:                        newExpiry,
+  lib\screens\settings_screen.dart:891:                      },
+  lib\screens\settings_screen.dart:1686:      );
+  lib\screens\settings_screen.dart:1687:
+  lib\screens\settings_screen.dart:1688:      final newUrl =
+  lib\screens\settings_screen.dart:1689:      await storageRef
+  lib\screens\settings_screen.dart:1690:          .getDownloadURL();
+  lib\screens\settings_screen.dart:1691:
+> lib\screens\settings_screen.dart:1692:      await storesRef.set(
+  lib\screens\settings_screen.dart:1693:        {
+  lib\screens\settings_screen.dart:1694:          'pixQrCodeUrl':
+  lib\screens\settings_screen.dart:1695:          newUrl,
+  lib\screens\settings_screen.dart:1696:          'pixQrCodePath':
+  lib\screens\settings_screen.dart:1697:          storagePath,
+  lib\screens\settings_screen.dart:1698:          'pixQrCodeUpdatedAt':
+  lib\screens\settings_screen.dart:1714:          await FirebaseStorage
+  lib\screens\settings_screen.dart:1715:              .instance
+  lib\screens\settings_screen.dart:1716:              .ref()
+  lib\screens\settings_screen.dart:1717:              .child(
+  lib\screens\settings_screen.dart:1718:            oldStoragePath,
+  lib\screens\settings_screen.dart:1719:          )
+> lib\screens\settings_screen.dart:1720:              .delete();
+  lib\screens\settings_screen.dart:1721:        } catch (_) {}
+  lib\screens\settings_screen.dart:1722:      } else if (oldUrl != null &&
+  lib\screens\settings_screen.dart:1723:          oldUrl.isNotEmpty) {
+  lib\screens\settings_screen.dart:1724:        try {
+  lib\screens\settings_screen.dart:1725:          await FirebaseStorage
+  lib\screens\settings_screen.dart:1726:              .instance
+  lib\screens\settings_screen.dart:1727:              .refFromURL(
+  lib\screens\settings_screen.dart:1728:            oldUrl,
+  lib\screens\settings_screen.dart:1729:          )
+> lib\screens\settings_screen.dart:1730:              .delete();
+  lib\screens\settings_screen.dart:1731:        } catch (_) {}
+  lib\screens\settings_screen.dart:1732:      }
+  lib\screens\settings_screen.dart:1733:
+  lib\screens\settings_screen.dart:1734:      try {
+  lib\screens\settings_screen.dart:1735:        imageCache.clear();
+  lib\screens\settings_screen.dart:1736:        imageCache
+  lib\screens\subscription_screen.dart:180:        setState(() => _isLoading = true); // Retoma o loading
+  lib\screens\subscription_screen.dart:181:
+  lib\screens\subscription_screen.dart:182:        // Salva o documento no banco da loja para nunca mais 
+precisar pedir
+  lib\screens\subscription_screen.dart:183:        await FirebaseFirestore.instance
+  lib\screens\subscription_screen.dart:184:            .collection('stores')
+  lib\screens\subscription_screen.dart:185:            .doc(widget.storeId)
+> lib\screens\subscription_screen.dart:186:            .update({'document': document});
+  lib\screens\subscription_screen.dart:187:      }
+  lib\screens\subscription_screen.dart:188:
+  lib\screens\subscription_screen.dart:189:      // 2. Chama a Cloud Function do Asaas enviando os dados 
+garantidos
+  lib\screens\subscription_screen.dart:190:      final response = await FirebaseFunctions.instance
+  lib\screens\subscription_screen.dart:191:          .httpsCallable('createAsaasSubscription',
+  lib\screens\subscription_screen.dart:192:          options: HttpsCallableOptions(timeout: const 
+Duration(seconds: 120)))
+  lib\screens\auth\auth_gate.dart:122:    _lastUidProcessed = uid;
+  lib\screens\auth\auth_gate.dart:123:
+  lib\screens\auth\auth_gate.dart:124:    try {
+  lib\screens\auth\auth_gate.dart:125:      final packageInfo = await PackageInfo.fromPlatform();
+  lib\screens\auth\auth_gate.dart:126:      final versaoAtual = 
+'${packageInfo.version}+${packageInfo.buildNumber}';
+  lib\screens\auth\auth_gate.dart:127:
+> lib\screens\auth\auth_gate.dart:128:      await 
+FirebaseFirestore.instance.collection('users').doc(uid).set({
+  lib\screens\auth\auth_gate.dart:129:        'versao_app': versaoAtual,
+  lib\screens\auth\auth_gate.dart:130:        'ultimo_login': FieldValue.serverTimestamp(),
+  lib\screens\auth\auth_gate.dart:131:      }, SetOptions(merge: true));
+  lib\screens\auth\auth_gate.dart:132:
+  lib\screens\auth\auth_gate.dart:133:      debugPrint('🚀 Info de login/versão sincronizada para: $uid');
+  lib\screens\auth\auth_gate.dart:134:    } catch (e) {
+  lib\screens\auth\create_store_screen.dart:75:        setState(() => _isLoading = false);
+  lib\screens\auth\create_store_screen.dart:76:        return; // Barra a criação da loja!
+  lib\screens\auth\create_store_screen.dart:77:      }
+  lib\screens\auth\create_store_screen.dart:78:
+  lib\screens\auth\create_store_screen.dart:79:      final firestore = FirebaseFirestore.instance;
+  lib\screens\auth\create_store_screen.dart:80:      final now = DateTime.now();
+> lib\screens\auth\create_store_screen.dart:81:      final trialEnd = now.add(const Duration(days: 7));
+  lib\screens\auth\create_store_screen.dart:82:
+  lib\screens\auth\create_store_screen.dart:83:      final batch = firestore.batch();
+  lib\screens\auth\create_store_screen.dart:84:
+  lib\screens\auth\create_store_screen.dart:85:      final storeRef = 
+firestore.collection('stores').doc();
+  lib\screens\auth\create_store_screen.dart:86:      final userRef = 
+firestore.collection('users').doc(user.uid);
+  lib\screens\auth\create_store_screen.dart:87:      final cpfRef = 
+firestore.collection('cpfs_cadastrados').doc(cleanDoc);
+  lib\screens\auth\create_store_screen.dart:88:
+  lib\screens\auth\create_store_screen.dart:89:      // -> PASSO A: Gravar os dados da Loja (Já com o CPF 
+para o Asaas)
+> lib\screens\auth\create_store_screen.dart:90:      batch.set(storeRef, {
+  lib\screens\auth\create_store_screen.dart:91:        'name': _storeNameController.text.trim(),
+  lib\screens\auth\create_store_screen.dart:92:        'phone': 
+UtilBrasilFields.removeCaracteres(_phoneController.text),
+  lib\screens\auth\create_store_screen.dart:93:        'document': cleanDoc,
+  lib\screens\auth\create_store_screen.dart:94:        'ownerId': user.uid,
+  lib\screens\auth\create_store_screen.dart:95:        'createdAt': FieldValue.serverTimestamp(),
+  lib\screens\auth\create_store_screen.dart:96:        'subscriptionStatus': 'active', // Liberado para 
+os 7 dias grátis
+  lib\screens\auth\create_store_screen.dart:97:        'trialEndDate': trialEnd.toIso8601String(),
+  lib\screens\auth\create_store_screen.dart:98:      });
+  lib\screens\auth\create_store_screen.dart:99:
+  lib\screens\auth\create_store_screen.dart:100:      // -> PASSO B: Atualizar o Utilizador
+> lib\screens\auth\create_store_screen.dart:101:      batch.set(userRef, {
+  lib\screens\auth\create_store_screen.dart:102:        'storeId': storeRef.id,
+  lib\screens\auth\create_store_screen.dart:103:        'phone': 
+UtilBrasilFields.removeCaracteres(_phoneController.text),
+  lib\screens\auth\create_store_screen.dart:104:        'role': 'admin',
+  lib\screens\auth\create_store_screen.dart:105:      }, SetOptions(merge: true));
+  lib\screens\auth\create_store_screen.dart:106:
+  lib\screens\auth\create_store_screen.dart:107:      // -> PASSO C: Trancar o CPF na lista de controle
+> lib\screens\auth\create_store_screen.dart:108:      batch.set(cpfRef, {
+  lib\screens\auth\create_store_screen.dart:109:        'storeId': storeRef.id,
+  lib\screens\auth\create_store_screen.dart:110:        'uid': user.uid,
+  lib\screens\auth\create_store_screen.dart:111:        'cadastradoEm': FieldValue.serverTimestamp(),
+  lib\screens\auth\create_store_screen.dart:112:      });
+  lib\screens\auth\create_store_screen.dart:113:
+  lib\screens\auth\create_store_screen.dart:114:      // Executa tudo de uma vez!
+  lib\screens\auth\register_screen.dart:68:      final generatedName = 
+_emailController.text.split('@')[0];
+  lib\screens\auth\register_screen.dart:69:
+  lib\screens\auth\register_screen.dart:70:      // 2. Salva no Firestore apenas dados iniciais (Sem CPF)
+  lib\screens\auth\register_screen.dart:71:      await FirebaseFirestore.instance
+  lib\screens\auth\register_screen.dart:72:          .collection('users')
+  lib\screens\auth\register_screen.dart:73:          .doc(userCredential.user!.uid)
+> lib\screens\auth\register_screen.dart:74:          .set({
+  lib\screens\auth\register_screen.dart:75:        'username': generatedName,
+  lib\screens\auth\register_screen.dart:76:        'email': _emailController.text.trim(),
+  lib\screens\auth\register_screen.dart:77:        'storeId': '',
+  lib\screens\auth\register_screen.dart:78:        'createdAt': FieldValue.serverTimestamp(),
+  lib\screens\auth\register_screen.dart:79:        'subscriptionStatus': 'trial',
+  lib\screens\auth\register_screen.dart:80:      });
+  lib\screens\finance\invoices_screen.dart:374:          'color': Colors.red,
+  lib\screens\finance\invoices_screen.dart:375:          'icon': Icons.error,
+  lib\screens\finance\invoices_screen.dart:376:        };
+  lib\screens\finance\invoices_screen.dart:377:
+  lib\screens\finance\invoices_screen.dart:378:      case 'PENDING':
+  lib\screens\finance\invoices_screen.dart:379:        if (dueDate.isAfter(
+> lib\screens\finance\invoices_screen.dart:380:          DateTime.now().add(
+  lib\screens\finance\invoices_screen.dart:381:            const Duration(days: 7),
+  lib\screens\finance\invoices_screen.dart:382:          ),
+  lib\screens\finance\invoices_screen.dart:383:        )) {
+  lib\screens\finance\invoices_screen.dart:384:          return {
+  lib\screens\finance\invoices_screen.dart:385:            'text': 'A Vencer',
+  lib\screens\finance\invoices_screen.dart:386:            'color':
+  lib\screens\fiscal\fiscal_settings_screen.dart:459:          .doc(widget.storeId);
+  lib\screens\fiscal\fiscal_settings_screen.dart:460:
+  lib\screens\fiscal\fiscal_settings_screen.dart:461:      // IMPORTANTE:
+  lib\screens\fiscal\fiscal_settings_screen.dart:462:      // Não substituímos "perfilFiscal" inteiro. O 
+bloco perfilFiscal.focus
+  lib\screens\fiscal\fiscal_settings_screen.dart:463:      // contém o vínculo com a Focus e as 
+credenciais criptografadas.
+  lib\screens\fiscal\fiscal_settings_screen.dart:464:      // Atualizar o mapa inteiro apagaria esses 
+dados.
+> lib\screens\fiscal\fiscal_settings_screen.dart:465:      await storeRef.update({
+  lib\screens\fiscal\fiscal_settings_screen.dart:466:        'perfilFiscal.ambiente': _ambiente,
+  lib\screens\fiscal\fiscal_settings_screen.dart:467:        'perfilFiscal.razaoSocial': 
+_razaoSocialController.text.trim(),
+  lib\screens\fiscal\fiscal_settings_screen.dart:468:        'perfilFiscal.nomeFantasia': 
+_nomeFantasiaController.text.trim(),
+  lib\screens\fiscal\fiscal_settings_screen.dart:469:        'perfilFiscal.cnpj': 
+_digitsOnly(_cnpjController.text),
+  lib\screens\fiscal\fiscal_settings_screen.dart:470:        'perfilFiscal.inscricaoEstadual':
+  lib\screens\fiscal\fiscal_settings_screen.dart:471:        _inscricaoEstadualController.text.trim(),
+  lib\screens\management\category_management_screen.dart:306:            .collection(
+  lib\screens\management\category_management_screen.dart:307:          'categories',
+  lib\screens\management\category_management_screen.dart:308:        )
+  lib\screens\management\category_management_screen.dart:309:            .doc(
+  lib\screens\management\category_management_screen.dart:310:          widget.category!.id,
+  lib\screens\management\category_management_screen.dart:311:        )
+> lib\screens\management\category_management_screen.dart:312:            .update(
+  lib\screens\management\category_management_screen.dart:313:          categoryData,
+  lib\screens\management\category_management_screen.dart:314:        );
+  lib\screens\management\category_management_screen.dart:315:      } else {
+  lib\screens\management\category_management_screen.dart:316:        categoryData['createdAt'] =
+  lib\screens\management\category_management_screen.dart:317:            FieldValue.serverTimestamp();
+  lib\screens\management\category_management_screen.dart:318:
+  lib\screens\management\category_management_screen.dart:320:            .instance
+  lib\screens\management\category_management_screen.dart:321:            .collection('stores')
+  lib\screens\management\category_management_screen.dart:322:            .doc(widget.storeId)
+  lib\screens\management\category_management_screen.dart:323:            .collection(
+  lib\screens\management\category_management_screen.dart:324:          'categories',
+  lib\screens\management\category_management_screen.dart:325:        )
+> lib\screens\management\category_management_screen.dart:326:            .add(
+  lib\screens\management\category_management_screen.dart:327:          categoryData,
+  lib\screens\management\category_management_screen.dart:328:        );
+  lib\screens\management\category_management_screen.dart:329:      }
+  lib\screens\management\category_management_screen.dart:330:
+  lib\screens\management\category_management_screen.dart:331:      // 
+======================================================================
+  lib\screens\management\category_management_screen.dart:332:      // 4. REMOVE IMAGEM ANTIGA
+  lib\screens\management\category_management_screen.dart:344:        try {
+  lib\screens\management\category_management_screen.dart:345:          await FirebaseStorage
+  lib\screens\management\category_management_screen.dart:346:              .instance
+  lib\screens\management\category_management_screen.dart:347:              .refFromURL(
+  lib\screens\management\category_management_screen.dart:348:            oldImageUrl,
+  lib\screens\management\category_management_screen.dart:349:          )
+> lib\screens\management\category_management_screen.dart:350:              .delete();
+  lib\screens\management\category_management_screen.dart:351:        } catch (e) {
+  lib\screens\management\category_management_screen.dart:352:          debugPrint(
+  lib\screens\management\category_management_screen.dart:353:            'Aviso: Não foi possível apagar 
+a imagem antiga: $e',
+  lib\screens\management\category_management_screen.dart:354:          );
+  lib\screens\management\category_management_screen.dart:355:        }
+  lib\screens\management\category_management_screen.dart:356:      }
+  lib\screens\management\category_management_screen.dart:673:                      .collection(
+  lib\screens\management\category_management_screen.dart:674:                    'categories',
+  lib\screens\management\category_management_screen.dart:675:                  )
+  lib\screens\management\category_management_screen.dart:676:                      .doc(
+  lib\screens\management\category_management_screen.dart:677:                    categoryId,
+  lib\screens\management\category_management_screen.dart:678:                  )
+> lib\screens\management\category_management_screen.dart:679:                      .delete();
+  lib\screens\management\category_management_screen.dart:680:
+  lib\screens\management\category_management_screen.dart:681:                  if (!ctx.mounted) {
+  lib\screens\management\category_management_screen.dart:682:                    return;
+  lib\screens\management\category_management_screen.dart:683:                  }
+  lib\screens\management\category_management_screen.dart:684:
+  lib\screens\management\category_management_screen.dart:685:                  Navigator.of(ctx)
+  lib\screens\management\customer_receivables_screen.dart:122:
+  lib\screens\management\customer_receivables_screen.dart:123:        final dueDate =
+  lib\screens\management\customer_receivables_screen.dart:124:        _toDate(installment['dueDate']);
+  lib\screens\management\customer_receivables_screen.dart:125:
+  lib\screens\management\customer_receivables_screen.dart:126:        if (dueDate == null) continue;
+  lib\screens\management\customer_receivables_screen.dart:127:
+> lib\screens\management\customer_receivables_screen.dart:128:        pending.add({
+  lib\screens\management\customer_receivables_screen.dart:129:          'saleId': saleDoc.id,
+  lib\screens\management\customer_receivables_screen.dart:130:          'saleCreatedAt': saleCreatedAt,
+  lib\screens\management\customer_receivables_screen.dart:131:          'dueDate': _dateOnly(dueDate),
+  lib\screens\management\customer_receivables_screen.dart:132:          'installmentNumber':
+  lib\screens\management\customer_receivables_screen.dart:133:          (installment['number'] as num? ?? 
+0)
+  lib\screens\management\customer_receivables_screen.dart:134:              .toInt(),
+  lib\screens\management\customer_receivables_screen.dart:178:        // Se já foi totalmente quitada,
+  lib\screens\management\customer_receivables_screen.dart:179:        // não entra na lista de pendências.
+  lib\screens\management\customer_receivables_screen.dart:180:        if (remaining <= 0.001) {
+  lib\screens\management\customer_receivables_screen.dart:181:          continue;
+  lib\screens\management\customer_receivables_screen.dart:182:        }
+  lib\screens\management\customer_receivables_screen.dart:183:
+> lib\screens\management\customer_receivables_screen.dart:184:        pending.add({
+  lib\screens\management\customer_receivables_screen.dart:185:          'saleId': saleDoc.id,
+  lib\screens\management\customer_receivables_screen.dart:186:          'saleCreatedAt': saleCreatedAt,
+  lib\screens\management\customer_receivables_screen.dart:187:          'dueDate': _dateOnly(dueDate),
+  lib\screens\management\customer_receivables_screen.dart:188:          'installmentNumber': 1,
+  lib\screens\management\customer_receivables_screen.dart:189:          'installmentCount': 1,
+  lib\screens\management\customer_receivables_screen.dart:190:
+  lib\screens\management\customer_receivables_screen.dart:229:
+  lib\screens\management\customer_receivables_screen.dart:230:      groups.putIfAbsent(
+  lib\screens\management\customer_receivables_screen.dart:231:        dueDate,
+  lib\screens\management\customer_receivables_screen.dart:232:            () => [],
+  lib\screens\management\customer_receivables_screen.dart:233:      );
+  lib\screens\management\customer_receivables_screen.dart:234:
+> lib\screens\management\customer_receivables_screen.dart:235:      groups[dueDate]!.add(
+  lib\screens\management\customer_receivables_screen.dart:236:        installment,
+  lib\screens\management\customer_receivables_screen.dart:237:      );
+  lib\screens\management\customer_receivables_screen.dart:238:    }
+  lib\screens\management\customer_receivables_screen.dart:239:
+  lib\screens\management\customer_receivables_screen.dart:240:    return groups;
+  lib\screens\management\customer_receivables_screen.dart:241:  }
+  lib\screens\management\customer_receivables_screen.dart:277:
+  lib\screens\management\customer_receivables_screen.dart:278:        final name =
+  lib\screens\management\customer_receivables_screen.dart:279:        map['name']?.toString();
+  lib\screens\management\customer_receivables_screen.dart:280:
+  lib\screens\management\customer_receivables_screen.dart:281:        if (name != null &&
+  lib\screens\management\customer_receivables_screen.dart:282:            name.trim().isNotEmpty) {
+> lib\screens\management\customer_receivables_screen.dart:283:          names.add(name);
+  lib\screens\management\customer_receivables_screen.dart:284:        }
+  lib\screens\management\customer_receivables_screen.dart:285:      }
+  lib\screens\management\customer_receivables_screen.dart:286:    }
+  lib\screens\management\customer_receivables_screen.dart:287:
+  lib\screens\management\customer_receivables_screen.dart:288:    if (names.isEmpty) {
+  lib\screens\management\customer_receivables_screen.dart:289:      return 'Venda a prazo';
+  lib\screens\management\manage_customers_screen.dart:286:    try {
+  lib\screens\management\manage_customers_screen.dart:287:      // 
+======================================================================
+  lib\screens\management\manage_customers_screen.dart:288:      // EDIÇÃO
+  lib\screens\management\manage_customers_screen.dart:289:      // 
+======================================================================
+  lib\screens\management\manage_customers_screen.dart:290:
+  lib\screens\management\manage_customers_screen.dart:291:      if (_isEditing) {
+> lib\screens\management\manage_customers_screen.dart:292:        await 
+collectionRef.doc(widget.customer!.id).update(customerData);
+  lib\screens\management\manage_customers_screen.dart:293:      }
+  lib\screens\management\manage_customers_screen.dart:294:      // 
+======================================================================
+  lib\screens\management\manage_customers_screen.dart:295:      // NOVO CLIENTE
+  lib\screens\management\manage_customers_screen.dart:296:      // 
+======================================================================
+  lib\screens\management\manage_customers_screen.dart:297:      else {
+> lib\screens\management\manage_customers_screen.dart:298:        await collectionRef.add({
+  lib\screens\management\manage_customers_screen.dart:299:          ...customerData,
+  lib\screens\management\manage_customers_screen.dart:300:          'createdAt': Timestamp.now(),
+  lib\screens\management\manage_customers_screen.dart:301:        });
+  lib\screens\management\manage_customers_screen.dart:302:      }
+  lib\screens\management\manage_customers_screen.dart:303:
+  lib\screens\management\manage_customers_screen.dart:304:      if (!mounted) {
+  lib\screens\management\manage_products_screen.dart:705:      if (_isEditing) {
+  lib\screens\management\manage_products_screen.dart:706:        await FirebaseFirestore.instance
+  lib\screens\management\manage_products_screen.dart:707:            .collection('stores')
+  lib\screens\management\manage_products_screen.dart:708:            .doc(widget.storeId)
+  lib\screens\management\manage_products_screen.dart:709:            .collection('products')
+  lib\screens\management\manage_products_screen.dart:710:            .doc(widget.product!.id)
+> lib\screens\management\manage_products_screen.dart:711:            .update(productData);
+  lib\screens\management\manage_products_screen.dart:712:      } else {
+  lib\screens\management\manage_products_screen.dart:713:        productData['createdAt'] = 
+Timestamp.now();
+  lib\screens\management\manage_products_screen.dart:714:        productData['isArchived'] = false;
+  lib\screens\management\manage_products_screen.dart:715:
+  lib\screens\management\manage_products_screen.dart:716:        await FirebaseFirestore.instance
+  lib\screens\management\manage_products_screen.dart:717:            .collection('stores')
+  lib\screens\management\manage_products_screen.dart:718:            .doc(widget.storeId)
+  lib\screens\management\manage_products_screen.dart:719:            .collection('products')
+> lib\screens\management\manage_products_screen.dart:720:            .add(productData);
+  lib\screens\management\manage_products_screen.dart:721:      }
+  lib\screens\management\manage_products_screen.dart:722:
+  lib\screens\management\manage_products_screen.dart:723:      if (!mounted) return;
+  lib\screens\management\manage_products_screen.dart:724:
+  lib\screens\management\manage_products_screen.dart:725:      Navigator.of(context).pop();
+  lib\screens\management\manage_products_screen.dart:726:
+  lib\screens\management\manage_products_screen.dart:995:                        );
+  lib\screens\management\manage_products_screen.dart:996:
+  lib\screens\management\manage_products_screen.dart:997:                        if (qtd != null &&
+  lib\screens\management\manage_products_screen.dart:998:                            qtd > 0 &&
+  lib\screens\management\manage_products_screen.dart:999:                            
+_dataValidadeSelecionada != null) {
+  lib\screens\management\manage_products_screen.dart:1000:                          setState(() {
+> lib\screens\management\manage_products_screen.dart:1001:                            _lotes.add({
+  lib\screens\management\manage_products_screen.dart:1002:                              'quantidade': qtd,
+  lib\screens\management\manage_products_screen.dart:1003:                              'validade': 
+Timestamp.fromDate(
+  lib\screens\management\manage_products_screen.dart:1004:                                
+_dataValidadeSelecionada!,
+  lib\screens\management\manage_products_screen.dart:1005:                              ),
+  lib\screens\management\manage_products_screen.dart:1006:                            });
+  lib\screens\management\manage_products_screen.dart:1007:
+  lib\screens\management\product_import_mapping_screen.dart:440:        }
+  lib\screens\management\product_import_mapping_screen.dart:441:      }
+  lib\screens\management\product_import_mapping_screen.dart:442:
+  lib\screens\management\product_import_mapping_screen.dart:443:      if (selectedColumn != null) {
+  lib\screens\management\product_import_mapping_screen.dart:444:        _mapping[field.key] = 
+selectedColumn;
+  lib\screens\management\product_import_mapping_screen.dart:445:
+> lib\screens\management\product_import_mapping_screen.dart:446:        usedColumns.add(selectedColumn);
+  lib\screens\management\product_import_mapping_screen.dart:447:      }
+  lib\screens\management\product_import_mapping_screen.dart:448:    }
+  lib\screens\management\product_import_mapping_screen.dart:449:  }
+  lib\screens\management\product_import_mapping_screen.dart:450:
+  lib\screens\management\product_import_mapping_screen.dart:451:  // 
+==========================================================================
+  lib\screens\management\product_import_mapping_screen.dart:452:  // VERIFICA SE COLUNA JÁ ESTÁ SENDO 
+UTILIZADA
+  lib\screens\management\product_import_validation_screen.dart:477:    index < widget.rows.length;
+  lib\screens\management\product_import_validation_screen.dart:478:    index++
+  lib\screens\management\product_import_validation_screen.dart:479:    ) {
+  lib\screens\management\product_import_validation_screen.dart:480:      final row =
+  lib\screens\management\product_import_validation_screen.dart:481:      widget.rows[index];
+  lib\screens\management\product_import_validation_screen.dart:482:
+> lib\screens\management\product_import_validation_screen.dart:483:      result.add(
+  lib\screens\management\product_import_validation_screen.dart:484:        _validateRow(
+  lib\screens\management\product_import_validation_screen.dart:485:          row,
+  lib\screens\management\product_import_validation_screen.dart:486:
+  lib\screens\management\product_import_validation_screen.dart:487:          // Excel começa a contar em 
+1.
+  lib\screens\management\product_import_validation_screen.dart:488:          //
+  lib\screens\management\product_import_validation_screen.dart:489:          // index 1 do nosso array 
+corresponde à linha 2 da planilha.
+  lib\screens\management\product_import_validation_screen.dart:517:    _readField(
+  lib\screens\management\product_import_validation_screen.dart:518:      row,
+  lib\screens\management\product_import_validation_screen.dart:519:      'name',
+  lib\screens\management\product_import_validation_screen.dart:520:    );
+  lib\screens\management\product_import_validation_screen.dart:521:
+  lib\screens\management\product_import_validation_screen.dart:522:    if (name.isEmpty) {
+> lib\screens\management\product_import_validation_screen.dart:523:      errors.add(
+  lib\screens\management\product_import_validation_screen.dart:524:        'Nome do produto não 
+informado.',
+  lib\screens\management\product_import_validation_screen.dart:525:      );
+  lib\screens\management\product_import_validation_screen.dart:526:    }
+  lib\screens\management\product_import_validation_screen.dart:527:
+  lib\screens\management\product_import_validation_screen.dart:528:    // 
+=========================================================================
+  lib\screens\management\product_import_validation_screen.dart:529:    // 2. PREÇO DE VENDA
+  lib\screens\management\product_import_validation_screen.dart:538:    final price =
+  lib\screens\management\product_import_validation_screen.dart:539:    _parseNumber(
+  lib\screens\management\product_import_validation_screen.dart:540:      rawPrice,
+  lib\screens\management\product_import_validation_screen.dart:541:    );
+  lib\screens\management\product_import_validation_screen.dart:542:
+  lib\screens\management\product_import_validation_screen.dart:543:    if (rawPrice.isEmpty) {
+> lib\screens\management\product_import_validation_screen.dart:544:      errors.add(
+  lib\screens\management\product_import_validation_screen.dart:545:        'Preço de venda não 
+informado.',
+  lib\screens\management\product_import_validation_screen.dart:546:      );
+  lib\screens\management\product_import_validation_screen.dart:547:    } else if (price == null) {
+> lib\screens\management\product_import_validation_screen.dart:548:      errors.add(
+  lib\screens\management\product_import_validation_screen.dart:549:        'Preço de venda inválido: 
+"$rawPrice".',
+  lib\screens\management\product_import_validation_screen.dart:550:      );
+  lib\screens\management\product_import_validation_screen.dart:551:    } else if (price < 0) {
+> lib\screens\management\product_import_validation_screen.dart:552:      errors.add(
+  lib\screens\management\product_import_validation_screen.dart:553:        'Preço de venda não pode ser 
+negativo.',
+  lib\screens\management\product_import_validation_screen.dart:554:      );
+  lib\screens\management\product_import_validation_screen.dart:555:    }
+  lib\screens\management\product_import_validation_screen.dart:556:
+  lib\screens\management\product_import_validation_screen.dart:557:    // 
+=========================================================================
+  lib\screens\management\product_import_validation_screen.dart:558:    // 3. QUANTIDADE
+  lib\screens\management\product_import_validation_screen.dart:572:    // 
+-------------------------------------------------------------------------
+  lib\screens\management\product_import_validation_screen.dart:573:    // Valor preenchido, mas inválido.
+  lib\screens\management\product_import_validation_screen.dart:574:    // 
+-------------------------------------------------------------------------
+  lib\screens\management\product_import_validation_screen.dart:575:
+  lib\screens\management\product_import_validation_screen.dart:576:    if (rawQuantity.isNotEmpty &&
+  lib\screens\management\product_import_validation_screen.dart:577:        quantity == null) {
+> lib\screens\management\product_import_validation_screen.dart:578:      errors.add(
+  lib\screens\management\product_import_validation_screen.dart:579:        'Quantidade inválida: 
+"$rawQuantity".',
+  lib\screens\management\product_import_validation_screen.dart:580:      );
+  lib\screens\management\product_import_validation_screen.dart:581:    }
+  lib\screens\management\product_import_validation_screen.dart:582:
+  lib\screens\management\product_import_validation_screen.dart:583:    // 
+-------------------------------------------------------------------------
+  lib\screens\management\product_import_validation_screen.dart:584:    // Estoque negativo.
+  lib\screens\management\product_import_validation_screen.dart:585:    //
+  lib\screens\management\product_import_validation_screen.dart:586:    // Não bloqueamos a importação, 
+mas avisamos.
+  lib\screens\management\product_import_validation_screen.dart:587:    // 
+-------------------------------------------------------------------------
+  lib\screens\management\product_import_validation_screen.dart:588:
+  lib\screens\management\product_import_validation_screen.dart:589:    if (quantity != null &&
+  lib\screens\management\product_import_validation_screen.dart:590:        quantity < 0) {
+> lib\screens\management\product_import_validation_screen.dart:591:      warnings.add(
+  lib\screens\management\product_import_validation_screen.dart:592:        'Quantidade negativa. Confira 
+o estoque informado.',
+  lib\screens\management\product_import_validation_screen.dart:593:      );
+  lib\screens\management\product_import_validation_screen.dart:594:    }
+  lib\screens\management\product_import_validation_screen.dart:595:
+  lib\screens\management\product_import_validation_screen.dart:596:    // 
+-------------------------------------------------------------------------
+  lib\screens\management\product_import_validation_screen.dart:597:    // Quantidade decimal.
+  lib\screens\management\product_import_validation_screen.dart:602:    // Por isso avisamos o usuário em 
+vez de alterar silenciosamente.
+  lib\screens\management\product_import_validation_screen.dart:603:    // 
+-------------------------------------------------------------------------
+  lib\screens\management\product_import_validation_screen.dart:604:
+  lib\screens\management\product_import_validation_screen.dart:605:    if (quantity != null &&
+  lib\screens\management\product_import_validation_screen.dart:606:        quantity >= 0 &&
+  lib\screens\management\product_import_validation_screen.dart:607:        quantity % 1 != 0) {
+> lib\screens\management\product_import_validation_screen.dart:608:      warnings.add(
+  lib\screens\management\product_import_validation_screen.dart:609:        'Quantidade decimal informada 
+($rawQuantity). '
+  lib\screens\management\product_import_validation_screen.dart:610:            'O estoque será convertido 
+para um número inteiro na importação.',
+  lib\screens\management\product_import_validation_screen.dart:611:      );
+  lib\screens\management\product_import_validation_screen.dart:612:    }
+  lib\screens\management\product_import_validation_screen.dart:613:
+  lib\screens\management\product_import_validation_screen.dart:614:    // 
+=========================================================================
+  lib\screens\management\product_import_validation_screen.dart:624:    // Só avisa categoria vazia se o 
+usuário realmente mapeou
+  lib\screens\management\product_import_validation_screen.dart:625:    // uma coluna de categoria.
+  lib\screens\management\product_import_validation_screen.dart:626:
+  lib\screens\management\product_import_validation_screen.dart:627:    if (widget.mapping['category'] !=
+  lib\screens\management\product_import_validation_screen.dart:628:        null &&
+  lib\screens\management\product_import_validation_screen.dart:629:        category.isEmpty) {
+> lib\screens\management\product_import_validation_screen.dart:630:      warnings.add(
+  lib\screens\management\product_import_validation_screen.dart:631:        'Categoria não informada.',
+  lib\screens\management\product_import_validation_screen.dart:632:      );
+  lib\screens\management\product_import_validation_screen.dart:633:    }
+  lib\screens\management\product_import_validation_screen.dart:634:
+  lib\screens\management\product_import_validation_screen.dart:635:    // 
+=========================================================================
+  lib\screens\management\product_import_validation_screen.dart:636:    // 5. CÓDIGO DE BARRAS
+  lib\screens\management\product_import_validation_screen.dart:665:    _parseNumber(
+  lib\screens\management\product_import_validation_screen.dart:666:      rawCostPrice,
+  lib\screens\management\product_import_validation_screen.dart:667:    );
+  lib\screens\management\product_import_validation_screen.dart:668:
+  lib\screens\management\product_import_validation_screen.dart:669:    if (rawCostPrice.isNotEmpty &&
+  lib\screens\management\product_import_validation_screen.dart:670:        costPrice == null) {
+> lib\screens\management\product_import_validation_screen.dart:671:      errors.add(
+  lib\screens\management\product_import_validation_screen.dart:672:        'Preço de custo inválido: 
+"$rawCostPrice".',
+  lib\screens\management\product_import_validation_screen.dart:673:      );
+  lib\screens\management\product_import_validation_screen.dart:674:    }
+  lib\screens\management\product_import_validation_screen.dart:675:
+  lib\screens\management\product_import_validation_screen.dart:676:    if (costPrice != null &&
+  lib\screens\management\product_import_validation_screen.dart:677:        costPrice < 0) {
+> lib\screens\management\product_import_validation_screen.dart:678:      errors.add(
+  lib\screens\management\product_import_validation_screen.dart:679:        'Preço de custo não pode ser 
+negativo.',
+  lib\screens\management\product_import_validation_screen.dart:680:      );
+  lib\screens\management\product_import_validation_screen.dart:681:    }
+  lib\screens\management\product_import_validation_screen.dart:682:
+  lib\screens\management\product_import_validation_screen.dart:683:    // 
+=========================================================================
+  lib\screens\management\product_import_validation_screen.dart:684:    // 7. NCM
+  lib\screens\management\product_import_validation_screen.dart:694:    _onlyDigits(
+  lib\screens\management\product_import_validation_screen.dart:695:      rawNcm,
+  lib\screens\management\product_import_validation_screen.dart:696:    );
+  lib\screens\management\product_import_validation_screen.dart:697:
+  lib\screens\management\product_import_validation_screen.dart:698:    if (rawNcm.isNotEmpty &&
+  lib\screens\management\product_import_validation_screen.dart:699:        ncm.length != 8) {
+> lib\screens\management\product_import_validation_screen.dart:700:      errors.add(
+  lib\screens\management\product_import_validation_screen.dart:701:        'NCM deve possuir 8 dígitos.',
+  lib\screens\management\product_import_validation_screen.dart:702:      );
+  lib\screens\management\product_import_validation_screen.dart:703:    }
+  lib\screens\management\product_import_validation_screen.dart:704:
+  lib\screens\management\product_import_validation_screen.dart:705:    // 
+=========================================================================
+  lib\screens\management\product_import_validation_screen.dart:706:    // 8. STATUS FINAL
+  lib\screens\products\import\product_import_screen.dart:241:      parsedRow.any(
+  lib\screens\products\import\product_import_screen.dart:242:            (value) =>
+  lib\screens\products\import\product_import_screen.dart:243:        value.trim().isNotEmpty,
+  lib\screens\products\import\product_import_screen.dart:244:      );
+  lib\screens\products\import\product_import_screen.dart:245:
+  lib\screens\products\import\product_import_screen.dart:246:      if (hasContent) {
+> lib\screens\products\import\product_import_screen.dart:247:        rows.add(parsedRow);
+  lib\screens\products\import\product_import_screen.dart:248:      }
+  lib\screens\products\import\product_import_screen.dart:249:    }
+  lib\screens\products\import\product_import_screen.dart:250:
+  lib\screens\products\import\product_import_screen.dart:251:    return rows;
+  lib\screens\products\import\product_import_screen.dart:252:  }
+  lib\screens\products\import\product_import_screen.dart:253:
+  lib\screens\products\import\product_import_screen.dart:309:      final cells =
+  lib\screens\products\import\product_import_screen.dart:310:      _splitCsvLine(
+  lib\screens\products\import\product_import_screen.dart:311:        line,
+  lib\screens\products\import\product_import_screen.dart:312:        delimiter,
+  lib\screens\products\import\product_import_screen.dart:313:      );
+  lib\screens\products\import\product_import_screen.dart:314:
+> lib\screens\products\import\product_import_screen.dart:315:      rows.add(cells);
+  lib\screens\products\import\product_import_screen.dart:316:    }
+  lib\screens\products\import\product_import_screen.dart:317:
+  lib\screens\products\import\product_import_screen.dart:318:    return rows;
+  lib\screens\products\import\product_import_screen.dart:319:  }
+  lib\screens\products\import\product_import_screen.dart:320:
+  lib\screens\products\import\product_import_screen.dart:321:  // 
+==========================================================================
+  lib\screens\products\import\product_import_screen.dart:366:
+  lib\screens\products\import\product_import_screen.dart:367:        continue;
+  lib\screens\products\import\product_import_screen.dart:368:      }
+  lib\screens\products\import\product_import_screen.dart:369:
+  lib\screens\products\import\product_import_screen.dart:370:      if (char == delimiter &&
+  lib\screens\products\import\product_import_screen.dart:371:          !insideQuotes) {
+> lib\screens\products\import\product_import_screen.dart:372:        result.add(
+  lib\screens\products\import\product_import_screen.dart:373:          buffer
+  lib\screens\products\import\product_import_screen.dart:374:              .toString()
+  lib\screens\products\import\product_import_screen.dart:375:              .trim(),
+  lib\screens\products\import\product_import_screen.dart:376:        );
+  lib\screens\products\import\product_import_screen.dart:377:
+  lib\screens\products\import\product_import_screen.dart:378:        buffer.clear();
+  lib\screens\products\import\product_import_screen.dart:380:        continue;
+  lib\screens\products\import\product_import_screen.dart:381:      }
+  lib\screens\products\import\product_import_screen.dart:382:
+  lib\screens\products\import\product_import_screen.dart:383:      buffer.write(char);
+  lib\screens\products\import\product_import_screen.dart:384:    }
+  lib\screens\products\import\product_import_screen.dart:385:
+> lib\screens\products\import\product_import_screen.dart:386:    result.add(
+  lib\screens\products\import\product_import_screen.dart:387:      buffer
+  lib\screens\products\import\product_import_screen.dart:388:          .toString()
+  lib\screens\products\import\product_import_screen.dart:389:          .trim(),
+  lib\screens\products\import\product_import_screen.dart:390:    );
+  lib\screens\products\import\product_import_screen.dart:391:
+  lib\screens\products\import\product_import_screen.dart:392:    return result;
+  lib\screens\profile\profile_screen.dart:87:      'phone': _phoneController.text,
+  lib\screens\profile\profile_screen.dart:88:      'lastUpdated': Timestamp.now(),
+  lib\screens\profile\profile_screen.dart:89:    };
+  lib\screens\profile\profile_screen.dart:90:
+  lib\screens\profile\profile_screen.dart:91:    try {
+  lib\screens\profile\profile_screen.dart:92:      // Atualiza o perfil no 'users'
+> lib\screens\profile\profile_screen.dart:93:      await 
+FirebaseFirestore.instance.collection('users').doc(currentUser!.uid).set(profileData, SetOptions(merge: 
+true));
+  lib\screens\profile\profile_screen.dart:94:
+  lib\screens\profile\profile_screen.dart:95:      // 3. Atualiza o Firestore com os dados da loja 
+(incluindo a nova URL se ela existir)
+  lib\screens\profile\profile_screen.dart:96:      Map<String, dynamic> storeUpdate = {
+  lib\screens\profile\profile_screen.dart:97:        'name': _nameController.text,
+  lib\screens\profile\profile_screen.dart:98:        'phone': _phoneController.text,
+  lib\screens\profile\profile_screen.dart:99:      };
+  lib\screens\profile\profile_screen.dart:100:      if (newUrl != null) {
+  lib\screens\profile\profile_screen.dart:101:        storeUpdate['logoUrl'] = newUrl;
+  lib\screens\profile\profile_screen.dart:102:      }
+  lib\screens\profile\profile_screen.dart:103:
+> lib\screens\profile\profile_screen.dart:104:      await 
+FirebaseFirestore.instance.collection('stores').doc(widget.storeId).update(storeUpdate);
+  lib\screens\profile\profile_screen.dart:105:
+  lib\screens\profile\profile_screen.dart:106:      if (mounted) {
+  lib\screens\profile\profile_screen.dart:107:        ScaffoldMessenger.of(context).showSnackBar(const 
+SnackBar(content: Text('Dados salvos com sucesso!'), backgroundColor: Colors.green));
+  lib\screens\profile\profile_screen.dart:108:      }
+  lib\screens\profile\profile_screen.dart:109:    } catch (e) {
+  lib\screens\profile\profile_screen.dart:110:      if (mounted) {
+  lib\screens\reports\expiring_products_screen.dart:36:          final expiringProducts = 
+allProducts.where((doc) {
+  lib\screens\reports\expiring_products_screen.dart:37:            final data = doc.data() as Map<String, 
+dynamic>;
+  lib\screens\reports\expiring_products_screen.dart:38:            final lotes = data['lotes'] as 
+List<dynamic>? ?? [];
+  lib\screens\reports\expiring_products_screen.dart:39:
+  lib\screens\reports\expiring_products_screen.dart:40:            // Define o prazo de alerta (buscando 
+do documento da loja se necessário ou usando 30 dias)
+  lib\screens\reports\expiring_products_screen.dart:41:            // Nota: Para simplicidade, usamos 30 
+dias, igual à lógica do seu Dashboard
+> lib\screens\reports\expiring_products_screen.dart:42:            final limit = DateTime.now().add(const 
+Duration(days: 30));
+  lib\screens\reports\expiring_products_screen.dart:43:
+  lib\screens\reports\expiring_products_screen.dart:44:            return lotes.any((lote) {
+  lib\screens\reports\expiring_products_screen.dart:45:              final validade = (lote['validade'] 
+as Timestamp).toDate();
+  lib\screens\reports\expiring_products_screen.dart:46:              final qtdLote = lote['quantidade'] 
+as int? ?? 0;
+  lib\screens\reports\expiring_products_screen.dart:47:              return validade.isBefore(limit) && 
+qtdLote > 0;
+  lib\screens\reports\expiring_products_screen.dart:48:            });
+  lib\screens\reports\expiring_products_screen.dart:63:              final productDoc = 
+expiringProducts[index];
+  lib\screens\reports\expiring_products_screen.dart:64:              final product = 
+Product.fromMap(productDoc.id, productDoc.data() as Map<String, dynamic>);
+  lib\screens\reports\expiring_products_screen.dart:65:              final data = productDoc.data() as 
+Map<String, dynamic>;
+  lib\screens\reports\expiring_products_screen.dart:66:              final lotes = data['lotes'] as 
+List<dynamic>? ?? [];
+  lib\screens\reports\expiring_products_screen.dart:67:
+  lib\screens\reports\expiring_products_screen.dart:68:              // Encontra o lote mais próximo do 
+vencimento para mostrar na lista
+> lib\screens\reports\expiring_products_screen.dart:69:              final limit = 
+DateTime.now().add(const Duration(days: 30));
+  lib\screens\reports\expiring_products_screen.dart:70:              final lotesVencendo = 
+lotes.where((l) =>
+  lib\screens\reports\expiring_products_screen.dart:71:              (l['validade'] as 
+Timestamp).toDate().isBefore(limit) && (l['quantidade'] as int) > 0
+  lib\screens\reports\expiring_products_screen.dart:72:              ).toList();
+  lib\screens\reports\expiring_products_screen.dart:73:              lotesVencendo.sort((a, b) => 
+(a['validade'] as Timestamp).compareTo(b['validade'] as Timestamp));
+  lib\screens\reports\expiring_products_screen.dart:74:              final proximoLote = 
+lotesVencendo.first;
+  lib\screens\reports\expiring_products_screen.dart:75:              final DateTime dataValidade = 
+(proximoLote['validade'] as Timestamp).toDate();
+  lib\screens\reports\sales_by_period_screen.dart:62:          .get();
+  lib\screens\reports\sales_by_period_screen.dart:63:
+  lib\screens\reports\sales_by_period_screen.dart:64:      final List<SaleOrder> loadedSales = [];
+  lib\screens\reports\sales_by_period_screen.dart:65:      double total = 0;
+  lib\screens\reports\sales_by_period_screen.dart:66:      for (var doc in querySnapshot.docs) {
+  lib\screens\reports\sales_by_period_screen.dart:67:        final sale = SaleOrder.fromFirestore(doc);
+> lib\screens\reports\sales_by_period_screen.dart:68:        loadedSales.add(sale);
+  lib\screens\reports\sales_by_period_screen.dart:69:        total += sale.totalAmount;
+  lib\screens\reports\sales_by_period_screen.dart:70:      }
+  lib\screens\reports\sales_by_period_screen.dart:71:
+  lib\screens\reports\sales_by_period_screen.dart:72:      setState(() {
+  lib\screens\reports\sales_by_period_screen.dart:73:        _sales = loadedSales;
+  lib\screens\reports\sales_by_period_screen.dart:74:        _totalAmount = total;
+  lib\screens\sales\new_sale_screen.dart:552:                                      );
+  lib\screens\sales\new_sale_screen.dart:553:                                      await 
+ref.putFile(File(pickedImage.path));
+  lib\screens\sales\new_sale_screen.dart:554:                                      final newUrl = await 
+ref.getDownloadURL();
+  lib\screens\sales\new_sale_screen.dart:555:                                      await 
+FirebaseFirestore.instance
+  lib\screens\sales\new_sale_screen.dart:556:                                          
+.collection('stores')
+  lib\screens\sales\new_sale_screen.dart:557:                                          
+.doc(widget.storeId)
+> lib\screens\sales\new_sale_screen.dart:558:                                          
+.update({'logoUrl': newUrl});
+  lib\screens\sales\new_sale_screen.dart:559:                                      ScaffoldMessenger.of(
+  lib\screens\sales\new_sale_screen.dart:560:                                        context,
+  lib\screens\sales\new_sale_screen.dart:561:                                      ).showSnackBar(
+  lib\screens\sales\new_sale_screen.dart:562:                                        const SnackBar(
+  lib\screens\sales\new_sale_screen.dart:563:                                          content: 
+Text("Logo atualizada!"),
+  lib\screens\sales\new_sale_screen.dart:564:                                        ),
+  lib\services\business_insights_service.dart:47:
+  lib\services\business_insights_service.dart:48:  final FirebaseFirestore _firestore;
+  lib\services\business_insights_service.dart:49:
+  lib\services\business_insights_service.dart:50:  Future<BusinessHomeSnapshot> load({required String 
+storeId}) async {
+  lib\services\business_insights_service.dart:51:    final now = DateTime.now();
+  lib\services\business_insights_service.dart:52:    final todayStart = DateTime(now.year, now.month, 
+now.day);
+> lib\services\business_insights_service.dart:53:    final tomorrowStart = todayStart.add(const 
+Duration(days: 1));
+  lib\services\business_insights_service.dart:54:    final historyStart = todayStart.subtract(const 
+Duration(days: 35));
+  lib\services\business_insights_service.dart:55:    final last30DaysStart = todayStart.subtract(const 
+Duration(days: 30));
+  lib\services\business_insights_service.dart:56:    final last7DaysStart = todayStart.subtract(const 
+Duration(days: 7));
+  lib\services\business_insights_service.dart:57:
+  lib\services\business_insights_service.dart:58:    final storeRef = 
+_firestore.collection('stores').doc(storeId);
+  lib\services\business_insights_service.dart:59:
+  lib\services\business_insights_service.dart:129:      }
+  lib\services\business_insights_service.dart:130:    }
+  lib\services\business_insights_service.dart:131:
+  lib\services\business_insights_service.dart:132:    final lowStockProducts = 
+<QueryDocumentSnapshot<Map<String, dynamic>>>[];
+  lib\services\business_insights_service.dart:133:    int expiredProductsCount = 0;
+  lib\services\business_insights_service.dart:134:    int expiringProductsCount = 0;
+> lib\services\business_insights_service.dart:135:    final expiryLimit = now.add(Duration(days: 
+expiryThresholdDays));
+  lib\services\business_insights_service.dart:136:
+  lib\services\business_insights_service.dart:137:    for (final productDoc in products.docs) {
+  lib\services\business_insights_service.dart:138:      final data = productDoc.data();
+  lib\services\business_insights_service.dart:139:      final quantity = (data['quantidade'] as num? ?? 
+0).toInt();
+  lib\services\business_insights_service.dart:140:      final productMinimum = (data['minimumStock'] as 
+num?)?.toInt();
+  lib\services\business_insights_service.dart:141:      final threshold = productMinimum ?? 
+fallbackLowStockThreshold;
+  lib\services\business_insights_service.dart:142:
+  lib\services\business_insights_service.dart:143:      if (quantity <= threshold) {
+> lib\services\business_insights_service.dart:144:        lowStockProducts.add(productDoc);
+  lib\services\business_insights_service.dart:145:      }
+  lib\services\business_insights_service.dart:146:
+  lib\services\business_insights_service.dart:147:      final lots = data['lotes'];
+  lib\services\business_insights_service.dart:148:      if (lots is List) {
+  lib\services\business_insights_service.dart:149:        bool hasExpiredLot = false;
+  lib\services\business_insights_service.dart:150:        bool hasExpiringLot = false;
+  lib\services\business_insights_service.dart:196:      for (final rawProduct in rawProducts) {
+  lib\services\business_insights_service.dart:197:        if (rawProduct is! Map) continue;
+  lib\services\business_insights_service.dart:198:        final productId = 
+rawProduct['productId']?.toString() ?? '';
+  lib\services\business_insights_service.dart:199:        if (productId.isEmpty) continue;
+  lib\services\business_insights_service.dart:200:
+  lib\services\business_insights_service.dart:201:        if (!createdAt.isBefore(last30DaysStart)) {
+> lib\services\business_insights_service.dart:202:          soldLast30Days.add(productId);
+  lib\services\business_insights_service.dart:203:        }
+  lib\services\business_insights_service.dart:204:        if (!createdAt.isBefore(last7DaysStart)) {
+  lib\services\business_insights_service.dart:205:          final quantity = (rawProduct['quantity'] as 
+num? ?? 0).toInt();
+> lib\services\business_insights_service.dart:206:          soldLast7Days.update(
+  lib\services\business_insights_service.dart:207:            productId,
+  lib\services\business_insights_service.dart:208:            (current) => current + quantity,
+  lib\services\business_insights_service.dart:209:            ifAbsent: () => quantity,
+  lib\services\business_insights_service.dart:210:          );
+  lib\services\business_insights_service.dart:211:        }
+  lib\services\business_insights_service.dart:212:      }
+  lib\services\business_insights_service.dart:243:    required int occurrences,
+  lib\services\business_insights_service.dart:244:  }) {
+  lib\services\business_insights_service.dart:245:    final totals = <double>[];
+  lib\services\business_insights_service.dart:246:
+  lib\services\business_insights_service.dart:247:    for (var i = 1; i <= occurrences; i++) {
+  lib\services\business_insights_service.dart:248:      final targetStart = 
+todayStart.subtract(Duration(days: 7 * i));
+> lib\services\business_insights_service.dart:249:      final targetEnd = targetStart.add(const 
+Duration(days: 1));
+  lib\services\business_insights_service.dart:250:      double total = 0;
+  lib\services\business_insights_service.dart:251:      bool foundDayData = false;
+  lib\services\business_insights_service.dart:252:
+  lib\services\business_insights_service.dart:253:      for (final doc in sales) {
+  lib\services\business_insights_service.dart:254:        final data = doc.data();
+  lib\services\business_insights_service.dart:255:        final createdAt = _readDate(data['createdAt']);
+  lib\services\business_insights_service.dart:257:        if (!createdAt.isBefore(targetStart) && 
+createdAt.isBefore(targetEnd)) {
+  lib\services\business_insights_service.dart:258:          total += (data['totalAmount'] as num? ?? 
+0).toDouble();
+  lib\services\business_insights_service.dart:259:          foundDayData = true;
+  lib\services\business_insights_service.dart:260:        }
+  lib\services\business_insights_service.dart:261:      }
+  lib\services\business_insights_service.dart:262:
+> lib\services\business_insights_service.dart:263:      if (foundDayData) totals.add(total);
+  lib\services\business_insights_service.dart:264:    }
+  lib\services\business_insights_service.dart:265:
+  lib\services\business_insights_service.dart:266:    return totals;
+  lib\services\business_insights_service.dart:267:  }
+  lib\services\business_insights_service.dart:268:
+  lib\services\business_insights_service.dart:269:  List<BusinessInsight> _buildInsights({
+  lib\services\business_insights_service.dart:278:    required _RadarPreferences radarPreferences,
+  lib\services\business_insights_service.dart:279:  }) {
+  lib\services\business_insights_service.dart:280:    final insights = <BusinessInsight>[];
+  lib\services\business_insights_service.dart:281:
+  lib\services\business_insights_service.dart:282:    if (radarPreferences.salesPerformance && 
+comparisonPercent != null) {
+  lib\services\business_insights_service.dart:283:      if (comparisonPercent <= -15) {
+> lib\services\business_insights_service.dart:284:        insights.add(
+  lib\services\business_insights_service.dart:285:          BusinessInsight(
+  lib\services\business_insights_service.dart:286:            level: BusinessInsightLevel.attention,
+  lib\services\business_insights_service.dart:287:            title: 'Vendas abaixo do ritmo habitual',
+  lib\services\business_insights_service.dart:288:            message:
+  lib\services\business_insights_service.dart:289:                'O faturamento de hoje está 
+${comparisonPercent.abs().toStringAsFixed(0)}% abaixo da média das últimas semanas para este mesmo dia.',
+  lib\services\business_insights_service.dart:290:            icon: Icons.trending_down,
+  lib\services\business_insights_service.dart:291:            actionLabel: 'Ver vendas',
+  lib\services\business_insights_service.dart:292:            action: 
+BusinessInsightAction.openSalesHistory,
+  lib\services\business_insights_service.dart:293:          ),
+  lib\services\business_insights_service.dart:294:        );
+  lib\services\business_insights_service.dart:295:      } else if (comparisonPercent >= 15) {
+> lib\services\business_insights_service.dart:296:        insights.add(
+  lib\services\business_insights_service.dart:297:          BusinessInsight(
+  lib\services\business_insights_service.dart:298:            level: BusinessInsightLevel.positive,
+  lib\services\business_insights_service.dart:299:            title: 'Hoje está acima da média',
+  lib\services\business_insights_service.dart:300:            message:
+  lib\services\business_insights_service.dart:301:                'Seu faturamento está 
+${comparisonPercent.toStringAsFixed(0)}% acima da média das últimas semanas para este mesmo dia.',
+  lib\services\business_insights_service.dart:302:            icon: Icons.trending_up,
+  lib\services\business_insights_service.dart:322:        );
+  lib\services\business_insights_service.dart:323:        hotProductName = 
+productDoc.data()['name']?.toString();
+  lib\services\business_insights_service.dart:324:        hotProductSales = entry.value;
+  lib\services\business_insights_service.dart:325:      }
+  lib\services\business_insights_service.dart:326:
+  lib\services\business_insights_service.dart:327:      if (hotProductName != null && hotProductSales > 
+0) {
+> lib\services\business_insights_service.dart:328:        insights.add(
+  lib\services\business_insights_service.dart:329:          BusinessInsight(
+  lib\services\business_insights_service.dart:330:            level: BusinessInsightLevel.critical,
+  lib\services\business_insights_service.dart:331:            title: 'Produto de alta saída perto de 
+acabar',
+  lib\services\business_insights_service.dart:332:            message:
+  lib\services\business_insights_service.dart:333:                '$hotProductName vendeu 
+$hotProductSales unidade(s) nos últimos 7 dias e já está no nível de estoque baixo.',
+  lib\services\business_insights_service.dart:334:            icon: Icons.local_fire_department_outlined,
+  lib\services\business_insights_service.dart:335:            actionLabel: 'Ver estoque',
+  lib\services\business_insights_service.dart:336:            action: BusinessInsightAction.openLowStock,
+  lib\services\business_insights_service.dart:337:          ),
+  lib\services\business_insights_service.dart:338:        );
+  lib\services\business_insights_service.dart:339:      } else if (lowStockProducts.isNotEmpty) {
+> lib\services\business_insights_service.dart:340:        insights.add(
+  lib\services\business_insights_service.dart:341:          BusinessInsight(
+  lib\services\business_insights_service.dart:342:            level: BusinessInsightLevel.critical,
+  lib\services\business_insights_service.dart:343:            title: 'Estoque precisa de atenção',
+  lib\services\business_insights_service.dart:344:            message:
+  lib\services\business_insights_service.dart:345:                '${lowStockProducts.length} produto(s) 
+atingiram o nível de estoque baixo definido pela loja.',
+  lib\services\business_insights_service.dart:346:            icon: Icons.inventory_2_outlined,
+  lib\services\business_insights_service.dart:349:          ),
+  lib\services\business_insights_service.dart:350:        );
+  lib\services\business_insights_service.dart:351:      }
+  lib\services\business_insights_service.dart:352:    }
+  lib\services\business_insights_service.dart:353:
+  lib\services\business_insights_service.dart:354:    if (radarPreferences.expiry && expiredProductsCount 
+> 0) {
+> lib\services\business_insights_service.dart:355:      insights.add(
+  lib\services\business_insights_service.dart:356:        BusinessInsight(
+  lib\services\business_insights_service.dart:357:          level: BusinessInsightLevel.critical,
+  lib\services\business_insights_service.dart:358:          title: 'Produtos vencidos em estoque',
+  lib\services\business_insights_service.dart:359:          message:
+  lib\services\business_insights_service.dart:360:              '$expiredProductsCount produto(s) possuem 
+lote vencido ainda com quantidade em estoque.',
+  lib\services\business_insights_service.dart:361:          icon: Icons.warning_amber_rounded,
+  lib\services\business_insights_service.dart:362:        ),
+  lib\services\business_insights_service.dart:363:      );
+  lib\services\business_insights_service.dart:364:    }
+  lib\services\business_insights_service.dart:365:
+  lib\services\business_insights_service.dart:366:    if (radarPreferences.expiry && 
+expiringProductsCount > 0) {
+> lib\services\business_insights_service.dart:367:      insights.add(
+  lib\services\business_insights_service.dart:368:        BusinessInsight(
+  lib\services\business_insights_service.dart:369:          level: BusinessInsightLevel.attention,
+  lib\services\business_insights_service.dart:370:          title: 'Produtos próximos do vencimento',
+  lib\services\business_insights_service.dart:371:          message:
+  lib\services\business_insights_service.dart:372:              '$expiringProductsCount produto(s) 
+possuem lote com validade dentro do período de alerta configurado.',
+  lib\services\business_insights_service.dart:373:          icon: Icons.event_busy_outlined,
+  lib\services\business_insights_service.dart:375:      );
+  lib\services\business_insights_service.dart:376:    }
+  lib\services\business_insights_service.dart:377:
+  lib\services\business_insights_service.dart:378:    if (radarPreferences.receivables && totalReceivable 
+> 0) {
+  lib\services\business_insights_service.dart:379:      final currency = NumberFormat.currency(locale: 
+'pt_BR', symbol: 'R\$');
+  lib\services\business_insights_service.dart:380:
+> lib\services\business_insights_service.dart:381:      insights.add(
+  lib\services\business_insights_service.dart:382:        BusinessInsight(
+  lib\services\business_insights_service.dart:383:          level: BusinessInsightLevel.attention,
+  lib\services\business_insights_service.dart:384:          title: 'Valores a receber',
+  lib\services\business_insights_service.dart:385:          message:
+  lib\services\business_insights_service.dart:386:              'Você tem 
+${currency.format(totalReceivable)} em vendas a prazo ainda em aberto. Acompanhe esses recebimentos para 
+proteger o caixa.',
+  lib\services\business_insights_service.dart:387:          icon: Icons.account_balance_wallet_outlined,
+  lib\services\business_insights_service.dart:410:      final hasNoSalesInLast30Days = 
+!soldLast30Days.contains(doc.id);
+  lib\services\business_insights_service.dart:411:
+  lib\services\business_insights_service.dart:412:      return isOldEnough && hasNoSalesInLast30Days;
+  lib\services\business_insights_service.dart:413:    }).toList();
+  lib\services\business_insights_service.dart:414:
+  lib\services\business_insights_service.dart:415:    if (radarPreferences.slowMoving && 
+stagnantProducts.isNotEmpty) {
+> lib\services\business_insights_service.dart:416:      insights.add(
+  lib\services\business_insights_service.dart:417:        BusinessInsight(
+  lib\services\business_insights_service.dart:418:          level: BusinessInsightLevel.opportunity,
+  lib\services\business_insights_service.dart:419:          title: 'Produtos com pouca saída',
+  lib\services\business_insights_service.dart:420:          message:
+  lib\services\business_insights_service.dart:421:              '${stagnantProducts.length} produto(s) 
+estão em estoque há pelo menos 30 dias e não registraram vendas nesse período.',
+  lib\services\business_insights_service.dart:422:          icon: Icons.lightbulb_outline,
+  lib\services\business_insights_service.dart:423:        ),
+  lib\services\business_insights_service.dart:424:      );
+  lib\services\business_insights_service.dart:425:    }
+  lib\services\business_insights_service.dart:426:
+  lib\services\business_insights_service.dart:427:    if (insights.isEmpty) {
+  lib\services\business_insights_service.dart:428:      if (radarPreferences.hasAnyEnabledCategory) {
+> lib\services\business_insights_service.dart:429:        insights.add(
+  lib\services\business_insights_service.dart:430:          const BusinessInsight(
+  lib\services\business_insights_service.dart:431:            level: BusinessInsightLevel.positive,
+  lib\services\business_insights_service.dart:432:            title: 'Nenhum alerta importante agora',
+  lib\services\business_insights_service.dart:433:            message:
+  lib\services\business_insights_service.dart:434:                'Os indicadores que você escolheu 
+acompanhar não mostram nenhuma situação urgente neste momento.',
+  lib\services\business_insights_service.dart:435:            icon: Icons.check_circle_outline,
+  lib\services\business_insights_service.dart:436:          ),
+  lib\services\business_insights_service.dart:437:        );
+  lib\services\business_insights_service.dart:438:      } else {
+> lib\services\business_insights_service.dart:439:        insights.add(
+  lib\services\business_insights_service.dart:440:          const BusinessInsight(
+  lib\services\business_insights_service.dart:441:            level: BusinessInsightLevel.neutral,
+  lib\services\business_insights_service.dart:442:            title: 'Radar sem categorias ativas',
+  lib\services\business_insights_service.dart:443:            message:
+  lib\services\business_insights_service.dart:444:                'Abra as preferências do Radar e 
+escolha quais informações deseja acompanhar.',
+  lib\services\business_insights_service.dart:445:            icon: Icons.tune_outlined,
+  lib\services\pdf_receipt_service.dart:512:
+  lib\services\pdf_receipt_service.dart:513:          final name =
+  lib\services\pdf_receipt_service.dart:514:          map['name']?.toString();
+  lib\services\pdf_receipt_service.dart:515:
+  lib\services\pdf_receipt_service.dart:516:          if (name != null &&
+  lib\services\pdf_receipt_service.dart:517:              name.trim().isNotEmpty) {
+> lib\services\pdf_receipt_service.dart:518:            names.add(name.trim());
+  lib\services\pdf_receipt_service.dart:519:          }
+  lib\services\pdf_receipt_service.dart:520:        }
+  lib\services\pdf_receipt_service.dart:521:      }
+  lib\services\pdf_receipt_service.dart:522:
+  lib\services\pdf_receipt_service.dart:523:      if (names.isEmpty) {
+  lib\services\pdf_receipt_service.dart:524:        return 'Venda a prazo';
+  lib\services\product_import_service.dart:182:                  ?.toString()
+  lib\services\product_import_service.dart:183:                  .trim()
+  lib\services\product_import_service.dart:184:                  .toLowerCase() ??
+  lib\services\product_import_service.dart:185:              '';
+  lib\services\product_import_service.dart:186:
+  lib\services\product_import_service.dart:187:      if (name.isNotEmpty) {
+> lib\services\product_import_service.dart:188:        existingNames.add(
+  lib\services\product_import_service.dart:189:          name,
+  lib\services\product_import_service.dart:190:        );
+  lib\services\product_import_service.dart:191:      }
+  lib\services\product_import_service.dart:192:
+  lib\services\product_import_service.dart:193:      final barcode =
+  lib\services\product_import_service.dart:194:          data['barcode']
+  lib\services\product_import_service.dart:195:              ?.toString()
+  lib\services\product_import_service.dart:196:              .trim() ??
+  lib\services\product_import_service.dart:197:              '';
+  lib\services\product_import_service.dart:198:
+  lib\services\product_import_service.dart:199:      if (barcode.isNotEmpty) {
+> lib\services\product_import_service.dart:200:        existingBarcodes.add(
+  lib\services\product_import_service.dart:201:          barcode,
+  lib\services\product_import_service.dart:202:        );
+  lib\services\product_import_service.dart:203:      }
+  lib\services\product_import_service.dart:204:    }
+  lib\services\product_import_service.dart:205:
+  lib\services\product_import_service.dart:206:    // 
+========================================================================
+  lib\services\product_import_service.dart:291:            )) {
+  lib\services\product_import_service.dart:292:          duplicate = true;
+  lib\services\product_import_service.dart:293:        }
+  lib\services\product_import_service.dart:294:      }
+  lib\services\product_import_service.dart:295:
+  lib\services\product_import_service.dart:296:      if (duplicate) {
+> lib\services\product_import_service.dart:297:        duplicateProducts.add(
+  lib\services\product_import_service.dart:298:          product,
+  lib\services\product_import_service.dart:299:        );
+  lib\services\product_import_service.dart:300:
+  lib\services\product_import_service.dart:301:        continue;
+  lib\services\product_import_service.dart:302:      }
+  lib\services\product_import_service.dart:303:
+> lib\services\product_import_service.dart:304:      newProducts.add(
+  lib\services\product_import_service.dart:305:        product,
+  lib\services\product_import_service.dart:306:      );
+  lib\services\product_import_service.dart:307:
+> lib\services\product_import_service.dart:308:      namesSeenInFile.add(
+  lib\services\product_import_service.dart:309:        normalizedName,
+  lib\services\product_import_service.dart:310:      );
+  lib\services\product_import_service.dart:311:
+  lib\services\product_import_service.dart:312:      if (barcode.isNotEmpty) {
+> lib\services\product_import_service.dart:313:        barcodesSeenInFile.add(
+  lib\services\product_import_service.dart:314:          barcode,
+  lib\services\product_import_service.dart:315:        );
+  lib\services\product_import_service.dart:316:      }
+  lib\services\product_import_service.dart:317:    }
+  lib\services\product_import_service.dart:318:
+  lib\services\product_import_service.dart:319:    // 
+========================================================================
+  lib\services\product_import_service.dart:473:          .firstWhere(
+  lib\services\product_import_service.dart:474:            (name) =>
+  lib\services\product_import_service.dart:475:        _normalize(name) ==
+  lib\services\product_import_service.dart:476:            entry.key,
+  lib\services\product_import_service.dart:477:      );
+  lib\services\product_import_service.dart:478:
+> lib\services\product_import_service.dart:479:      operations.add(
+  lib\services\product_import_service.dart:480:            (batch) {
+> lib\services\product_import_service.dart:481:          batch.set(
+  lib\services\product_import_service.dart:482:            entry.value,
+  lib\services\product_import_service.dart:483:            {
+  lib\services\product_import_service.dart:484:              'name':
+  lib\services\product_import_service.dart:485:              categoryName,
+  lib\services\product_import_service.dart:486:
+  lib\services\product_import_service.dart:487:              'imageUrl':
+  lib\services\product_import_service.dart:499:    // 
+------------------------------------------------------------------------
+  lib\services\product_import_service.dart:500:    // PRODUTOS
+  lib\services\product_import_service.dart:501:    // 
+------------------------------------------------------------------------
+  lib\services\product_import_service.dart:502:
+  lib\services\product_import_service.dart:503:    for (final product
+  lib\services\product_import_service.dart:504:    in analysis.newProducts) {
+> lib\services\product_import_service.dart:505:      operations.add(
+  lib\services\product_import_service.dart:506:            (batch) {
+  lib\services\product_import_service.dart:507:          final productRef =
+  lib\services\product_import_service.dart:508:          productsRef.doc();
+  lib\services\product_import_service.dart:509:
+  lib\services\product_import_service.dart:510:          final categoryName =
+  lib\services\product_import_service.dart:511:          product.category
+  lib\services\product_import_service.dart:610:              'updatedAt':
+  lib\services\product_import_service.dart:611:              FieldValue
+  lib\services\product_import_service.dart:612:                  .serverTimestamp(),
+  lib\services\product_import_service.dart:613:            };
+  lib\services\product_import_service.dart:614:          }
+  lib\services\product_import_service.dart:615:
+> lib\services\product_import_service.dart:616:          batch.set(
+  lib\services\product_import_service.dart:617:            productRef,
+  lib\services\product_import_service.dart:618:            productData,
+  lib\services\product_import_service.dart:619:          );
+  lib\services\product_import_service.dart:620:        },
+  lib\services\product_import_service.dart:621:      );
+  lib\services\product_import_service.dart:622:    }
+  lib\services\home\radar_preferences_screen.dart:49:  Future<void> _setPreference(
+  lib\services\home\radar_preferences_screen.dart:50:    BuildContext context,
+  lib\services\home\radar_preferences_screen.dart:51:    String key,
+  lib\services\home\radar_preferences_screen.dart:52:    bool value,
+  lib\services\home\radar_preferences_screen.dart:53:  ) async {
+  lib\services\home\radar_preferences_screen.dart:54:    try {
+> lib\services\home\radar_preferences_screen.dart:55:      await 
+_storeRef().update({'radarPreferences.$key': value});
+  lib\services\home\radar_preferences_screen.dart:56:    } catch (e) {
+  lib\services\home\radar_preferences_screen.dart:57:      if (!context.mounted) return;
+  lib\services\home\radar_preferences_screen.dart:58:
+  lib\services\home\radar_preferences_screen.dart:59:      ScaffoldMessenger.of(context).showSnackBar(
+  lib\services\home\radar_preferences_screen.dart:60:        SnackBar(
+  lib\services\home\radar_preferences_screen.dart:61:          content: Text('Não foi possível salvar a 
+preferência: $e'),
+  lib\services\home\radar_preferences_screen.dart:64:      );
+  lib\services\home\radar_preferences_screen.dart:65:    }
+  lib\services\home\radar_preferences_screen.dart:66:  }
+  lib\services\home\radar_preferences_screen.dart:67:
+  lib\services\home\radar_preferences_screen.dart:68:  Future<void> _restoreDefaults(BuildContext 
+context) async {
+  lib\services\home\radar_preferences_screen.dart:69:    try {
+> lib\services\home\radar_preferences_screen.dart:70:      await _storeRef().update({
+  lib\services\home\radar_preferences_screen.dart:71:        'radarPreferences.salesPerformance': true,
+  lib\services\home\radar_preferences_screen.dart:72:        'radarPreferences.lowStock': true,
+  lib\services\home\radar_preferences_screen.dart:73:        'radarPreferences.expiry': true,
+  lib\services\home\radar_preferences_screen.dart:74:        'radarPreferences.receivables': true,
+  lib\services\home\radar_preferences_screen.dart:75:        'radarPreferences.slowMoving': true,
+  lib\services\home\radar_preferences_screen.dart:76:      });
+  lib\widgets\app_drawer.dart:212:                              await FirebaseFirestore
+  lib\widgets\app_drawer.dart:213:                                  .instance
+  lib\widgets\app_drawer.dart:214:                                  .collection(
+  lib\widgets\app_drawer.dart:215:                                'stores',
+  lib\widgets\app_drawer.dart:216:                              )
+  lib\widgets\app_drawer.dart:217:                                  .doc(storeId)
+> lib\widgets\app_drawer.dart:218:                                  .update({
+  lib\widgets\app_drawer.dart:219:                                'logoUrl':
+  lib\widgets\app_drawer.dart:220:                                newUrl,
+  lib\widgets\app_drawer.dart:221:                              });
+  lib\widgets\app_drawer.dart:222:
+  lib\widgets\app_drawer.dart:223:                              if (!context
+  lib\widgets\app_drawer.dart:224:                                  .mounted) {
+  lib\widgets\confirm_fiado_dialog.dart:130:      } else {
+  lib\widgets\confirm_fiado_dialog.dart:131:        amount = baseAmount;
+  lib\widgets\confirm_fiado_dialog.dart:132:      }
+  lib\widgets\confirm_fiado_dialog.dart:133:
+  lib\widgets\confirm_fiado_dialog.dart:134:      final dueDate = _addMonths(_selectedDate!, i);
+  lib\widgets\confirm_fiado_dialog.dart:135:
+> lib\widgets\confirm_fiado_dialog.dart:136:      installments.add({
+  lib\widgets\confirm_fiado_dialog.dart:137:        'number': i + 1,
+  lib\widgets\confirm_fiado_dialog.dart:138:        'amount': amount,
+  lib\widgets\confirm_fiado_dialog.dart:139:        'dueDate': dueDate,
+  lib\widgets\confirm_fiado_dialog.dart:140:      });
+  lib\widgets\confirm_fiado_dialog.dart:141:
+  lib\widgets\confirm_fiado_dialog.dart:142:      accumulatedAmount += amount;
+  lib\widgets\confirm_fiado_dialog.dart:222:      final saleDocRef = firestore
+  lib\widgets\confirm_fiado_dialog.dart:223:          .collection('stores')
+  lib\widgets\confirm_fiado_dialog.dart:224:          .doc(widget.storeId)
+  lib\widgets\confirm_fiado_dialog.dart:225:          .collection('sales')
+  lib\widgets\confirm_fiado_dialog.dart:226:          .doc();
+  lib\widgets\confirm_fiado_dialog.dart:227:
+> lib\widgets\confirm_fiado_dialog.dart:228:      batch.set(saleDocRef, {
+  lib\widgets\confirm_fiado_dialog.dart:229:        'totalAmount': cart.totalAmount,
+  lib\widgets\confirm_fiado_dialog.dart:230:        'products': cart.items.values
+  lib\widgets\confirm_fiado_dialog.dart:231:            .map((item) => item.toMap())
+  lib\widgets\confirm_fiado_dialog.dart:232:            .toList(),
+  lib\widgets\confirm_fiado_dialog.dart:233:        'createdAt': Timestamp.now(),
+  lib\widgets\confirm_fiado_dialog.dart:234:        'storeId': widget.storeId,
+  lib\widgets\confirm_fiado_dialog.dart:269:        final productRef = firestore
+  lib\widgets\confirm_fiado_dialog.dart:270:            .collection('stores')
+  lib\widgets\confirm_fiado_dialog.dart:271:            .doc(widget.storeId)
+  lib\widgets\confirm_fiado_dialog.dart:272:            .collection('products')
+  lib\widgets\confirm_fiado_dialog.dart:273:            .doc(cartItem.productId);
+  lib\widgets\confirm_fiado_dialog.dart:274:
+> lib\widgets\confirm_fiado_dialog.dart:275:        batch.update(
+  lib\widgets\confirm_fiado_dialog.dart:276:          productRef,
+  lib\widgets\confirm_fiado_dialog.dart:277:          {
+  lib\widgets\confirm_fiado_dialog.dart:278:            'quantidade': 
+FieldValue.increment(-cartItem.quantity),
+  lib\widgets\confirm_fiado_dialog.dart:279:          },
+  lib\widgets\confirm_fiado_dialog.dart:280:        );
+  lib\widgets\confirm_fiado_dialog.dart:281:      }
+  lib\widgets\payment_options_sheet.dart:346:            final int qtdAtual = data['quantidade'] ?? 0;
+  lib\widgets\payment_options_sheet.dart:347:
+  lib\widgets\payment_options_sheet.dart:348:            if (qtdAtual < cartItem.quantity) {
+  lib\widgets\payment_options_sheet.dart:349:              throw Exception('Estoque insuficiente para 
+${cartItem.name}');
+  lib\widgets\payment_options_sheet.dart:350:            }
+  lib\widgets\payment_options_sheet.dart:351:
+> lib\widgets\payment_options_sheet.dart:352:            transaction.update(productRef, {
+  lib\widgets\payment_options_sheet.dart:353:              'quantidade': 
+FieldValue.increment(-cartItem.quantity),
+  lib\widgets\payment_options_sheet.dart:354:            });
+  lib\widgets\payment_options_sheet.dart:355:          } else {
+  lib\widgets\payment_options_sheet.dart:356:            // Produto COM lotes: baixa FIFO.
+  lib\widgets\payment_options_sheet.dart:357:            final List<dynamic> lotesBrutos = 
+List.from(data['lotes'] ?? []);
+  lib\widgets\payment_options_sheet.dart:358:
+  lib\widgets\payment_options_sheet.dart:370:            final List<Map<String, dynamic>> 
+lotesAtualizados = [];
+  lib\widgets\payment_options_sheet.dart:371:
+  lib\widgets\payment_options_sheet.dart:372:            for (final lote in lotesAtivos) {
+  lib\widgets\payment_options_sheet.dart:373:              final loteMap = Map<String, dynamic>.from(lote 
+as Map);
+  lib\widgets\payment_options_sheet.dart:374:
+  lib\widgets\payment_options_sheet.dart:375:              if (qtdParaBaixar <= 0) {
+> lib\widgets\payment_options_sheet.dart:376:                lotesAtualizados.add(loteMap);
+  lib\widgets\payment_options_sheet.dart:377:                continue;
+  lib\widgets\payment_options_sheet.dart:378:              }
+  lib\widgets\payment_options_sheet.dart:379:
+  lib\widgets\payment_options_sheet.dart:380:              final int qtdNoLote = loteMap['quantidade'] as 
+int;
+  lib\widgets\payment_options_sheet.dart:381:
+  lib\widgets\payment_options_sheet.dart:382:              if (qtdNoLote <= qtdParaBaixar) {
+  lib\widgets\payment_options_sheet.dart:383:                qtdParaBaixar -= qtdNoLote;
+  lib\widgets\payment_options_sheet.dart:384:              } else {
+  lib\widgets\payment_options_sheet.dart:385:                loteMap['quantidade'] = qtdNoLote - 
+qtdParaBaixar;
+> lib\widgets\payment_options_sheet.dart:386:                lotesAtualizados.add(loteMap);
+  lib\widgets\payment_options_sheet.dart:387:                qtdParaBaixar = 0;
+  lib\widgets\payment_options_sheet.dart:388:              }
+  lib\widgets\payment_options_sheet.dart:389:            }
+  lib\widgets\payment_options_sheet.dart:390:
+  lib\widgets\payment_options_sheet.dart:391:            if (qtdParaBaixar > 0) {
+  lib\widgets\payment_options_sheet.dart:392:              throw Exception(
+  lib\widgets\payment_options_sheet.dart:396:
+  lib\widgets\payment_options_sheet.dart:397:            final int novoTotalEstoque = 
+lotesAtualizados.fold(
+  lib\widgets\payment_options_sheet.dart:398:              0,
+  lib\widgets\payment_options_sheet.dart:399:              (total, item) => total + (item['quantidade'] 
+as int),
+  lib\widgets\payment_options_sheet.dart:400:            );
+  lib\widgets\payment_options_sheet.dart:401:
+> lib\widgets\payment_options_sheet.dart:402:            transaction.update(productRef, {
+  lib\widgets\payment_options_sheet.dart:403:              'quantidade': novoTotalEstoque,
+  lib\widgets\payment_options_sheet.dart:404:              'lotes': lotesAtualizados,
+  lib\widgets\payment_options_sheet.dart:405:            });
+  lib\widgets\payment_options_sheet.dart:406:          }
+  lib\widgets\payment_options_sheet.dart:407:        }
+  lib\widgets\payment_options_sheet.dart:408:
+  lib\widgets\payment_options_sheet.dart:409:        // 
+=================================================================
+  lib\widgets\payment_options_sheet.dart:410:        // FASE 3: REGISTRAR A VENDA
+  lib\widgets\payment_options_sheet.dart:411:        // 
+=================================================================
+> lib\widgets\payment_options_sheet.dart:412:        transaction.set(saleDocRef, {
+  lib\widgets\payment_options_sheet.dart:413:          'totalAmount': cart.totalAmount,
+  lib\widgets\payment_options_sheet.dart:414:          'products': cart.items.values.map((item) => 
+item.toMap()).toList(),
+  lib\widgets\payment_options_sheet.dart:415:          'createdAt': Timestamp.now(),
+  lib\widgets\payment_options_sheet.dart:416:          'storeId': widget.storeId,
+  lib\widgets\payment_options_sheet.dart:417:          'notes': widget.notes,
+  lib\widgets\payment_options_sheet.dart:418:          'paymentMethod': paymentMethod,
+
+

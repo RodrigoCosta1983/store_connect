@@ -11,13 +11,11 @@ import 'package:store_connect/providers/user_role_provider.dart';
 import 'package:store_connect/providers/cart_provider.dart';
 import 'package:store_connect/providers/sales_provider.dart';
 import 'package:store_connect/providers/cash_flow_provider.dart';
-import 'package:store_connect/providers/subscription_provider.dart';
 import 'package:store_connect/providers/theme_provider.dart';
 import 'package:store_connect/screens/auth/auth_gate.dart';
 import 'package:store_connect/themes/app_theme.dart';
 import 'package:store_connect/services/navigation_service.dart';
 import 'firebase_options.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -89,9 +87,7 @@ class _MyAppState extends State<MyApp> {
       ChangeNotifierProvider(create: (ctx) => SalesProvider()),
     ];
 
-    if (!kIsWeb) {
-      appProviders.add(ChangeNotifierProvider(create: (ctx) => SubscriptionProvider()));
-    }
+
 
     return MultiProvider(
       providers: appProviders,

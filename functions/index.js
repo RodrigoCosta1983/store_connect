@@ -66,13 +66,14 @@ const {
  * 🔵 FUNÇÃO: createAsaasSubscription
  * * Descrição: Responsável por converter uma loja em um cliente pagante no Asaas.
  *
- * Fluxo Atualizado (Arquitetura Segura):
- * 1. Solicitação → Recebe apenas o `storeId` do aplicativo (Flutter).
- * 2. Enriquecimento → Busca de forma segura o CPF, Nome e Email direto no Firestore (evita manipulação de dados pelo frontend).
- * 3. Verificação de Assinatura Existente:
+ * Fluxo Atualizado (P6.8-B - Arquitetura Segura):
+ * 1. Solicitação → Recebe `storeId` e, apenas para legado sem documento, CPF/CNPJ.
+ * 2. Autorização → Confirma ownerId + users/{uid}.storeId + role admin + accessStatus.
+ * 3. Enriquecimento → Nome, telefone e e-mail vêm de fontes canônicas do backend.
+ * 4. Verificação de Assinatura Existente:
  * - Se já tem assinatura e está PAGA → Retorna aviso de sucesso.
  * - Se já tem assinatura e está PENDENTE → Recupera e retorna o link do boleto já existente.
- * 4. Nova Assinatura (Ação do botão "Assinar Agora"):
+ * 5. Nova Assinatura (Ação do botão "Assinar Agora"):
  * - Cadastra ou localiza o cliente no Asaas (usando o CPF do banco).
  * - Cria a assinatura PAGA (Plano Pro).
  * - Atualiza a loja no Firestore com os IDs gerados pelo Asaas.
@@ -122,20 +123,28 @@ const {
 
      try {
        // ============================================================
-       // 1. IDENTIFICA A LOJA
+       // 1. IDENTIFICA A LOJA PELO VÍNCULO DO USUÁRIO
+       // ============================================================
+       //
+       // O storeId enviado pelo Flutter é tratado apenas como identificador
+       // solicitado. A autorização real é confirmada no Firestore dentro da
+       // mesma transação que adquire a trava de criação da assinatura.
        // ============================================================
 
-       let storeId = request.data.storeId;
+       const userRef = db
+         .collection("users")
+         .doc(userId);
+
+       let storeId = String(
+         request.data?.storeId || ""
+       ).trim();
 
        if (!storeId) {
-         const userDoc = await db
-           .collection("users")
-           .doc(userId)
-           .get();
+         const userDocForStore = await userRef.get();
 
          if (
-           !userDoc.exists ||
-           !userDoc.data().storeId
+           !userDocForStore.exists ||
+           !userDocForStore.data()?.storeId
          ) {
            throw new HttpsError(
              "not-found",
@@ -143,240 +152,343 @@ const {
            );
          }
 
-         storeId = userDoc.data().storeId;
+         storeId = String(
+           userDocForStore.data().storeId
+         ).trim();
+       }
+
+       if (!storeId) {
+         throw new HttpsError(
+           "invalid-argument",
+           "Store ID inválido."
+         );
        }
 
        storeRef = db
          .collection("stores")
          .doc(storeId);
 
+       const requestedDocument = String(
+         request.data?.cpfCnpj || ""
+       ).replace(/\D/g, "");
+
+       const documentAuditRef = storeRef
+         .collection("auditLogs")
+         .doc();
+
        // ============================================================
-       // 2. TRAVA CONTRA DUPLO CLIQUE / DUAS REQUISIÇÕES
+       // 2. AUTORIZAÇÃO + CPF/CNPJ + TRAVA EM UMA ÚNICA TRANSAÇÃO
+       // ============================================================
        //
-       // Apenas UMA chamada pode assumir o estado "creating".
+       // Segurança:
+       // • o usuário precisa existir;
+       // • não pode estar revogado;
+       // • precisa pertencer à loja;
+       // • precisa ser admin;
+       // • precisa ser o ownerId da loja;
+       // • CPF/CNPJ não pode pertencer a outra conta/loja;
+       // • o documento legado, quando ausente, é persistido pelo backend;
+       // • a trava contra duplo clique é adquirida atomicamente.
+       //
+       // IMPORTANTE:
+       // Firestore Rules NÃO protegem o Admin SDK. Por isso estas validações
+       // são obrigatórias dentro da própria Cloud Function.
        // ============================================================
 
-       await db.runTransaction(async (transaction) => {
-         const freshStoreDoc =
-           await transaction.get(storeRef);
+       const transactionResult = await db.runTransaction(
+         async (transaction) => {
+           const userDoc = await transaction.get(userRef);
+           const freshStoreDoc = await transaction.get(storeRef);
 
-         if (!freshStoreDoc.exists) {
-           throw new HttpsError(
-             "not-found",
-             "Loja não encontrada."
+           if (!userDoc.exists) {
+             throw new HttpsError(
+               "permission-denied",
+               "Usuário sem cadastro válido no Store Connect."
+             );
+           }
+
+           if (!freshStoreDoc.exists) {
+             throw new HttpsError(
+               "not-found",
+               "Loja não encontrada."
+             );
+           }
+
+           const userData = userDoc.data() || {};
+           const freshData = freshStoreDoc.data() || {};
+
+           const userStoreId = String(
+             userData.storeId || ""
+           ).trim();
+
+           const role = String(
+             userData.role || ""
+           ).trim().toLowerCase();
+
+           const accessStatus = String(
+             userData.accessStatus || "active"
+           ).trim().toLowerCase();
+
+           const ownerId = String(
+             freshData.ownerId || ""
+           ).trim();
+
+           if (accessStatus === "revoked") {
+             throw new HttpsError(
+               "permission-denied",
+               "Seu acesso a esta loja foi revogado."
+             );
+           }
+
+           if (userStoreId !== storeId) {
+             throw new HttpsError(
+               "permission-denied",
+               "Esta conta não pertence à loja informada."
+             );
+           }
+
+           if (role !== "admin") {
+             throw new HttpsError(
+               "permission-denied",
+               "Somente o administrador proprietário pode gerenciar a assinatura."
+             );
+           }
+
+           // Enquanto as Firestore Rules finais do P7 ainda não foram
+           // publicadas, ownerId é a âncora mais forte contra autoelevação
+           // indevida de role/storeId pelo cliente.
+           if (!ownerId || ownerId !== userId) {
+             throw new HttpsError(
+               "permission-denied",
+               "Somente o proprietário da loja pode gerenciar a assinatura."
+             );
+           }
+
+           const storedDocument = String(
+             freshData.document || ""
+           ).replace(/\D/g, "");
+
+           if (
+             storedDocument &&
+             requestedDocument &&
+             storedDocument !== requestedDocument
+           ) {
+             throw new HttpsError(
+               "failed-precondition",
+               "O CPF/CNPJ informado não corresponde ao documento cadastrado nesta loja."
+             );
+           }
+
+           const cleanDocument =
+             storedDocument || requestedDocument;
+
+           if (
+             cleanDocument.length !== 11 &&
+             cleanDocument.length !== 14
+           ) {
+             throw new HttpsError(
+               "invalid-argument",
+               "Informe um CPF/CNPJ válido para continuar."
+             );
+           }
+
+           const cpfRegistryRef = db
+             .collection("cpfs_cadastrados")
+             .doc(cleanDocument);
+
+           const cpfRegistryDoc = await transaction.get(
+             cpfRegistryRef
            );
-         }
 
-         const freshData =
-           freshStoreDoc.data() || {};
+           if (cpfRegistryDoc.exists) {
+             const cpfRegistryData =
+               cpfRegistryDoc.data() || {};
 
-         const creationStatus =
-           freshData.subscriptionCreationStatus;
+             const registeredUid = String(
+               cpfRegistryData.uid || ""
+             ).trim();
 
-         const creationStartedAt =
-           freshData.subscriptionCreationStartedAt;
+             const registeredStoreId = String(
+               cpfRegistryData.storeId || ""
+             ).trim();
 
-         // ----------------------------------------------------------
-         // Trava expirada:
-         // se por algum erro uma chamada morreu deixando "creating",
-         // liberamos automaticamente após 3 minutos.
-         // ----------------------------------------------------------
+             if (
+               !registeredUid ||
+               !registeredStoreId ||
+               registeredUid !== userId ||
+               registeredStoreId !== storeId
+             ) {
+               throw new HttpsError(
+                 "already-exists",
+                 "Este CPF/CNPJ já está vinculado a outra conta do Store Connect."
+               );
+             }
+           }
 
-         let lockStillValid = false;
+           const creationStatus =
+             freshData.subscriptionCreationStatus;
 
-         if (
-           creationStatus === "creating" &&
-           creationStartedAt
-         ) {
-           const started =
-             creationStartedAt.toDate
-               ? creationStartedAt.toDate()
-               : new Date(creationStartedAt);
+           const creationStartedAt =
+             freshData.subscriptionCreationStartedAt;
 
-           const ageMs =
-             Date.now() - started.getTime();
+           let lockStillValid = false;
 
-           lockStillValid =
-             ageMs < 3 * 60 * 1000;
-         }
+           if (
+             creationStatus === "creating" &&
+             creationStartedAt
+           ) {
+             const started =
+               creationStartedAt.toDate
+                 ? creationStartedAt.toDate()
+                 : new Date(creationStartedAt);
 
-         if (lockStillValid) {
-           throw new HttpsError(
-             "already-exists",
-             "Já existe uma assinatura sendo criada. Aguarde alguns segundos."
+             const ageMs =
+               Date.now() - started.getTime();
+
+             lockStillValid =
+               ageMs < 3 * 60 * 1000;
+           }
+
+           if (lockStillValid) {
+             throw new HttpsError(
+               "already-exists",
+               "Já existe uma assinatura sendo criada. Aguarde alguns segundos."
+             );
+           }
+
+           const serverTimestamp =
+             admin.firestore.FieldValue.serverTimestamp();
+
+           const storeUpdate = {
+             subscriptionCreationStatus: "creating",
+             subscriptionCreationStartedAt:
+               serverTimestamp,
+           };
+
+           const documentWasMissing =
+             !storedDocument;
+
+           if (documentWasMissing) {
+             storeUpdate.document = cleanDocument;
+             storeUpdate.documentUpdatedAt =
+               serverTimestamp;
+             storeUpdate.documentUpdatedBy =
+               userId;
+           }
+
+           transaction.update(
+             storeRef,
+             storeUpdate
            );
+
+           if (!cpfRegistryDoc.exists) {
+             transaction.set(
+               cpfRegistryRef,
+               {
+                 uid: userId,
+                 storeId,
+                 document: cleanDocument,
+                 createdAt: serverTimestamp,
+                 motivo:
+                   "Cadastro financeiro Store Connect",
+               }
+             );
+           }
+
+           if (documentWasMissing) {
+             transaction.set(
+               documentAuditRef,
+               {
+                 action:
+                   "store_document_registered",
+                 entityType:
+                   "store",
+                 entityId:
+                   storeId,
+                 storeId,
+                 performedBy: {
+                   uid: userId,
+                   role: "admin",
+                 },
+                 reason:
+                   "subscription_legacy_fallback",
+                 before: {
+                   hasDocument: false,
+                 },
+                 after: {
+                   hasDocument: true,
+                 },
+                 createdAt:
+                   serverTimestamp,
+               }
+             );
+           }
+
+           return {
+             cleanDocument,
+             userEmail:
+               userData.email || null,
+           };
          }
+       );
 
-         // Assume a trava.
-         transaction.update(storeRef, {
-           subscriptionCreationStatus: "creating",
-           subscriptionCreationStartedAt:
-             admin.firestore.FieldValue.serverTimestamp(),
-         });
+       creationLockAcquired = true;
 
-         creationLockAcquired = true;
-       });
+       const cleanDocument =
+         transactionResult.cleanDocument;
 
        console.log(
-         `🔒 Trava de criação adquirida para loja ${storeId}`
+         `🔒 Autorização validada e trava adquirida para loja ${storeId}`
        );
 
        // ============================================================
-       // 3. BUSCA DADOS ATUALIZADOS DA LOJA
+       // 3. BUSCA DADOS CANÔNICOS DA LOJA APÓS A TRANSAÇÃO
+       // ============================================================
+       //
+       // Nome e telefone vêm do Firestore. O cliente não escolhe esses dados
+       // para o cadastro financeiro do Asaas.
        // ============================================================
 
-       const storeDoc =
-         await storeRef.get();
+       const storeDoc = await storeRef.get();
+
+       if (!storeDoc.exists) {
+         throw new HttpsError(
+           "not-found",
+           "Loja não encontrada após a validação."
+         );
+       }
 
        const storeData =
          storeDoc.data() || {};
 
-       const cpfCnpj =
-         request.data.cpfCnpj ||
-         storeData.document;
-
-       const name =
-         request.data.name ||
+       const name = String(
          storeData.name ||
-         "Cliente Store Connect";
+         "Cliente Store Connect"
+       ).trim();
 
-       const phone =
-         request.data.phone ||
-         storeData.phone ||
-         "";
+       const phone = String(
+         storeData.phone || ""
+       ).trim();
 
-       const email =
-         request.data.email ||
+       const email = String(
          request.auth.token?.email ||
-         `contato@${storeId}.com.br`;
+         transactionResult.userEmail ||
+         `contato@${storeId}.com.br`
+       ).trim();
 
-       if (!cpfCnpj) {
-         throw new HttpsError(
-           "invalid-argument",
-           "CPF/CNPJ não encontrado no cadastro da loja."
-         );
-       }
+       const maskedDocument =
+         cleanDocument.length >= 4
+           ? `***${cleanDocument.slice(-4)}`
+           : "***";
 
        console.log(`📌 User ID: ${userId}`);
        console.log(`📌 Store ID: ${storeId}`);
-       console.log(`📌 CPF/CNPJ: ${cpfCnpj}`);
+       console.log(`📌 CPF/CNPJ: ${maskedDocument}`);
        console.log(
          `📌 Assinatura salva atualmente: ${
            storeData.asaasSubscriptionId || "NÃO"
          }`
        );
-
-       // ============================================================
-       // 4. VALIDA CPF/CNPJ NA BASE INTERNA DO STORE CONNECT
-       //
-       // OBJETIVO:
-       //
-       // Impedir que um CPF/CNPJ pertencente a outra conta/loja
-       // seja reutilizado antes mesmo de consultar o Asaas.
-       //
-       // REGRA:
-       //
-       // cpfs_cadastrados/{documentoLimpo}
-       //
-       // • mesmo UID -> permitido;
-       // • mesma storeId -> permitido;
-       // • UID/storeId diferente -> bloqueia.
-       //
-       // IMPORTANTE:
-       //
-       // Esta validação acontece ANTES de qualquer chamada ao Asaas.
-       // ============================================================
-
-       const cleanDocument =
-         String(cpfCnpj)
-           .replace(/\D/g, "");
-
-       if (!cleanDocument) {
-         throw new HttpsError(
-           "invalid-argument",
-           "CPF/CNPJ inválido."
-         );
-       }
-
-       const cpfRegistryRef =
-         db
-           .collection("cpfs_cadastrados")
-           .doc(cleanDocument);
-
-       const cpfRegistryDoc =
-         await cpfRegistryRef.get();
-
-       if (cpfRegistryDoc.exists) {
-         const cpfRegistryData =
-           cpfRegistryDoc.data() || {};
-
-         const registeredUid =
-           cpfRegistryData.uid || null;
-
-         const registeredStoreId =
-           cpfRegistryData.storeId || null;
-
-         const sameUser =
-           registeredUid === userId;
-
-         const sameStore =
-           registeredStoreId === storeId;
-
-         console.log(
-           `🔎 Documento encontrado em cpfs_cadastrados: ${cleanDocument}`
-         );
-
-         console.log(
-           `📌 UID cadastrado: ${registeredUid || "NÃO INFORMADO"}`
-         );
-
-         console.log(
-           `📌 Store cadastrada: ${registeredStoreId || "NÃO INFORMADA"}`
-         );
-
-         if (
-           !sameUser &&
-           !sameStore
-         ) {
-           console.warn(
-             `🚫 CPF/CNPJ ${cleanDocument} já pertence a outra conta.`
-           );
-
-           throw new HttpsError(
-             "already-exists",
-             "Este CPF/CNPJ já está vinculado a outra conta do Store Connect."
-           );
-         }
-
-         console.log(
-           `✅ CPF/CNPJ ${cleanDocument} pertence à própria conta.`
-         );
-
-       } else {
-
-         await cpfRegistryRef.set({
-           uid:
-             userId,
-
-           storeId:
-             storeId,
-
-           document:
-             cleanDocument,
-
-           createdAt:
-             admin.firestore.FieldValue
-               .serverTimestamp(),
-
-           motivo:
-             "Cadastro financeiro Store Connect",
-         });
-
-         console.log(
-           `✅ CPF/CNPJ ${cleanDocument} reservado para a loja ${storeId}.`
-         );
-       }
-
 
        // ============================================================
        // 4.1 LOCALIZA OU CRIA O CUSTOMER NO ASAAS
@@ -1213,6 +1325,36 @@ exports.asaasWebhook = webhook.asaasWebhook;
 const faturas = require("./financeiro/faturas");
 exports.listAsaasInvoices = faturas.listAsaasInvoices;
 exports.getAsaasPortalUrl = faturas.getAsaasPortalUrl;
+
+// -----------------------------------------------------------------------
+// ⏳ EXPIRAÇÃO SERVER-SIDE DE TRIALS - P6
+// -----------------------------------------------------------------------
+//
+// O Flutter não persiste mais mudanças em subscriptionStatus por expiração.
+// Esta rotina agendada usa o relógio do servidor e mantém auditLog.
+// -----------------------------------------------------------------------
+
+const {
+  expireTrials,
+} = require("./financeiro/expireTrials");
+
+exports.expireTrials =
+  expireTrials;
+
+
+// -----------------------------------------------------------------------
+// 🏪 BOOTSTRAP SEGURO DA PRIMEIRA LOJA - P6.8
+// -----------------------------------------------------------------------
+//
+// Cria loja + owner admin + trial + reserva de CPF/CNPJ somente no backend.
+// -----------------------------------------------------------------------
+
+const {
+  bootstrapStore,
+} = require("./auth/bootstrapStore");
+
+exports.bootstrapStore =
+  bootstrapStore;
 
 
 

@@ -1,4 +1,38 @@
-// lib/screens/subscription_screen.dart
+// ============================================================================
+// STORE CONNECT - SUBSCRIPTION SCREEN / ASSINATURA E REGULARIZAÇÃO
+// ============================================================================
+//
+// Arquivo:
+//   lib/screens/subscription_screen.dart
+//
+// OBJETIVO:
+//
+// Exibir o fluxo de assinatura/regularização e acompanhar, em tempo real,
+// o estado financeiro persistido da loja.
+//
+// P6.8-B - AUTORIDADE FINANCEIRA:
+//
+// Este arquivo NÃO grava mais CPF/CNPJ nem campos de assinatura no Firestore.
+// O Flutter pode somente:
+//   - ler o documento da loja para saber se já existe CPF/CNPJ;
+//   - solicitar o CPF/CNPJ ao proprietário apenas como fallback legado;
+//   - chamar createAsaasSubscription;
+//   - reagir ao status persistido pelo backend/webhook.
+//
+// Quando uma loja legada não possui `document`, o CPF/CNPJ informado é enviado
+// para a Cloud Function. O backend valida proprietário/admin, reserva o documento
+// e persiste `stores/{storeId}.document` de forma transacional.
+//
+// CUIDADOS DE MANUTENÇÃO:
+//
+// • Não reintroduzir update/set de `document` neste arquivo.
+// • Não escrever subscriptionStatus/subscriptionType pelo cliente.
+// • Nome, telefone e e-mail usados no Asaas são resolvidos pelo backend.
+// • A decisão local de acesso serve apenas para navegação; a autoridade
+//   persistente continua no backend + Firestore.
+// • A proteção técnica final contra writes indevidos será concluída no P7.
+//
+// ============================================================================
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -34,47 +68,78 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     super.dispose();
   }
 
-  /// Monitora se o pagamento foi confirmado via Webhook
-  /// Listener para monitorar mudanças de status da assinatura
+
+  DateTime? _parseTrialEndDate(dynamic rawValue) {
+    if (rawValue == null) return null;
+
+    if (rawValue is Timestamp) {
+      return rawValue.toDate();
+    }
+
+    if (rawValue is DateTime) {
+      return rawValue;
+    }
+
+    if (rawValue is! String || rawValue.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      var normalized = rawValue.trim();
+      final fractionalMatch = RegExp(r'(\.\d{3})\d+');
+      normalized = normalized.replaceFirstMapped(
+        fractionalMatch,
+        (match) => match.group(1)!,
+      );
+      return DateTime.parse(normalized);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Monitora mudanças persistidas pelo backend/webhook e retorna ao AuthGate
+  /// quando a mesma matriz de acesso do P6 indicar que a loja pode entrar.
   void _startListeningToStatus() {
     _statusListener = FirebaseFirestore.instance
         .collection('stores')
         .doc(widget.storeId)
         .snapshots()
         .listen((docSnapshot) {
-          if (docSnapshot.exists) {
-            final data = docSnapshot.data();
-            final status = data?['subscriptionStatus'] as String?;
-            final type = data?['subscriptionType'] as String?;
-            final trialEndDate = data?['trialEndDate'] as String?;
+      if (!docSnapshot.exists) return;
 
-            // 1. Calcula se o trial ainda é válido
-            bool isTrialActive = false;
-            if (trialEndDate != null) {
-              try {
-                isTrialActive = DateTime.now().isBefore(
-                  DateTime.parse(trialEndDate),
-                );
-              } catch (e) {}
-            }
+      final data = docSnapshot.data() ?? <String, dynamic>{};
 
-            // 2. A MESMA REGRA DO AUTHGATE:
-            bool hasAccess = false;
-            if (status == 'active') {
-              if (type == 'pro' || type == 'business' || isTrialActive) {
-                hasAccess = true;
-              }
-            }
+      final status =
+          (data['subscriptionStatus']?.toString() ?? 'trial')
+              .trim()
+              .toLowerCase();
 
-            // 3. Se realmente tem acesso (Pagou ou Trial Válido), volta para AuthGate
-            if (hasAccess && mounted) {
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (ctx) => const AuthGate()),
-                (route) => false,
-              );
-            }
-          }
-        });
+      final type =
+          (data['subscriptionType']?.toString() ?? 'free')
+              .trim()
+              .toLowerCase();
+
+      final trialEndDate = _parseTrialEndDate(data['trialEndDate']);
+      final isTrialActive =
+          trialEndDate != null && DateTime.now().isBefore(trialEndDate);
+
+      final isPaidPlanType = type == 'pro' || type == 'business';
+      final hasPaidAccess = status == 'active' && isPaidPlanType;
+      final hasTrialAccess =
+          (status == 'trial' || (status == 'active' && !isPaidPlanType)) &&
+          isTrialActive;
+      final hasOverdueGraceAccess = status == 'overdue';
+
+      final hasAccess =
+          hasPaidAccess || hasTrialAccess || hasOverdueGraceAccess;
+
+      if (hasAccess && mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (ctx) => const AuthGate()),
+          (route) => false,
+        );
+      }
+    });
   }
 
   void _showSnackBar(String message, Color color) {
@@ -97,10 +162,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text(
-          "Informação Necessária",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text("Informação Necessária", style: TextStyle(fontWeight: FontWeight.bold)),
         content: Form(
           key: formKey,
           child: Column(
@@ -117,15 +179,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
                   labelText: "CPF ou CNPJ (apenas números)",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   prefixIcon: const Icon(Icons.badge_outlined),
                 ),
                 validator: (val) {
                   if (val == null || val.isEmpty) return "Campo obrigatório.";
-                  if (val.length != 11 && val.length != 14)
-                    return "Digite 11 (CPF) ou 14 (CNPJ) números.";
+                  if (val.length != 11 && val.length != 14) return "Digite 11 (CPF) ou 14 (CNPJ) números.";
                   return null;
                 },
               ),
@@ -141,9 +200,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.deepPurple,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () {
               if (formKey.currentState!.validate()) {
@@ -157,49 +214,61 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  /// Inicia o processo de assinatura buscando os dados já salvos no Firestore
+
+  /// Inicia o processo de assinatura sem conceder autoridade financeira ao
+  /// cliente. O Flutter apenas identifica a loja e, quando necessário, coleta
+  /// um CPF/CNPJ legado; toda validação e persistência ocorre no backend.
   Future<void> _startSubscriptionProcess() async {
     setState(() => _isLoading = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception("Usuário não logado");
+      if (user == null) {
+        throw Exception('Usuário não logado');
+      }
 
-      // 1. Busca os dados da loja que já foram salvos no cadastro inicial
       final storeDoc = await FirebaseFirestore.instance
           .collection('stores')
           .doc(widget.storeId)
           .get();
 
-      if (!storeDoc.exists) throw Exception("Loja não encontrada");
-
-      final storeData = storeDoc.data()!;
-      String document =
-          storeData['document'] ?? ''; // 👇 Mudamos de final para String
-      final name = storeData['name'] ?? '';
-      final phone = storeData['phone'] ?? '';
-
-      // 🚀 REDE DE SEGURANÇA: Se o CPF não estiver no banco, pede na hora!
-      if (document.isEmpty) {
-        setState(
-          () => _isLoading = false,
-        ); // Pausa o loading para abrir o modal
-
-        final inputDoc = await _askForDocumentModal(context);
-        if (inputDoc == null || inputDoc.isEmpty)
-          return; // Se o usuário cancelar, interrompe o fluxo
-
-        document = inputDoc;
-        setState(() => _isLoading = true); // Retoma o loading
-
-        // Salva o documento no banco da loja para nunca mais precisar pedir
-        await FirebaseFirestore.instance
-            .collection('stores')
-            .doc(widget.storeId)
-            .update({'document': document});
+      if (!storeDoc.exists) {
+        throw Exception('Loja não encontrada');
       }
 
-      // 2. Chama a Cloud Function do Asaas enviando os dados garantidos
+      final storeData = storeDoc.data() ?? <String, dynamic>{};
+      final storedDocument =
+          (storeData['document']?.toString() ?? '').replaceAll(
+        RegExp(r'[^0-9]'),
+        '',
+      );
+
+      final payload = <String, dynamic>{
+        'storeId': widget.storeId,
+      };
+
+      // Fallback somente para lojas legadas sem documento. O valor NÃO é
+      // persistido pelo Flutter; a Cloud Function fará a validação e o write.
+      if (storedDocument.isEmpty) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+
+        if (!mounted) return;
+
+        final inputDoc = await _askForDocumentModal(context);
+
+        if (inputDoc == null || inputDoc.isEmpty) {
+          return;
+        }
+
+        payload['cpfCnpj'] = inputDoc;
+
+        if (mounted) {
+          setState(() => _isLoading = true);
+        }
+      }
+
       final response = await FirebaseFunctions.instance
           .httpsCallable(
             'createAsaasSubscription',
@@ -207,12 +276,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               timeout: const Duration(seconds: 120),
             ),
           )
-          .call({
-            "cpfCnpj": document, // Agora sempre terá um valor válido!
-            "name": name,
-            "email": user.email,
-            "phone": phone,
-          });
+          .call(payload);
 
       final data = response.data as Map<String, dynamic>;
       debugPrint('📱 RESPOSTA COMPLETA: $data');
@@ -226,7 +290,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (ctx) => const AuthGate()),
-            (route) => false,
+                (route) => false,
           );
         }
         return;
@@ -240,17 +304,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         _showSnackBar("📄 Gerando fatura de assinatura...", Colors.green);
 
         try {
-          await launchUrl(
-            Uri.parse(paymentUrl.toString()),
-            mode: LaunchMode.externalApplication,
-          );
+          await launchUrl(Uri.parse(paymentUrl.toString()),
+              mode: LaunchMode.externalApplication);
         } catch (e) {
           await Clipboard.setData(ClipboardData(text: paymentUrl.toString()));
-          if (mounted)
-            _showSnackBar(
-              '📋 Link copiado para a área de transferência!',
-              Colors.orange,
-            );
+          if (mounted) _showSnackBar('📋 Link copiado para a área de transferência!', Colors.orange);
         }
 
         await Future.delayed(const Duration(milliseconds: 500));
@@ -294,10 +352,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 40.0,
-                  horizontal: 30.0,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 30.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -329,15 +384,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     const SizedBox(height: 40),
 
                     // Benefícios (Visual Limpo)
-                    _buildFeatureRow(
-                      Icons.check_circle,
-                      "Gestão completa de vendas",
-                    ),
+                    _buildFeatureRow(Icons.check_circle, "Gestão completa de vendas"),
                     const SizedBox(height: 12),
-                    _buildFeatureRow(
-                      Icons.check_circle,
-                      "Controle de estoque ilimitado",
-                    ),
+                    _buildFeatureRow(Icons.check_circle, "Controle de estoque ilimitado"),
                     const SizedBox(height: 12),
                     _buildFeatureRow(Icons.check_circle, "Suporte prioritário"),
 
@@ -347,49 +396,32 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       width: double.infinity,
                       height: 55,
                       child: ElevatedButton.icon(
-                        onPressed: _isLoading
-                            ? null
-                            : _startSubscriptionProcess,
+                        onPressed: _isLoading ? null : _startSubscriptionProcess,
                         icon: _isLoading
                             ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                        )
                             : const Icon(Icons.lock_open),
                         label: Text(
                           _isLoading ? "PROCESSANDO..." : "ASSINAR AGORA",
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.deepPurple,
                           foregroundColor: Colors.white,
                           disabledBackgroundColor: Colors.grey[400],
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
                     ),
                     const SizedBox(height: 20),
                     TextButton.icon(
                       onPressed: () => FirebaseAuth.instance.signOut(),
-                      icon: const Icon(
-                        Icons.logout,
-                        size: 18,
-                        color: Colors.grey,
-                      ),
-                      label: const Text(
-                        "Sair da conta",
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
+                      icon: const Icon(Icons.logout, size: 18, color: Colors.grey),
+                      label: const Text("Sair da conta", style: TextStyle(color: Colors.grey)),
+                    )
                   ],
                 ),
               ),
