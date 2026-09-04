@@ -18,16 +18,22 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 - **Carrinho de Compras:** Sistema completo para adicionar produtos, com a flexibilidade de vender para um cliente cadastrado ou para o "Consumidor Final".
 - **Múltiplos Métodos de Pagamento:** Suporte para vendas em Dinheiro, Cartão, PIX e a Crédito.
 - **Vendas "A Crédito":** Sistema para registrar vendas a prazo, exigindo a seleção de um cliente cadastrado.
+- **Vendas Offline com Sincronização Idempotente:** As vendas instantâneas podem ser persistidas localmente em SQLite e sincronizadas depois por Cloud Function, com baixa definitiva de estoque apenas uma vez.
+- **Proteção para Produtos Arquivados:** Novas vendas não aceitam produtos arquivados; vendas offline realmente realizadas antes do arquivamento podem ser sincronizadas com rastreabilidade específica.
 
 ### Gestão de Estoque
 - **Cadastro e Edição de Produtos:** Formulário completo para gerenciar produtos, incluindo nome, preço, quantidade em estoque e **estoque mínimo** para alertas.
 - **Upload de Imagens:** Suporte para upload de imagens de produtos tanto do celular quanto da web.
-- **Baixa Automática de Estoque:** Após cada venda confirmada, a quantidade do produto é subtraída do estoque de forma atômica e segura, usando Batched Writes do Firebase.
+- **Baixa Automática de Estoque:** Após cada venda confirmada, a quantidade do produto é subtraída do estoque de forma atômica e segura.
+- **Arquivamento Seguro de Produtos:** Produtos deixam de ser excluídos fisicamente e passam a ser arquivados pelo backend, preservando estoque, lotes, imagem, categoria, dados fiscais e histórico de vendas.
+- **Restauração de Produtos:** Administradores podem consultar a tela de **Produtos Arquivados** e restaurar um item através da Cloud Function `restoreProduct`, sem alterar estoque, lotes ou dados fiscais.
 
 ### Gestão de Clientes (CRM)
 - **Cadastro e Edição de Clientes:** Tela dedicada para gerenciar a base de clientes da loja.
 - **Busca Inteligente:** Interface de busca dinâmica para encontrar clientes rapidamente.
 - **Reutilização de Componentes:** A tela de gerenciamento também funciona como um seletor de clientes para outras partes do app (ex: vendas A Crédito).
+- **Arquivamento Seguro de Clientes:** O cadastro pode ser arquivado sem apagar vendas, parcelas ou histórico financeiro.
+- **Restauração de Clientes:** Administradores podem consultar a tela de **Clientes Arquivados** e restaurar cadastros por meio da Cloud Function `restoreCustomer`.
 
 ### Dashboard e Relatórios
 - **Dashboard em Tempo Real:** Painel principal com os KPIs (Indicadores Chave de Performance) mais importantes:
@@ -47,14 +53,25 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
     - Permite habilitar/desabilitar a funcionalidade de vendas "A Crédito".
     - Permite configurar o limite numérico para o alerta de estoque baixo.
 - **Tela de Perfil do Usuário:**
-    - Permite que o usuário edite seus dados de perfil (nome, documento, telefone).
+    - Permite editar nome e telefone; CPF/CNPJ permanece imutável após o cadastro inicial.
     - Funcionalidade segura para **alterar senha e e-mail** diretamente no app, com reautenticação para garantir a segurança.
 - **Autenticação Segura:** Fluxo completo de login e logout gerenciado pelo Firebase Auth e um `AuthGate` para proteger as rotas.
+- **Controle de Acesso por Função:** Perfis `admin`, `gerente` e `operador` possuem permissões diferentes para ações críticas do sistema.
+- **Revogação de Funcionários:** O acesso de um funcionário pode ser revogado sem remover o histórico relacionado às operações já realizadas.
+- **Firestore Rules Endurecidas:** Escritas sensíveis, exclusões físicas e campos administrativos são bloqueados no cliente e ficam sob autoridade do backend.
+
+### 🛡️ Segurança Operacional, Auditoria e Recuperação
+- **Soft Delete / Arquivamento Lógico:** Clientes e produtos são preservados no Firestore em vez de sofrer exclusão física.
+- **Cloud Functions como Autoridade:** Operações críticas como `archiveCustomer`, `restoreCustomer`, `archiveProduct` e `restoreProduct` validam autenticação, função do usuário e vínculo com a loja no backend.
+- **Auditoria Before/After:** Arquivamentos e restaurações geram registros em `auditLogs`, incluindo entidade, executor, motivo, estado anterior e estado posterior.
+- **Recuperação Individual pelo Admin:** O administrador da própria loja pode restaurar clientes e produtos arquivados por telas dedicadas; operador não recebe esse acesso na interface e o backend reforça a autorização.
+- **Histórico de Arquivamento Preservado:** `archivedAt` e `archivedBy` permanecem como registro do último arquivamento, enquanto `isArchived` representa o estado atual.
+- **Proteção contra Bypass:** Campos administrativos de arquivamento não podem ser manipulados diretamente pelo Flutter; a alteração definitiva acontece nas Cloud Functions.
 
 ### 🚀 Onboarding e Segurança
 - **Fluxo de Cadastro Completo:** Permite que novos usuários se cadastrem com E-mail/Senha ou Login com Google.
 
-- **Criação de Loja:** Onboarding guiado para que o novo usuário crie sua própria loja no sistema.
+- **Criação de Loja:** Onboarding guiado com criação segura da loja pelo backend, incluindo vínculo do administrador e inicialização do período de teste.
 
 - **Login Seguro e Moderno:**
 
@@ -83,6 +100,7 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
 - **Webhooks com Auto-Cura (Self-Healing):** Lógica avançada de backend (Cloud Functions) que recebe webhooks do Asaas, valida pagamentos de forma assíncrona, sincroniza datas de vencimento diretamente com a API e corrige inconsistências no banco de dados automaticamente.
 
 - **Validação de Acesso (AuthGate):** O sistema verifica o status da assinatura em tempo real e libera ou bloqueia o acesso ao app instantaneamente, garantindo a segurança do modelo SaaS.
+- **Expiração Server-Side de Trial:** Uma rotina agendada no backend persiste a expiração do período de teste sem depender do relógio ou de gravações do Flutter.
 ## 📸 Telas do Aplicativo
 
 *(Instrução: Para adicionar suas imagens aqui, faça o upload delas para a pasta do seu projeto no GitHub e substitua as `URL_DA_SUA_IMAGEM_AQUI` pelo link da imagem)*
@@ -104,6 +122,7 @@ O aplicativo foi construído com uma base sólida, focando em funcionalidades es
     - **Cloud Firestore:** Banco de dados NoSQL em tempo real.
     - **Firebase Authentication:** Sistema de autenticação de usuários.
     - **Firebase Storage:** Armazenamento de imagens de produtos.
+    - **Cloud Functions:** Backend autoritativo para operações críticas, assinaturas, auditoria, sincronização offline e recuperação.
 - **Gerenciamento de Estado:** [Provider](https://pub.dev/packages/provider)
 - **Pacotes Principais:**
     - `cloud_firestore`
@@ -120,7 +139,9 @@ Com a arquitetura SaaS e o gateway de pagamento (Asaas) já estabelecidos, os pr
 
 - **Versão Web (Dashboard Administrativo):** Adaptar a aplicação Flutter para funcionar perfeitamente em navegadores, permitindo que os lojistas gerenciem seus estoques e vejam relatórios diretamente do computador, com um layout responsivo focado em desktop.
 
-- **Gestão de Múltiplos Usuários por Loja:** Criar níveis de acesso (Admin, Vendedor, Caixa) para que o dono da loja possa convidar funcionários para operar o PDV sem dar acesso às configurações financeiras e de assinatura.
+- **Backup / Snapshot Geral:** Criar uma camada de recuperação global para cenários extraordinários, complementando a restauração individual já disponível para clientes e produtos.
+
+- **Cancelamento Seguro de Vendas:** Implementar cancelamento via backend com auditoria, compensação financeira e tratamento correto do estoque, sem exclusão física da venda original.
 
 
 ## 🏁 Como Executar o Projeto
@@ -180,16 +201,22 @@ The application was built on a solid foundation, focusing on essential features 
 - **Shopping Cart:** A complete system for adding products, with the flexibility to sell to a registered customer or to a "Final Consumer".
 - **Multiple Payment Methods:** Support for sales via Cash, Card, PIX, and credit.
 - **(Credit) Sales:** A system to record on-credit sales, requiring the selection of a registered customer.
+- **Offline Sales with Idempotent Sync:** Instant sales can be persisted locally in SQLite and synchronized later through a Cloud Function, with definitive stock decrement happening only once.
+- **Archived Product Protection:** New sales cannot use archived products; legitimate offline sales created before archival may still synchronize with dedicated traceability.
 
 ### Inventory Management
 - **Product Creation and Editing:** A complete form to manage products, including name, price, quantity in stock, and a **minimum stock level** for alerts.
 - **Image Uploads:** Support for uploading product images from both mobile and web.
-- **Automatic Stock Decrement:** After each confirmed sale, the product quantity is atomically and safely subtracted from the inventory using Firebase Batched Writes.
+- **Automatic Stock Decrement:** After each confirmed sale, the product quantity is atomically and safely subtracted from inventory.
+- **Secure Product Archiving:** Products are logically archived by the backend instead of being physically deleted, preserving stock, lots, images, categories, fiscal data, and sales history.
+- **Product Restoration:** Administrators can open the **Archived Products** view and restore an item through the `restoreProduct` Cloud Function without changing stock, lots, or fiscal data.
 
 ### Customer Management (CRM)
 - **Customer Creation and Editing:** A dedicated screen to manage the store's customer base.
 - **Smart Search:** A dynamic search interface to find customers quickly.
 - **Component Reuse:** The management screen also functions as a customer selector for other parts of the app (e.g., credit sales).
+- **Secure Customer Archiving:** Customer records can be archived without deleting sales, installments, or financial history.
+- **Customer Restoration:** Administrators can open the **Archived Customers** view and restore records through the `restoreCustomer` Cloud Function.
 
 ### Dashboard & Reports
 - **Real-time Dashboard:** A main dashboard with the most important KPIs (Key Performance Indicators):
@@ -209,14 +236,25 @@ The application was built on a solid foundation, focusing on essential features 
     - Allows you to enable or disable the credit sales feature.
     - Allows configuring the numerical threshold for the low stock alert.
 - **User Profile Screen:**
-    - Allows the user to edit their profile data (name, document, phone).
+    - Allows editing name and phone; CPF/CNPJ remains immutable after initial registration.
     - Secure functionality to **change password and email** directly within the app, with re-authentication to ensure security.
 - **Secure Authentication:** A complete login and logout flow managed by Firebase Auth and an `AuthGate` to protect routes.
+- **Role-Based Access Control:** `admin`, `gerente`, and `operador` profiles receive different permissions for critical operations.
+- **Employee Access Revocation:** Employee access can be revoked while preserving the operational history already associated with that user.
+- **Hardened Firestore Rules:** Sensitive writes, physical deletes, and administrative fields are blocked on the client and kept under backend authority.
+
+### 🛡️ Operational Security, Auditing & Recovery
+- **Soft Delete / Logical Archiving:** Customers and products are preserved in Firestore instead of being physically deleted.
+- **Cloud Functions as Authority:** Critical operations such as `archiveCustomer`, `restoreCustomer`, `archiveProduct`, and `restoreProduct` validate authentication, user role, and store membership on the backend.
+- **Before/After Audit Trail:** Archive and restore actions create `auditLogs` records containing the entity, executor, optional reason, previous state, and resulting state.
+- **Admin Self-Service Recovery:** Store administrators can restore archived customers and products from dedicated views; operators do not receive this UI access and backend authorization is still enforced.
+- **Archived History Preservation:** `archivedAt` and `archivedBy` remain as metadata for the last archive event while `isArchived` represents the current state.
+- **Bypass Protection:** Administrative archive fields cannot be directly manipulated by Flutter; authoritative state changes are performed by Cloud Functions.
 
 ### 🚀 Onboarding and Security
 - **Complete Registration Flow:** Allows new users to register with Email/Password or Google Login.
 
-- **Store Creation:** Guided onboarding for new users to create their own store in the system.
+- **Store Creation:** Guided onboarding with secure backend store creation, administrator linkage, and trial initialization.
 
 - **Secure and Modern Login:**
 
@@ -245,13 +283,16 @@ The application was built on a solid foundation, focusing on essential features 
 - **Self-Healing Webhooks (Cloud Functions):** Advanced backend logic in Firebase to receive Asaas webhooks, asynchronously validating payments, syncing due dates directly with the API, and automatically correcting database inconsistencies.
 
 - **Access Validation (AuthGate):** The system instantly verifies subscription status in real-time to grant or block app access, ensuring the security of the SaaS model.
+- **Server-Side Trial Expiration:** A scheduled backend routine persists trial expiration without relying on the device clock or direct Flutter writes.
 ## 🔮 Next Steps (Roadmap)
 
 With the SaaS architecture and payment gateway (Asaas) already established, the next objectives focus on platform expansion:
 
 - **Web Version (Admin Dashboard):** Adapt the Flutter application to work seamlessly in browsers, allowing store owners to manage their inventory and view reports directly from their computers, with a responsive desktop-focused layout.
 
-- **Multi-User Management per Store:** Create access levels (Admin, Salesperson, Cashier) so the store owner can invite employees to operate the POS without granting access to financial and subscription settings.
+- **Full Backup / Snapshot Layer:** Add global recovery for extraordinary incidents, complementing the individual customer and product restoration already available.
+
+- **Safe Sale Cancellation:** Implement backend-driven sale cancellation with auditing, financial compensation entries, and correct inventory handling without physically deleting the original sale.
 
 ## 🏁 Getting Started
 
