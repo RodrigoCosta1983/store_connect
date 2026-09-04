@@ -75,6 +75,7 @@ import 'package:store_connect/widgets/dynamic_background.dart';
 import 'package:store_connect/screens/fiscal/widgets/ncm_search_dialog.dart';
 
 import 'package:store_connect/screens/products/import/product_import_screen.dart';
+import 'package:store_connect/screens/management/archived_products_screen.dart';
 
 // ============================================================================
 // DIÁLOGO DE CADASTRO / EDIÇÃO DE PRODUTO
@@ -711,7 +712,7 @@ class _ProductDialogState extends State<_ProductDialog> {
             .update(productData);
       } else {
         productData['createdAt'] = Timestamp.now();
-        productData['isArchived'] = false;
+        //productData['isArchived'] = false;
 
         await FirebaseFirestore.instance
             .collection('stores')
@@ -1721,7 +1722,8 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   // ==========================================================================
 
   Future<void> _archiveProduct(String productId, String productName) async {
-    final reasonController = TextEditingController();
+    String reason = '';
+
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1737,8 +1739,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
             ),
             const SizedBox(height: 16),
             TextField(
-              controller: reasonController,
               maxLines: 2,
+              onChanged: (value) {
+                reason = value.trim();
+              },
               decoration: const InputDecoration(
                 labelText: 'Motivo (opcional)',
                 hintText: 'Ex.: produto fora de linha',
@@ -1765,8 +1769,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       ),
     );
 
-    final reason = reasonController.text.trim();
-    reasonController.dispose();
+
 
     if (confirmed != true) {
       return;
@@ -1856,7 +1859,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                 constraints: const BoxConstraints(maxWidth: 1100),
                 child: Column(
                   children: [
-                    _buildCustomHeader(isDarkMode),
+                    _buildCustomHeader(isDarkMode, canArchiveProducts),
 
                     Expanded(
                       child: StreamBuilder<QuerySnapshot>(
@@ -2138,7 +2141,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   // CABEÇALHO
   // ==========================================================================
 
-  Widget _buildCustomHeader(bool isDarkMode) {
+  Widget _buildCustomHeader(bool isDarkMode, bool canArchiveProducts) {
     final headerColor = isDarkMode ? Colors.white : Colors.black;
 
     return Padding(
@@ -2191,6 +2194,23 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                       }
                     : null,
               ),
+
+              // ================================================================
+              // PRODUTOS ARQUIVADOS
+              // ================================================================
+              if (canArchiveProducts)
+                IconButton(
+                  tooltip: 'Produtos arquivados',
+                  icon: Icon(Icons.archive_outlined, color: headerColor),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            ArchivedProductsScreen(storeId: widget.storeId),
+                      ),
+                    );
+                  },
+                ),
 
               // ================================================================
               // INDICADOR BUSINESS

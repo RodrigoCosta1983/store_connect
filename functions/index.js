@@ -1150,13 +1150,15 @@ const {
 
 
 // ============================================================================
-// STORE CONNECT - EXPORT: ARQUIVAMENTO SEGURO DE CLIENTE
+// STORE CONNECT - EXPORT: ARQUIVAMENTO E RESTAURAÇÃO SEGURA DE CLIENTE
 // ============================================================================
 //
-// Arquivo de destino:
+// Arquivo:
 //   functions/index.js
 //
-// Adicione este bloco junto aos demais módulos exportados.
+// Exporta as Cloud Functions responsáveis pelo ciclo seguro de:
+// - arquivamento de clientes;
+// - restauração de clientes.
 //
 // ============================================================================
 
@@ -1166,6 +1168,15 @@ const {
 
 exports.archiveCustomer =
   archiveCustomer;
+
+const {
+  restoreCustomer,
+} = require("./customers/restoreCustomer");
+
+exports.restoreCustomer =
+  restoreCustomer;
+
+
 
 
  /// =======================================================================
@@ -1389,6 +1400,17 @@ const {
 } = require("./products/archiveProduct");
 
 exports.archiveProduct = archiveProduct;
+
+// ============================================================================
+// STORE CONNECT - RESTAURAÇÃO SEGURA DE PRODUTO
+// ============================================================================
+
+const {
+  restoreProduct,
+} = require("./products/restoreProduct");
+
+exports.restoreProduct =
+  restoreProduct;
 
 /**
  * 🔄 ALTERAR PLANO DA ASSINATURA

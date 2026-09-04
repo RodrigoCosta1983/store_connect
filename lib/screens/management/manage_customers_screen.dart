@@ -101,6 +101,7 @@ import 'package:store_connect/providers/user_role_provider.dart';
 import 'package:store_connect/widgets/dynamic_background.dart';
 
 import 'package:store_connect/screens/management/customer_receivables_screen.dart';
+import 'package:store_connect/screens/management/archived_customers_screen.dart';
 
 // ============================================================================
 // DIÁLOGO DE ADICIONAR / EDITAR CLIENTE
@@ -481,7 +482,7 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
   // ==========================================================================
 
   Future<void> _archiveCustomer(Customer customer) async {
-    final reasonController = TextEditingController();
+    String reason = '';
 
     final shouldArchive = await showDialog<bool>(
       context: context,
@@ -505,8 +506,10 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
               ),
               const SizedBox(height: 16),
               TextField(
-                controller: reasonController,
                 maxLines: 3,
+                onChanged: (value) {
+                  reason = value.trim();
+                },
                 decoration: const InputDecoration(
                   labelText: 'Motivo (opcional)',
                   hintText: 'Ex.: cadastro duplicado',
@@ -535,13 +538,8 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
     );
 
     if (shouldArchive != true) {
-      reasonController.dispose();
       return;
     }
-
-    final reason = reasonController.text.trim();
-
-    reasonController.dispose();
 
     try {
       final callable = FirebaseFunctions.instance.httpsCallable(
@@ -643,7 +641,10 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
                     // ========================================================
                     // CABEÇALHO + BUSCA
                     // ========================================================
-                    _buildCustomHeader(isDarkMode),
+                    _buildCustomHeader(
+                      isDarkMode,
+                      roleProvider.canPerformCriticalActions,
+                    ),
 
                     // ========================================================
                     // LISTA
@@ -766,7 +767,7 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
   // CABEÇALHO PERSONALIZADO
   // ==========================================================================
 
-  Widget _buildCustomHeader(bool isDarkMode) {
+  Widget _buildCustomHeader(bool isDarkMode, bool canPerformCriticalActions) {
     final headerColor = isDarkMode ? Colors.white : Colors.black;
 
     return Padding(
@@ -813,10 +814,30 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
               // ============================================================
               // MODO GERENCIAMENTO
               //
-              // Espaço usado apenas para manter o título visualmente alinhado.
+              // ADMIN:
+              // pode acessar os clientes arquivados.
+              //
+              // GERENTE / OPERADOR:
+              // mantém apenas o espaço de alinhamento.
+              //
+              // A segurança definitiva da restauração permanece no backend.
               // ============================================================
               if (!widget.isSelectionMode)
-                const SizedBox(width: 48)
+                canPerformCriticalActions
+                    ? IconButton(
+                        icon: Icon(Icons.archive_outlined, color: headerColor),
+                        tooltip: 'Clientes arquivados',
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => ArchivedCustomersScreen(
+                                storeId: widget.storeId,
+                              ),
+                            ),
+                          );
+                        },
+                      )
+                    : const SizedBox(width: 48)
               // ============================================================
               // MODO SELEÇÃO
               //
@@ -825,9 +846,7 @@ class _ManageCustomersScreenState extends State<ManageCustomersScreen> {
               else
                 IconButton(
                   icon: Icon(Icons.person_off, color: headerColor),
-
                   tooltip: 'Vender sem cliente',
-
                   onPressed: () => Navigator.of(context).pop(null),
                 ),
             ],
