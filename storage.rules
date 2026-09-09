@@ -1,0 +1,101 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ========================================================================
+    // AUTORIZAÇÃO DA LOJA
+    // ========================================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function userExists() {
+      return isAuthenticated() &&
+        firestore.exists(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        );
+    }
+
+    function userData() {
+      return firestore.get(
+        /databases/(default)/documents/users/$(request.auth.uid)
+      ).data;
+    }
+
+    function isActiveStoreMember(storeId) {
+      return userExists() &&
+        userData().storeId == storeId &&
+        (
+          !('accessStatus' in userData()) ||
+          userData().accessStatus == 'active'
+        );
+    }
+
+
+    // ========================================================================
+    // LOGO DA LOJA
+    // ========================================================================
+
+    match /store_logos/{storeId}/{fileName} {
+      allow read, write:
+        if isActiveStoreMember(storeId);
+    }
+
+
+    // ========================================================================
+    // QR CODE PIX
+    // ========================================================================
+
+    match /pix_qrcodes/{storeId}/{fileName} {
+      allow read, write:
+        if isActiveStoreMember(storeId);
+    }
+
+
+    // ========================================================================
+    // IMAGENS DE CATEGORIAS
+    // ========================================================================
+
+    match /category_images/{storeId}/{fileName} {
+      allow read, write:
+        if isActiveStoreMember(storeId);
+    }
+
+
+    // ========================================================================
+    // IMAGENS DE PRODUTOS
+    // ========================================================================
+
+    match /product_images/{storeId}/{fileName} {
+      allow read, write:
+        if isActiveStoreMember(storeId);
+    }
+
+
+    // ========================================================================
+    // BACKUPS DA LOJA
+    //
+    // Cliente Flutter/Web NÃO possui acesso.
+    // Somente backend/Admin SDK controla esses arquivos.
+    // ========================================================================
+
+    match /store_backups/{storeId}/{allPaths=**} {
+      allow read, write:
+        if false;
+    }
+
+
+    // ========================================================================
+    // FAIL CLOSED
+    //
+    // Qualquer caminho não declarado acima permanece bloqueado.
+    // ========================================================================
+
+    match /{allPaths=**} {
+      allow read, write:
+        if false;
+    }
+  }
+}

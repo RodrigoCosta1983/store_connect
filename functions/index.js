@@ -1412,6 +1412,53 @@ const {
 exports.restoreProduct =
   restoreProduct;
 
+
+// -----------------------------------------------------------------------
+// 💾 BACKUP / SNAPSHOT GERAL DA LOJA
+// -----------------------------------------------------------------------
+
+const {
+  createStoreSnapshot,
+} = require("./backups/createStoreSnapshot");
+
+exports.createStoreSnapshot =
+  createStoreSnapshot;
+
+// -----------------------------------------------------------------------
+// ⏰ BACKUP AUTOMÁTICO DIÁRIO DAS LOJAS
+// -----------------------------------------------------------------------
+const {
+  scheduledStoreBackups,
+} = require("./backups/scheduledStoreBackups");
+
+exports.scheduledStoreBackups =
+  scheduledStoreBackups;
+
+
+// -----------------------------------------------------------------------
+// 🧪 PREVIEW / DRY RUN DA RETENÇÃO DE BACKUPS
+// -----------------------------------------------------------------------
+const {
+  previewBackupRetention,
+} = require("./backups/previewBackupRetention");
+
+exports.previewBackupRetention =
+  previewBackupRetention;
+
+
+
+// -----------------------------------------------------------------------
+// 🧪 RETENÇÃO AUTOMÁTICA DE BACKUPS — DRY RUN
+// -----------------------------------------------------------------------
+const {
+  scheduledBackupRetention,
+} = require("./backups/scheduledBackupRetention");
+
+exports.scheduledBackupRetention =
+  scheduledBackupRetention;
+
+
+
 /**
  * 🔄 ALTERAR PLANO DA ASSINATURA
  *
