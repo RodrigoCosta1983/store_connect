@@ -16,15 +16,17 @@ Documentação oficial da arquitetura de backup, retenção e recuperação do S
 ✅ F5.4 — Auditoria do backup
 ✅ F5.5 — Automação diária
 
-🟡 F5.6 — Política de retenção automática
+🟡 F5.6 — Implementação concluída; rollout destrutivo em produção aguardando candidato natural
 
-⏳ F5.7 — Tela de backups
-⏳ F5.8 — Estratégia de restauração
-⏳ F5.9 — Restore pelo backend
-⏳ F5.10 — Backup físico de arquivos Storage
-⏳ F5.11 — Testes de recuperação
-⏳ F5.12 — Backup redundante externo
-⏳ F5.13 — Disaster Recovery
+⏸️ F5.7 — Tela de backups — PAUSADA TEMPORARIAMENTE
+⏸️ F5.8 — Estratégia de restauração — PAUSADA TEMPORARIAMENTE
+⏸️ F5.9 — Restore pelo backend — PAUSADA TEMPORARIAMENTE
+⏸️ F5.10 — Backup físico de arquivos Storage — PAUSADA TEMPORARIAMENTE
+⏸️ F5.11 — Testes de recuperação — PAUSADA TEMPORARIAMENTE
+⏸️ F5.12 — Backup redundante externo — PAUSADA TEMPORARIAMENTE
+⏸️ F5.13 — Disaster Recovery — PAUSADA TEMPORARIAMENTE
+
+🚀 PRÓXIMA GRANDE FRENTE: F7 — CATÁLOGO INTELIGENTE E COMPARTILHAMENTO DE PRODUTOS
 ```
 
 =====================================================================
@@ -2426,7 +2428,11 @@ qualquer combinação impossível
 
 =====================================================================
 
-# ⏳ F5.6-D3-D — PURE CLAIM PLANNER + TESTES
+# ✅ F5.6-D3-D — PURE CLAIM PLANNER + TESTES
+
+> **Atualização de 09/09/2026:** esta etapa foi concluída posteriormente.
+> O conteúdo abaixo preserva o planejamento original que orientou a implementação.
+> Para o estado vigente, consulte a seção **F5.6 — ESTADO CONSOLIDADO APÓS D3 E G9**.
 
 Antes de conectar qualquer decisão a uma Firestore Transaction real,
 será criada uma função pura, sem Firebase.
@@ -2497,7 +2503,7 @@ a implementação da transaction de CLAIM no Firebase.
 
 =====================================================================
 
-## 📌 Estado atual da F5.6-D3
+## 📌 Estado registrado naquele momento da F5.6-D3 — HISTÓRICO
 
 ```text
 ✅ D3-A — protocolo geral
@@ -2509,6 +2515,9 @@ a implementação da transaction de CLAIM no Firebase.
 ❌ zero escrita nova
 ❌ zero deploy desta fase
 ```
+
+> Este bloco registra o estado histórico anterior à implementação completa da D3/G9.
+> Ele foi supersedido pelo estado consolidado de 09/09/2026, preservado abaixo para rastreabilidade arquitetural.
 
 =====================================================================
 
@@ -2652,3 +2661,130 @@ mas não entram no pacote de deploy das Cloud Functions.
 
 ⚠️ execução destrutiva em produção permanece DESATIVADA
 ```
+
+=====================================================================
+
+# 🟡 F5.6 — ROLLOUT CONTROLADO EM PRODUÇÃO
+
+## 📅 Último pré-flight confirmado
+
+Data observada nos logs de produção:
+
+```text
+08/09/2026 — execução natural das 04:00
+America/Sao_Paulo
+```
+
+Resumo global do dry run:
+
+```text
+totalStores:                    9
+successCount:                   9
+failureCount:                   0
+totalEligible:                 36
+totalDeleteCandidates:          0
+totalAllowedDeleteCandidates:   0
+totalBlockedDeleteCandidates:   0
+```
+
+Conclusão operacional:
+
+```text
+✅ Scheduler saudável
+✅ 9/9 lojas processadas
+✅ nenhuma falha
+✅ classificação consistente
+✅ produção continua em DRY RUN
+✅ nenhum backup removido
+
+❌ ainda não existe candidato natural para exclusão
+```
+
+## 🔒 Decisão de segurança
+
+Enquanto não existir candidato natural:
+
+```text
+❌ NÃO alterar RETENTION_EXECUTION_ENABLED
+❌ NÃO adicionar loja à RETENTION_EXECUTION_STORE_IDS
+❌ NÃO realizar deploy destrutivo apenas para forçar validação
+
+✅ manter produção em DRY RUN
+✅ deixar o histórico de backups crescer naturalmente
+```
+
+Estado de produção preservado:
+
+```text
+RETENTION_EXECUTION_ENABLED = false
+RETENTION_EXECUTION_STORE_IDS = vazio
+RETENTION_MAX_FRESH_DELETES_PER_STORE = 1
+```
+
+## 🎯 Condição para o primeiro rollout destrutivo real
+
+O rollout somente será iniciado quando o dry run real apresentar:
+
+```text
+totalDeleteCandidates > 0
+E
+totalAllowedDeleteCandidates > 0
+```
+
+Nesse momento, o procedimento será:
+
+```text
+1. identificar uma única loja com candidato ALLOWED
+2. revisar novamente metadata, storagePath, checksum e estado atual
+3. habilitar somente essa loja na allow-list
+4. manter RETENTION_MAX_FRESH_DELETES_PER_STORE = 1
+5. executar uma única exclusão fresca controlada
+6. validar Storage removido
+7. validar metadata do snapshot removida somente após Storage
+8. validar retentionDeletes/{backupId} = completed
+9. validar auditLog store_backup_retention_deleted
+10. validar ledger do Scheduler e proteção contra retry
+11. confirmar idempotência e ausência de alteração em dailyRuns
+12. decidir se o rollout permanece limitado ou volta imediatamente para dry run
+```
+
+## 📌 Estado oficial da F5.6 após o pré-flight
+
+```text
+✅ implementação da retenção concluída
+✅ exclusão segura e resumível implementada
+✅ proteção de concorrência / lease / takeover
+✅ proteção contra retry do Scheduler
+✅ 38/38 testes da F5.6 aprovados
+✅ 8/8 testes de Storage Rules aprovados
+✅ deploy atual permanece não destrutivo
+✅ produção observada em dry run sem falhas
+
+🟡 rollout destrutivo real
+   → aguardando candidato natural de retenção
+```
+
+A F5.6 somente será encerrada definitivamente após a primeira validação
+real e controlada de um candidato natural em produção.
+
+=====================================================================
+
+# 🚀 TRANSIÇÃO DE FRENTE DO PROJETO
+
+Decisão de 09/09/2026:
+
+```text
+🟡 F5.6
+→ permanecer acompanhando em dry run
+→ aguardar candidato natural para rollout real
+
+⏸️ F5.7 → F5.13
+→ pausadas temporariamente
+
+🚀 F7 — CATÁLOGO INTELIGENTE E COMPARTILHAMENTO DE PRODUTOS
+→ próxima grande frente de desenvolvimento
+```
+
+A pausa de F5.7 → F5.13 não cancela essas etapas.
+Elas permanecem no roadmap de recuperação e Disaster Recovery e serão retomadas posteriormente.
+
