@@ -76,6 +76,7 @@ import 'package:store_connect/screens/fiscal/widgets/ncm_search_dialog.dart';
 
 import 'package:store_connect/screens/products/import/product_import_screen.dart';
 import 'package:store_connect/screens/management/archived_products_screen.dart';
+import 'package:store_connect/screens/management/widgets/catalog_created_dialog.dart';
 
 // ============================================================================
 // DIÁLOGO DE CADASTRO / EDIÇÃO DE PRODUTO
@@ -1577,6 +1578,8 @@ class ManageProductsScreen extends StatefulWidget {
 }
 
 class _ManageProductsScreenState extends State<ManageProductsScreen> {
+  static const String _catalogPublicBaseUrl = 'https://www.storeconnect.com.br';
+
   final _searchController = TextEditingController();
 
   // ==========================================================================
@@ -1591,6 +1594,493 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
   bool _isBusiness = false;
   bool _planLoaded = false;
+  // ==========================================================================
+  // CATÁLOGO — MODO DE SELEÇÃO
+  // ==========================================================================
+
+  bool _isCatalogSelectionMode = false;
+
+  final Set<String> _selectedCatalogProductIds = <String>{};
+
+  int get _selectedCatalogProductCount => _selectedCatalogProductIds.length;
+
+  bool _isCatalogProductSelected(String productId) {
+    return _selectedCatalogProductIds.contains(productId);
+  }
+
+  bool _isCatalogProductAvailable(Map<String, dynamic> productData) {
+    final quantidade = productData['quantidade'];
+
+    return quantidade is num && quantidade > 0;
+  }
+
+  String _buildCatalogPublicUrl({
+    required String publicSlug,
+    required String publicToken,
+  }) {
+    return '$_catalogPublicBaseUrl/$publicSlug/catalogo/$publicToken';
+  }
+
+  void _enterCatalogSelectionMode() {
+    if (_isCatalogSelectionMode) {
+      return;
+    }
+
+    setState(() {
+      _isCatalogSelectionMode = true;
+      _selectedCatalogProductIds.clear();
+    });
+  }
+
+  void _toggleCatalogProduct(String productId) {
+    if (!_isCatalogSelectionMode) {
+      return;
+    }
+
+    final normalizedProductId = productId.trim();
+
+    if (normalizedProductId.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      if (_selectedCatalogProductIds.contains(normalizedProductId)) {
+        _selectedCatalogProductIds.remove(normalizedProductId);
+      } else {
+        _selectedCatalogProductIds.add(normalizedProductId);
+      }
+    });
+  }
+
+  bool _isCatalogCategoryFullySelected(
+    String categoryId,
+    List<QueryDocumentSnapshot> products,
+  ) {
+    final categoryProducts = products.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+
+      return data['categoryId']?.toString().trim() == categoryId &&
+          _isCatalogProductAvailable(data);
+    }).toList();
+
+    if (categoryProducts.isEmpty) {
+      return false;
+    }
+
+    return categoryProducts.every(
+      (doc) => _selectedCatalogProductIds.contains(doc.id),
+    );
+  }
+
+  int _selectedCatalogCategoryProductCount(
+    String categoryId,
+    List<QueryDocumentSnapshot> products,
+  ) {
+    return products.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+
+      return data['categoryId']?.toString().trim() == categoryId &&
+          _isCatalogProductAvailable(data) &&
+          _selectedCatalogProductIds.contains(doc.id);
+    }).length;
+  }
+
+  void _toggleCatalogCategory(
+    String categoryId,
+    List<QueryDocumentSnapshot> products,
+  ) {
+    if (!_isCatalogSelectionMode) {
+      return;
+    }
+
+    final normalizedCategoryId = categoryId.trim();
+
+    if (normalizedCategoryId.isEmpty) {
+      return;
+    }
+
+    final categoryProductIds = products
+        .where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+
+          return data['categoryId']?.toString().trim() ==
+                  normalizedCategoryId &&
+              _isCatalogProductAvailable(data);
+        })
+        .map((doc) => doc.id)
+        .toSet();
+
+    if (categoryProductIds.isEmpty) {
+      return;
+    }
+
+    final allSelected = categoryProductIds.every(
+      _selectedCatalogProductIds.contains,
+    );
+
+    setState(() {
+      if (allSelected) {
+        _selectedCatalogProductIds.removeAll(categoryProductIds);
+      } else {
+        _selectedCatalogProductIds.addAll(categoryProductIds);
+      }
+    });
+  }
+
+  Future<void> _showCatalogCategorySelector(
+    List<QueryDocumentSnapshot> products,
+  ) async {
+    final categories = <String, String>{};
+
+    for (final productDoc in products) {
+      final data = productDoc.data() as Map<String, dynamic>;
+
+      final categoryId = data['categoryId']?.toString().trim() ?? '';
+
+      final categoryName = data['categoryName']?.toString().trim() ?? '';
+
+      if (categoryId.isEmpty || categoryName.isEmpty) {
+        continue;
+      }
+
+      categories[categoryId] = categoryName;
+    }
+
+    if (categories.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nenhuma categoria disponível para seleção.'),
+        ),
+      );
+
+      return;
+    }
+
+    final sortedCategories = categories.entries.toList()
+      ..sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Selecionar por categoria'),
+              content: SizedBox(
+                width: 480,
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: sortedCategories.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final category = sortedCategories[index];
+
+                    final totalCount = products.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+
+                      return data['categoryId']?.toString().trim() ==
+                              category.key &&
+                          _isCatalogProductAvailable(data);
+                    }).length;
+
+                    final selectedCount = _selectedCatalogCategoryProductCount(
+                      category.key,
+                      products,
+                    );
+
+                    final fullySelected = _isCatalogCategoryFullySelected(
+                      category.key,
+                      products,
+                    );
+
+                    final bool? checkboxValue = fullySelected
+                        ? true
+                        : selectedCount > 0
+                        ? null
+                        : false;
+
+                    return CheckboxListTile(
+                      value: checkboxValue,
+                      tristate: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(category.value),
+                      subtitle: Text(
+                        totalCount == 0
+                            ? 'Nenhum produto disponível'
+                            : '$selectedCount de $totalCount disponíveis selecionados',
+                      ),
+                      onChanged: totalCount == 0
+                          ? null
+                          : (_) {
+                              _toggleCatalogCategory(category.key, products);
+
+                              setDialogState(() {});
+                            },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Concluir'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>?> _showCreateCatalogDialog() async {
+    final selectedProductIds = _selectedCatalogProductIds.toList(
+      growable: false,
+    );
+
+    if (selectedProductIds.isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Selecione pelo menos um produto para criar o catálogo.',
+            ),
+          ),
+        );
+
+      return null;
+    }
+
+    if (selectedProductIds.length > 200) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('O catálogo pode ter no máximo 200 produtos.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+      return null;
+    }
+
+    String catalogTitle = '';
+
+    int expiresInDays = 7;
+    String? titleError;
+
+    final config = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              scrollable: true,
+              title: const Text('Configurar catálogo'),
+              content: SizedBox(
+                width: 460,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      autofocus: true,
+                      maxLength: 100,
+                      decoration: InputDecoration(
+                        labelText: 'Título do catálogo',
+                        hintText: 'Ex.: Catálogo Setembro',
+                        errorText: titleError,
+                        border: const OutlineInputBorder(),
+                      ),
+                      onChanged: (value) {
+                        catalogTitle = value;
+                        if (titleError == null) {
+                          return;
+                        }
+
+                        setDialogState(() {
+                          titleError = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<int>(
+                      value: expiresInDays,
+                      decoration: const InputDecoration(
+                        labelText: 'Validade do catálogo',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 1, child: Text('1 dia')),
+                        DropdownMenuItem(value: 3, child: Text('3 dias')),
+                        DropdownMenuItem(value: 7, child: Text('7 dias')),
+                        DropdownMenuItem(value: 15, child: Text('15 dias')),
+                        DropdownMenuItem(value: 30, child: Text('30 dias')),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) {
+                          return;
+                        }
+
+                        setDialogState(() {
+                          expiresInDays = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '${selectedProductIds.length} '
+                      '${selectedProductIds.length == 1 ? 'produto selecionado' : 'produtos selecionados'}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    final title = catalogTitle.trim();
+
+                    if (title.isEmpty) {
+                      setDialogState(() {
+                        titleError = 'Informe um título para o catálogo.';
+                      });
+
+                      return;
+                    }
+
+                    Navigator.of(
+                      dialogContext,
+                    ).pop({'title': title, 'expiresInDays': expiresInDays});
+                  },
+                  icon: const Icon(Icons.menu_book_outlined),
+                  label: const Text('Criar catálogo'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (config == null || !mounted) {
+      return null;
+    }
+
+    final title = config['title']?.toString().trim() ?? '';
+    final expiresInDaysValue = config['expiresInDays'];
+
+    if (title.isEmpty || expiresInDaysValue is! int) {
+      return null;
+    }
+
+    final result = await _createCatalog(
+      title: title,
+      productIds: selectedProductIds,
+      expiresInDays: expiresInDaysValue,
+    );
+
+    return result;
+  }
+
+  Future<Map<String, dynamic>?> _createCatalog({
+    required String title,
+    required List<String> productIds,
+    required int expiresInDays,
+  }) async {
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'createCatalog',
+      );
+
+      final response = await callable.call({
+        'title': title,
+        'productIds': productIds,
+        'expiresInDays': expiresInDays,
+      });
+
+      final rawData = response.data;
+
+      if (rawData is! Map) {
+        throw const FormatException('Resposta inválida ao criar catálogo.');
+      }
+
+      final data = Map<String, dynamic>.from(rawData);
+
+      final catalogId = data['catalogId']?.toString().trim() ?? '';
+      final publicSlug = data['publicSlug']?.toString().trim() ?? '';
+
+      final publicToken = data['publicToken']?.toString().trim() ?? '';
+
+      if (data['success'] != true ||
+          catalogId.isEmpty ||
+          publicSlug.isEmpty ||
+          publicToken.isEmpty) {
+        throw const FormatException('Resposta incompleta ao criar catálogo.');
+      }
+
+      final publicUrl = _buildCatalogPublicUrl(
+        publicSlug: publicSlug,
+        publicToken: publicToken,
+      );
+
+      data['publicUrl'] = publicUrl;
+
+      return data;
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) {
+        return null;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'Não foi possível criar o catálogo.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+      return null;
+    } catch (e) {
+      debugPrint('Erro inesperado ao criar catálogo: $e');
+
+      if (!mounted) {
+        return null;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível criar o catálogo.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+      return null;
+    }
+  }
+
+  void _cancelCatalogSelection() {
+    if (!_isCatalogSelectionMode && _selectedCatalogProductIds.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isCatalogSelectionMode = false;
+      _selectedCatalogProductIds.clear();
+    });
+  }
 
   // ==========================================================================
   // INIT
@@ -1724,7 +2214,6 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   Future<void> _archiveProduct(String productId, String productName) async {
     String reason = '';
 
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1768,8 +2257,6 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         ],
       ),
     );
-
-
 
     if (confirmed != true) {
       return;
@@ -1928,23 +2415,50 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                             );
                           }
 
-                          return LayoutBuilder(
-                            builder: (context, constraints) {
-                              if (constraints.maxWidth > 768) {
-                                return _buildProductDataTable(
-                                  filteredProducts,
-                                  isDarkMode,
-                                  constraints,
-                                  canArchiveProducts,
-                                );
-                              }
+                          return Column(
+                            children: [
+                              if (_isCatalogSelectionMode)
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    8,
+                                    0,
+                                    8,
+                                    8,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () =>
+                                          _showCatalogCategorySelector(
+                                            allProducts,
+                                          ),
+                                      icon: const Icon(Icons.category_outlined),
+                                      label: const Text('Categorias'),
+                                    ),
+                                  ),
+                                ),
 
-                              return _buildProductListView(
-                                filteredProducts,
-                                isDarkMode,
-                                canArchiveProducts,
-                              );
-                            },
+                              Expanded(
+                                child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    if (constraints.maxWidth > 768) {
+                                      return _buildProductDataTable(
+                                        filteredProducts,
+                                        isDarkMode,
+                                        constraints,
+                                        canArchiveProducts,
+                                      );
+                                    }
+
+                                    return _buildProductListView(
+                                      filteredProducts,
+                                      isDarkMode,
+                                      canArchiveProducts,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
                           );
                         },
                       ),
@@ -1957,17 +2471,19 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         ],
       ),
 
-      floatingActionButton: FloatingActionButton(
-        onPressed: _planLoaded ? () => _showProductDialog() : null,
-        tooltip: 'Adicionar Produto',
-        child: _planLoaded
-            ? const Icon(Icons.add)
-            : const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-      ),
+      floatingActionButton: _isCatalogSelectionMode
+          ? null
+          : FloatingActionButton(
+              onPressed: _planLoaded ? () => _showProductDialog() : null,
+              tooltip: 'Adicionar Produto',
+              child: _planLoaded
+                  ? const Icon(Icons.add)
+                  : const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+            ),
     );
   }
 
@@ -2022,11 +2538,12 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
           headingRowColor: MaterialStateProperty.all(
             Theme.of(context).splashColor,
           ),
-          columns: const [
-            DataColumn(label: Text('Produto')),
-            DataColumn(label: Text('Estoque (Mín.)'), numeric: true),
-            DataColumn(label: Text('Preço'), numeric: true),
-            DataColumn(label: Text('Ações')),
+          columns: [
+            const DataColumn(label: Text('Produto')),
+            const DataColumn(label: Text('Estoque (Mín.)'), numeric: true),
+            const DataColumn(label: Text('Preço'), numeric: true),
+            if (!_isCatalogSelectionMode)
+              const DataColumn(label: Text('Ações')),
           ],
           rows: products.map((productDoc) {
             final productData = productDoc.data() as Map<String, dynamic>;
@@ -2042,7 +2559,18 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
             final bool needsRestock = quantidade <= minimumStock;
 
+            final bool isCatalogAvailable = _isCatalogProductAvailable(
+              productData,
+            );
+
+            final bool isSelected = _isCatalogProductSelected(productDoc.id);
+
             return DataRow(
+              selected: _isCatalogSelectionMode && isSelected,
+              onSelectChanged:
+                  _isCatalogSelectionMode && (isCatalogAvailable || isSelected)
+                  ? (_) => _toggleCatalogProduct(productDoc.id)
+                  : null,
               color: MaterialStateProperty.resolveWith<Color?>((
                 Set<MaterialState> states,
               ) {
@@ -2105,30 +2633,34 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
                 DataCell(Text(formatCurrency.format(price))),
 
-                DataCell(
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blueAccent),
-                        onPressed: () =>
-                            _showProductDialog(product: productDoc),
-                        tooltip: 'Editar',
-                      ),
-                      if (canArchiveProducts)
+                if (!_isCatalogSelectionMode)
+                  DataCell(
+                    Row(
+                      children: [
                         IconButton(
-                          icon: Icon(
-                            Icons.archive_outlined,
-                            color: Colors.orange.shade700,
+                          icon: const Icon(
+                            Icons.edit,
+                            color: Colors.blueAccent,
                           ),
-                          onPressed: () => _archiveProduct(
-                            productDoc.id,
-                            productData['name']?.toString() ?? 'Produto',
-                          ),
-                          tooltip: 'Arquivar',
+                          onPressed: () =>
+                              _showProductDialog(product: productDoc),
+                          tooltip: 'Editar',
                         ),
-                    ],
+                        if (canArchiveProducts)
+                          IconButton(
+                            icon: Icon(
+                              Icons.archive_outlined,
+                              color: Colors.orange.shade700,
+                            ),
+                            onPressed: () => _archiveProduct(
+                              productDoc.id,
+                              productData['name']?.toString() ?? 'Produto',
+                            ),
+                            tooltip: 'Arquivar',
+                          ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             );
           }).toList(),
@@ -2136,7 +2668,6 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       ),
     );
   }
-
   // ==========================================================================
   // CABEÇALHO
   // ==========================================================================
@@ -2144,100 +2675,219 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   Widget _buildCustomHeader(bool isDarkMode, bool canArchiveProducts) {
     final headerColor = isDarkMode ? Colors.white : Colors.black;
 
+    final bool isMobileHeader = MediaQuery.of(context).size.width < 600;
+
+    Widget buildBackButton() {
+      return IconButton(
+        tooltip: _isCatalogSelectionMode ? 'Cancelar seleção' : 'Voltar',
+        icon: Icon(
+          _isCatalogSelectionMode ? Icons.close : Icons.arrow_back,
+          color: headerColor,
+        ),
+        onPressed: _isCatalogSelectionMode
+            ? _cancelCatalogSelection
+            : () => Navigator.of(context).pop(),
+      );
+    }
+
+    Widget buildTitle() {
+      return Text(
+        _isCatalogSelectionMode ? 'Selecionar produtos' : 'Gerenciar Produtos',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: headerColor,
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+    }
+
+    Widget buildContinueButton() {
+      return FilledButton.icon(
+        onPressed:
+            _selectedCatalogProductCount > 0 &&
+                _selectedCatalogProductCount <= 200
+            ? () async {
+                final result = await _showCreateCatalogDialog();
+
+                if (result == null || !mounted) {
+                  return;
+                }
+
+                final publicUrl = result['publicUrl']?.toString().trim() ?? '';
+
+                await showCatalogCreatedDialog(
+                  context: context,
+                  publicUrl: publicUrl,
+                );
+              }
+            : null,
+        icon: const Icon(Icons.arrow_forward),
+        label: const Text('Continuar'),
+      );
+    }
+
+    Widget buildCatalogButton() {
+      return IconButton(
+        tooltip: 'Criar catálogo',
+        icon: Icon(Icons.menu_book_outlined, color: headerColor),
+        onPressed: _planLoaded ? _enterCatalogSelectionMode : null,
+      );
+    }
+
+    Widget buildImportButton() {
+      return IconButton(
+        tooltip: 'Importar produtos',
+        icon: Icon(Icons.upload_file_outlined, color: headerColor),
+        onPressed: _planLoaded
+            ? () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (ctx) => ProductImportScreen(
+                      storeId: widget.storeId,
+                      isBusiness: _isBusiness,
+                    ),
+                  ),
+                );
+              }
+            : null,
+      );
+    }
+
+    Widget buildArchivedButton() {
+      return IconButton(
+        tooltip: 'Produtos arquivados',
+        icon: Icon(Icons.archive_outlined, color: headerColor),
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) =>
+                  ArchivedProductsScreen(storeId: widget.storeId),
+            ),
+          );
+        },
+      );
+    }
+
+    Widget buildBusinessBadge() {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.deepPurple.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Text(
+          'BUSINESS',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: Colors.deepPurple,
+          ),
+        ),
+      );
+    }
+
+    Widget buildDesktopTopRow() {
+      return Row(
+        children: [
+          buildBackButton(),
+
+          Expanded(child: buildTitle()),
+
+          if (_isCatalogSelectionMode)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                '$_selectedCatalogProductCount '
+                '${_selectedCatalogProductCount == 1 ? 'selecionado' : 'selecionados'}',
+                style: TextStyle(
+                  color: headerColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+
+          if (_isCatalogSelectionMode)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: buildContinueButton(),
+            ),
+
+          if (!_isCatalogSelectionMode) buildCatalogButton(),
+
+          if (!_isCatalogSelectionMode) buildImportButton(),
+
+          if (!_isCatalogSelectionMode && canArchiveProducts)
+            buildArchivedButton(),
+
+          if (!_isCatalogSelectionMode && _isBusiness)
+            buildBusinessBadge()
+          else if (!_isCatalogSelectionMode)
+            const SizedBox(width: 8),
+        ],
+      );
+    }
+
+    Widget buildMobileHeader() {
+      return Column(
+        children: [
+          Row(
+            children: [
+              buildBackButton(),
+              const SizedBox(width: 4),
+              Expanded(child: buildTitle()),
+            ],
+          ),
+
+          const SizedBox(height: 4),
+
+          if (_isCatalogSelectionMode)
+            Padding(
+              padding: const EdgeInsets.only(left: 12, right: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '$_selectedCatalogProductCount '
+                      '${_selectedCatalogProductCount == 1 ? 'selecionado' : 'selecionados'}',
+                      style: TextStyle(
+                        color: headerColor,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  buildContinueButton(),
+                ],
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(left: 48, right: 4),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  spacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    buildCatalogButton(),
+                    buildImportButton(),
+                    if (canArchiveProducts) buildArchivedButton(),
+                    if (_isBusiness) buildBusinessBadge(),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
       child: Column(
         children: [
-          Row(
-            children: [
-              // ================================================================
-              // VOLTAR
-              // ================================================================
-              IconButton(
-                icon: Icon(Icons.arrow_back, color: headerColor),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-
-              // ================================================================
-              // TÍTULO
-              // ================================================================
-              Expanded(
-                child: Text(
-                  'Gerenciar Produtos',
-                  style: TextStyle(
-                    color: headerColor,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-
-              // ================================================================
-              // IMPORTAR PRODUTOS
-              //
-              // Disponível tanto para PRO quanto para BUSINESS.
-              // Abre o assistente de importação XLSX / CSV.
-              // ================================================================
-              IconButton(
-                tooltip: 'Importar produtos',
-                icon: Icon(Icons.upload_file_outlined, color: headerColor),
-                onPressed: _planLoaded
-                    ? () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (ctx) => ProductImportScreen(
-                              storeId: widget.storeId,
-                              isBusiness: _isBusiness,
-                            ),
-                          ),
-                        );
-                      }
-                    : null,
-              ),
-
-              // ================================================================
-              // PRODUTOS ARQUIVADOS
-              // ================================================================
-              if (canArchiveProducts)
-                IconButton(
-                  tooltip: 'Produtos arquivados',
-                  icon: Icon(Icons.archive_outlined, color: headerColor),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            ArchivedProductsScreen(storeId: widget.storeId),
-                      ),
-                    );
-                  },
-                ),
-
-              // ================================================================
-              // INDICADOR BUSINESS
-              // ================================================================
-              if (_isBusiness)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.deepPurple.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'BUSINESS',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple,
-                    ),
-                  ),
-                )
-              else
-                const SizedBox(width: 8),
-            ],
-          ),
+          if (isMobileHeader) buildMobileHeader() else buildDesktopTopRow(),
 
           const SizedBox(height: 8),
 
@@ -2269,7 +2919,6 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       ),
     );
   }
-
   // ==========================================================================
   // CARD MOBILE
   // ==========================================================================
@@ -2288,6 +2937,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
 
     final bool needsRestock = quantidade <= minimumStock;
 
+    final bool isCatalogAvailable = _isCatalogProductAvailable(productData);
+
+    final bool isSelected = _isCatalogProductSelected(productDoc.id);
+
     // Verifica apenas para mostrar um pequeno indicador.
     final fiscal = productData['fiscal'];
 
@@ -2297,13 +2950,17 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         fiscal['ncm'].toString().isNotEmpty;
 
     return Card(
-      color: isDarkMode
+      color: _isCatalogSelectionMode && isSelected
+          ? Colors.deepPurple.withOpacity(isDarkMode ? 0.28 : 0.10)
+          : isDarkMode
           ? Colors.black.withOpacity(0.6)
           : Colors.white.withOpacity(0.8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
         side: BorderSide(
-          color: needsRestock
+          color: _isCatalogSelectionMode && isSelected
+              ? Colors.deepPurple
+              : needsRestock
               ? Colors.redAccent.withOpacity(0.8)
               : Colors.transparent,
           width: 2,
@@ -2311,6 +2968,9 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       ),
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       child: ListTile(
+        onTap: _isCatalogSelectionMode && (isCatalogAvailable || isSelected)
+            ? () => _toggleCatalogProduct(productDoc.id)
+            : null,
         contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         leading: CircleAvatar(
           radius: 25,
@@ -2339,6 +2999,19 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
               ),
             ),
 
+            if (_isCatalogSelectionMode && !isCatalogAvailable)
+              const Padding(
+                padding: EdgeInsets.only(top: 3),
+                child: Text(
+                  'Indisponível para catálogo',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+
             // Somente Business vê indicação fiscal.
             if (_isBusiness)
               Padding(
@@ -2356,31 +3029,41 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
               ),
           ],
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (needsRestock)
-              const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+        trailing: _isCatalogSelectionMode
+            ? Checkbox(
+                value: isSelected,
+                onChanged: isCatalogAvailable || isSelected
+                    ? (_) => _toggleCatalogProduct(productDoc.id)
+                    : null,
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (needsRestock)
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.redAccent,
+                    ),
 
-            IconButton(
-              icon: const Icon(Icons.edit, color: Colors.blueAccent),
-              onPressed: () => _showProductDialog(product: productDoc),
-            ),
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                    onPressed: () => _showProductDialog(product: productDoc),
+                  ),
 
-            if (canArchiveProducts)
-              IconButton(
-                tooltip: 'Arquivar',
-                icon: Icon(
-                  Icons.archive_outlined,
-                  color: Colors.orange.shade700,
-                ),
-                onPressed: () => _archiveProduct(
-                  productDoc.id,
-                  productData['name']?.toString() ?? 'Produto',
-                ),
+                  if (canArchiveProducts)
+                    IconButton(
+                      tooltip: 'Arquivar',
+                      icon: Icon(
+                        Icons.archive_outlined,
+                        color: Colors.orange.shade700,
+                      ),
+                      onPressed: () => _archiveProduct(
+                        productDoc.id,
+                        productData['name']?.toString() ?? 'Produto',
+                      ),
+                    ),
+                ],
               ),
-          ],
-        ),
       ),
     );
   }

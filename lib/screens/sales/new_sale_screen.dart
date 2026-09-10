@@ -82,13 +82,13 @@ import 'package:store_connect/services/offline_sales_sync_service.dart';
 import 'package:store_connect/models/product_model.dart';
 import 'package:store_connect/providers/cart_provider.dart';
 import 'package:store_connect/screens/cart/cart_screen.dart';
+import 'package:store_connect/screens/management/catalogs_screen.dart';
 import 'package:store_connect/screens/management/manage_customers_screen.dart';
 import 'package:store_connect/screens/management/manage_products_screen.dart';
 import 'package:store_connect/screens/reports/reports_hub_screen.dart';
 import 'package:store_connect/screens/sales/sales_history_screen.dart';
 import 'package:store_connect/screens/settings_screen.dart';
 import 'package:store_connect/screens/dashboard_screen.dart';
-
 
 import '../management/category_management_screen.dart';
 
@@ -161,8 +161,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         repository: _offlineSalesRepository!,
       );
 
-      _waitingSalesCountStream =
-          _offlineSalesRepository!.watchWaitingSalesCount();
+      _waitingSalesCountStream = _offlineSalesRepository!
+          .watchWaitingSalesCount();
     }
 
     _loadAppVersion();
@@ -700,6 +700,18 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 );
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.inventory_2_outlined),
+              title: const Text('Catálogo Inteligente'),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CatalogsScreen(),
+                  ),
+                );
+              },
+            ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.settings_outlined),
@@ -840,32 +852,31 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           }
 
                           // ==========================================================================
-// PRODUTOS ATIVOS
-// ==========================================================================
-//
-// Compatibilidade com produtos legados:
-//
-// isArchived ausente → ativo
-// isArchived false   → ativo
-// isArchived true    → arquivado / não aparece no PDV
-//
-// O filtro é feito localmente de propósito neste momento para que produtos
-// antigos, que ainda não possuem o campo isArchived, continuem normalmente
-// disponíveis.
-//
-// IMPORTANTE:
-//
-// Esta é a proteção visual/operacional do PDV. A validação definitiva da
-// venda também precisa existir no backend, especialmente para vendas offline.
-// ==========================================================================
+                          // PRODUTOS ATIVOS
+                          // ==========================================================================
+                          //
+                          // Compatibilidade com produtos legados:
+                          //
+                          // isArchived ausente → ativo
+                          // isArchived false   → ativo
+                          // isArchived true    → arquivado / não aparece no PDV
+                          //
+                          // O filtro é feito localmente de propósito neste momento para que produtos
+                          // antigos, que ainda não possuem o campo isArchived, continuem normalmente
+                          // disponíveis.
+                          //
+                          // IMPORTANTE:
+                          //
+                          // Esta é a proteção visual/operacional do PDV. A validação definitiva da
+                          // venda também precisa existir no backend, especialmente para vendas offline.
+                          // ==========================================================================
 
                           final allProductDocs =
                               productSnapshot.data?.docs ?? [];
 
-                          final activeProductDocs =
-                          allProductDocs.where((doc) {
+                          final activeProductDocs = allProductDocs.where((doc) {
                             final productData =
-                            doc.data() as Map<String, dynamic>;
+                                doc.data() as Map<String, dynamic>;
 
                             return productData['isArchived'] != true;
                           }).toList();
@@ -883,14 +894,13 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                             );
                           }
 
-// ==========================================================================
-// PESQUISA + CATEGORIA
-// ==========================================================================
+                          // ==========================================================================
+                          // PESQUISA + CATEGORIA
+                          // ==========================================================================
 
-                          final productDocs =
-                          activeProductDocs.where((doc) {
+                          final productDocs = activeProductDocs.where((doc) {
                             final productData =
-                            doc.data() as Map<String, dynamic>;
+                                doc.data() as Map<String, dynamic>;
 
                             final product = Product.fromMap(
                               doc.id,
@@ -901,14 +911,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                             // 1. PESQUISA
                             // ------------------------------------------------------------------------
 
-                            final productName =
-                            product.name.toLowerCase();
+                            final productName = product.name.toLowerCase();
 
-                            final searchLower =
-                            _searchQuery.toLowerCase();
+                            final searchLower = _searchQuery.toLowerCase();
 
-                            final matchesSearch =
-                            productName.contains(
+                            final matchesSearch = productName.contains(
                               searchLower,
                             );
 
@@ -920,17 +927,13 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
                             if (_selectedCategoryId.isNotEmpty) {
                               final prodCatId =
-                                  productData['categoryId']
-                                  as String? ??
-                                      '';
+                                  productData['categoryId'] as String? ?? '';
 
                               matchesCategory =
-                                  prodCatId ==
-                                      _selectedCategoryId;
+                                  prodCatId == _selectedCategoryId;
                             }
 
-                            return matchesSearch &&
-                                matchesCategory;
+                            return matchesSearch && matchesCategory;
                           }).toList();
 
                           if (productDocs.isEmpty) {

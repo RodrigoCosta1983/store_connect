@@ -1838,3 +1838,15 @@ exports.changeAsaasPlan = onCall(
     }
   }
 );
+
+// =============================================================================
+// 🛍️ CATÁLOGO INTELIGENTE
+// =============================================================================
+
+const {
+  createCatalog,
+  listCatalogs,
+} = require("./catalog/createCatalog");
+
+exports.createCatalog = createCatalog;
+exports.listCatalogs = listCatalogs;

@@ -62,6 +62,19 @@ function normalizeString(value) {
     : "";
 }
 
+function buildPublicSlugBase(value) {
+  const normalized = normalizeString(value)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60)
+      .replace(/-+$/g, "");
+
+  return normalized || "loja";
+}
+
 function onlyDigits(value) {
   return String(value ?? "")
     .replace(/\D/g, "");
@@ -157,6 +170,18 @@ const bootstrapStore = onCall(
     const storeRef =
       db.collection("stores").doc();
 
+    const publicSlugBase =
+      buildPublicSlugBase(name);
+
+    const publicSlugBaseRef =
+      db.collection("storePublicSlugs").doc(publicSlugBase);
+
+    const publicSlugFallback =
+      `${publicSlugBase}-${storeRef.id}`;
+
+    const publicSlugFallbackRef =
+      db.collection("storePublicSlugs").doc(publicSlugFallback);
+
     const auditRef =
       storeRef.collection("auditLogs").doc();
 
@@ -170,6 +195,7 @@ const bootstrapStore = onCall(
       );
 
     let createdStoreId = null;
+    let createdPublicSlug = null;
 
     await db.runTransaction(
       async (transaction) => {
@@ -179,6 +205,12 @@ const bootstrapStore = onCall(
 
         const cpfSnapshot =
           await transaction.get(cpfRef);
+
+        const publicSlugBaseSnapshot =
+          await transaction.get(publicSlugBaseRef);
+
+        const publicSlugFallbackSnapshot =
+          await transaction.get(publicSlugFallbackRef);
 
         const userData =
           userSnapshot.exists
@@ -214,6 +246,22 @@ const bootstrapStore = onCall(
           );
         }
 
+        let publicSlug;
+        let publicSlugRef;
+
+        if (!publicSlugBaseSnapshot.exists) {
+          publicSlug = publicSlugBase;
+          publicSlugRef = publicSlugBaseRef;
+        } else if (!publicSlugFallbackSnapshot.exists) {
+          publicSlug = publicSlugFallback;
+          publicSlugRef = publicSlugFallbackRef;
+        } else {
+          throw new HttpsError(
+            "already-exists",
+            "N\u00e3o foi poss\u00edvel reservar uma URL p\u00fablica para esta loja.",
+          );
+        }
+
         const serverTimestamp =
           admin.firestore.FieldValue.serverTimestamp();
 
@@ -221,6 +269,7 @@ const bootstrapStore = onCall(
           storeRef,
           {
             name,
+            publicSlug,
             phone,
             document,
 
@@ -238,6 +287,16 @@ const bootstrapStore = onCall(
               serverTimestamp,
             subscriptionStatusUpdatedBy:
               "system:bootstrapStore",
+          },
+        );
+
+        transaction.set(
+          publicSlugRef,
+          {
+            storeId: storeRef.id,
+            publicSlug,
+            createdAt: serverTimestamp,
+            createdBy: "system:bootstrapStore:publicSlug",
           },
         );
 
@@ -316,6 +375,7 @@ const bootstrapStore = onCall(
         );
 
         createdStoreId = storeRef.id;
+        createdPublicSlug = publicSlug;
       },
     );
 
@@ -324,12 +384,14 @@ const bootstrapStore = onCall(
       {
         uid,
         storeId: createdStoreId,
+        publicSlug: createdPublicSlug,
       },
     );
 
     return {
       success: true,
       storeId: createdStoreId,
+      publicSlug: createdPublicSlug,
       subscriptionStatus: "trial",
       subscriptionType: "free",
       trialDays: TRIAL_DAYS,

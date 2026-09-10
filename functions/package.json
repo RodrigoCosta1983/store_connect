@@ -7,7 +7,8 @@
         "start": "npm run shell",
         "deploy": "firebase deploy --only functions",
         "logs": "firebase functions:log",
-        "test:retention": "firebase emulators:exec --config ../firebase.json --project store-connect-app --only firestore,storage \"node tests/backups/runBackupRetentionTests.js\""
+        "test:retention": "firebase emulators:exec --config ../firebase.json --project store-connect-app --only firestore,storage \"node tests/backups/runBackupRetentionTests.js\"",
+        "test:catalog": "firebase emulators:exec --config ../firebase.json --project store-connect-app --only firestore \"node tests/catalog/runCatalogTests.js\""
     },
     "engines": {
         "node": "22"
