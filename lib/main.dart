@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,6 +14,7 @@ import 'package:store_connect/providers/sales_provider.dart';
 import 'package:store_connect/providers/cash_flow_provider.dart';
 import 'package:store_connect/providers/theme_provider.dart';
 import 'package:store_connect/screens/auth/auth_gate.dart';
+import 'package:store_connect/screens/public/public_catalog_screen.dart';
 import 'package:store_connect/themes/app_theme.dart';
 import 'package:store_connect/services/navigation_service.dart';
 import 'firebase_options.dart';
@@ -59,21 +61,32 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  late StreamSubscription<User?> _authSubscription;
+  StreamSubscription<User?>? _authSubscription;
+
+  late final _PublicCatalogRoute? _publicCatalogRoute;
 
   @override
   void initState() {
     super.initState();
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((User? user) {
-      if (user == null) {
-        NavigationService.refreshAuthGate();
-      }
-    });
+
+    _publicCatalogRoute =
+        _PublicCatalogRoute.fromCurrentUrl();
+
+    if (_publicCatalogRoute == null) {
+      _authSubscription =
+          FirebaseAuth.instance.authStateChanges().listen(
+        (User? user) {
+          if (user == null) {
+            NavigationService.refreshAuthGate();
+          }
+        },
+      );
+    }
   }
 
   @override
   void dispose() {
-    _authSubscription.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 
@@ -100,10 +113,70 @@ class _MyAppState extends State<MyApp> {
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: themeProvider.themeMode,
-            home: const AuthGate(),
+            home: _publicCatalogRoute == null
+                ? const AuthGate()
+                : PublicCatalogScreen(
+                    publicSlug:
+                        _publicCatalogRoute.publicSlug,
+                    publicToken:
+                        _publicCatalogRoute.publicToken,
+                  ),
           );
         },
       ),
+    );
+  }
+}
+
+class _PublicCatalogRoute {
+  const _PublicCatalogRoute({
+    required this.publicSlug,
+    required this.publicToken,
+  });
+
+  final String publicSlug;
+  final String publicToken;
+
+  static _PublicCatalogRoute? fromCurrentUrl() {
+    if (!kIsWeb) {
+      return null;
+    }
+
+    final uri = Uri.base;
+
+    final segments = uri.pathSegments
+        .where(
+          (segment) => segment.trim().isNotEmpty,
+        )
+        .toList(growable: false);
+
+    if (
+      segments.length != 3 ||
+      segments[1].toLowerCase() != 'catalogo'
+    ) {
+      return null;
+    }
+
+    final publicSlug =
+        Uri.decodeComponent(
+          segments[0],
+        ).trim();
+
+    final publicToken =
+        Uri.decodeComponent(
+          segments[2],
+        ).trim();
+
+    if (
+      publicSlug.isEmpty ||
+      publicToken.isEmpty
+    ) {
+      return null;
+    }
+
+    return _PublicCatalogRoute(
+      publicSlug: publicSlug,
+      publicToken: publicToken,
     );
   }
 }

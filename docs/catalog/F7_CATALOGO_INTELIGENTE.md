@@ -5,7 +5,7 @@ Documentação oficial da arquitetura, decisões, segurança, implementação e 
 > Este documento é a referência oficial da F7.
 > Toda decisão arquitetural relevante e toda etapa concluída devem ser registradas aqui.
 
-**Última atualização:** 10/09/2026 — F7.4-B7 a F7.4-B10 concluídas, incluindo recuperação segura de links, listCatalogs, tela Catálogo Inteligente, menu e ações de copiar/compartilhar validadas em runtime Android.
+**Última atualização:** 11/09/2026 — F7.5 concluída em produção: getPublicCatalog, rota pública Flutter Web sem login, layout responsivo, Firebase Hosting live em app.storeconnect.com.br, listCatalogs atualizado para o domínio definitivo e comportamento de estoque dinâmico validado por nova consulta.
 
 =====================================================================
 
@@ -49,7 +49,14 @@ Documentação oficial da arquitetura, decisões, segurança, implementação e 
     ✅ tela Catálogo Inteligente validada em runtime Android
     ✅ F7.4-B10 — copiar e compartilhar catálogo existente
     ✅ F7.4-B10 validada em runtime Android
-⏳ F7.5 — Página pública responsiva
+✅ F7.5 — Página pública responsiva
+    ✅ getPublicCatalog público e sanitizado
+    ✅ rota /{publicSlug}/catalogo/{publicToken} sem AuthGate
+    ✅ layout responsivo desktop/mobile
+    ✅ Firebase Hosting Preview + live
+    ✅ domínio definitivo app.storeconnect.com.br
+    ✅ comportamento de estoque dinâmico validado por nova consulta
+⏳ F7.5-P — Performance + atualização inteligente da página pública
 ⏳ F7.6 — Seleção de quantidades
 ⏳ F7.7 — Resumo e envio da seleção
 ⏳ F7.8 — Recebimento da solicitação no Store&Connect
@@ -203,31 +210,31 @@ O navegador do cliente nunca deverá receber o documento operacional completo do
 
 =====================================================================
 
-# 📦 CAMPOS PÚBLICOS INICIAIS
+# 📦 CAMPOS PÚBLICOS — CONTRATO ATUAL DA F7.5
 
-Campos candidatos ao MVP público:
+A implementação concluída da F7.5 expõe somente o conjunto sanitizado
+necessário para a página pública.
+
+Contrato atual de produto:
 
 ```text
+productId
 name
 price
 imageUrl
+quantidade
 categoryName
-availability
+position
 ```
 
-A disponibilidade será derivada do estoque interno.
+A `quantidade` retornada representa a disponibilidade atual consultada
+pelo backend no momento da requisição.
 
-Exemplo conceitual:
+Produtos com `quantidade <= 0`, inexistentes ou arquivados são omitidos
+da resposta pública.
 
-```text
-INTERNO
-quantidade = 37
-
-PÚBLICO
-availability = available
-```
-
-O estoque operacional detalhado não será exposto inicialmente.
+Continuam fora do contrato público os demais dados operacionais,
+fiscais, custo, margem, lotes e informações internas da loja.
 
 =====================================================================
 
@@ -244,7 +251,7 @@ createdAt
 isArchived
 ```
 
-O campo quantidade continuará interno e será utilizado somente para derivar disponibilidade e validações.
+A F7.5 revisou a decisão inicial sobre `quantidade`: a página pública recebe somente a quantidade disponível necessária para exibição e futura seleção, sem receber os demais dados operacionais do produto.
 
 O barcode permanece como decisão pendente da F7.1.
 
@@ -493,49 +500,38 @@ O catalogItemId deverá possuir identificador próprio e não depender do produc
 
 =====================================================================
 
-# 🔐 PRODUCT ID NÃO EXPOSTO AO CLIENTE
+# 🔐 IDENTIFICADOR PÚBLICO DO PRODUTO — DECISÃO REVISADA NA F7.5
 
-O productId pertence à estrutura interna da loja.
+O desenho inicial previa utilizar apenas um `itemId` público e esconder
+`productId`.
 
-O cliente público trabalhará com o identificador do item do catálogo:
+Na implementação concluída da F7.5, o contrato sanitizado de
+`getPublicCatalog` retorna `productId` junto dos campos públicos do
+produto.
 
-```text
-itemId
-```
+Isso NÃO transforma o documento operacional do produto em público:
+o navegador continua sem acesso direto a
+`stores/{storeId}/products/{productId}` e não recebe `storeId`,
+`catalogId`, campos fiscais, custo, lotes ou demais dados internos.
 
-Exemplo da resposta pública:
-
-```text
-itemId
-name
-price
-imageUrl
-categoryName
-availability
-```
-
-Não será necessário expor:
+A segurança do catálogo não depende de esconder o `productId`.
+Ela depende de o backend validar:
 
 ```text
-productId
+publicSlug
+publicToken
+status do catálogo
+expiresAt
+loja
+assinatura
+itens pertencentes ao catálogo
+estado atual dos produtos
 ```
 
-Ao enviar uma seleção:
-
-```text
-CLIENTE
-itemId + quantity
-        ↓
-BACKEND
-        ↓
-CatalogItem
-        ↓
-productId interno
-        ↓
-produto verdadeiro da loja
-```
-
-Isso impede que o cliente tente enviar diretamente um productId que nunca pertenceu ao catálogo.
+O contrato definitivo de envio da F7.6/F7.7 ainda deverá decidir qual
+identificador será enviado pelo cliente. Independentemente disso, o
+backend deverá revalidar que cada produto solicitado pertence ao
+catálogo e continua elegível antes de aceitar a solicitação.
 
 =====================================================================
 
@@ -554,24 +550,29 @@ availability
 
 Essas informações serão consultadas no produto verdadeiro e sanitizadas pelo backend.
 
-Consequências:
+Consequências na próxima consulta pública:
 
 ```text
 PREÇO ALTERADO NA LOJA
-→ catálogo passa a mostrar o preço atual
+→ próxima chamada a getPublicCatalog retorna o preço atual
 
 NOME ALTERADO
-→ catálogo passa a mostrar o nome atual
+→ próxima chamada retorna o nome atual
 
 IMAGEM ALTERADA
-→ catálogo passa a utilizar a imagem atual
+→ próxima chamada retorna a imagem atual
 
 CATEGORIA ALTERADA
-→ catálogo passa a mostrar a categoria atual
+→ próxima chamada retorna a categoria atual
 
 ESTOQUE ALTERADO
-→ disponibilidade pública é recalculada
+→ próxima chamada recalcula quantidade e elegibilidade
 ```
+
+IMPORTANTE: uma página que já permaneça aberta não recebe essas mudanças
+automaticamente no estado atual da F7.5. É necessária uma nova chamada
+a `getPublicCatalog`, hoje provocada por recarregamento da página.
+A estratégia de atualização inteligente será tratada na F7.5-P.
 
 O objetivo é manter:
 
@@ -582,23 +583,28 @@ products
 
 =====================================================================
 
-# 📦 REGRA DE DISPONIBILIDADE
+# 📦 REGRA DE DISPONIBILIDADE — IMPLEMENTAÇÃO ATUAL
 
-O campo quantidade continuará privado.
-
-O backend deverá derivar uma informação pública simplificada.
-
-Exemplo inicial:
+Regra pública validada na F7.5:
 
 ```text
 quantidade > 0
-→ availability = available
+→ produto é retornado
+→ quantidade atual é enviada no contrato sanitizado
 
 quantidade <= 0
-→ availability = unavailable
+→ produto é omitido da resposta pública
+
+produto inexistente
+→ omitido
+
+isArchived == true
+→ omitido
 ```
 
-A quantidade exata não será enviada ao navegador no MVP.
+A quantidade exibida é informativa e representa o estado encontrado
+naquela requisição. Ela não substitui a revalidação obrigatória do
+backend no envio final da seleção.
 
 =====================================================================
 
@@ -644,7 +650,7 @@ O link utilizará token aleatório de alta entropia.
 Formato canônico definido posteriormente na F7.4:
 
 ```text
-https://www.storeconnect.com.br/{publicSlug}/catalogo/{publicToken}
+https://app.storeconnect.com.br/{publicSlug}/catalogo/{publicToken}
 ```
 
 O banco armazenará:
@@ -786,17 +792,40 @@ A entrada pública deverá ser reconhecida antes do AuthGate.
 
 ## Firebase Hosting
 
-O firebase.json atual ainda não possui configuração de Firebase Hosting.
+O Firebase Hosting está configurado no `firebase.json` com:
 
-Existe aplicação Web registrada no Firebase, porém Hosting e rewrites ainda deverão ser configurados.
+```text
+public = build/web
+rewrite ** → /index.html
+```
 
-Quando implementado, o Hosting deverá permitir abertura direta de URLs no formato canônico:
+Isso permite abertura direta da rota canônica:
 
 ```text
 /{publicSlug}/catalogo/{publicToken}
 ```
 
 sem redirecionar o cliente para o fluxo de autenticação.
+
+Fluxo validado:
+
+```text
+Flutter Web build
+    ↓
+Firebase Hosting Preview Channel
+    ↓
+validação funcional
+    ↓
+canal live
+    ↓
+https://app.storeconnect.com.br
+```
+
+O domínio institucional permanece separado em:
+
+```text
+https://www.storeconnect.com.br
+```
 
 =====================================================================
 
@@ -885,7 +914,20 @@ Produtos que tiverem sua imagem atualizada passarão naturalmente a possuir imag
 
 ## Entrega pública da imagem
 
-Fluxo definido:
+### Revisão de implementação na F7.5
+
+O desenho inicial abaixo previa uma entrega de imagem por endpoint
+controlado e `imagePath`.
+
+Na F7.5 concluída, `getPublicCatalog` retorna o `imageUrl` sanitizado
+necessário à interface pública. As regras privadas da collection de
+produtos não foram abertas ao navegador.
+
+A eventual migração para entrega de imagem por proxy controlado,
+inclusive para acoplar a validade da imagem à expiração do catálogo,
+permanece como possibilidade de endurecimento na F7.9.
+
+Fluxo inicialmente definido:
 
 ```text
 CLIENTE
@@ -906,13 +948,16 @@ Firebase Storage via Admin SDK
 imagem enviada ao navegador
 ```
 
-O navegador público não deverá receber:
+Estado atual da F7.5:
 
 ```text
-❌ imagePath
-❌ productId
-❌ imageUrl original do Firebase Storage
+❌ imagePath não é exposto
+✅ productId faz parte do contrato sanitizado atual
+✅ imageUrl é utilizado pela página pública
 ```
+
+A página continua sem acesso direto ao documento operacional completo
+do produto.
 
 =====================================================================
 
@@ -942,7 +987,7 @@ rota pública
 → tratada antes do AuthGate
 
 Hosting
-→ será configurado para suportar a rota canônica /{publicSlug}/catalogo/{publicToken}
+→ configurado para suportar a rota canônica /{publicSlug}/catalogo/{publicToken}
 
 product_images
 → continua privado
@@ -1172,7 +1217,7 @@ F7.2-D — IMPLEMENTAR createCatalog
 O link público utiliza:
 
 ```text
-https://www.storeconnect.com.br/{publicSlug}/catalogo/{publicToken}
+https://app.storeconnect.com.br/{publicSlug}/catalogo/{publicToken}
 ```
 
 O cliente público conhece apenas o publicSlug amigável e o publicToken.
@@ -1491,12 +1536,14 @@ BACKEND createCatalog
 ✅ tentativa de burlar a UI continua bloqueada
 ```
 
-## Proteções futuras
+## Proteções
 
 ```text
 F7.5 — Página pública
-⏳ consultar disponibilidade atual
-⏳ se o estoque zerar após a criação, mostrar indisponível
+✅ consultar disponibilidade atual a cada nova requisição
+✅ estoque zerado → produto omitido na próxima consulta
+✅ reposição de estoque → produto reaparece na próxima consulta
+✅ productCount acompanha os produtos efetivamente retornados
 
 F7.7 — Envio final
 ⏳ backend revalidar disponibilidade antes de aceitar a seleção
@@ -1509,7 +1556,7 @@ F7.7 — Envio final
 ## URL canônica definida
 
 ```text
-https://www.storeconnect.com.br/{publicSlug}/catalogo/{publicToken}
+https://app.storeconnect.com.br/{publicSlug}/catalogo/{publicToken}
 ```
 
 O catalogId não é exposto na URL pública.
@@ -1569,7 +1616,7 @@ Após createCatalog retornar com sucesso, o Flutter monta:
 
 ```text
 publicUrl =
-https://www.storeconnect.com.br/{publicSlug}/catalogo/{publicToken}
+https://app.storeconnect.com.br/{publicSlug}/catalogo/{publicToken}
 ```
 
 O diálogo de sucesso foi separado em:
@@ -1598,8 +1645,9 @@ Validação realizada:
 ✅ compartilhar link
 ```
 
-A página pública ainda não existe nesta etapa; portanto,
-abrir o link no navegador depende da F7.5.
+A página pública foi implementada e validada posteriormente na F7.5.
+Os links agora abrem diretamente no Flutter Web pelo domínio
+`app.storeconnect.com.br`, sem exigir login.
 
 =====================================================================
 
@@ -1779,7 +1827,7 @@ decryptCatalogPublicToken()
       ↓
 publicToken em memória no backend
       ↓
-https://www.storeconnect.com.br/{publicSlug}/catalogo/{publicToken}
+https://app.storeconnect.com.br/{publicSlug}/catalogo/{publicToken}
       ↓
 publicUrl
 ```
@@ -2054,7 +2102,345 @@ Validação runtime Android concluída em 10/09/2026:
 
 Com isso, a **F7.4 — Geração e gestão do link público temporário está concluída**.
 
-A página pública responsiva continua sendo responsabilidade da **F7.5**.
+A página pública responsiva foi concluída na **F7.5** em 11/09/2026.
+
+=====================================================================
+
+# ✅ F7.5 — PÁGINA PÚBLICA RESPONSIVA CONCLUÍDA
+
+A F7.5 foi concluída e validada de ponta a ponta em produção em
+11/09/2026.
+
+## Backend público — getPublicCatalog
+
+Foi implementada a callable pública:
+
+```text
+getPublicCatalog
+```
+
+Arquivos principais:
+
+```text
+functions/catalog/createCatalog.js
+functions/index.js
+```
+
+Responsabilidades validadas:
+
+```text
+✅ acesso sem autenticação
+✅ recebe publicSlug + publicToken
+✅ calcula SHA-256 do token
+✅ resolve catalogPublicTokens/{publicTokenHash}
+✅ valida storeId/catalogId apenas internamente
+✅ valida loja e assinatura
+✅ valida status do catálogo
+✅ valida expiresAt
+✅ consulta os CatalogItems ordenados
+✅ resolve os documentos atuais dos produtos
+✅ omite produto inexistente
+✅ omite produto arquivado
+✅ omite produto com quantidade <= 0
+✅ retorna somente contrato sanitizado
+```
+
+Não são retornados ao navegador:
+
+```text
+❌ publicToken
+❌ publicTokenHash
+❌ publicTokenEncrypted
+❌ storeId
+❌ catalogId
+❌ chave de criptografia
+❌ documento operacional completo do produto
+```
+
+## Contrato público atual
+
+```text
+store
+  name
+  logoUrl
+  phone
+
+catalog
+  title
+  expiresAt
+  productCount
+
+products[]
+  productId
+  name
+  price
+  imageUrl
+  quantidade
+  categoryName
+  position
+```
+
+`productCount` representa a quantidade de produtos efetivamente
+disponíveis retornados pela consulta pública.
+
+## Flutter Web — rota pública
+
+Tela criada em:
+
+```text
+lib/screens/public/public_catalog_screen.dart
+```
+
+A entrada Web reconhece:
+
+```text
+/{publicSlug}/catalogo/{publicToken}
+```
+
+antes do fluxo autenticado.
+
+Arquitetura validada:
+
+```text
+URL pública
+    ↓
+main.dart identifica a rota
+    ↓
+PublicCatalogScreen
+    ↓
+SEM AuthGate
+SEM login
+    ↓
+getPublicCatalog
+```
+
+Os demais acessos continuam seguindo o fluxo autenticado normal.
+
+## Estados da página pública
+
+Implementado:
+
+```text
+✅ loading
+✅ sucesso
+✅ erro
+✅ tentar novamente
+```
+
+A interface pública exibe:
+
+```text
+✅ logo da loja com fallback
+✅ nome da loja
+✅ telefone
+✅ título do catálogo
+✅ validade
+✅ quantidade de produtos disponíveis
+✅ imagem do produto com fallback
+✅ categoria
+✅ nome
+✅ preço
+✅ quantidade disponível
+✅ layout responsivo desktop/mobile
+```
+
+Os cards foram centralizados e ajustados para apresentação compacta
+em telas maiores, preservando adaptação para celular.
+
+## Expiração visual
+
+A validade é apresentada ao cliente em formato local:
+
+```text
+Disponível até DD/MM/AAAA
+```
+
+A autoridade sobre a expiração continua no backend.
+
+## Firebase Hosting e domínio definitivo
+
+O `firebase.json` passou a possuir Hosting para o Flutter Web:
+
+```text
+public = build/web
+rewrite ** → /index.html
+```
+
+A implementação foi validada primeiro em Preview Channel e depois
+publicada no canal `live`.
+
+Aplicação / catálogo público:
+
+```text
+https://app.storeconnect.com.br
+```
+
+Site institucional preservado:
+
+```text
+https://www.storeconnect.com.br
+```
+
+URL canônica definitiva:
+
+```text
+https://app.storeconnect.com.br/{publicSlug}/catalogo/{publicToken}
+```
+
+`listCatalogs` foi publicado isoladamente após a validação do Hosting
+live para devolver o domínio definitivo ao copiar ou compartilhar
+catálogos existentes.
+
+## Validações concluídas
+
+```text
+✅ getPublicCatalog validado no Firestore Emulator
+✅ regressão completa do catálogo — 5/5 testes passaram
+✅ rota pública validada localmente no Flutter Web
+✅ acesso público sem login validado
+✅ Preview Channel validado
+✅ Hosting live validado
+✅ app.storeconnect.com.br respondeu em produção
+✅ desktop validado
+✅ mobile validado
+✅ link copiado pelo próprio Store&Connect validado
+✅ link enviado e aberto com sucesso em outro celular
+```
+
+## Estoque dinâmico — comportamento validado
+
+O catálogo não congela a quantidade do produto na criação.
+
+Em produção foi validado:
+
+```text
+quantidade alterada para um valor maior
+        ↓
+recarrega / nova consulta
+        ↓
+nova quantidade aparece
+
+quantidade alterada para 0
+        ↓
+recarrega / nova consulta
+        ↓
+produto é omitido
+        ↓
+productCount diminui
+
+quantidade volta a ser > 0
+        ↓
+recarrega / nova consulta
+        ↓
+produto reaparece
+        ↓
+productCount aumenta novamente
+```
+
+Portanto:
+
+```text
+✅ products continua sendo a fonte operacional de verdade
+✅ getPublicCatalog lê o estado atual em cada requisição
+✅ catálogo reflete estoque atual na próxima consulta
+```
+
+## Limitação atual — página aberta não é tempo real
+
+O teste em celular real também confirmou que uma página já aberta
+mantém os dados recebidos na última requisição.
+
+Hoje:
+
+```text
+cliente abre o catálogo
+        ↓
+getPublicCatalog
+        ↓
+dados ficam em memória na página
+
+estoque muda na loja
+        ↓
+página já aberta NÃO muda sozinha
+
+recarregar página
+        ↓
+nova chamada getPublicCatalog
+        ↓
+dados atualizados
+```
+
+Logo, a F7.5 NÃO deve ser descrita como atualização em tempo real.
+
+## ⏳ F7.5-P — PERFORMANCE + ATUALIZAÇÃO INTELIGENTE
+
+Antes da F7.6 será executada uma etapa curta de otimização da página
+pública.
+
+```text
+P1 — diagnosticar lentidão da rolagem mobile
+
+P2 — otimizar imagens
+     └── evitar decodificação em resolução desnecessariamente alta
+
+P3 — revisar isolamento da rota pública
+     └── evitar providers/listeners privados desnecessários
+
+P4 — otimizar scroll e renderização
+
+P5 — atualização inteligente do catálogo
+     ├── atualizar quando a página voltar a ficar ativa
+     ├── atualizar ao retornar para a aba/app
+     ├── avaliar atualização periódica leve enquanto visível
+     ├── evitar consultas desnecessárias quando não estiver ativa
+     └── continuar utilizando getPublicCatalog
+
+P6 — validar novamente em celular real
+```
+
+A estratégia continuará mantendo o Firestore privado:
+
+```text
+página pública
+      ↓
+getPublicCatalog
+      ↓
+backend seguro
+      ↓
+Firestore
+```
+
+## Regra obrigatória para F7.6 / F7.7
+
+A quantidade mostrada no catálogo é informação da interface e pode
+ficar desatualizada entre duas consultas.
+
+Por isso, no envio final:
+
+```text
+cliente envia seleção
+        ↓
+backend recebe a solicitação
+        ↓
+backend consulta o estoque atual novamente
+        ↓
+quantidade solicitada ainda disponível?
+        │
+        ├── SIM → fluxo pode prosseguir
+        │
+        └── NÃO → retornar disponibilidade atual / impedir inconsistência
+```
+
+Regra arquitetural:
+
+```text
+interface = informação de disponibilidade
+
+backend no envio = autoridade final sobre disponibilidade
+```
+
+Essa revalidação é obrigatória e não será substituída pela atualização
+periódica da página.
 
 =====================================================================
 

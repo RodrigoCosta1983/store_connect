@@ -821,7 +821,7 @@ const listCatalogs = onCall(
               decryptCatalogPublicToken(encryptedToken);
 
             publicUrl =
-              `https://www.storeconnect.com.br/${publicSlug}/catalogo/${publicToken}`;
+              `https://app.storeconnect.com.br/${publicSlug}/catalogo/${publicToken}`;
 
             linkAvailable = true;
           } catch (error) {
@@ -870,7 +870,384 @@ const listCatalogs = onCall(
     },
 );
 
+const getPublicCatalog = onCall(
+    {
+      timeoutSeconds: 30,
+      memory: "256MiB",
+    },
+    async (request) => {
+      // ======================================================================
+      // F7.5-B1 - LEITURA PÚBLICA SEGURA DO CATÁLOGO
+      // ======================================================================
+
+      const db = admin.firestore();
+
+      // ======================================================================
+      // 1. ENTRADA
+      // ======================================================================
+
+      const publicSlug = normalizeString(
+          request.data?.publicSlug,
+      ).toLowerCase();
+
+      const publicToken = normalizeString(
+          request.data?.publicToken,
+      );
+
+      const validSlug =
+        publicSlug.length <= 128 &&
+        /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(publicSlug);
+
+      const validToken =
+        publicToken.length <= 256 &&
+        /^[A-Za-z0-9_-]{32,256}$/.test(publicToken);
+
+      if (!validSlug || !validToken) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Link de catálogo inválido.",
+        );
+      }
+
+      // ======================================================================
+      // 2. LOCALIZAÇÃO PELO HASH DO TOKEN
+      // ======================================================================
+
+      const publicTokenHash =
+        hashPublicToken(publicToken);
+
+      const publicTokenSnapshot = await db
+          .collection("catalogPublicTokens")
+          .doc(publicTokenHash)
+          .get();
+
+      if (!publicTokenSnapshot.exists) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      const publicTokenData =
+        publicTokenSnapshot.data() || {};
+
+      const storeId =
+        normalizeString(publicTokenData.storeId);
+
+      const catalogId =
+        normalizeString(publicTokenData.catalogId);
+
+      if (!storeId || !catalogId) {
+        console.error(
+            "[getPublicCatalog] Índice público inválido.",
+        );
+
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      // ======================================================================
+      // 3. LOJA E CATÁLOGO
+      // ======================================================================
+
+      const storeRef = db
+          .collection("stores")
+          .doc(storeId);
+
+      const catalogRef = storeRef
+          .collection("catalogs")
+          .doc(catalogId);
+
+      const [
+        storeSnapshot,
+        catalogSnapshot,
+      ] = await Promise.all([
+        storeRef.get(),
+        catalogRef.get(),
+      ]);
+
+      if (
+        !storeSnapshot.exists ||
+        !catalogSnapshot.exists
+      ) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      const storeData =
+        storeSnapshot.data() || {};
+
+      const catalogData =
+        catalogSnapshot.data() || {};
+
+      // ======================================================================
+      // 4. CONFIRMA SLUG E HASH
+      // ======================================================================
+
+      const storedPublicSlug =
+        normalizeString(storeData.publicSlug)
+            .toLowerCase();
+
+      const storedTokenHash =
+        normalizeString(catalogData.publicTokenHash)
+            .toLowerCase();
+
+      if (
+        storedPublicSlug !== publicSlug ||
+        storedTokenHash !== publicTokenHash
+      ) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      // ======================================================================
+      // 5. DISPONIBILIDADE DA LOJA
+      // ======================================================================
+
+      const subscriptionStatus =
+        normalizeString(storeData.subscriptionStatus)
+            .toLowerCase();
+
+      if (
+        !ALLOWED_SUBSCRIPTION_STATUS.has(
+            subscriptionStatus,
+        )
+      ) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      // ======================================================================
+      // 6. STATUS E EXPIRAÇÃO DO CATÁLOGO
+      // ======================================================================
+
+      const status =
+        normalizeString(catalogData.status)
+            .toLowerCase();
+
+      if (status !== "active") {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      const expiresAt =
+        catalogData.expiresAt;
+
+      if (
+        !expiresAt ||
+        typeof expiresAt.toMillis !== "function"
+      ) {
+        console.error(
+            `[getPublicCatalog] Catálogo ${catalogId} sem expiresAt válido.`,
+        );
+
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      if (Date.now() >= expiresAt.toMillis()) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo expirou.",
+        );
+      }
+
+      // ======================================================================
+      // 7. ITENS DO CATÁLOGO
+      // ======================================================================
+
+      const itemsSnapshot = await catalogRef
+          .collection("items")
+          .orderBy("position", "asc")
+          .get();
+
+      const catalogItems = [];
+
+      for (const itemSnapshot of itemsSnapshot.docs) {
+        const itemData =
+          itemSnapshot.data() || {};
+
+        const productId =
+          normalizeString(itemData.productId);
+
+        if (
+          !productId ||
+          productId.includes("/")
+        ) {
+          continue;
+        }
+
+        const rawPosition =
+          Number(itemData.position);
+
+        catalogItems.push({
+          productId,
+          position:
+            Number.isFinite(rawPosition) ?
+              rawPosition :
+              catalogItems.length,
+        });
+      }
+
+      // ======================================================================
+      // 8. PRODUTOS ATUAIS
+      // ======================================================================
+
+      const productsCollection =
+        storeRef.collection("products");
+
+      const productRefs = catalogItems.map(
+          (item) =>
+            productsCollection.doc(
+                item.productId,
+            ),
+      );
+
+      const productSnapshots =
+        productRefs.length > 0 ?
+          await db.getAll(...productRefs) :
+          [];
+
+      const productSnapshotsById =
+        new Map();
+
+      for (const productSnapshot of productSnapshots) {
+        productSnapshotsById.set(
+            productSnapshot.id,
+            productSnapshot,
+        );
+      }
+
+      const products = [];
+
+      for (const item of catalogItems) {
+        const productSnapshot =
+          productSnapshotsById.get(
+              item.productId,
+          );
+
+        if (
+          !productSnapshot ||
+          !productSnapshot.exists
+        ) {
+          continue;
+        }
+
+        const productData =
+          productSnapshot.data() || {};
+
+        if (productData.isArchived === true) {
+          continue;
+        }
+
+        const quantidade =
+          Number(productData.quantidade ?? 0);
+
+        if (
+          !Number.isFinite(quantidade) ||
+          quantidade <= 0
+        ) {
+          continue;
+        }
+
+        const rawPrice =
+          Number(productData.price ?? 0);
+
+        const price =
+          Number.isFinite(rawPrice) &&
+          rawPrice >= 0 ?
+            rawPrice :
+            0;
+
+        products.push({
+          productId:
+            item.productId,
+
+          name:
+            normalizeString(
+                productData.name,
+            ) || "Produto",
+
+          price,
+
+          imageUrl:
+            normalizeString(
+                productData.imageUrl,
+            ),
+
+          quantidade,
+
+          categoryName:
+            normalizeString(
+                productData.categoryName,
+            ),
+
+          position:
+            item.position,
+        });
+      }
+
+      // ======================================================================
+      // 9. RETORNO PÚBLICO SEGURO
+      // ======================================================================
+
+      return {
+        success: true,
+
+        store: {
+          name:
+            normalizeString(storeData.name) ||
+            normalizeString(
+                storeData.storeName,
+            ) ||
+            "Loja",
+
+          logoUrl:
+            normalizeString(
+                storeData.logoUrl,
+            ),
+
+          phone:
+            normalizeString(
+                storeData.phone,
+            ),
+        },
+
+        catalog: {
+          title:
+            normalizeString(
+                catalogData.title,
+            ) ||
+            "Catálogo",
+
+          expiresAt:
+            expiresAt
+                .toDate()
+                .toISOString(),
+
+          productCount:
+            products.length,
+        },
+
+        products,
+      };
+    },
+);
+
 module.exports = {
   createCatalog,
   listCatalogs,
+  getPublicCatalog,
 };

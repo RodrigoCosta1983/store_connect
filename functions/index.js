@@ -1846,7 +1846,9 @@ exports.changeAsaasPlan = onCall(
 const {
   createCatalog,
   listCatalogs,
+  getPublicCatalog,
 } = require("./catalog/createCatalog");
 
 exports.createCatalog = createCatalog;
 exports.listCatalogs = listCatalogs;
+exports.getPublicCatalog = getPublicCatalog;

@@ -433,15 +433,23 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
       return _buildEmptyState();
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadCatalogs,
-      child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        itemCount: _catalogs.length,
-        itemBuilder: (context, index) {
-          return _buildCatalogCard(_catalogs[index]);
-        },
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: 1100,
+        ),
+        child: RefreshIndicator(
+          onRefresh: _loadCatalogs,
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            itemCount: _catalogs.length,
+            itemBuilder: (context, index) {
+              return _buildCatalogCard(_catalogs[index]);
+            },
+          ),
+        ),
       ),
     );
   }

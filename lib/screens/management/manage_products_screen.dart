@@ -1578,7 +1578,7 @@ class ManageProductsScreen extends StatefulWidget {
 }
 
 class _ManageProductsScreenState extends State<ManageProductsScreen> {
-  static const String _catalogPublicBaseUrl = 'https://www.storeconnect.com.br';
+  static const String _catalogPublicBaseUrl = 'https://app.storeconnect.com.br';
 
   final _searchController = TextEditingController();
 
