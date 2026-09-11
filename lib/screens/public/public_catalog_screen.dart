@@ -412,12 +412,14 @@ class _PublicCatalogScreenState
           runSpacing: 18,
           children: _products.map(
             (product) {
-              return SizedBox(
-                width: cardWidth,
-                height: 300,
-                child: _buildProductCard(
-                  context,
-                  product,
+              return RepaintBoundary(
+                child: SizedBox(
+                  width: cardWidth,
+                  height: 300,
+                  child: _buildProductCard(
+                    context,
+                    product,
+                  ),
                 ),
               );
             },
