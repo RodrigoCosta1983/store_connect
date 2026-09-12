@@ -17,7 +17,8 @@ class PublicCatalogScreen extends StatefulWidget {
 }
 
 class _PublicCatalogScreenState
-    extends State<PublicCatalogScreen> {
+    extends State<PublicCatalogScreen>
+    with WidgetsBindingObserver {
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -29,14 +30,89 @@ class _PublicCatalogScreenState
   List<Map<String, dynamic>> _products =
       <Map<String, dynamic>>[];
 
+  bool _isCatalogRequestInFlight = false;
+  bool _refreshOnResumeArmed = false;
+  bool _isManualRefreshInProgress = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadCatalog();
   }
 
-  Future<void> _loadCatalog() async {
-    if (mounted) {
+  @override
+  void didChangeAppLifecycleState(
+    AppLifecycleState state,
+  ) {
+    if (state == AppLifecycleState.resumed) {
+      if (_refreshOnResumeArmed) {
+        _refreshOnResumeArmed = false;
+
+        _loadCatalog(
+          showLoading: false,
+        );
+      }
+
+      return;
+    }
+
+    if (
+      state == AppLifecycleState.inactive ||
+      state == AppLifecycleState.paused ||
+      state == AppLifecycleState.hidden
+    ) {
+      _refreshOnResumeArmed = true;
+    }
+  }
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _refreshCatalogManually() async {
+    if (
+      !mounted ||
+      _isManualRefreshInProgress
+    ) {
+      return;
+    }
+
+    setState(() {
+      _isManualRefreshInProgress = true;
+    });
+
+    try {
+      await _loadCatalog(
+        showLoading: false,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isManualRefreshInProgress = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadCatalog({
+    bool showLoading = true,
+  }) async {
+    if (
+      !mounted ||
+      _isCatalogRequestInFlight
+    ) {
+      return;
+    }
+
+    _isCatalogRequestInFlight = true;
+
+    final hasCurrentCatalog =
+        _store != null &&
+        _catalog != null;
+
+    if (showLoading) {
       setState(() {
         _isLoading = true;
         _errorMessage = null;
@@ -44,7 +120,8 @@ class _PublicCatalogScreenState
     }
 
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable(
+      final callable =
+          FirebaseFunctions.instance.httpsCallable(
         'getPublicCatalog',
         options: HttpsCallableOptions(
           timeout: const Duration(seconds: 30),
@@ -121,24 +198,41 @@ class _PublicCatalogScreenState
         return;
       }
 
-      setState(() {
-        _isLoading = false;
-        _errorMessage =
-            _messageForFunctionsError(error);
-      });
+      final catalogBecameUnavailable =
+          error.code == 'invalid-argument' ||
+          error.code == 'not-found' ||
+          error.code == 'failed-precondition';
+
+      if (
+        showLoading ||
+        !hasCurrentCatalog ||
+        catalogBecameUnavailable
+      ) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage =
+              _messageForFunctionsError(error);
+        });
+      }
     } catch (_) {
       if (!mounted) {
         return;
       }
 
-      setState(() {
-        _isLoading = false;
-        _errorMessage =
-            'Não foi possível carregar este catálogo agora.';
-      });
+      if (
+        showLoading ||
+        !hasCurrentCatalog
+      ) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage =
+              'Não foi possível carregar este catálogo agora.';
+        });
+      }
+    } finally {
+      _isCatalogRequestInFlight = false;
     }
   }
-
   Map<String, dynamic>? _toStringDynamicMap(
     dynamic value,
   ) {
@@ -333,21 +427,67 @@ class _PublicCatalogScreenState
                                       const Color(0xFFE5E7EB),
                                 ),
                               ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.inventory_2_outlined,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      '$_availableProducts produtos disponíveis',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium,
-                                    ),
-                                  ),
-                                ],
+                              child: LayoutBuilder(
+                                builder: (
+                                  context,
+                                  constraints,
+                                ) {
+                                  final compactRefresh =
+                                      constraints.maxWidth < 460;
+
+                                  return Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.inventory_2_outlined,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          '$_availableProducts produtos disponíveis',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      if (_isManualRefreshInProgress)
+                                        const SizedBox(
+                                          width: 40,
+                                          height: 40,
+                                          child: Padding(
+                                            padding:
+                                                EdgeInsets.all(10),
+                                            child:
+                                                CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                        )
+                                      else if (compactRefresh)
+                                        IconButton(
+                                          onPressed:
+                                              _refreshCatalogManually,
+                                          tooltip:
+                                              'Atualizar catálogo',
+                                          icon: const Icon(
+                                            Icons.refresh,
+                                          ),
+                                        )
+                                      else
+                                        TextButton.icon(
+                                          onPressed:
+                                              _refreshCatalogManually,
+                                          icon: const Icon(
+                                            Icons.refresh,
+                                            size: 18,
+                                          ),
+                                          label: const Text(
+                                            'Atualizar',
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                },
                               ),
                             ),
                             const SizedBox(height: 24),

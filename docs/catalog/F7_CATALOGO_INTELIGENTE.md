@@ -5,7 +5,7 @@ Documentação oficial da arquitetura, decisões, segurança, implementação e 
 > Este documento é a referência oficial da F7.
 > Toda decisão arquitetural relevante e toda etapa concluída devem ser registradas aqui.
 
-**Última atualização:** 11/09/2026 — F7.5 concluída em produção: getPublicCatalog, rota pública Flutter Web sem login, layout responsivo, Firebase Hosting live em app.storeconnect.com.br, listCatalogs atualizado para o domínio definitivo e comportamento de estoque dinâmico validado por nova consulta.
+**Última atualização:** 12/09/2026 — F7.5-P avançou com P1–P4 concluídas e P5 concluída no Preview. Refresh silencioso, proteção contra requisições simultâneas, lifecycle funcional no iOS e refresh manual universal foram validados em Android, iPhone e desktop. A futura ação de selecionar produtos reutilizará o refresh silencioso na F7.6. Produção LIVE ainda permanece na versão anterior até publicação isolada do checkpoint.
 
 =====================================================================
 
@@ -57,6 +57,12 @@ Documentação oficial da arquitetura, decisões, segurança, implementação e 
     ✅ domínio definitivo app.storeconnect.com.br
     ✅ comportamento de estoque dinâmico validado por nova consulta
 ⏳ F7.5-P — Performance + atualização inteligente da página pública
+    ✅ P1 — diagnóstico de performance mobile
+    ✅ P2 — redução de repaints + diagnóstico de imagens/dispositivo
+    ✅ P3 — isolamento completo da rota pública dos providers privados
+    ✅ P4 — Slivers, lazy rendering, layout mobile e escala de 200 produtos
+    ✅ P5 — atualização inteligente / refresh orientado à ação do cliente
+    ⏳ P6 — validação final em dispositivos reais
 ⏳ F7.6 — Seleção de quantidades
 ⏳ F7.7 — Resumo e envio da seleção
 ⏳ F7.8 — Recebimento da solicitação no Store&Connect
@@ -2345,12 +2351,13 @@ Portanto:
 ✅ catálogo reflete estoque atual na próxima consulta
 ```
 
-## Limitação atual — página aberta não é tempo real
+## Estado atual — página aberta, refresh e autoridade dos dados
 
-O teste em celular real também confirmou que uma página já aberta
-mantém os dados recebidos na última requisição.
+A F7.5 base publicada em produção continua sendo orientada a requisições:
+uma página já aberta mantém o snapshot recebido na última chamada a
+`getPublicCatalog` até ocorrer uma nova consulta.
 
-Hoje:
+Fluxo base em produção:
 
 ```text
 cliente abre o catálogo
@@ -2359,9 +2366,9 @@ getPublicCatalog
         ↓
 dados ficam em memória na página
 
-estoque muda na loja
+estoque/preço muda na loja
         ↓
-página já aberta NÃO muda sozinha
+página já aberta pode continuar com o snapshot anterior
 
 recarregar página
         ↓
@@ -2370,35 +2377,313 @@ nova chamada getPublicCatalog
 dados atualizados
 ```
 
-Logo, a F7.5 NÃO deve ser descrita como atualização em tempo real.
+Portanto, a F7.5 NÃO é descrita como atualização em tempo real.
 
 ## ⏳ F7.5-P — PERFORMANCE + ATUALIZAÇÃO INTELIGENTE
 
-Antes da F7.6 será executada uma etapa curta de otimização da página
-pública.
+A F7.5-P foi criada para melhorar a experiência da página pública antes da
+F7.6, sem abrir acesso direto ao Firestore e sem transformar o catálogo em
+uma tela de sincronização contínua.
+
+### ✅ P1 — diagnóstico de performance
+
+O diagnóstico confirmou que a página pública original utilizava
+`SingleChildScrollView` + `Wrap`, construindo todos os cards de uma vez.
+Também foi confirmado que não existia atualização contínua de estado durante
+o scroll.
+
+### ✅ P2 — redução de repaints e diagnóstico de imagens/dispositivo
+
+Foi adicionado `RepaintBoundary` aos cards públicos para reduzir repaints
+durante a rolagem.
+
+Checkpoint:
 
 ```text
-P1 — diagnosticar lentidão da rolagem mobile
-
-P2 — otimizar imagens
-     └── evitar decodificação em resolução desnecessariamente alta
-
-P3 — revisar isolamento da rota pública
-     └── evitar providers/listeners privados desnecessários
-
-P4 — otimizar scroll e renderização
-
-P5 — atualização inteligente do catálogo
-     ├── atualizar quando a página voltar a ficar ativa
-     ├── atualizar ao retornar para a aba/app
-     ├── avaliar atualização periódica leve enquanto visível
-     ├── evitar consultas desnecessárias quando não estiver ativa
-     └── continuar utilizando getPublicCatalog
-
-P6 — validar novamente em celular real
+5b72654 perf(f7): reduzir repaints dos cards do catalogo publico
 ```
 
-A estratégia continuará mantendo o Firestore privado:
+As imagens reais utilizadas no diagnóstico eram pequenas e não se mostraram
+o gargalo principal. O teste em iPhone também identificou que o modo de
+baixo consumo de energia pode degradar fortemente a fluidez da rolagem;
+ao desativá-lo, a melhora foi significativa. Isso foi tratado como
+comportamento do dispositivo, não como falha estrutural do catálogo.
+
+### ✅ P3 — isolamento da rota pública
+
+A rota pública foi progressivamente separada dos providers/listeners da área
+privada.
+
+Checkpoints:
+
+```text
+b02a95b perf(f7): isolar rota publica dos providers privados
+e472cf7 perf(f7): remover theme provider da rota publica
+```
+
+Estado final da rota pública:
+
+```text
+rota pública
+  ↓
+MaterialApp próprio
+  ↓
+AppTheme.lightTheme
+  ↓
+PublicCatalogScreen
+
+SEM MultiProvider privado
+SEM ThemeProvider
+SEM AuthGate
+```
+
+A aplicação autenticada continua com seus providers normalmente.
+
+### ✅ P4 — Slivers, lazy rendering e layout mobile
+
+A estrutura da página pública foi migrada para `CustomScrollView` com Slivers.
+
+Checkpoints:
+
+```text
+c2fa135 perf(f7): preparar catalogo publico para slivers
+96ecdd8 perf(f7): implementar lazy rendering no catalogo publico
+4e0a862 feat(f7): otimizar layout mobile do catalogo publico
+```
+
+Principais decisões implementadas:
+
+```text
+✅ CustomScrollView
+✅ SliverList lazy por linhas
+✅ RepaintBoundary preservado por card
+✅ desktop/tablet preservados
+✅ mobile < 600 px com card horizontal compacto
+✅ imagem mobile 110 x 110 com BoxFit.contain
+✅ cabeçalho mobile horizontal
+✅ logo mobile 110 x 110
+✅ área estrutural preparada para futuras ações da F7.6
+```
+
+#### Validação de escala — P4B3
+
+O limite oficial do catálogo permanece em 200 produtos.
+
+Foi criado um build temporário de Preview que replicou produtos somente em
+memória até atingir 200 cards. Firestore, Functions e dados reais não foram
+alterados.
+
+Resultado validado:
+
+```text
+✅ contador com 200 produtos
+✅ rolagem mobile até o final
+✅ retorno rápido ao topo
+✅ rolagem desktop
+✅ imagens durante a rolagem
+✅ layout mobile
+✅ layout desktop
+```
+
+Após o teste, o código-fonte foi restaurado e o Preview retornou aos produtos
+reais. Nenhum commit permanente foi necessário para o teste sintético.
+
+Com isso, a P4 foi encerrada no checkpoint:
+
+```text
+4e0a862 feat(f7): otimizar layout mobile do catalogo publico
+```
+
+### ✅ P5 — atualização inteligente do catálogo
+
+O diagnóstico inicial confirmou que `_loadCatalog()` era a única rota de
+consulta pública e sempre exibia o loading completo. Não existiam
+`WidgetsBindingObserver`, `Timer`, `RefreshIndicator` ou acesso direto ao
+Firestore.
+
+#### ✅ P5-B1 — infraestrutura de refresh silencioso
+
+Foi preparada localmente a evolução de `_loadCatalog()` para suportar:
+
+```text
+_loadCatalog(showLoading: true)
+→ carregamento inicial / tentativa explícita
+
+_loadCatalog(showLoading: false)
+→ atualização silenciosa
+```
+
+Também foi adicionada proteção contra requisições simultâneas.
+
+Regra de falha definida:
+
+```text
+falha transitória durante refresh silencioso
+→ mantém o catálogo já carregado
+
+backend informa catálogo inválido / expirado / indisponível
+→ não manter conteúdo antigo como se ainda estivesse válido
+```
+
+#### ✅ P5-B2 — lifecycle preservado onde funciona
+
+Foi adicionado `WidgetsBindingObserver` para tentar atualizar silenciosamente
+quando a página/app retorna ao estado ativo.
+
+Validação prática:
+
+```text
+iPhone / iOS
+→ saiu da página/app
+→ voltou
+→ nova quantidade apareceu sem refresh manual ✅
+
+inclusive com a tela apagando/entrando em descanso e voltando
+→ catálogo retornou atualizado ✅
+```
+
+#### ❌ P5-B3 — tentativa específica para Web descartada
+
+Foi testada uma ampliação do lifecycle utilizando `kIsWeb` e o estado
+`inactive` para tentar cobrir Chrome Android e navegador desktop.
+
+Resultado:
+
+```text
+iOS
+→ continuou funcionando
+
+Android / navegador Web
+→ não atualizaram de forma confiável ao alternar telas
+→ só refletiram a nova quantidade após refresh da página
+```
+
+A B3 foi removida do código-fonte. A P5 voltou para a base B1+B2.
+
+Decisão: NÃO introduzir agora Page Visibility API, polling periódico, Timer
+ou dependência Web específica apenas para forçar comportamento idêntico entre
+navegadores.
+#### ✅ P5-D2 — refresh manual universal
+
+Foi adicionado ao bloco de disponibilidade da página pública um controle
+explícito de atualização que reutiliza:
+
+```text
+_loadCatalog(showLoading: false)
+```
+
+Comportamento validado:
+
+```text
+desktop / tablet
+→ botão "Atualizar"
+
+mobile
+→ botão compacto com ícone de refresh
+
+durante a requisição
+→ pequeno indicador de progresso no próprio controle
+→ sem loading de tela inteira
+```
+
+Validação prática concluída no Preview:
+
+```text
+✅ Android — botão Atualizar refletiu o estoque novo sem recarregar a página
+✅ desktop — botão Atualizar refletiu o estoque novo sem F5
+✅ iPhone — botão Atualizar refletiu o estoque novo
+✅ iPhone — atualização automática ao retornar continuou funcionando
+✅ nenhum loading de tela inteira durante o refresh silencioso
+✅ layout do controle aprovado em mobile e desktop
+```
+
+#### 📌 Estratégia oficial da P5
+
+A atualização será orientada à ação real do cliente:
+
+```text
+ABERTURA DO CATÁLOGO
+        ↓
+getPublicCatalog
+        ↓
+snapshot atual
+
+RETORNO AO APP/ABA
+        ↓
+quando o lifecycle da plataforma suportar
+        ↓
+refresh silencioso automático
+        ↓
+validado no iOS
+
+ANDROID / DESKTOP WEB
+        ↓
+refresh normal da página continua válido
+
+CLIENTE TOCA EM "SELECIONAR PRODUTOS"
+        ↓
+_loadCatalog(showLoading: false)
+        ↓
+preço + estoque + elegibilidade atualizados
+        ↓
+inicia seleção com snapshot recente
+
+OPÇÃO DE INTERFACE
+        ↓
+botão discreto "Atualizar"
+        ↓
+mesmo refresh silencioso
+
+ENVIO FINAL
+        ↓
+backend consulta novamente produto/estoque/preço
+        ↓
+autoridade final
+```
+
+Regras consolidadas:
+
+```text
+✅ continuar utilizando getPublicCatalog
+✅ manter Firestore privado
+✅ manter refresh normal da página em qualquer plataforma
+✅ preservar refresh automático no iOS onde já funciona
+✅ atualizar antes de iniciar a seleção de produtos
+✅ permitir refresh manual discreto na própria interface
+✅ impedir requisições simultâneas
+✅ revalidar novamente no backend no envio final
+
+❌ sem polling contínuo
+❌ sem Timer periódico
+❌ sem acesso direto do navegador ao Firestore
+❌ sem depender exclusivamente de lifecycle para Android/Web
+```
+
+Com a validação do refresh manual universal e a preservação do lifecycle
+funcional no iOS, a P5 está concluída no Preview.
+
+A futura ação "Selecionar produtos" reutilizará a mesma infraestrutura de
+refresh silencioso durante a F7.6, antes de iniciar a seleção de quantidades.
+
+Essa integração pertence à F7.6 e não reabre a P5.
+
+A produção LIVE permanece temporariamente na versão base da F7.5 até a
+publicação isolada deste checkpoint após commit e push.
+
+### ⏳ P6 — validação final em dispositivos reais
+
+Depois da integração do refresh orientado à ação do cliente, validar novamente:
+
+```text
+✅/⏳ iPhone / Safari
+⏳ Android / Chrome
+⏳ desktop / navegador
+⏳ refresh manual da interface
+⏳ entrada em "Selecionar produtos"
+⏳ ausência de loading completo durante refresh silencioso
+```
+
+A estratégia continua mantendo o Firestore privado:
 
 ```text
 página pública
@@ -2439,8 +2724,8 @@ interface = informação de disponibilidade
 backend no envio = autoridade final sobre disponibilidade
 ```
 
-Essa revalidação é obrigatória e não será substituída pela atualização
-periódica da página.
+Essa revalidação é obrigatória e não será substituída por refresh automático,
+refresh manual ou pela atualização feita antes de iniciar a seleção.
 
 =====================================================================
 
@@ -2485,3 +2770,82 @@ não remove automaticamente a subcollection items.
 
 O período de retenção será definido durante a implementação
 da F7.9, sem antecipar agora se serão 30, 90 ou outro número de dias.
+
+=====================================================================
+
+# 📌 F7.9 — ACHADO DE RUNTIME PARA O BACKLOG
+
+Em 12/09/2026 foi validado um caso importante de expiração:
+
+```text
+link público de catálogo expirado
+→ backend bloqueou corretamente o acesso ✅
+→ mensagem pública de catálogo expirado/indisponível ✅
+
+mesmo catálogo na tela interna "Catálogo Inteligente"
+→ card ainda exibiu badge ATIVO ❌
+```
+
+Conclusão:
+
+```text
+segurança/backend de expiração
+→ correta
+
+estado visual da tela administrativa
+→ precisa considerar expiresAt, não apenas o status persistido
+```
+
+Regra prevista para a F7.9:
+
+```text
+status salvo active + expiresAt ainda futuro
+→ ATIVO
+
+status salvo active + expiresAt atingido
+→ EXPIRADO
+
+status revogado/inativo
+→ INATIVO / REVOGADO conforme contrato final
+```
+
+Também deverá ser decidido de forma única o significado temporal de
+`expiresAt` (instante exato vs. fim do dia) e aplicar a mesma semântica no
+backend e na interface.
+
+Ações de copiar/compartilhar link de catálogo efetivamente expirado também
+deverão ser revisadas na F7.9 para evitar apresentar uma ação que leve a um
+link já bloqueado.
+
+=====================================================================
+
+# 💡 BACKLOG FUTURO — VITRINE COMPLEMENTAR / CROSS-SELL
+
+Ideia registrada para evolução posterior ao núcleo do MVP:
+
+```text
+CATÁLOGO PÚBLICO
+  ├── produtos selecionados / solicitados para o cliente
+  └── "Aproveite também" / promoções / sugestões da loja
+```
+
+Objetivo:
+
+```text
+upsell / cross-sell
+→ permitir que a loja acrescente sugestões sem misturar a intenção original
+  da seleção principal
+```
+
+Possível evolução do modelo:
+
+```text
+CatalogItem.purpose
+  requested
+  promotion
+```
+
+A ideia deve manter as mesmas regras já definidas para preço e estoque:
+consulta atual pelo backend, sem snapshot operacional e com revalidação final.
+Não faz parte do núcleo da F7.6 neste momento e permanece em backlog para não
+desviar o MVP.
