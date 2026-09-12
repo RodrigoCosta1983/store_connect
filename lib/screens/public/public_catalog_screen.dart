@@ -298,9 +298,11 @@ class _PublicCatalogScreenState
               slivers: [
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: horizontalPadding,
-                      vertical: 24,
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      24,
+                      horizontalPadding,
+                      0,
                     ),
                     child: Center(
                       child: ConstrainedBox(
@@ -349,14 +351,18 @@ class _PublicCatalogScreenState
                               ),
                             ),
                             const SizedBox(height: 24),
-                            _buildProductsGrid(
-                              context,
-                            ),
                           ],
                         ),
                       ),
                     ),
                   ),
+                ),
+                _buildProductsSliver(
+                  context,
+                  horizontalPadding,
+                ),
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 24),
                 ),
               ],
             );
@@ -366,70 +372,147 @@ class _PublicCatalogScreenState
     );
   }
 
-  Widget _buildProductsGrid(
+  Widget _buildProductsSliver(
     BuildContext context,
+    double horizontalPadding,
   ) {
     if (_products.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFFE5E7EB),
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
           ),
-        ),
-        child: const Column(
-          children: [
-            Icon(
-              Icons.inventory_2_outlined,
-              size: 44,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 1100,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFFE5E7EB),
+                  ),
+                ),
+                child: const Column(
+                  children: [
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      size: 44,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'Nenhum produto disponível neste catálogo.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
             ),
-            SizedBox(height: 16),
-            Text(
-              'Nenhum produto disponível neste catálogo.',
-              textAlign: TextAlign.center,
-            ),
-          ],
+          ),
         ),
       );
     }
 
-    return LayoutBuilder(
+    return SliverLayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth;
+        final availableWidth =
+            constraints.crossAxisExtent -
+            (horizontalPadding * 2);
+
+        final contentWidth =
+            availableWidth > 1100
+                ? 1100.0
+                : availableWidth;
 
         final double cardWidth;
 
-        if (width >= 900) {
+        if (contentWidth >= 900) {
           cardWidth = 220;
-        } else if (width >= 600) {
+        } else if (contentWidth >= 600) {
           cardWidth = 220;
         } else {
           cardWidth =
-              width > 360
+              contentWidth > 360
                   ? 360
-                  : width;
+                  : contentWidth;
         }
 
-        return Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 18,
-          runSpacing: 18,
-          children: _products.map(
-            (product) {
-              return RepaintBoundary(
+        const spacing = 18.0;
+
+        final calculatedColumns =
+            ((contentWidth + spacing) /
+                    (cardWidth + spacing))
+                .floor();
+
+        final columns =
+            calculatedColumns < 1
+                ? 1
+                : calculatedColumns;
+
+        final rowCount =
+            (_products.length / columns).ceil();
+
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, rowIndex) {
+              final startIndex =
+                  rowIndex * columns;
+
+              final calculatedEnd =
+                  startIndex + columns;
+
+              final endIndex =
+                  calculatedEnd > _products.length
+                      ? _products.length
+                      : calculatedEnd;
+
+              final isLastRow =
+                  rowIndex == rowCount - 1;
+
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  0,
+                  horizontalPadding,
+                  isLastRow ? 0 : spacing,
+                ),
                 child: SizedBox(
-                  width: cardWidth,
                   height: 300,
-                  child: _buildProductCard(
-                    context,
-                    product,
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (
+                          var productIndex = startIndex;
+                          productIndex < endIndex;
+                          productIndex++
+                        ) ...[
+                          if (productIndex > startIndex)
+                            const SizedBox(
+                              width: spacing,
+                            ),
+                          RepaintBoundary(
+                            child: SizedBox(
+                              width: cardWidth,
+                              height: 300,
+                              child: _buildProductCard(
+                                context,
+                                _products[productIndex],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               );
             },
-          ).toList(growable: false),
+            childCount: rowCount,
+          ),
         );
       },
     );
