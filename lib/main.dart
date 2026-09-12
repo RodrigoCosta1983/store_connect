@@ -95,23 +95,15 @@ class _MyAppState extends State<MyApp> {
     final publicCatalogRoute = _publicCatalogRoute;
 
     if (publicCatalogRoute != null) {
-      return ChangeNotifierProvider(
-        create: (ctx) => ThemeProvider(),
-        child: Consumer<ThemeProvider>(
-          builder: (context, themeProvider, child) {
-            return MaterialApp(
-              navigatorKey: NavigationService.navigatorKey,
-              title: 'Store&Connect',
-              debugShowCheckedModeBanner: false,
-              theme: AppTheme.lightTheme,
-              darkTheme: AppTheme.darkTheme,
-              themeMode: themeProvider.themeMode,
-              home: PublicCatalogScreen(
-                publicSlug: publicCatalogRoute.publicSlug,
-                publicToken: publicCatalogRoute.publicToken,
-              ),
-            );
-          },
+      return MaterialApp(
+        navigatorKey: NavigationService.navigatorKey,
+        title: 'Store&Connect',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        themeMode: ThemeMode.light,
+        home: PublicCatalogScreen(
+          publicSlug: publicCatalogRoute.publicSlug,
+          publicToken: publicCatalogRoute.publicToken,
         ),
       );
     }
