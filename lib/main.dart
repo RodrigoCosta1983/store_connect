@@ -92,6 +92,30 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    final publicCatalogRoute = _publicCatalogRoute;
+
+    if (publicCatalogRoute != null) {
+      return ChangeNotifierProvider(
+        create: (ctx) => ThemeProvider(),
+        child: Consumer<ThemeProvider>(
+          builder: (context, themeProvider, child) {
+            return MaterialApp(
+              navigatorKey: NavigationService.navigatorKey,
+              title: 'Store&Connect',
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: themeProvider.themeMode,
+              home: PublicCatalogScreen(
+                publicSlug: publicCatalogRoute.publicSlug,
+                publicToken: publicCatalogRoute.publicToken,
+              ),
+            );
+          },
+        ),
+      );
+    }
+
     final List<SingleChildWidget> appProviders = <SingleChildWidget>[
       ChangeNotifierProvider(create: (ctx) => UserRoleProvider()),
       ChangeNotifierProvider(create: (ctx) => ThemeProvider()),
@@ -99,8 +123,6 @@ class _MyAppState extends State<MyApp> {
       ChangeNotifierProvider(create: (ctx) => CashFlowProvider()),
       ChangeNotifierProvider(create: (ctx) => SalesProvider()),
     ];
-
-
 
     return MultiProvider(
       providers: appProviders,
@@ -113,14 +135,7 @@ class _MyAppState extends State<MyApp> {
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: themeProvider.themeMode,
-            home: _publicCatalogRoute == null
-                ? const AuthGate()
-                : PublicCatalogScreen(
-                    publicSlug:
-                        _publicCatalogRoute.publicSlug,
-                    publicToken:
-                        _publicCatalogRoute.publicToken,
-                  ),
+            home: const AuthGate(),
           );
         },
       ),
