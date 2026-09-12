@@ -294,65 +294,71 @@ class _PublicCatalogScreenState
                     ? 16.0
                     : 32.0;
 
-            return SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                horizontal: horizontalPadding,
-                vertical: 24,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: 1100,
-                  ),
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.stretch,
-                    children: [
-                      _buildPublicHeader(
-                        context: context,
-                        storeName: storeName,
-                        catalogTitle: catalogTitle,
-                        logoUrl: logoUrl,
-                        phone: phone,
-                        expiresAt: expiresAt,
-                      ),
-                      const SizedBox(height: 24),
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius:
-                              BorderRadius.circular(16),
-                          border: Border.all(
-                            color:
-                                const Color(0xFFE5E7EB),
-                          ),
+            return CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                      vertical: 24,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: 1100,
                         ),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.stretch,
                           children: [
-                            const Icon(
-                              Icons.inventory_2_outlined,
+                            _buildPublicHeader(
+                              context: context,
+                              storeName: storeName,
+                              catalogTitle: catalogTitle,
+                              logoUrl: logoUrl,
+                              phone: phone,
+                              expiresAt: expiresAt,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                '$_availableProducts produtos disponíveis',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium,
+                            const SizedBox(height: 24),
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius:
+                                    BorderRadius.circular(16),
+                                border: Border.all(
+                                  color:
+                                      const Color(0xFFE5E7EB),
+                                ),
                               ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.inventory_2_outlined,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      '$_availableProducts produtos disponíveis',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            _buildProductsGrid(
+                              context,
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      _buildProductsGrid(
-                        context,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+              ],
             );
           },
         ),
