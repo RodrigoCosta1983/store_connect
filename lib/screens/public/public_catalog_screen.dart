@@ -427,6 +427,12 @@ class _PublicCatalogScreenState
                 ? 1100.0
                 : availableWidth;
 
+        final isMobile =
+            constraints.crossAxisExtent < 600;
+
+        final cardHeight =
+            isMobile ? 150.0 : 300.0;
+
         final double cardWidth;
 
         if (contentWidth >= 900) {
@@ -480,7 +486,7 @@ class _PublicCatalogScreenState
                   isLastRow ? 0 : spacing,
                 ),
                 child: SizedBox(
-                  height: 300,
+                  height: cardHeight,
                   child: Center(
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -497,10 +503,11 @@ class _PublicCatalogScreenState
                           RepaintBoundary(
                             child: SizedBox(
                               width: cardWidth,
-                              height: 300,
+                              height: cardHeight,
                               child: _buildProductCard(
                                 context,
                                 _products[productIndex],
+                                isMobile: isMobile,
                               ),
                             ),
                           ),
@@ -519,8 +526,9 @@ class _PublicCatalogScreenState
   }
   Widget _buildProductCard(
     BuildContext context,
-    Map<String, dynamic> product,
-  ) {
+    Map<String, dynamic> product, {
+    required bool isMobile,
+  }) {
     final name = _stringValue(
       product,
       'name',
@@ -546,6 +554,123 @@ class _PublicCatalogScreenState
     final quantity = _doubleValue(
       product['quantidade'],
     );
+
+    if (isMobile) {
+      return Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFE5E7EB),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.center,
+                  children: [
+                    ClipRRect(
+                      borderRadius:
+                          BorderRadius.circular(12),
+                      child: SizedBox(
+                        width: 110,
+                        height: 110,
+                        child: _buildProductImage(
+                          imageUrl,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment:
+                            MainAxisAlignment.center,
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          if (categoryName.isNotEmpty) ...[
+                            Text(
+                              categoryName,
+                              maxLines: 1,
+                              overflow:
+                                  TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color:
+                                        const Color(
+                                          0xFF6B7280,
+                                        ),
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                          Text(
+                            name,
+                            maxLines: 2,
+                            overflow:
+                                TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontWeight:
+                                      FontWeight.w600,
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _formatPrice(price),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  fontWeight:
+                                      FontWeight.w700,
+                                ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.check_circle_outline,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Disponível: ${_formatQuantity(quantity)}',
+                                  maxLines: 1,
+                                  overflow:
+                                      TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // F7.6:
+            // área inferior para quantidade,
+            // adicionar e demais ações.
+          ],
+        ),
+      );
+    }
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -640,8 +765,9 @@ class _PublicCatalogScreenState
   }
 
   Widget _buildProductImage(
-    String imageUrl,
-  ) {
+    String imageUrl, {
+    BoxFit fit = BoxFit.cover,
+  }) {
     if (imageUrl.isEmpty) {
       return Container(
         color: const Color(0xFFF3F4F6),
@@ -656,7 +782,7 @@ class _PublicCatalogScreenState
 
     return Image.network(
       imageUrl,
-      fit: BoxFit.cover,
+      fit: fit,
       width: double.infinity,
       errorBuilder: (
         context,
@@ -719,8 +845,13 @@ class _PublicCatalogScreenState
     required String phone,
     required String expiresAt,
   }) {
+    final isHeaderMobile =
+        MediaQuery.sizeOf(context).width < 600;
+
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(
+        isHeaderMobile ? 16 : 24,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -735,18 +866,22 @@ class _PublicCatalogScreenState
 
           final logo = _buildStoreLogo(
             logoUrl,
+            size: isHeaderMobile ? 110 : 88,
           );
+
+          final centerHeaderInfo =
+              isCompact && !isHeaderMobile;
 
           final info = Column(
             crossAxisAlignment:
-                isCompact
+                centerHeaderInfo
                     ? CrossAxisAlignment.center
                     : CrossAxisAlignment.start,
             children: [
               Text(
                 storeName,
                 textAlign:
-                    isCompact
+                    centerHeaderInfo
                         ? TextAlign.center
                         : TextAlign.start,
                 style: Theme.of(context)
@@ -760,7 +895,7 @@ class _PublicCatalogScreenState
               Text(
                 catalogTitle,
                 textAlign:
-                    isCompact
+                    centerHeaderInfo
                         ? TextAlign.center
                         : TextAlign.start,
                 style: Theme.of(context)
@@ -804,6 +939,20 @@ class _PublicCatalogScreenState
               ],
             ],
           );
+
+          if (isHeaderMobile) {
+            return Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.center,
+              children: [
+                logo,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: info,
+                ),
+              ],
+            );
+          }
 
           if (isCompact) {
             return Column(
@@ -860,9 +1009,9 @@ class _PublicCatalogScreenState
     return 'Disponível até $day/$month/$year';
   }
   Widget _buildStoreLogo(
-    String logoUrl,
-  ) {
-    const size = 88.0;
+    String logoUrl, {
+    double size = 88,
+  }) {
 
     if (logoUrl.isEmpty) {
       return Container(
