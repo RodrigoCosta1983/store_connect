@@ -37,6 +37,9 @@ class _PublicCatalogScreenState
   bool _refreshOnResumeArmed = false;
   bool _isManualRefreshInProgress = false;
 
+  bool _isSelectionMode = false;
+  bool _isEnteringSelectionMode = false;
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +100,87 @@ class _PublicCatalogScreenState
         });
       }
     }
+  }
+
+  Future<void> _startSelectionMode() async {
+    if (
+      !mounted ||
+      _isSelectionMode ||
+      _isEnteringSelectionMode ||
+      _isManualRefreshInProgress
+    ) {
+      return;
+    }
+
+    if (_isCatalogRequestInFlight) {
+      final messenger =
+          ScaffoldMessenger.maybeOf(context);
+
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Aguarde a atualização do catálogo terminar.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    setState(() {
+      _isEnteringSelectionMode = true;
+    });
+
+    final refreshed =
+        await _loadCatalog(
+      showLoading: false,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (refreshed) {
+      setState(() {
+        _isEnteringSelectionMode = false;
+        _isSelectionMode = true;
+      });
+
+      return;
+    }
+
+    setState(() {
+      _isEnteringSelectionMode = false;
+    });
+
+    if (_errorMessage == null) {
+      final messenger =
+          ScaffoldMessenger.maybeOf(context);
+
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Não foi possível atualizar o catálogo. Tente novamente.',
+          ),
+        ),
+      );
+    }
+  }
+
+  void _cancelSelectionMode() {
+    if (
+      !mounted ||
+      !_isSelectionMode ||
+      _isEnteringSelectionMode
+    ) {
+      return;
+    }
+
+    setState(() {
+      _isSelectionMode = false;
+      _selectedQuantities =
+          <String, int>{};
+    });
   }
 
   Map<String, int> _reconcileSelectedQuantities(
@@ -162,14 +246,14 @@ class _PublicCatalogScreenState
     return reconciled;
   }
 
-  Future<void> _loadCatalog({
+  Future<bool> _loadCatalog({
     bool showLoading = true,
   }) async {
     if (
       !mounted ||
       _isCatalogRequestInFlight
     ) {
-      return;
+      return false;
     }
 
     _isCatalogRequestInFlight = true;
@@ -253,7 +337,7 @@ class _PublicCatalogScreenState
       );
 
       if (!mounted) {
-        return;
+        return false;
       }
 
       setState(() {
@@ -266,9 +350,11 @@ class _PublicCatalogScreenState
         _isLoading = false;
         _errorMessage = null;
       });
+
+      return true;
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) {
-        return;
+        return false;
       }
 
       final catalogBecameUnavailable =
@@ -287,9 +373,11 @@ class _PublicCatalogScreenState
               _messageForFunctionsError(error);
         });
       }
+
+      return false;
     } catch (_) {
       if (!mounted) {
-        return;
+        return false;
       }
 
       if (
@@ -302,6 +390,8 @@ class _PublicCatalogScreenState
               'Não foi possível carregar este catálogo agora.';
         });
       }
+
+      return false;
     } finally {
       _isCatalogRequestInFlight = false;
     }
@@ -539,7 +629,9 @@ class _PublicCatalogScreenState
                                       else if (compactRefresh)
                                         IconButton(
                                           onPressed:
-                                              _refreshCatalogManually,
+                                              _isEnteringSelectionMode
+                                                  ? null
+                                                  : _refreshCatalogManually,
                                           tooltip:
                                               'Atualizar catálogo',
                                           icon: const Icon(
@@ -549,13 +641,80 @@ class _PublicCatalogScreenState
                                       else
                                         TextButton.icon(
                                           onPressed:
-                                              _refreshCatalogManually,
+                                              _isEnteringSelectionMode
+                                                  ? null
+                                                  : _refreshCatalogManually,
                                           icon: const Icon(
                                             Icons.refresh,
                                             size: 18,
                                           ),
                                           label: const Text(
                                             'Atualizar',
+                                          ),
+                                        ),
+                                      const SizedBox(width: 4),
+                                      if (_isEnteringSelectionMode)
+                                        const SizedBox(
+                                          width: 40,
+                                          height: 40,
+                                          child: Padding(
+                                            padding:
+                                                EdgeInsets.all(10),
+                                            child:
+                                                CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          ),
+                                        )
+                                      else if (
+                                        _isSelectionMode &&
+                                        compactRefresh
+                                      )
+                                        IconButton(
+                                          onPressed:
+                                              _cancelSelectionMode,
+                                          tooltip:
+                                              'Cancelar seleção',
+                                          icon: const Icon(
+                                            Icons.close,
+                                          ),
+                                        )
+                                      else if (_isSelectionMode)
+                                        TextButton.icon(
+                                          onPressed:
+                                              _cancelSelectionMode,
+                                          icon: const Icon(
+                                            Icons.close,
+                                            size: 18,
+                                          ),
+                                          label: const Text(
+                                            'Cancelar',
+                                          ),
+                                        )
+                                      else if (compactRefresh)
+                                        IconButton(
+                                          onPressed:
+                                              _isManualRefreshInProgress
+                                                  ? null
+                                                  : _startSelectionMode,
+                                          tooltip:
+                                              'Selecionar produtos',
+                                          icon: const Icon(
+                                            Icons.check_circle_outline,
+                                          ),
+                                        )
+                                      else
+                                        TextButton.icon(
+                                          onPressed:
+                                              _isManualRefreshInProgress
+                                                  ? null
+                                                  : _startSelectionMode,
+                                          icon: const Icon(
+                                            Icons.check_circle_outline,
+                                            size: 18,
+                                          ),
+                                          label: const Text(
+                                            'Selecionar produtos',
                                           ),
                                         ),
                                     ],
