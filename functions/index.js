@@ -2114,11 +2114,13 @@ const {
   createCatalog,
   listCatalogs,
   getPublicCatalog,
+  submitPublicCatalogSelection,
 } = require("./catalog/createCatalog");
 
 exports.createCatalog = createCatalog;
 exports.listCatalogs = listCatalogs;
 exports.getPublicCatalog = getPublicCatalog;
+exports.submitPublicCatalogSelection = submitPublicCatalogSelection;
 
 // -----------------------------------------------------------------------
 // 💰 RECONCILIACAO DIARIA ASAAS -> FIRESTORE
