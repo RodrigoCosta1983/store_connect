@@ -5,7 +5,7 @@ Documentação oficial da arquitetura, decisões, segurança, implementação e 
 > Este documento é a referência oficial da F7.
 > Toda decisão arquitetural relevante e toda etapa concluída devem ser registradas aqui.
 
-**Última atualização:** 12/09/2026 — F7.5-P avançou com P1–P4 concluídas e P5 concluída no Preview. Refresh silencioso, proteção contra requisições simultâneas, lifecycle funcional no iOS e refresh manual universal foram validados em Android, iPhone e desktop. A futura ação de selecionar produtos reutilizará o refresh silencioso na F7.6. Produção LIVE ainda permanece na versão anterior até publicação isolada do checkpoint.
+**Última atualização:** 15/09/2026 — F7.6 concluída e publicada em produção LIVE. A seleção pública de quantidades foi validada em mobile e desktop, com incremento/decremento limitado ao estoque atual, reconciliação após atualização do catálogo e teste real de redução dinâmica de estoque: uma seleção de 10 unidades foi ajustada automaticamente para 7 após a venda de 3 unidades na loja.
 
 =====================================================================
 
@@ -63,7 +63,18 @@ Documentação oficial da arquitetura, decisões, segurança, implementação e 
     ✅ P4 — Slivers, lazy rendering, layout mobile e escala de 200 produtos
     ✅ P5 — atualização inteligente / refresh orientado à ação do cliente
     ⏳ P6 — validação final em dispositivos reais
-⏳ F7.6 — Seleção de quantidades
+✅ F7.6 — Seleção de quantidades
+    ✅ estado local da seleção pública por productId
+    ✅ entrada no modo de seleção precedida por refresh silencioso
+    ✅ incremento e decremento de quantidade
+    ✅ limite máximo pela quantidade disponível
+    ✅ remoção da seleção ao retornar para zero
+    ✅ reconciliação das quantidades após atualização do catálogo
+    ✅ seleção reduzida automaticamente quando o estoque diminui
+    ✅ controle responsivo de quantidade no mobile
+    ✅ controle responsivo de quantidade no desktop
+    ✅ validação runtime LIVE em mobile e desktop
+    ✅ teste real de estoque dinâmico: selecionado 10 → venda de 3 → seleção reconciliada para 7
 ⏳ F7.7 — Resumo e envio da seleção
 ⏳ F7.8 — Recebimento da solicitação no Store&Connect
 ⏳ F7.9 — Expiração, bloqueio, segurança, retenção e limpeza
