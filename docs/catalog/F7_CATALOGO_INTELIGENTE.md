@@ -2907,3 +2907,46 @@ Cobertura inclui snapshot atual, campos públicos forjados, contrato de
 retorno, centavos, dados inválidos, limites numéricos, rollback de batch,
 reenvios, limite de 200 itens e ausência de venda/alteração de estoque.
 Checks de sintaxe Node e `git diff --check` aprovados.
+
+=====================================================================
+
+## F7.7-E — integração Flutter do envio público
+
+Implementação local concluída, sem publicação ou deploy.
+
+- O resumo local existente oferece a ação Enviar.
+- Usa `FirebaseFunctions.instance.httpsCallable`, com timeout de 30 segundos,
+  seguindo o padrão existente da tela.
+- Envia exclusivamente `publicSlug`, `publicToken` e
+  `items[{productId, quantity}]`.
+- O resumo mantém um snapshot estável durante sua abertura; refresh de
+  lifecycle não altera a seleção por trás do diálogo.
+- Envio em andamento bloqueia chamadas duplicadas, mostra Enviando e impede
+  fechar o diálogo por Voltar/back. Nenhuma chave de idempotência foi criada.
+- Sucesso exige confirmação do backend e requestId válido; fecha o resumo,
+  limpa a seleção, sai do modo de seleção e confirma solicitação enviada.
+  Não cria venda, não reserva e não reduz estoque.
+- Erros transitórios ou resposta não confirmada preservam o resumo/seleção,
+  mostram mensagem amigável e liberam nova tentativa.
+- Erros estruturados de produto/estoque reconciliam a seleção antes do
+  refresh existente. availableQuantity limita a quantidade; produtos
+  inelegíveis são removidos da seleção. Se o refresh falhar, o ajuste
+  conhecido pelo erro do servidor permanece.
+- Erros de catálogo provocam refresh pelo caminho existente, que determina
+  o estado público de catálogo expirado/inativo/indisponível.
+- Backend, contrato F7.7-D e `functions/index.js` não foram alterados.
+
+### Validação e limites
+
+- `flutter analyze --no-pub lib/screens/public/public_catalog_screen.dart test/public_catalog_submission_test.dart`: sem problemas.
+- `flutter test --no-pub test/public_catalog_submission_test.dart`: 15 testes passaram.
+- Testes de widgets usam canal Firebase simulado, sem acesso a produção:
+  payload, clique duplo, mobile/desktop, lifecycle, sucesso, retry,
+  resposta incompleta, reconciliação com/sem refresh, catálogo indisponível
+  e desmontagem durante chamada.
+- `git diff --check` aprovado.
+- A integração ainda não foi validada em dispositivo real com Function
+  publicada. `submitPublicCatalogSelection` permanece fora do index.
+- Reenvios após resposta perdida ainda podem duplicar solicitações:
+  a proteção desta etapa cobre somente chamadas simultâneas.
+- F7.8, recebimento interno e deploy não iniciados.

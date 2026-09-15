@@ -37,6 +37,9 @@ class _PublicCatalogScreenState
   bool _refreshOnResumeArmed = false;
   bool _isManualRefreshInProgress = false;
 
+  bool _isSummaryOpen = false;
+  bool _isSubmittingSelection = false;
+
   bool _isSelectionMode = false;
   bool _isEnteringSelectionMode = false;
 
@@ -281,7 +284,9 @@ class _PublicCatalogScreenState
     if (
       !mounted ||
       !_isSelectionMode ||
-      _selectedQuantities.isEmpty
+      _selectedQuantities.isEmpty ||
+      _isSummaryOpen ||
+      _isCatalogRequestInFlight
     ) {
       return;
     }
@@ -303,10 +308,24 @@ class _PublicCatalogScreenState
       selectedProducts,
     );
 
-    await showDialog<void>(
+    // Mantem o resumo e o payload no mesmo snapshot durante o dialogo.
+    final submittedQuantities =
+        Map<String, int>.from(_selectedQuantities);
+    var sent = false;
+    var refreshAfterSubmit = false;
+    String? submitError;
+    Map<String, dynamic>? revalidationError;
+    _isSummaryOpen = true;
+
+    try {
+      await showDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+        return PopScope(
+          canPop: !_isSubmittingSelection,
+          child: AlertDialog(
           scrollable: true,
           title: const Text(
             'Resumo da seleção',
@@ -340,7 +359,7 @@ class _PublicCatalogScreenState
                       );
 
                       final quantity =
-                          _selectedQuantities[
+                          submittedQuantities[
                                 productId
                               ] ??
                               0;
@@ -491,12 +510,21 @@ class _PublicCatalogScreenState
                         ),
                       ),
                 ),
+                if (submitError != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    submitError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () {
+              onPressed: _isSubmittingSelection ? null : () {
                 Navigator.of(
                   dialogContext,
                 ).pop();
@@ -505,10 +533,165 @@ class _PublicCatalogScreenState
                 'Voltar',
               ),
             ),
+            FilledButton(
+              onPressed: _isSubmittingSelection ? null : () async {
+                if (_isSubmittingSelection) {
+                  return;
+                }
+                setDialogState(() {
+                  _isSubmittingSelection = true;
+                  submitError = null;
+                });
+                try {
+                  final callable =
+                      FirebaseFunctions.instance.httpsCallable(
+                    'submitPublicCatalogSelection',
+                    options: HttpsCallableOptions(
+                      timeout: const Duration(seconds: 30),
+                    ),
+                  );
+                  final response = await callable.call(
+                    <String, dynamic>{
+                      'publicSlug': widget.publicSlug,
+                      'publicToken': widget.publicToken,
+                      'items': submittedQuantities.entries.map((entry) {
+                        return <String, dynamic>{
+                          'productId': entry.key,
+                          'quantity': entry.value,
+                        };
+                      }).toList(growable: false),
+                    },
+                  );
+                  final data = response.data;
+                  if (data is! Map ||
+                      data['success'] != true ||
+                      data['requestId'] is! String ||
+                      (data['requestId'] as String).trim().isEmpty) {
+                    throw const FormatException('Envio nao confirmado.');
+                  }
+                  if (!mounted || !dialogContext.mounted) {
+                    return;
+                  }
+                  sent = true;
+                  Navigator.of(dialogContext).pop();
+                } on FirebaseFunctionsException catch (error) {
+                  if (!mounted || !dialogContext.mounted) {
+                    return;
+                  }
+                  if (error.code == 'failed-precondition' ||
+                      error.code == 'not-found' ||
+                      error.code == 'invalid-argument') {
+                    revalidationError = _toStringDynamicMap(error.details);
+                    refreshAfterSubmit = true;
+                    Navigator.of(dialogContext).pop();
+                  } else {
+                    submitError =
+                        'Não foi possível confirmar o envio. '
+                        'Sua seleção foi mantida. Tente novamente.';
+                  }
+                } catch (_) {
+                  submitError =
+                      'Não foi possível confirmar o envio. '
+                      'Sua seleção foi mantida. Tente novamente.';
+                } finally {
+                  if (!sent && !refreshAfterSubmit &&
+                      mounted && dialogContext.mounted) {
+                    setDialogState(() {
+                      _isSubmittingSelection = false;
+                    });
+                  }
+                }
+              },
+              child: _isSubmittingSelection
+                  ? const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 8),
+                        Text('Enviando...'),
+                      ],
+                    )
+                  : const Text('Enviar'),
+            ),
           ],
+        ),
         );
-      },
+        },
+      ),
     );
+    } finally {
+      _isSummaryOpen = false;
+      _isSubmittingSelection = false;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    if (sent) {
+      setState(() {
+        _selectedQuantities = <String, int>{};
+        _isSelectionMode = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Solicitação enviada à loja com sucesso.'),
+        ),
+      );
+    } else if (refreshAfterSubmit) {
+      _reconcileSubmissionError(revalidationError);
+      await _loadCatalog(showLoading: false);
+      if (!mounted || _errorMessage != null) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            revalidationError?['reason'] != null
+                ? 'Os dados ou a disponibilidade mudaram. '
+                    'Revise a seleção antes de enviar novamente.'
+                : 'Não foi possível enviar a solicitação agora. '
+                    'Revise a seleção e tente novamente.',
+          ),
+        ),
+      );
+    }
+  }
+
+  void _reconcileSubmissionError(Map<String, dynamic>? details) {
+    final productId = details?['productId'];
+    final reason = details?['reason'];
+    if (productId is! String) {
+      return;
+    }
+    final unavailable = reason == 'product-not-in-catalog' ||
+        reason == 'product-unavailable' ||
+        reason == 'product-archived' ||
+        reason == 'invalid-product-data';
+    final rawAvailable = details?['availableQuantity'];
+    final available = rawAvailable is num &&
+            rawAvailable.isFinite && rawAvailable >= 0
+        ? rawAvailable.floor()
+        : null;
+    if (!unavailable && available == null) {
+      return;
+    }
+    final products = <Map<String, dynamic>>[];
+    for (final product in _products) {
+      if (_selectionProductId(product) != productId) {
+        products.add(product);
+      } else if (!unavailable && available! > 0) {
+        products.add({...product, 'quantidade': available});
+      }
+    }
+    setState(() {
+      _selectedQuantities = _reconcileSelectedQuantities(products);
+      _products = products;
+      _availableProducts = products.length;
+    });
   }
 
   int _selectedQuantityForProduct(
@@ -670,7 +853,8 @@ class _PublicCatalogScreenState
   }) async {
     if (
       !mounted ||
-      _isCatalogRequestInFlight
+      _isCatalogRequestInFlight ||
+      _isSummaryOpen
     ) {
       return false;
     }
