@@ -2860,3 +2860,50 @@ A ideia deve manter as mesmas regras já definidas para preço e estoque:
 consulta atual pelo backend, sem snapshot operacional e com revalidação final.
 Não faz parte do núcleo da F7.6 neste momento e permanece em backlog para não
 desviar o MVP.
+
+=====================================================================
+
+## F7.7-D — persistência segura da solicitação
+
+Concluída localmente, sem publicação da Function ou deploy.
+
+- Coleção: `stores/{storeId}/catalogRequests/{requestId}`.
+- Itens: subcoleção `items/{itemId}`; ambos os IDs gerados pelo Firestore.
+- Pai: `catalogId`, `status: pending`, `itemCount`, `totalUnits`,
+  `totalAmount`, `createdAt`, `updatedAt`, `source: public_catalog`.
+- Timestamps gerados pelo servidor.
+- Item: `productId`, `name`, `quantity`, `price`, `subtotal`.
+- Nome e preço vêm do produto atual reconsultado pelo backend.
+- Preço deve ser número finito não negativo; zero explícito é permitido.
+  Nome vazio e preço ausente/inválido são rejeitados.
+- Arredondamento unitário: `Math.round(price * 100)`, seguindo o padrão
+  monetário existente. Subtotais e total são calculados em centavos;
+  valores persistidos/retornados usam unidade monetária com duas casas.
+  Quantidades, centavos e somas precisam permanecer em inteiros seguros.
+- Gravação em batch atômico após revalidação: pai e todos os itens,
+  ou nenhum deles. Sem alteração de estoque, lotes ou vendas.
+- Retorno: `success`, `requestId`, `validatedItemCount`, `totalUnits`,
+  `totalAmount`. Sem storeId/catalogId nem token público.
+- Solicitação anônima, sem vínculo com customers, sem imagem ou título
+  adicional no snapshot nesta etapa.
+
+### Limitações preservadas
+
+- Reenvios independentes podem criar novas solicitações; sem chave de
+  idempotência. Prevenção de clique duplo fica para F7.7-E.
+- Leituras e escrita não são uma transação conjunta: o snapshot registra
+  disponibilidade observada, sem reserva ou garantia futura.
+- Sem integração Flutter de envio, recebimento interno, transições de
+  status, retenção ou limpeza.
+- Function permanece fora de `functions/index.js`.
+- Rules não alteradas. O repositório não fornece regras Firestore;
+  a suíte com Admin SDK não comprova permissões de clientes diretos.
+  A fonte oficial das rules continua pendente para auditoria de acesso.
+
+### Validação
+
+`npm run test:catalog` no Firestore Emulator com JDK 21: 6/6 arquivos.
+Cobertura inclui snapshot atual, campos públicos forjados, contrato de
+retorno, centavos, dados inválidos, limites numéricos, rollback de batch,
+reenvios, limite de 200 itens e ausência de venda/alteração de estoque.
+Checks de sintaxe Node e `git diff --check` aprovados.

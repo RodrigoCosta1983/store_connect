@@ -1247,13 +1247,10 @@ const getPublicCatalog = onCall(
 );
 
 // ============================================================================
-// F7.7-C1 - VALIDAÇÃO SEGURA DA SELEÇÃO PÚBLICA
+// F7.7-D - PERSISTENCIA SEGURA DA SOLICITACAO PUBLICA
 //
-// Importante:
-// - esta etapa é somente leitura;
-// - nenhuma solicitação é persistida;
-// - nenhum estoque é reservado ou decrementado;
-// - a autoridade continua sendo o estado atual do servidor.
+// Solicitacao e itens sao persistidos atomicamente, sem venda ou reserva.
+// O snapshot representa o estado observado na revalidacao do servidor.
 // ============================================================================
 
 const submitPublicCatalogSelection = onCall(
@@ -1323,7 +1320,7 @@ const submitPublicCatalogSelection = onCall(
         if (
           !productId ||
           productId.includes("/") ||
-          !Number.isInteger(quantity) ||
+          !Number.isSafeInteger(quantity) ||
           quantity <= 0
         ) {
           throw new HttpsError(
@@ -1577,6 +1574,8 @@ const submitPublicCatalogSelection = onCall(
       }
 
       const validatedItems = [];
+      let totalUnits = 0;
+      let totalCents = 0;
 
       for (const requestedItem of requestedItems) {
         const productSnapshot =
@@ -1650,35 +1649,79 @@ const submitPublicCatalogSelection = onCall(
           );
         }
 
-        const rawPrice =
-          Number(productData.price ?? 0);
+        const name = normalizeString(productData.name);
+        const rawPrice = productData.price;
+        const unitCents = Math.round(rawPrice * 100);
+        const subtotalCents = unitCents * requestedItem.quantity;
 
-        const price =
-          Number.isFinite(rawPrice) &&
-          rawPrice >= 0 ?
-            rawPrice :
-            0;
+        // Mesmo arredondamento monetario usado em syncOfflineSale.
+        // Nunca converter preco ausente/invalido em produto gratuito.
+        if (
+          !name ||
+          typeof rawPrice !== "number" ||
+          !Number.isFinite(rawPrice) ||
+          rawPrice < 0 ||
+          !Number.isSafeInteger(unitCents) ||
+          !Number.isSafeInteger(subtotalCents) ||
+          !Number.isSafeInteger(totalCents + subtotalCents) ||
+          !Number.isSafeInteger(totalUnits + requestedItem.quantity)
+        ) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Os dados do produto precisam ser atualizados.",
+              {
+                reason: "invalid-product-data",
+                productId: requestedItem.productId,
+              },
+          );
+        }
 
+        totalUnits += requestedItem.quantity;
+        totalCents += subtotalCents;
         validatedItems.push({
-          productId:
-            requestedItem.productId,
-          quantity:
-            requestedItem.quantity,
-          availableQuantity,
-          price,
+          productId: requestedItem.productId,
+          name,
+          quantity: requestedItem.quantity,
+          price: unitCents / 100,
+          subtotal: subtotalCents / 100,
         });
       }
 
       // ======================================================================
-      // 9. RETORNO DA VALIDAÇÃO
+      // 9. PERSISTENCIA ATOMICA DO SNAPSHOT REVALIDADO
       //
-      // C1 ainda não persiste solicitação e não altera estoque.
+      // Disponibilidade observada, sem reserva ou garantia futura.
+      // Reenvios independentes criam novas solicitacoes nesta etapa.
       // ======================================================================
+
+      const requestRef = storeRef.collection("catalogRequests").doc();
+      const serverTimestamp = FieldValue.serverTimestamp();
+      const totalAmount = totalCents / 100;
+      const batch = db.batch();
+
+      batch.create(requestRef, {
+        catalogId,
+        status: "pending",
+        itemCount: validatedItems.length,
+        totalUnits,
+        totalAmount,
+        createdAt: serverTimestamp,
+        updatedAt: serverTimestamp,
+        source: "public_catalog",
+      });
+
+      for (const item of validatedItems) {
+        batch.create(requestRef.collection("items").doc(), item);
+      }
+
+      await batch.commit();
 
       return {
         success: true,
-        validatedItemCount:
-          validatedItems.length,
+        requestId: requestRef.id,
+        validatedItemCount: validatedItems.length,
+        totalUnits,
+        totalAmount,
       };
     },
 );

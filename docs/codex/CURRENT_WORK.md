@@ -91,7 +91,7 @@ Arquivo:
 
 `functions/catalog/createCatalog.js`
 
-Ela atualmente:
+No checkpoint C, ela:
 
 - valida slug/token;
 - limita seleção a `MAX_PRODUCTS = 200`;
@@ -131,27 +131,58 @@ Portanto ela ainda não deve ser considerada publicada em produção.
 Não adicionar ao `functions/index.js` e não fazer deploy até a etapa
 correta e autorização explícita de Rodrigo.
 
+## F7.7-D — persistência segura da solicitação
+
+Concluída localmente, sem publicação da Function ou deploy.
+
+- Coleção: `stores/{storeId}/catalogRequests/{requestId}`.
+- Itens: subcoleção `items/{itemId}`; ambos os IDs gerados pelo Firestore.
+- Pai: `catalogId`, `status: pending`, `itemCount`, `totalUnits`,
+  `totalAmount`, `createdAt`, `updatedAt`, `source: public_catalog`.
+- Timestamps gerados pelo servidor.
+- Item: `productId`, `name`, `quantity`, `price`, `subtotal`.
+- Nome e preço vêm do produto atual reconsultado pelo backend.
+- Preço deve ser número finito não negativo; zero explícito é permitido.
+  Nome vazio e preço ausente/inválido são rejeitados.
+- Arredondamento unitário: `Math.round(price * 100)`, seguindo o padrão
+  monetário existente. Subtotais e total são calculados em centavos;
+  valores persistidos/retornados usam unidade monetária com duas casas.
+  Quantidades, centavos e somas precisam permanecer em inteiros seguros.
+- Gravação em batch atômico após revalidação: pai e todos os itens,
+  ou nenhum deles. Sem alteração de estoque, lotes ou vendas.
+- Retorno: `success`, `requestId`, `validatedItemCount`, `totalUnits`,
+  `totalAmount`. Sem storeId/catalogId nem token público.
+- Solicitação anônima, sem vínculo com customers, sem imagem ou título
+  adicional no snapshot nesta etapa.
+
+### Limitações preservadas
+
+- Reenvios independentes podem criar novas solicitações; sem chave de
+  idempotência. Prevenção de clique duplo fica para F7.7-E.
+- Leituras e escrita não são uma transação conjunta: o snapshot registra
+  disponibilidade observada, sem reserva ou garantia futura.
+- Sem integração Flutter de envio, recebimento interno, transições de
+  status, retenção ou limpeza.
+- Function permanece fora de `functions/index.js`.
+- Rules não alteradas. O repositório não fornece regras Firestore;
+  a suíte com Admin SDK não comprova permissões de clientes diretos.
+  A fonte oficial das rules continua pendente para auditoria de acesso.
+
+### Validação
+
+`npm run test:catalog` no Firestore Emulator com JDK 21: 6/6 arquivos.
+Cobertura inclui snapshot atual, campos públicos forjados, contrato de
+retorno, centavos, dados inválidos, limites numéricos, rollback de batch,
+reenvios, limite de 200 itens e ausência de venda/alteração de estoque.
+Checks de sintaxe Node e `git diff --check` aprovados.
+
 ## Próxima etapa
 
-F7.7-D — persistência segura da solicitação.
+F7.7-E — integração Flutter do envio e prevenção de clique duplo.
 
-Antes de implementar:
-
-1. auditar documentação e padrões existentes;
-2. identificar estrutura apropriada para solicitação;
-3. confirmar que não existe modelo equivalente já oficial;
-4. não reutilizar `sales` automaticamente;
-5. não reservar nem decrementar estoque;
-6. definir quais valores validados pelo servidor devem ser congelados no
-   momento da solicitação;
-7. definir status inicial e timestamps;
-8. considerar idempotência/duplicidade e concorrência.
-
-Se o repositório/documentação não determinar de forma clara uma decisão
-arquitetural necessária para a persistência, pare depois da auditoria e
-apresente a decisão necessária a Rodrigo.
-
-Não invente silenciosamente uma regra de negócio.
+Parada obrigatória após F7.7-D, conforme autorização de Rodrigo.
+Não iniciar F7.7-E automaticamente. Não exportar em functions/index.js,
+não fazer deploy e não tocar produção.
 
 ## Fluxo desejado
 

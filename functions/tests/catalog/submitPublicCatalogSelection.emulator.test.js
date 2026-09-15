@@ -122,7 +122,7 @@ async function run() {
 
   console.log("");
   console.log("============================================================");
-  console.log("F7.7-C2 — SUBMIT PUBLIC CATALOG SELECTION / TESTE FUNCIONAL");
+  console.log("F7.7-D — SUBMIT PUBLIC CATALOG SELECTION / TESTE FUNCIONAL");
   console.log("============================================================");
 
   const storeRef = db
@@ -250,7 +250,10 @@ async function run() {
       validResult,
       {
         success: true,
+        requestId: validResult.requestId,
         validatedItemCount: 1,
+        totalUnits: 2,
+        totalAmount: 99.8,
       },
   );
 
@@ -658,6 +661,184 @@ async function run() {
       7,
   );
 
+
+  const requestsRef = storeRef.collection("catalogRequests");
+  assert.strictEqual((await requestsRef.get()).size, 1);
+  assert.strictEqual((await storeRef.collection("sales").get()).size, 0);
+  const savedRef = requestsRef.doc(validResult.requestId);
+  const saved = (await savedRef.get()).data();
+  assert.deepStrictEqual(Object.keys(saved).sort(), [
+    "catalogId", "createdAt", "itemCount", "source", "status",
+    "totalAmount", "totalUnits", "updatedAt",
+  ].sort());
+  assert.strictEqual(saved.catalogId, catalogId);
+  assert.strictEqual(saved.status, "pending");
+  assert.strictEqual(saved.source, "public_catalog");
+  assert.strictEqual(saved.itemCount, 1);
+  assert.strictEqual(saved.totalUnits, 2);
+  assert.strictEqual(saved.totalAmount, 99.8);
+  assert(saved.createdAt instanceof admin.firestore.Timestamp);
+  assert(saved.createdAt.isEqual(saved.updatedAt));
+  assert.deepStrictEqual(
+      (await savedRef.collection("items").get()).docs.map((doc) => doc.data()),
+      [{
+        productId: activeProductId, name: "Produto Ativo",
+        quantity: 2, price: 49.9, subtotal: 99.8,
+      }],
+  );
+  const submit = (items, extra = {}) => submitPublicCatalogSelection.run({
+    data: {publicSlug, publicToken, items, ...extra},
+  });
+
+  // Dados atuais do servidor prevalecem sobre campos forjados.
+  await productsRef.doc(activeProductId).update({
+    name: "Nome Atual", price: 0.1, quantidade: 10,
+  });
+  await productsRef.doc(zeroStockProductId).update({
+    price: 0.2, quantidade: 10,
+  });
+  const forgedItems = [
+    {
+      productId: activeProductId, quantity: 3,
+      name: "Forjado", price: 999, subtotal: 999,
+      imageUrl: "https://invalid.example/image", quantidade: 999,
+    },
+    {productId: zeroStockProductId, quantity: 1, price: 999},
+  ];
+  const fresh = await submit(forgedItems, {
+    storeId: "forged-store", catalogId: "forged-catalog", totalAmount: 999,
+  });
+  assert.strictEqual(fresh.totalAmount, 0.5);
+  assert.strictEqual(fresh.totalUnits, 4);
+  const freshItems = (await requestsRef.doc(fresh.requestId)
+      .collection("items").get()).docs.map((doc) => doc.data());
+  assert.deepStrictEqual(
+      freshItems.find((item) => item.productId === activeProductId),
+      {
+        productId: activeProductId, name: "Nome Atual",
+        quantity: 3, price: 0.1, subtotal: 0.3,
+      },
+  );
+  assert.strictEqual((await savedRef.get()).data().totalAmount, 99.8);
+  const repeated = await submit(forgedItems);
+  assert.notStrictEqual(repeated.requestId, fresh.requestId);
+
+  // Falha em item posterior nao pode persistir solicitacao parcial.
+  const countBeforeFailures = (await requestsRef.get()).size;
+  await expectHttpsError(
+      () => submit([
+        {productId: activeProductId, quantity: 1},
+        {productId: archivedProductId, quantity: 1},
+      ]),
+      "failed-precondition", "product-archived", 0,
+  );
+  for (const price of [-1, NaN, Infinity, null, "12.00", 1e20]) {
+    await productsRef.doc(activeProductId).update({price});
+    await expectHttpsError(
+        () => submit([{productId: activeProductId, quantity: 1}]),
+        "failed-precondition", "invalid-product-data",
+    );
+  }
+  await productsRef.doc(activeProductId).update({
+    price: admin.firestore.FieldValue.delete(),
+  });
+  await expectHttpsError(
+      () => submit([{productId: activeProductId, quantity: 1}]),
+      "failed-precondition", "invalid-product-data",
+  );
+  await productsRef.doc(activeProductId).update({price: 1, name: " "});
+  await expectHttpsError(
+      () => submit([{productId: activeProductId, quantity: 1}]),
+      "failed-precondition", "invalid-product-data",
+  );
+  await expectHttpsError(
+      () => submit([{productId: activeProductId, quantity: 2 ** 53}]),
+      "invalid-argument",
+  );
+  assert.strictEqual((await requestsRef.get()).size, countBeforeFailures);
+
+  // Zero explicito e arredondamento monetario existente.
+  await productsRef.doc(activeProductId).update({price: 0, name: "Atual"});
+  assert.strictEqual((await submit([
+    {productId: activeProductId, quantity: 1},
+  ])).totalAmount, 0);
+  await productsRef.doc(activeProductId).update({price: 1.236});
+  assert.strictEqual((await submit([
+    {productId: activeProductId, quantity: 3},
+  ])).totalAmount, 3.72);
+
+
+  // Limites numericos: subtotal e soma nao podem exceder inteiros seguros.
+  await productsRef.doc(activeProductId).update({
+    price: 50000000000000, quantidade: 10,
+  });
+  await expectHttpsError(
+      () => submit([{productId: activeProductId, quantity: 2}]),
+      "failed-precondition", "invalid-product-data",
+  );
+  await productsRef.doc(zeroStockProductId).update({price: 50000000000000});
+  await expectHttpsError(
+      () => submit([
+        {productId: activeProductId, quantity: 1},
+        {productId: zeroStockProductId, quantity: 1},
+      ]),
+      "failed-precondition", "invalid-product-data",
+  );
+  await productsRef.doc(activeProductId).update({price: 1});
+  await productsRef.doc(zeroStockProductId).update({price: 1});
+
+  // Falha real de precondicao no Emulator: o batch inteiro deve reverter.
+  // Adiciona create de documento existente ao mesmo batch da funcao.
+  const originalBatch = db.batch;
+  const beforeAtomicFailure = (await requestsRef.get()).size;
+  const beforeItemFailure = (await db.collectionGroup("items").get()).size;
+  db.batch = function() {
+    const batch = originalBatch.call(this);
+    batch.create(storeRef, {shouldNeverPersist: true});
+    return batch;
+  };
+  try {
+    await assert.rejects(
+        () => submit([{productId: activeProductId, quantity: 1}]),
+        (error) => error.code === 6,
+    );
+  } finally {
+    db.batch = originalBatch;
+  }
+  assert.strictEqual((await requestsRef.get()).size, beforeAtomicFailure);
+  assert.strictEqual((await db.collectionGroup("items").get()).size,
+      beforeItemFailure);
+  assert.strictEqual((await storeRef.get()).data().shouldNeverPersist, undefined);
+
+  // Limite oficial: 200 itens, 201 documentos atomicos.
+  const fixtures = db.batch();
+  const bulkItems = [];
+  for (let i = 0; i < 200; i += 1) {
+    const productId = "bulk-valid-" + i + "-" + suffix;
+    fixtures.set(productsRef.doc(productId), {
+      name: "Produto " + i, price: 0.01, quantidade: 1,
+    });
+    fixtures.set(catalogRef.collection("items").doc("bulk-" + i), {productId});
+    bulkItems.push({productId, quantity: 1});
+  }
+  await fixtures.commit();
+  const bulk = await submit(bulkItems);
+  assert.strictEqual(bulk.validatedItemCount, 200);
+  assert.strictEqual(bulk.totalUnits, 200);
+  assert.strictEqual(bulk.totalAmount, 2);
+  assert.strictEqual((await requestsRef.doc(bulk.requestId)
+      .collection("items").get()).size, 200);
+  assert.strictEqual((await productsRef.doc(activeProductId).get())
+      .data().quantidade, 10);
+  assert.strictEqual((await storeRef.collection("sales").get()).size, 0);
+  const allRequests = await requestsRef.get();
+  for (const doc of allRequests.docs) {
+    assert.strictEqual((await doc.ref.collection("items").get()).size,
+        doc.data().itemCount);
+    assert(!JSON.stringify(doc.data()).includes(publicToken));
+  }
+  console.log("Persistencia F7.7-D: snapshot, totais e limite OK");
+
   const finalCatalog =
     await catalogRef.get();
 
@@ -666,12 +847,12 @@ async function run() {
       "active",
   );
 
-  console.log("✅ Estoque permaneceu 7");
+  console.log("Estoque preservado em todos os envios");
   console.log("✅ Catálogo restaurado para ativo");
 
   console.log("");
   console.log("============================================================");
-  console.log("✅ F7.7-C2 SUBMIT PUBLIC CATALOG SELECTION PASSOU");
+  console.log("✅ F7.7-D SUBMIT PUBLIC CATALOG SELECTION PASSOU");
   console.log("============================================================");
   console.log("");
 }
@@ -679,7 +860,7 @@ async function run() {
 run().catch((error) => {
   console.error("");
   console.error(
-      "❌ F7.7-C2 SUBMIT PUBLIC CATALOG SELECTION FALHOU",
+      "❌ F7.7-D SUBMIT PUBLIC CATALOG SELECTION FALHOU",
   );
   console.error(error);
   process.exit(1);
