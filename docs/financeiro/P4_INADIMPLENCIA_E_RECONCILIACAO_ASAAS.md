@@ -17,9 +17,9 @@ Documentação oficial da arquitetura de detecção de inadimplência, período 
 ✅ P4-F1 — Diagnóstico completo de inadimplência
 ✅ P4-F2 — Proteção do bloqueio
 ✅ P4-F3 — Reconciliação financeira
+✅ P4-F4 — Interface de aviso de inadimplência
 
-🟡 P4-F4 — Interface de aviso de inadimplência
-⏳ P4-F5 — Validação do bloqueio real no dia 4
+🟡 P4-F5 — Validação do bloqueio real no dia 4
 ⏳ P4-F6 — Validação completa de pagamento e reativação
 ```
 
@@ -598,7 +598,7 @@ Vencimento real: 2026-09-12
 Estado: overdue
 ```
 
-## H_Carl@_
+## H_Carl
 
 ```text
 Plano: business
@@ -737,26 +737,89 @@ nextDueDate atualizado
 
 =====================================================================
 
-# ⚠️ INTERFACE FLUTTER — PENDÊNCIA ATUAL
+# ✅ INTERFACE FLUTTER — P4-F4 CONCLUÍDA
 
-O backend usa `overdueDueDate` como fonte oficial para o período de tolerância.
+A P4-F4 foi concluída e validada em 15/09/2026.
 
-A interface Flutter ainda precisa ser auditada para confirmar se o banner de aviso continua usando `overdueSince`.
-
-Exemplo real:
+A auditoria identificou que o `warning_banner.dart` ainda utilizava:
 
 ```text
-overdueDueDate = 12/09
-overdueSince   = 15/09
+overdueSince
 ```
 
-Financeiramente:
+para calcular os dias restantes de tolerância.
+
+Esse comportamento era incorreto porque `overdueSince` representa o momento em que o Store&Connect detectou o atraso, e não a data real de vencimento da cobrança.
+
+A interface foi corrigida para utilizar:
 
 ```text
-15/09 = dia 3
+overdueDueDate
 ```
 
-Se a interface usar `overdueSince`, poderá calcular o período de forma incorreta.
+como fonte canônica do cálculo visual.
+
+A regra aplicada ficou:
+
+```text
+Vencimento: 12/09/2026
+
+13/09 → 3 dias antes do bloqueio
+14/09 → 2 dias antes do bloqueio
+15/09 → último dia de tolerância
+16/09 → dia de bloqueio
+```
+
+O campo:
+
+```text
+overdueSince
+```
+
+permanece somente como informação de auditoria.
+
+## Validação real — Master Gelo
+
+Em 15/09/2026:
+
+```text
+subscriptionStatus = overdue
+overdueDueDate      = 2026-09-12
+dias de atraso      = 3
+```
+
+O Asaas confirmou a cobrança de 12/09/2026 como vencida há 3 dias.
+
+O Store&Connect exibiu corretamente:
+
+```text
+Atenção: Hoje é o último dia de tolerância.
+Seu acesso será bloqueado amanhã se o pagamento não for identificado.
+```
+
+Também foi validado que o botão:
+
+```text
+VER FATURA
+```
+
+continua abrindo normalmente a tela `Minha Assinatura`.
+
+Na tela financeira foram confirmadas as cobranças:
+
+```text
+12/08/2026 → PAGO
+12/09/2026 → ATRASADO
+12/10/2026 → A VENCER
+```
+
+Nenhuma alteração foi realizada no Asaas durante a correção do banner.
+
+Commit da correção:
+
+```text
+0d1ef94 — fix(financeiro): alinhar banner ao vencimento canonico
+```
 
 =====================================================================
 
@@ -853,6 +916,8 @@ aa8374b — fix(financeiro): tratar pending vencida como atraso
 a10862d — fix(financeiro): proteger bloqueio por inadimplencia
 99f3948 — fix(financeiro): persistir vencimento canonico do atraso
 abf6ba5 — fix(financeiro): reconciliar cobrancas Asaas diariamente
+99529d1 — docs(financeiro): documentar inadimplencia e reconciliacao Asaas
+0d1ef94 — fix(financeiro): alinhar banner ao vencimento canonico
 ```
 
 =====================================================================
@@ -860,22 +925,21 @@ abf6ba5 — fix(financeiro): reconciliar cobrancas Asaas diariamente
 # 🚧 PRÓXIMAS ETAPAS
 
 ```text
-P4-F4
-→ auditar warning_banner.dart
-→ utilizar overdueDueDate
-→ validar contagem visual
-
 P4-F5
-→ validar execução real do dia 4
-→ confirmar inactive
+→ aguardar 16/09/2026
+→ validar reconcileAsaasBilling às 01:30
+→ validar checkOverdueSubscriptions às 02:00
+→ confirmar subscriptionStatus = inactive
 → confirmar blockedAt
+→ confirmar overdueDueDate preservado
 → confirmar assinatura Asaas preservada
 
 P4-F6
-→ pagar cobrança
+→ pagar cobrança após bloqueio
 → validar webhook
 → validar regularização
-→ definir comportamento seguro de INACTIVE após pagamento
+→ validar reativação do acesso
+→ definir comportamento seguro de INACTIVE se o webhook de recuperação for perdido
 ```
 
 =====================================================================
