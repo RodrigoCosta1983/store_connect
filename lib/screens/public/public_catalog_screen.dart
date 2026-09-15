@@ -30,6 +30,9 @@ class _PublicCatalogScreenState
   List<Map<String, dynamic>> _products =
       <Map<String, dynamic>>[];
 
+  Map<String, int> _selectedQuantities =
+      <String, int>{};
+
   bool _isCatalogRequestInFlight = false;
   bool _refreshOnResumeArmed = false;
   bool _isManualRefreshInProgress = false;
@@ -94,6 +97,69 @@ class _PublicCatalogScreenState
         });
       }
     }
+  }
+
+  Map<String, int> _reconcileSelectedQuantities(
+    List<Map<String, dynamic>> products,
+  ) {
+    if (_selectedQuantities.isEmpty) {
+      return <String, int>{};
+    }
+
+    final availableByProductId =
+        <String, int>{};
+
+    for (final product in products) {
+      final productId = _stringValue(
+        product,
+        'productId',
+        '',
+      ).trim();
+
+      if (productId.isEmpty) {
+        continue;
+      }
+
+      final availableRaw =
+          _doubleValue(
+        product['quantidade'],
+      );
+
+      final available =
+          availableRaw > 0
+              ? availableRaw.floor()
+              : 0;
+
+      if (available > 0) {
+        availableByProductId[productId] =
+            available;
+      }
+    }
+
+    final reconciled =
+        <String, int>{};
+
+    _selectedQuantities.forEach(
+      (productId, selectedQuantity) {
+        final available =
+            availableByProductId[productId];
+
+        if (
+          available == null ||
+          available <= 0 ||
+          selectedQuantity <= 0
+        ) {
+          return;
+        }
+
+        reconciled[productId] =
+            selectedQuantity > available
+                ? available
+                : selectedQuantity;
+      },
+    );
+
+    return reconciled;
   }
 
   Future<void> _loadCatalog({
@@ -181,6 +247,11 @@ class _PublicCatalogScreenState
               )
               .toList(growable: false);
 
+      final reconciledSelectedQuantities =
+          _reconcileSelectedQuantities(
+        products,
+      );
+
       if (!mounted) {
         return;
       }
@@ -189,6 +260,8 @@ class _PublicCatalogScreenState
         _store = store;
         _catalog = catalog;
         _products = products;
+        _selectedQuantities =
+            reconciledSelectedQuantities;
         _availableProducts = products.length;
         _isLoading = false;
         _errorMessage = null;
