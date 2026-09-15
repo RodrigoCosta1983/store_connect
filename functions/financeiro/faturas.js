@@ -87,6 +87,8 @@ const ASAAS_URL = ASAAS_ENV === "production"
       throw new HttpsError("unauthenticated", "O usuário deve estar logado.");
     }
 
+    const userId = request.auth.uid;
+
     const storeId = request.data.storeId;
     if (!storeId) {
       throw new HttpsError("invalid-argument", "O ID da loja é obrigatório.");
@@ -95,23 +97,119 @@ const ASAAS_URL = ASAAS_ENV === "production"
     const db = admin.firestore();
 
     try {
-      const storeDoc = await db.collection("stores").doc(storeId).get();
-      if (!storeDoc.exists) {
-        throw new HttpsError("not-found", "Loja não encontrada.");
+      const userDoc =
+        await db
+          .collection("users")
+          .doc(userId)
+          .get();
+
+      const storeDoc =
+        await db
+          .collection("stores")
+          .doc(storeId)
+          .get();
+
+      if (!userDoc.exists) {
+        throw new HttpsError(
+          "permission-denied",
+          "Usuário sem cadastro válido no Store Connect."
+        );
       }
 
-      const asaasCustomerId = storeDoc.data().asaasCustomerId;
-      if (!asaasCustomerId) {
-        throw new HttpsError("failed-precondition", "Loja sem cadastro financeiro.");
+      if (!storeDoc.exists) {
+        throw new HttpsError(
+          "not-found",
+          "Loja não encontrada."
+        );
+      }
+
+      const userData =
+        userDoc.data() || {};
+
+      const storeData =
+        storeDoc.data() || {};
+
+      const userStoreId =
+        String(
+          userData.storeId || ""
+        ).trim();
+
+      const role =
+        String(
+          userData.role || ""
+        )
+          .trim()
+          .toLowerCase();
+
+      const accessStatus =
+        String(
+          userData.accessStatus || "active"
+        )
+          .trim()
+          .toLowerCase();
+
+      const ownerId =
+        String(
+          storeData.ownerId || ""
+        ).trim();
+
+      if (accessStatus === "revoked") {
+        throw new HttpsError(
+          "permission-denied",
+          "Seu acesso a esta loja foi revogado."
+        );
+      }
+
+      if (userStoreId !== storeId) {
+        throw new HttpsError(
+          "permission-denied",
+          "Esta conta não pertence à loja informada."
+        );
+      }
+
+      if (role !== "admin") {
+        throw new HttpsError(
+          "permission-denied",
+          "Somente o administrador proprietário pode acessar as faturas da assinatura."
+        );
+      }
+
+      if (
+        !ownerId ||
+        ownerId !== userId
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "Somente o proprietário da loja pode acessar as faturas da assinatura."
+        );
+      }
+
+      const asaasSubscriptionId =
+        storeData.asaasSubscriptionId;
+
+      if (!asaasSubscriptionId) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Loja sem assinatura financeira oficial."
+        );
       }
 
       const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
 
-      // Busca até 12 faturas do cliente no Asaas
-      const response = await axios.get(`${ASAAS_URL}/payments?customer=${asaasCustomerId}&limit=12`, {
+      // Busca somente cobranças da assinatura oficial da loja.
+      //
+      // IMPORTANTE:
+      // Não usamos apenas customer/asaasCustomerId porque um mesmo customer
+      // pode estar associado a mais de uma loja no Asaas. O isolamento
+      // financeiro deve seguir a asaasSubscriptionId oficial do Firestore.
+      const response = await axios.get(`${ASAAS_URL}/payments`, {
         headers: {
           "access_token": ASAAS_API_KEY,
           "User-Agent": "StoreConnectApp/1.0"
+        },
+        params: {
+          subscription: asaasSubscriptionId,
+          limit: 12
         }
       });
 
@@ -134,7 +232,18 @@ const ASAAS_URL = ASAAS_ENV === "production"
       return { invoices: invoices };
 
     } catch (error) {
-      console.error("Erro ao listar faturas:", error.message);
-      throw new HttpsError("internal", "Erro ao conectar com o servidor financeiro.");
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      console.error(
+        "Erro ao listar faturas:",
+        error.message
+      );
+
+      throw new HttpsError(
+        "internal",
+        "Erro ao conectar com o servidor financeiro."
+      );
     }
   });
