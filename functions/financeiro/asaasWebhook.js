@@ -587,6 +587,9 @@ exports.asaasWebhook = onRequest(
           overdueSince:
             admin.firestore.FieldValue.delete(),
 
+          overdueDueDate:
+            admin.firestore.FieldValue.delete(),
+
           // Também removemos o vínculo.
           asaasSubscriptionId:
             admin.firestore.FieldValue.delete(),
@@ -705,6 +708,22 @@ exports.asaasWebhook = onRequest(
         }
 
 
+        const canonicalOverdueDueDate =
+          billingState.hasOverdue &&
+          billingState.nextDueDate
+            ? billingState.nextDueDate
+            : payment?.dueDate || null;
+
+
+        if (
+          canonicalOverdueDueDate
+        ) {
+
+          updateData.overdueDueDate =
+            canonicalOverdueDueDate;
+        }
+
+
         // ---------------------------------------------------------------------
         // NÃO REINICIA O GRACE PERIOD
         //
@@ -783,6 +802,9 @@ exports.asaasWebhook = onRequest(
           ) {
 
             updateData.nextDueDate =
+              billingState.nextDueDate;
+
+            updateData.overdueDueDate =
               billingState.nextDueDate;
           }
 
@@ -950,6 +972,9 @@ exports.asaasWebhook = onRequest(
 
           overdueSince:
             admin.firestore.FieldValue.delete(),
+
+          overdueDueDate:
+            admin.firestore.FieldValue.delete(),
         };
 
 
@@ -1026,6 +1051,14 @@ exports.asaasWebhook = onRequest(
 
           updateData.subscriptionStatus =
             "overdue";
+
+          if (
+            billingState.nextDueDate
+          ) {
+
+            updateData.overdueDueDate =
+              billingState.nextDueDate;
+          }
 
           if (
             storeData.subscriptionStatus !==
