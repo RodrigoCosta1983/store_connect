@@ -166,6 +166,65 @@ async function getSubscriptionBillingState(
     nextDueDate =
       pendingPayments[0].dueDate;
 
+    // -------------------------------------------------------------------------
+    // PROTEÇÃO CONTRA PENDING VENCIDA
+    //
+    // O Asaas pode manter temporariamente uma cobrança como PENDING mesmo
+    // após o vencimento. Para a regra de acesso do Store&Connect, qualquer
+    // PENDING com dueDate anterior ao dia atual já representa inadimplência.
+    //
+    // No próprio dia do vencimento ela continua regular.
+    // -------------------------------------------------------------------------
+
+    const todayParts =
+      new Intl.DateTimeFormat(
+        "en-US",
+        {
+          timeZone: "America/Sao_Paulo",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }
+      ).formatToParts(new Date());
+
+    const todayMap =
+      Object.fromEntries(
+        todayParts
+          .filter(
+            (part) =>
+              part.type !== "literal"
+          )
+          .map(
+            (part) => [
+              part.type,
+              part.value,
+            ]
+          )
+      );
+
+    const todaySaoPaulo =
+      `${todayMap.year}-${todayMap.month}-${todayMap.day}`;
+
+    if (
+      nextDueDate &&
+      nextDueDate < todaySaoPaulo
+    ) {
+      hasOverdue = true;
+
+      console.log(
+        `🔴 Cobrança PENDING vencida detectada: ${nextDueDate}`
+      );
+
+      console.log(
+        `📅 Data atual em São Paulo: ${todaySaoPaulo}`
+      );
+
+      return {
+        hasOverdue,
+        nextDueDate,
+      };
+    }
+
     console.log(
       `📅 Próxima cobrança pendente: ${nextDueDate}`
     );
