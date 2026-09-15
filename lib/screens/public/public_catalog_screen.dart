@@ -183,6 +183,34 @@ class _PublicCatalogScreenState
     });
   }
 
+  String _selectionProductId(
+    Map<String, dynamic> product,
+  ) {
+    return _stringValue(
+      product,
+      'productId',
+      '',
+    ).trim();
+  }
+
+  int _selectionAvailableQuantity(
+    Map<String, dynamic> product,
+  ) {
+    final availableRaw =
+        _doubleValue(
+      product['quantidade'],
+    );
+
+    if (
+      !availableRaw.isFinite ||
+      availableRaw <= 0
+    ) {
+      return 0;
+    }
+
+    return availableRaw.floor();
+  }
+
   Map<String, int> _reconcileSelectedQuantities(
     List<Map<String, dynamic>> products,
   ) {
@@ -194,25 +222,15 @@ class _PublicCatalogScreenState
         <String, int>{};
 
     for (final product in products) {
-      final productId = _stringValue(
-        product,
-        'productId',
-        '',
-      ).trim();
+      final productId =
+          _selectionProductId(product);
 
       if (productId.isEmpty) {
         continue;
       }
 
-      final availableRaw =
-          _doubleValue(
-        product['quantidade'],
-      );
-
       final available =
-          availableRaw > 0
-              ? availableRaw.floor()
-              : 0;
+          _selectionAvailableQuantity(product);
 
       if (available > 0) {
         availableByProductId[productId] =
