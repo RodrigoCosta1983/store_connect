@@ -92,35 +92,80 @@ class _WarningBannerState extends State<WarningBanner> {
     final trialEndDateStr = storeData['trialEndDate'] as String?;
 
     // 🔴 1. LÓGICA PARA FATURA EM ATRASO (OVERDUE)
+    //
+    // overdueDueDate = vencimento financeiro real.
+    // overdueSince = auditoria de quando o atraso foi detectado.
     if (status == 'overdue') {
-      final overdueSince = storeData['overdueSince'];
-      int diasRestantes = 3;
+      final overdueDueDateStr = storeData['overdueDueDate']?.toString().trim();
+      int? diasRestantes;
 
-      if (overdueSince != null) {
-        DateTime dataAtraso = (overdueSince as Timestamp).toDate();
-        int diasPassados = DateTime.now().difference(dataAtraso).inDays;
-        diasRestantes = 3 - diasPassados;
-        if (diasRestantes < 0) diasRestantes = 0;
+      if (overdueDueDateStr != null && overdueDueDateStr.isNotEmpty) {
+        final dataVencimento = DateTime.tryParse(overdueDueDateStr);
+
+        if (dataVencimento != null) {
+          // O backend financeiro usa America/Sao_Paulo.
+          // O Flutter apenas apresenta o estado.
+          final agoraSaoPaulo =
+              DateTime.now().toUtc().subtract(const Duration(hours: 3));
+
+          final vencimentoCivil = DateTime.utc(
+            dataVencimento.year,
+            dataVencimento.month,
+            dataVencimento.day,
+          );
+
+          final hojeCivil = DateTime.utc(
+            agoraSaoPaulo.year,
+            agoraSaoPaulo.month,
+            agoraSaoPaulo.day,
+          );
+
+          final diasAtraso =
+              hojeCivil.difference(vencimentoCivil).inDays;
+
+          if (diasAtraso >= 1) {
+            diasRestantes = 4 - diasAtraso;
+
+            if (diasRestantes < 0) {
+              diasRestantes = 0;
+            }
+          }
+        }
+      }
+
+      final bool isBlockDay = diasRestantes == 0;
+      final String overdueMessage;
+
+      if (diasRestantes == null) {
+        overdueMessage =
+            "Atenção: Sua fatura está em atraso. Consulte a fatura para regularizar.";
+      } else if (isBlockDay) {
+        overdueMessage =
+            "URGENTE: Sua fatura venceu e seu acesso será bloqueado HOJE.";
+      } else if (diasRestantes == 1) {
+        overdueMessage =
+            "Atenção: Hoje é o último dia de tolerância. Seu acesso será bloqueado amanhã se o pagamento não for identificado.";
+      } else {
+        overdueMessage =
+            "Atenção: Sua fatura venceu. Você tem $diasRestantes dias para pagar antes do bloqueio.";
       }
 
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        color: diasRestantes == 0 ? Colors.red.shade100 : Colors.amber.shade100,
+        color: isBlockDay ? Colors.red.shade100 : Colors.amber.shade100,
         child: Row(
           children: [
             Icon(
               Icons.warning_amber_rounded,
-              color: diasRestantes == 0 ? Colors.red.shade800 : Colors.amber.shade900,
+              color: isBlockDay ? Colors.red.shade800 : Colors.amber.shade900,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                diasRestantes == 0
-                    ? "URGENTE: Sua fatura venceu e seu acesso será bloqueado HOJE."
-                    : "Atenção: Sua fatura venceu. Você tem $diasRestantes dia(s) para pagar antes do bloqueio.",
+                overdueMessage,
                 style: TextStyle(
-                  color: diasRestantes == 0 ? Colors.red.shade900 : Colors.amber.shade900,
+                  color: isBlockDay ? Colors.red.shade900 : Colors.amber.shade900,
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
@@ -129,7 +174,11 @@ class _WarningBannerState extends State<WarningBanner> {
             if (_isLoadingPayment)
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16.0),
-                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               )
             else
               TextButton(
@@ -141,17 +190,19 @@ class _WarningBannerState extends State<WarningBanner> {
                   );
                 },
                 style: TextButton.styleFrom(
-                  backgroundColor: diasRestantes == 0 ? Colors.red.shade800 : Colors.blue.shade800,
+                  backgroundColor: isBlockDay ? Colors.red.shade800 : Colors.blue.shade800,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text("VER FATURA", style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text(
+                  "VER FATURA",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               )
           ],
         ),
       );
     }
-
     // 🟠 2. LÓGICA PARA PERÍODO DE TESTE (TRIAL)
     if ((status == 'trial' || status == 'active') &&
         !isPaidPlan &&
