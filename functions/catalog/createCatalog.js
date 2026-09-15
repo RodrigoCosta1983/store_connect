@@ -1246,8 +1246,446 @@ const getPublicCatalog = onCall(
     },
 );
 
+// ============================================================================
+// F7.7-C1 - VALIDAÇÃO SEGURA DA SELEÇÃO PÚBLICA
+//
+// Importante:
+// - esta etapa é somente leitura;
+// - nenhuma solicitação é persistida;
+// - nenhum estoque é reservado ou decrementado;
+// - a autoridade continua sendo o estado atual do servidor.
+// ============================================================================
+
+const submitPublicCatalogSelection = onCall(
+    {
+      timeoutSeconds: 30,
+      memory: "256MiB",
+    },
+    async (request) => {
+      const db = admin.firestore();
+
+      // ======================================================================
+      // 1. ENTRADA PÚBLICA
+      // ======================================================================
+
+      const publicSlug = normalizeString(
+          request.data?.publicSlug,
+      ).toLowerCase();
+
+      const publicToken = normalizeString(
+          request.data?.publicToken,
+      );
+
+      const rawItems = request.data?.items;
+
+      const validSlug =
+        publicSlug.length <= 128 &&
+        /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(publicSlug);
+
+      const validToken =
+        publicToken.length <= 256 &&
+        /^[A-Za-z0-9_-]{32,256}$/.test(publicToken);
+
+      if (
+        !validSlug ||
+        !validToken ||
+        !Array.isArray(rawItems) ||
+        rawItems.length === 0 ||
+        rawItems.length > MAX_PRODUCTS
+      ) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Seleção de catálogo inválida.",
+        );
+      }
+
+      const requestedItems = [];
+      const requestedProductIds = new Set();
+
+      for (const rawItem of rawItems) {
+        if (
+          !rawItem ||
+          typeof rawItem !== "object" ||
+          Array.isArray(rawItem)
+        ) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Seleção de catálogo inválida.",
+          );
+        }
+
+        const productId = normalizeString(
+            rawItem.productId,
+        );
+
+        const quantity = rawItem.quantity;
+
+        if (
+          !productId ||
+          productId.includes("/") ||
+          !Number.isInteger(quantity) ||
+          quantity <= 0
+        ) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Seleção de catálogo inválida.",
+          );
+        }
+
+        if (requestedProductIds.has(productId)) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Produto duplicado na seleção.",
+          );
+        }
+
+        requestedProductIds.add(productId);
+
+        requestedItems.push({
+          productId,
+          quantity,
+        });
+      }
+
+      // ======================================================================
+      // 2. RESOLUÇÃO SEGURA PELO HASH DO TOKEN
+      // ======================================================================
+
+      const publicTokenHash =
+        hashPublicToken(publicToken);
+
+      const publicTokenSnapshot = await db
+          .collection("catalogPublicTokens")
+          .doc(publicTokenHash)
+          .get();
+
+      if (!publicTokenSnapshot.exists) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      const publicTokenData =
+        publicTokenSnapshot.data() || {};
+
+      const storeId =
+        normalizeString(publicTokenData.storeId);
+
+      const catalogId =
+        normalizeString(publicTokenData.catalogId);
+
+      if (!storeId || !catalogId) {
+        console.error(
+            "[submitPublicCatalogSelection] Índice público inválido.",
+        );
+
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      // ======================================================================
+      // 3. LOJA E CATÁLOGO
+      // ======================================================================
+
+      const storeRef = db
+          .collection("stores")
+          .doc(storeId);
+
+      const catalogRef = storeRef
+          .collection("catalogs")
+          .doc(catalogId);
+
+      const [
+        storeSnapshot,
+        catalogSnapshot,
+      ] = await Promise.all([
+        storeRef.get(),
+        catalogRef.get(),
+      ]);
+
+      if (
+        !storeSnapshot.exists ||
+        !catalogSnapshot.exists
+      ) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      const storeData =
+        storeSnapshot.data() || {};
+
+      const catalogData =
+        catalogSnapshot.data() || {};
+
+      // ======================================================================
+      // 4. CONFIRMA SLUG E TOKEN
+      // ======================================================================
+
+      const storedPublicSlug =
+        normalizeString(storeData.publicSlug)
+            .toLowerCase();
+
+      const storedTokenHash =
+        normalizeString(catalogData.publicTokenHash)
+            .toLowerCase();
+
+      if (
+        storedPublicSlug !== publicSlug ||
+        storedTokenHash !== publicTokenHash
+      ) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      // ======================================================================
+      // 5. DISPONIBILIDADE DA LOJA
+      // ======================================================================
+
+      const subscriptionStatus =
+        normalizeString(storeData.subscriptionStatus)
+            .toLowerCase();
+
+      if (
+        !ALLOWED_SUBSCRIPTION_STATUS.has(
+            subscriptionStatus,
+        )
+      ) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      // ======================================================================
+      // 6. STATUS E EXPIRAÇÃO DO CATÁLOGO
+      // ======================================================================
+
+      const status =
+        normalizeString(catalogData.status)
+            .toLowerCase();
+
+      if (status !== "active") {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      const expiresAt =
+        catalogData.expiresAt;
+
+      if (
+        !expiresAt ||
+        typeof expiresAt.toMillis !== "function"
+      ) {
+        console.error(
+            `[submitPublicCatalogSelection] ` +
+            `Catálogo ${catalogId} sem expiresAt válido.`,
+        );
+
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      if (Date.now() >= expiresAt.toMillis()) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo expirou.",
+        );
+      }
+
+      // ======================================================================
+      // 7. CONFIRMAR PERTENCIMENTO AO CATÁLOGO
+      // ======================================================================
+
+      const catalogItemsSnapshot = await catalogRef
+          .collection("items")
+          .get();
+
+      const catalogProductIds = new Set();
+
+      for (
+        const itemSnapshot
+        of catalogItemsSnapshot.docs
+      ) {
+        const itemData =
+          itemSnapshot.data() || {};
+
+        const productId =
+          normalizeString(itemData.productId);
+
+        if (
+          productId &&
+          !productId.includes("/")
+        ) {
+          catalogProductIds.add(productId);
+        }
+      }
+
+      for (const item of requestedItems) {
+        if (!catalogProductIds.has(item.productId)) {
+          throw new HttpsError(
+              "failed-precondition",
+              "A seleção precisa ser atualizada.",
+              {
+                reason: "product-not-in-catalog",
+                productId: item.productId,
+              },
+          );
+        }
+      }
+
+      // ======================================================================
+      // 8. RECONSULTAR PRODUTOS ATUAIS
+      // ======================================================================
+
+      const productsCollection =
+        storeRef.collection("products");
+
+      const productRefs = requestedItems.map(
+          (item) =>
+            productsCollection.doc(
+                item.productId,
+            ),
+      );
+
+      const productSnapshots =
+        productRefs.length > 0 ?
+          await db.getAll(...productRefs) :
+          [];
+
+      const productSnapshotsById =
+        new Map();
+
+      for (
+        const productSnapshot
+        of productSnapshots
+      ) {
+        productSnapshotsById.set(
+            productSnapshot.id,
+            productSnapshot,
+        );
+      }
+
+      const validatedItems = [];
+
+      for (const requestedItem of requestedItems) {
+        const productSnapshot =
+          productSnapshotsById.get(
+              requestedItem.productId,
+          );
+
+        if (
+          !productSnapshot ||
+          !productSnapshot.exists
+        ) {
+          throw new HttpsError(
+              "failed-precondition",
+              "A seleção precisa ser atualizada.",
+              {
+                reason: "product-unavailable",
+                productId:
+                  requestedItem.productId,
+                availableQuantity: 0,
+              },
+          );
+        }
+
+        const productData =
+          productSnapshot.data() || {};
+
+        if (productData.isArchived === true) {
+          throw new HttpsError(
+              "failed-precondition",
+              "A seleção precisa ser atualizada.",
+              {
+                reason: "product-archived",
+                productId:
+                  requestedItem.productId,
+                availableQuantity: 0,
+              },
+          );
+        }
+
+        const rawAvailableQuantity =
+          Number(
+              productData.quantidade ?? 0,
+          );
+
+        const availableQuantity =
+          Number.isFinite(
+              rawAvailableQuantity,
+          ) ?
+            Math.max(
+                0,
+                Math.floor(
+                    rawAvailableQuantity,
+                ),
+            ) :
+            0;
+
+        if (
+          availableQuantity <= 0 ||
+          requestedItem.quantity >
+            availableQuantity
+        ) {
+          throw new HttpsError(
+              "failed-precondition",
+              "A quantidade selecionada não está mais disponível.",
+              {
+                reason: "insufficient-stock",
+                productId:
+                  requestedItem.productId,
+                availableQuantity,
+              },
+          );
+        }
+
+        const rawPrice =
+          Number(productData.price ?? 0);
+
+        const price =
+          Number.isFinite(rawPrice) &&
+          rawPrice >= 0 ?
+            rawPrice :
+            0;
+
+        validatedItems.push({
+          productId:
+            requestedItem.productId,
+          quantity:
+            requestedItem.quantity,
+          availableQuantity,
+          price,
+        });
+      }
+
+      // ======================================================================
+      // 9. RETORNO DA VALIDAÇÃO
+      //
+      // C1 ainda não persiste solicitação e não altera estoque.
+      // ======================================================================
+
+      return {
+        success: true,
+        validatedItemCount:
+          validatedItems.length,
+      };
+    },
+);
+
 module.exports = {
   createCatalog,
   listCatalogs,
   getPublicCatalog,
+  submitPublicCatalogSelection,
 };
