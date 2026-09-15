@@ -211,6 +211,306 @@ class _PublicCatalogScreenState
     return availableRaw.floor();
   }
 
+  List<Map<String, dynamic>>
+      _selectedProductsForSummary() {
+    final selectedProducts =
+        <Map<String, dynamic>>[];
+
+    for (final product in _products) {
+      final productId =
+          _selectionProductId(product);
+
+      if (productId.isEmpty) {
+        continue;
+      }
+
+      final selectedQuantity =
+          _selectedQuantities[productId] ?? 0;
+
+      if (selectedQuantity <= 0) {
+        continue;
+      }
+
+      selectedProducts.add(product);
+    }
+
+    return selectedProducts;
+  }
+
+  int _selectedUnitsCount(
+    List<Map<String, dynamic>> selectedProducts,
+  ) {
+    var totalUnits = 0;
+
+    for (final product in selectedProducts) {
+      final productId =
+          _selectionProductId(product);
+
+      totalUnits +=
+          _selectedQuantities[productId] ?? 0;
+    }
+
+    return totalUnits;
+  }
+
+  double _selectionTotalValue(
+    List<Map<String, dynamic>> selectedProducts,
+  ) {
+    var total = 0.0;
+
+    for (final product in selectedProducts) {
+      final productId =
+          _selectionProductId(product);
+
+      final selectedQuantity =
+          _selectedQuantities[productId] ?? 0;
+
+      final price =
+          _doubleValue(
+        product['price'],
+      );
+
+      total +=
+          price * selectedQuantity;
+    }
+
+    return total;
+  }
+
+  Future<void> _openSelectionSummary() async {
+    if (
+      !mounted ||
+      !_isSelectionMode ||
+      _selectedQuantities.isEmpty
+    ) {
+      return;
+    }
+
+    final selectedProducts =
+        _selectedProductsForSummary();
+
+    if (selectedProducts.isEmpty) {
+      return;
+    }
+
+    final totalUnits =
+        _selectedUnitsCount(
+      selectedProducts,
+    );
+
+    final totalValue =
+        _selectionTotalValue(
+      selectedProducts,
+    );
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          scrollable: true,
+          title: const Text(
+            'Resumo da seleção',
+          ),
+          content: SizedBox(
+            width: 560,
+            child: Column(
+              mainAxisSize:
+                  MainAxisSize.min,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${selectedProducts.length} '
+                  'produto(s) • '
+                  '$totalUnits unidade(s)',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                for (
+                  final product
+                      in selectedProducts
+                ) ...[
+                  Builder(
+                    builder: (context) {
+                      final productId =
+                          _selectionProductId(
+                        product,
+                      );
+
+                      final quantity =
+                          _selectedQuantities[
+                                productId
+                              ] ??
+                              0;
+
+                      final price =
+                          _doubleValue(
+                        product['price'],
+                      );
+
+                      final subtotal =
+                          price * quantity;
+
+                      final name =
+                          _stringValue(
+                        product,
+                        'name',
+                        'Produto',
+                      );
+
+                      return Container(
+                        width:
+                            double.infinity,
+                        padding:
+                            const EdgeInsets.all(
+                          12,
+                        ),
+                        decoration:
+                            BoxDecoration(
+                          color:
+                              const Color(
+                            0xFFF9FAFB,
+                          ),
+                          borderRadius:
+                              BorderRadius.circular(
+                            12,
+                          ),
+                          border:
+                              Border.all(
+                            color:
+                                const Color(
+                              0xFFE5E7EB,
+                            ),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment
+                                  .start,
+                          children: [
+                            Row(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment
+                                      .start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    name,
+                                    style: Theme.of(
+                                      context,
+                                    )
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                          fontWeight:
+                                              FontWeight
+                                                  .w600,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 12,
+                                ),
+                                Text(
+                                  _formatPrice(
+                                    subtotal,
+                                  ),
+                                  style: Theme.of(
+                                    context,
+                                  )
+                                      .textTheme
+                                      .titleSmall
+                                      ?.copyWith(
+                                        fontWeight:
+                                            FontWeight
+                                                .w700,
+                                      ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(
+                              height: 6,
+                            ),
+                            Text(
+                              '$quantity × '
+                              '${_formatPrice(price)}',
+                              style: Theme.of(
+                                context,
+                              )
+                                  .textTheme
+                                  .bodySmall,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                const Divider(height: 24),
+                Row(
+                  children: [
+                    Text(
+                      'Total',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(
+                            fontWeight:
+                                FontWeight.w700,
+                          ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      _formatPrice(
+                        totalValue,
+                      ),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(
+                            fontWeight:
+                                FontWeight.w700,
+                          ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Valores e disponibilidade '
+                  'serão confirmados no envio.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(
+                        color:
+                            const Color(
+                          0xFF6B7280,
+                        ),
+                      ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(
+                  dialogContext,
+                ).pop();
+              },
+              child: const Text(
+                'Voltar',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   int _selectedQuantityForProduct(
     Map<String, dynamic> product,
   ) {
@@ -841,6 +1141,30 @@ class _PublicCatalogScreenState
                                 },
                               ),
                             ),
+                            if (_isSelectionMode) ...[
+                              const SizedBox(height: 14),
+                              Align(
+                                alignment:
+                                    Alignment.centerRight,
+                                child:
+                                    FilledButton.icon(
+                                  onPressed:
+                                      _selectedQuantities
+                                              .isEmpty
+                                          ? null
+                                          : _openSelectionSummary,
+                                  icon: const Icon(
+                                    Icons
+                                        .receipt_long_outlined,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    'Revisar seleção '
+                                    '(${_selectedQuantities.length})',
+                                  ),
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 24),
                           ],
                         ),
