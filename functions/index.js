@@ -1253,71 +1253,338 @@ exports.syncOfflineSale =
    */
   exports.checkOverdueSubscriptions = onSchedule(
     {
-      schedule: "0 2 * * *", // Todo dia às 02:00 AM
+      schedule: "0 2 * * *",
       timeZone: "America/Sao_Paulo",
       timeoutSeconds: 120
     },
     async (event) => {
-      console.log("⏰ Iniciando varredura de assinaturas em atraso...");
+      console.log(
+        "⏰ Iniciando verificacao segura de assinaturas overdue..."
+      );
 
-      const db = admin.firestore();
+      const db =
+        admin.firestore();
 
-      // Calcula a data exata de 3 dias atrás
-      const limitDate = new Date();
-      limitDate.setDate(limitDate.getDate() - 3);
+
+      // =========================================================
+      // DATA CIVIL DE SAO PAULO
+      // =========================================================
+
+      const formatter =
+        new Intl.DateTimeFormat(
+          "en-US",
+          {
+            timeZone:
+              "America/Sao_Paulo",
+
+            year:
+              "numeric",
+
+            month:
+              "2-digit",
+
+            day:
+              "2-digit"
+          }
+        );
+
+
+      const dateParts =
+        formatter.formatToParts(
+          new Date()
+        );
+
+
+      const dateValues = {};
+
+      for (
+        const part of dateParts
+      ) {
+        if (
+          part.type !==
+          "literal"
+        ) {
+          dateValues[part.type] =
+            part.value;
+        }
+      }
+
+
+      const today =
+        dateValues.year +
+        "-" +
+        dateValues.month +
+        "-" +
+        dateValues.day;
+
+
+      function dateOnlyToUtc(
+        value
+      ) {
+
+        if (
+          !/^\d{4}-\d{2}-\d{2}$/
+            .test(value)
+        ) {
+          return null;
+        }
+
+
+        const pieces =
+          value
+            .split("-")
+            .map(Number);
+
+
+        const timestamp =
+          Date.UTC(
+            pieces[0],
+            pieces[1] - 1,
+            pieces[2]
+          );
+
+
+        if (
+          !Number.isFinite(
+            timestamp
+          )
+        ) {
+          return null;
+        }
+
+
+        return timestamp;
+      }
+
+
+      function calendarDaysBetween(
+        fromDate,
+        toDate
+      ) {
+
+        const from =
+          dateOnlyToUtc(
+            fromDate
+          );
+
+        const to =
+          dateOnlyToUtc(
+            toDate
+          );
+
+
+        if (
+          from === null ||
+          to === null
+        ) {
+          return null;
+        }
+
+
+        return Math.floor(
+          (to - from) /
+          86400000
+        );
+      }
+
 
       try {
-        // Busca lojas que estão no período de tolerância e já passaram dos 3 dias
-        const snapshot = await db.collection("stores")
-          .where("subscriptionStatus", "==", "overdue")
-          .where("overdueSince", "<=", limitDate)
-          .get();
 
-        if (snapshot.empty) {
-          console.log("✅ Nenhuma loja com atraso superior a 3 dias encontrada hoje.");
+        // =======================================================
+        // SOMENTE LOJAS JA MARCADAS COMO OVERDUE
+        //
+        // A descoberta automatica da inadimplencia sera
+        // implementada na etapa seguinte.
+        // =======================================================
+
+        const snapshot =
+          await db
+            .collection("stores")
+            .where(
+              "subscriptionStatus",
+              "==",
+              "overdue"
+            )
+            .get();
+
+
+        if (
+          snapshot.empty
+        ) {
+          console.log(
+            "✅ Nenhuma loja overdue encontrada."
+          );
+
           return;
         }
 
-        const batch = db.batch();
-        const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
 
-        // Percorre todas as lojas inadimplentes
-        for (const doc of snapshot.docs) {
-          const storeData = doc.data();
-          const asaasSubscriptionId = storeData.asaasSubscriptionId;
-          const storeId = doc.id;
+        const batch =
+          db.batch();
 
-          // 1. Aplica o bloqueio no banco de dados
-          batch.update(doc.ref, {
-            subscriptionStatus: "inactive"
-          });
 
-          // 2. A Guilhotina: Cancela a assinatura no Asaas para evitar a bola de neve
-          if (asaasSubscriptionId) {
-            try {
-              await axios.delete(`${ASAAS_URL}/subscriptions/${asaasSubscriptionId}`, {
-                              headers: {
-                                "access_token": ASAAS_API_KEY,
-                                "User-Agent": "StoreConnectApp/1.0"
-                              }
-                            });
-              console.log(`✂️ Guilhotina aplicada: Assinatura ${asaasSubscriptionId} da loja ${storeId} CANCELADA.`);
-            } catch (error) {
-              console.error(`⚠️ Erro ao cancelar assinatura no Asaas (Loja ${storeId}):`, error.response?.data || error.message);
-            }
+        let blockedCount =
+          0;
+
+        let graceCount =
+          0;
+
+        let skippedCount =
+          0;
+
+
+        for (
+          const doc of snapshot.docs
+        ) {
+
+          const storeData =
+            doc.data() || {};
+
+          const storeId =
+            doc.id;
+
+
+          // =====================================================
+          // DATA CANONICA DO ATRASO
+          //
+          // YYYY-MM-DD da cobranca vencida mais antiga da
+          // assinatura oficial.
+          //
+          // Sem essa informacao, o cron NAO bloqueia.
+          // =====================================================
+
+          const overdueDueDate =
+            typeof storeData
+              .overdueDueDate ===
+              "string"
+              ? storeData
+                  .overdueDueDate
+                  .trim()
+              : "";
+
+
+          if (
+            !overdueDueDate
+          ) {
+
+            skippedCount++;
+
+            console.warn(
+              `⚠️ Loja ${storeId} overdue sem overdueDueDate. ` +
+              "Bloqueio ignorado por seguranca."
+            );
+
+            continue;
           }
+
+
+          const daysLate =
+            calendarDaysBetween(
+              overdueDueDate,
+              today
+            );
+
+
+          if (
+            daysLate === null ||
+            daysLate < 0
+          ) {
+
+            skippedCount++;
+
+            console.warn(
+              `⚠️ Loja ${storeId} possui overdueDueDate invalido: ` +
+              `${overdueDueDate}. Bloqueio ignorado.`
+            );
+
+            continue;
+          }
+
+
+          // =====================================================
+          // REGRA STORE&CONNECT
+          //
+          // dia 0 = vencimento
+          // dia 1 = graca 1
+          // dia 2 = graca 2
+          // dia 3 = graca 3 / ultimo dia
+          // dia 4 = bloqueio
+          // =====================================================
+
+          if (
+            daysLate < 4
+          ) {
+
+            graceCount++;
+
+            console.log(
+              `⏳ Loja ${storeId} continua em tolerancia. ` +
+              `Vencimento=${overdueDueDate}, ` +
+              `diasAtraso=${daysLate}.`
+            );
+
+            continue;
+          }
+
+
+          // =====================================================
+          // BLOQUEIO SOMENTE NO FIRESTORE
+          //
+          // A assinatura Asaas NAO e cancelada.
+          // As cobrancas permanecem disponiveis para pagamento.
+          // =====================================================
+
+          batch.update(
+            doc.ref,
+            {
+              subscriptionStatus:
+                "inactive",
+
+              blockedAt:
+                admin.firestore
+                  .FieldValue
+                  .serverTimestamp()
+            }
+          );
+
+
+          blockedCount++;
+
+
+          console.log(
+            `🔒 Loja ${storeId} marcada como inactive. ` +
+            `Vencimento=${overdueDueDate}, ` +
+            `diasAtraso=${daysLate}. ` +
+            "Assinatura Asaas preservada."
+          );
         }
 
-        // Executa a atualização de todas as lojas no banco de uma vez só (alta performance)
-        await batch.commit();
-        console.log(`🔒 Processamento concluído. ${snapshot.size} lojas foram bloqueadas.`);
+
+        if (
+          blockedCount > 0
+        ) {
+          await batch.commit();
+        }
+
+
+        console.log(
+          "✅ Verificacao concluida. " +
+          `Bloqueadas=${blockedCount}, ` +
+          `emGraca=${graceCount}, ` +
+          `ignoradas=${skippedCount}.`
+        );
 
       } catch (error) {
-        console.error("❌ Erro durante a execução do Cron Job:", error);
+
+        console.error(
+          "❌ Erro durante verificacao segura de inadimplencia:",
+          error
+        );
+
+        throw error;
       }
     }
   );
-
 /**
  * 🗑️ LIMPEZA: Quando um produto é deletado
  */
