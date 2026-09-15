@@ -960,8 +960,53 @@ class _PublicCatalogScreenState
       '',
     );
 
+    final isMobileViewport =
+        MediaQuery.sizeOf(context).width < 600;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
+      bottomNavigationBar:
+          _isSelectionMode &&
+                  isMobileViewport &&
+                  _selectedQuantities.isNotEmpty
+              ? SafeArea(
+                  top: false,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.fromLTRB(
+                      16,
+                      10,
+                      16,
+                      12,
+                    ),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      border: Border(
+                        top: BorderSide(
+                          color: Color(
+                            0xFFE5E7EB,
+                          ),
+                        ),
+                      ),
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed:
+                            _openSelectionSummary,
+                        icon: const Icon(
+                          Icons.receipt_long_outlined,
+                          size: 18,
+                        ),
+                        label: Text(
+                          'Revisar seleção '
+                          '(${_selectedQuantities.length})',
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : null,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -1141,7 +1186,10 @@ class _PublicCatalogScreenState
                                 },
                               ),
                             ),
-                            if (_isSelectionMode) ...[
+                            if (
+                              _isSelectionMode &&
+                              !isMobileViewport
+                            ) ...[
                               const SizedBox(height: 14),
                               Align(
                                 alignment:
