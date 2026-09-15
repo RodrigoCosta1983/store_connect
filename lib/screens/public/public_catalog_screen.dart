@@ -211,6 +211,107 @@ class _PublicCatalogScreenState
     return availableRaw.floor();
   }
 
+  int _selectedQuantityForProduct(
+    Map<String, dynamic> product,
+  ) {
+    final productId =
+        _selectionProductId(product);
+
+    if (productId.isEmpty) {
+      return 0;
+    }
+
+    return _selectedQuantities[productId] ?? 0;
+  }
+
+  void _incrementSelectedQuantity(
+    Map<String, dynamic> product,
+  ) {
+    if (
+      !mounted ||
+      !_isSelectionMode ||
+      _isEnteringSelectionMode
+    ) {
+      return;
+    }
+
+    final productId =
+        _selectionProductId(product);
+
+    if (productId.isEmpty) {
+      return;
+    }
+
+    final available =
+        _selectionAvailableQuantity(product);
+
+    if (available <= 0) {
+      return;
+    }
+
+    final current =
+        _selectedQuantities[productId] ?? 0;
+
+    if (current >= available) {
+      return;
+    }
+
+    final updated =
+        Map<String, int>.from(
+      _selectedQuantities,
+    );
+
+    updated[productId] =
+        current + 1;
+
+    setState(() {
+      _selectedQuantities = updated;
+    });
+  }
+
+  void _decrementSelectedQuantity(
+    Map<String, dynamic> product,
+  ) {
+    if (
+      !mounted ||
+      !_isSelectionMode ||
+      _isEnteringSelectionMode
+    ) {
+      return;
+    }
+
+    final productId =
+        _selectionProductId(product);
+
+    if (productId.isEmpty) {
+      return;
+    }
+
+    final current =
+        _selectedQuantities[productId] ?? 0;
+
+    if (current <= 0) {
+      return;
+    }
+
+    final updated =
+        Map<String, int>.from(
+      _selectedQuantities,
+    );
+
+    if (current == 1) {
+      updated.remove(productId);
+    }
+    else {
+      updated[productId] =
+          current - 1;
+    }
+
+    setState(() {
+      _selectedQuantities = updated;
+    });
+  }
+
   Map<String, int> _reconcileSelectedQuantities(
     List<Map<String, dynamic>> products,
   ) {
@@ -821,7 +922,9 @@ class _PublicCatalogScreenState
             constraints.crossAxisExtent < 600;
 
         final cardHeight =
-            isMobile ? 150.0 : 300.0;
+        isMobile
+            ? (_isSelectionMode ? 210.0 : 150.0)
+            : 300.0;
 
         final double cardWidth;
 
@@ -946,6 +1049,18 @@ class _PublicCatalogScreenState
     );
 
     if (isMobile) {
+      final selectedQuantity =
+          _selectedQuantityForProduct(product);
+
+      final availableQuantity =
+          _selectionAvailableQuantity(product);
+
+      final canDecrement =
+          selectedQuantity > 0;
+
+      final canIncrement =
+          selectedQuantity < availableQuantity;
+
       return Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
@@ -1054,9 +1169,84 @@ class _PublicCatalogScreenState
               ),
             ),
 
-            // F7.6:
-            // área inferior para quantidade,
-            // adicionar e demais ações.
+            if (_isSelectionMode)
+              Container(
+                decoration: const BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: Color(0xFFE5E7EB),
+                    ),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      'Quantidade',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(
+                            fontWeight:
+                                FontWeight.w600,
+                          ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed:
+                          canDecrement
+                              ? () =>
+                                  _decrementSelectedQuantity(
+                                    product,
+                                  )
+                              : null,
+                      tooltip:
+                          'Diminuir quantidade',
+                      visualDensity:
+                          VisualDensity.compact,
+                      icon: const Icon(
+                        Icons.remove,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 36,
+                      child: Text(
+                        '$selectedQuantity',
+                        textAlign:
+                            TextAlign.center,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(
+                              fontWeight:
+                                  FontWeight.w700,
+                            ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed:
+                          canIncrement
+                              ? () =>
+                                  _incrementSelectedQuantity(
+                                    product,
+                                  )
+                              : null,
+                      tooltip:
+                          canIncrement
+                              ? 'Aumentar quantidade'
+                              : 'Estoque máximo selecionado',
+                      visualDensity:
+                          VisualDensity.compact,
+                      icon: const Icon(
+                        Icons.add,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       );
