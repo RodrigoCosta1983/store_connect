@@ -2119,3 +2119,13 @@ const {
 exports.createCatalog = createCatalog;
 exports.listCatalogs = listCatalogs;
 exports.getPublicCatalog = getPublicCatalog;
+
+// -----------------------------------------------------------------------
+// 💰 RECONCILIACAO DIARIA ASAAS -> FIRESTORE
+// -----------------------------------------------------------------------
+const {
+  reconcileAsaasBilling,
+} = require("./financeiro/reconcileAsaasBilling");
+
+exports.reconcileAsaasBilling =
+  reconcileAsaasBilling;
