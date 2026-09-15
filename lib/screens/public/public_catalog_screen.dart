@@ -924,7 +924,7 @@ class _PublicCatalogScreenState
         final cardHeight =
         isMobile
             ? (_isSelectionMode ? 210.0 : 150.0)
-            : 300.0;
+            : (_isSelectionMode ? 360.0 : 300.0);
 
         final double cardWidth;
 
@@ -1339,6 +1339,101 @@ class _PublicCatalogScreenState
               ],
             ),
           ),
+          if (_isSelectionMode)
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: Color(0xFFE5E7EB),
+                  ),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 8,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Quantidade',
+                      maxLines: 1,
+                      overflow:
+                          TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(
+                            fontWeight:
+                                FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed:
+                        _selectedQuantityForProduct(
+                                  product,
+                                ) >
+                                0
+                            ? () =>
+                                _decrementSelectedQuantity(
+                                  product,
+                                )
+                            : null,
+                    tooltip:
+                        'Diminuir quantidade',
+                    visualDensity:
+                        VisualDensity.compact,
+                    icon: const Icon(
+                      Icons.remove,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 36,
+                    child: Text(
+                      '${_selectedQuantityForProduct(product)}',
+                      textAlign:
+                          TextAlign.center,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(
+                            fontWeight:
+                                FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed:
+                        _selectedQuantityForProduct(
+                                  product,
+                                ) <
+                                _selectionAvailableQuantity(
+                                  product,
+                                )
+                            ? () =>
+                                _incrementSelectedQuantity(
+                                  product,
+                                )
+                            : null,
+                    tooltip:
+                        _selectedQuantityForProduct(
+                                  product,
+                                ) <
+                                _selectionAvailableQuantity(
+                                  product,
+                                )
+                            ? 'Aumentar quantidade'
+                            : 'Estoque máximo selecionado',
+                    visualDensity:
+                        VisualDensity.compact,
+                    icon: const Icon(
+                      Icons.add,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
