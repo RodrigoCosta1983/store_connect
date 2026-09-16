@@ -288,3 +288,127 @@ Também respeitar documentação financeira e demais documentos quando a
 alteração tocar suas respectivas áreas.
 
 Não atualizar documentos históricos de outras fases sem necessidade.
+---
+
+## OBSERVACAO FINANCEIRA - RECORRENCIA POR FORMA DE PAGAMENTO
+
+Data da decisao: 2026-09-16
+
+### Contexto
+
+Durante a regularizacao das assinaturas legadas do Asaas foi
+investigado o comportamento de `billingType`.
+
+O backend publicado no commit `3781b3d` normaliza uma assinatura
+ACTIVE antiga para:
+
+`billingType = UNDEFINED`
+
+quando ela passa pelo fluxo `createAsaasSubscription`.
+
+Essa normalizacao atualmente altera somente a assinatura e NAO usa
+`updatePendingPayments`.
+
+### Comportamento comprovado no Sandbox
+
+Foi observado o seguinte comportamento real:
+
+1. uma assinatura Business estava com `billingType = UNDEFINED`;
+2. uma cobranca vencida foi paga usando cartao de teste;
+3. apos a confirmacao do pagamento, o Asaas voltou a assinatura para
+   `CREDIT_CARD`;
+4. a cobranca futura ja gerada para 12/10/2026 tambem apareceu como
+   `CREDIT_CARD`.
+
+Portanto, no teste realizado, escolher cartao fez o Asaas manter o
+cartao como forma recorrente para a assinatura.
+
+### Teste controlado adicional
+
+Tambem foi comprovado no Sandbox que:
+
+`billingType = UNDEFINED`
++
+`updatePendingPayments = true`
+
+aplicados na assinatura fizeram:
+
+- assinatura: `CREDIT_CARD -> UNDEFINED`;
+- cobranca futura PENDING: `CREDIT_CARD -> UNDEFINED`;
+
+sem alterar:
+
+- payment ID;
+- valor;
+- vencimento;
+- customer;
+- subscription ID;
+- externalReference.
+
+Isso demonstra que tecnicamente seria possivel forcar novamente a
+escolha da forma de pagamento para a proxima mensalidade.
+
+### Hipotese ainda NAO comprovada
+
+Ainda nao foi validado experimentalmente o comportamento de uma
+assinatura quando o cliente escolhe PIX ou boleto em uma cobranca
+`UNDEFINED`.
+
+Hipotese a observar:
+
+- pagamento por cartao pode permanecer recorrente no cartao;
+- pagamento por PIX/boleto pode manter as proximas cobrancas com
+  possibilidade de escolha.
+
+NAO tratar essa hipotese como regra confirmada ate existir teste ou
+evidencia real.
+
+### Decisao de produto atual
+
+NAO implementar, neste momento, uma rotina automatica para recolocar
+toda assinatura em `UNDEFINED` depois de cada pagamento.
+
+Tambem NAO implementar, neste momento, no webhook de pagamento uma
+normalizacao automatica com `updatePendingPayments = true`.
+
+Motivo:
+
+a recorrencia automatica no cartao pode ser um comportamento desejado
+pelo proprio cliente, evitando que ele precise escolher novamente a
+forma de pagamento todos os meses e reduzindo o risco de esquecimento.
+
+Forcar a escolha mensalmente poderia criar atrito para clientes que
+preferem recorrencia automatica.
+
+### Estrategia
+
+Manter o comportamento atual e observar uso/feedback dos clientes.
+
+Reavaliar caso aparecam sinais como:
+
+- clientes querendo escolher a forma de pagamento todos os meses;
+- clientes reclamando que o cartao ficou recorrente sem expectativa;
+- necessidade de uma configuracao explicita de "pagamento recorrente"
+  versus "escolher a cada mensalidade";
+- problemas comerciais ou de suporte relacionados ao comportamento.
+
+Uma evolucao futura possivel seria oferecer uma preferencia explicita:
+
+- manter pagamento recorrente;
+- perguntar a forma de pagamento a cada mensalidade.
+
+Essa evolucao permanece em BACKLOG e nao faz parte do escopo atual.
+
+### Observacao sobre o teste H_Carl
+
+O caso H_Carl no Sandbox foi alterado manualmente durante o teste
+controlado para:
+
+- assinatura `UNDEFINED`;
+- cobranca PENDING de 12/10/2026 `UNDEFINED`.
+
+Portanto, esse caso especifico nao deve ser usado para observar
+naturalmente se o cartao permaneceria recorrente no proximo ciclo,
+pois o estado foi deliberadamente normalizado durante o experimento.
+
+Nenhuma alteracao adicional de codigo foi decidida nesta etapa.
