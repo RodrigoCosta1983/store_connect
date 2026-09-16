@@ -2335,6 +2335,18 @@ const {
 exports.setProductCategories =
   setProductCategories;
 
+// ============================================================================
+// STORE CONNECT - CRIACAO SEGURA DE PRODUTOS
+// ============================================================================
+
+const {
+  createProduct,
+} = require("./products/createProduct");
+
+exports.createProduct =
+  createProduct;
+
+
 
 
 // -----------------------------------------------------------------------
