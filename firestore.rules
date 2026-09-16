@@ -1,0 +1,441 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+  
+    
+    // 1. Usuários: O próprio usuário pode ler/escrever OU o admin/gerente da mesma loja pode ler a lista
+    match /users/{userId} {
+
+  allow read: if request.auth != null && (
+    request.auth.uid == userId ||
+    resource.data.storeId == request.auth.token.storeId ||
+    (
+      exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.storeId
+        == resource.data.storeId
+    )
+  );
+
+  // Cadastro inicial por e-mail.
+  // O Flutter pode criar APENAS o próprio documento básico.
+  allow create: if request.auth != null
+    && request.auth.uid == userId
+    && request.resource.data.keys().hasOnly([
+      'username',
+      'email',
+      'storeId',
+      'createdAt'
+    ])
+    && request.resource.data.storeId == '';
+
+  // Depois de criado, o próprio usuário pode alterar
+  // apenas dados normais de perfil/aplicativo.
+  allow update: if request.auth != null
+    && request.auth.uid == userId
+    && request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasOnly([
+          'fullName',
+          'phone',
+          'lastUpdated',
+          'versao_app',
+          'ultimo_login'
+        ]);
+
+  // Exclusão de users/{uid} pertence ao backend.
+  allow delete: if false;
+}
+    
+    // 2. CPFs/CNPJs cadastrados
+// Coleção interna controlada exclusivamente pelo backend.
+match /cpfs_cadastrados/{cpf} {
+  allow read, write: if false;
+}
+
+     // 3. Documento principal da loja
+match /stores/{storeId} {
+
+  // Usuário só pode acessar a própria loja.
+  allow read: if request.auth != null
+    && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+    && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.storeId == storeId;
+
+  // A criação da loja pertence exclusivamente ao backend.
+  allow create: if false;
+
+  // Atualização permitida somente na própria loja
+  // e sem alteração de campos sensíveis.
+  allow update: if request.auth != null
+    && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+    && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.storeId == storeId
+    && !request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasAny([
+          'ownerId',
+          'createdAt',
+          'document',
+
+          'asaasCustomerId',
+          'asaasSubscriptionId',
+
+          'subscriptionStatus',
+          'subscriptionType',
+          'subscriptionPlanPrice',
+          'subscriptionPlanChangedAt',
+          'subscriptionPriceSyncedAt',
+
+          'trialEndDate',
+          'lastPaymentDate',
+          'nextDueDate',
+
+          // Campos legados do antigo Google Play
+          'productId',
+          'purchaseDate'
+        ]);
+
+  // Exclusão da loja pelo cliente não é permitida.
+  allow delete: if false;
+}
+
+// 4. Subcoleções da loja — TEMPORÁRIO
+  
+// 4. VENDAS
+// Usuários da própria loja podem registrar e atualizar vendas.
+//
+// Depois que uma venda existe, alguns campos estruturais
+// não podem mais ser alterados pelo aplicativo:
+//
+// • storeId
+// • createdAt
+// • localSaleId
+// • syncOrigin
+//
+// Exclusão física não é permitida.
+// Futuro cancelamento será realizado pelo backend.
+
+match /stores/{storeId}/sales/{saleId} {
+
+  allow read: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId;
+
+   allow create: if request.auth != null
+  && exists(
+    /databases/$(database)/documents/users/$(request.auth.uid)
+  )
+  && get(
+    /databases/$(database)/documents/users/$(request.auth.uid)
+  ).data.storeId == storeId
+  && request.resource.data.storeId == storeId;
+
+  allow update: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId
+    && !request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasAny([
+          'storeId',
+          'createdAt',
+          'localSaleId',
+          'syncOrigin'
+        ]);
+
+// Venda nunca é apagada fisicamente pelo aplicativo.
+// Futuro cancelamento será realizado de forma segura pelo backend.
+
+ allow delete: if false;
+
+ } // fecha match /stores/{storeId}/sales/{saleId}
+  
+
+
+// 4.1 AUDITORIA
+// Usuários da própria loja podem consultar.
+// Escrita pertence exclusivamente ao backend.
+
+match /stores/{storeId}/auditLogs/{document=**} {
+
+  allow read: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId;
+
+  allow create, update, delete: if false;
+}
+
+// 4.2 PRODUTOS
+// Usuários da própria loja podem ler/criar/editar.
+// Campos de arquivamento são exclusivos do backend.
+// Exclusão física não é permitida.
+
+match /stores/{storeId}/products/{productId} {
+
+  allow read: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId;
+
+  allow create: if request.auth != null
+  && exists(
+    /databases/$(database)/documents/users/$(request.auth.uid)
+  )
+  && get(
+    /databases/$(database)/documents/users/$(request.auth.uid)
+  ).data.storeId == storeId
+  && !request.resource.data.keys().hasAny([
+    'isArchived',
+    'archivedAt',
+    'archivedBy',
+    'archiveReason'
+  ]);
+
+  allow update: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId
+    && !request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasAny([
+          'isArchived',
+          'archivedAt',
+          'archivedBy',
+          'archiveReason'
+        ]);
+
+  allow delete: if false;
+}
+
+
+// 4.3 CLIENTES
+// Usuários da própria loja podem ler/criar/editar.
+// Campos de arquivamento são exclusivos do backend.
+// Exclusão física não é permitida.
+
+match /stores/{storeId}/customers/{customerId} {
+
+  allow read: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId;
+
+  allow create: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId
+    && !request.resource.data.keys().hasAny([
+      'isArchived',
+      'archivedAt',
+      'archivedBy',
+      'archiveReason'
+    ]);
+
+  allow update: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId
+    && !request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasAny([
+          'isArchived',
+          'archivedAt',
+          'archivedBy',
+          'archiveReason'
+        ]);
+
+  allow delete: if false;
+}
+
+
+// 4.4 CATEGORIAS
+// Usuários da própria loja podem ler/criar/editar.
+// Exclusão permitida somente para admin/gerente.
+
+match /stores/{storeId}/categories/{categoryId} {
+
+  allow read: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId;
+
+  allow create, update: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId;
+
+  allow delete: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId
+    && (
+      get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      ).data.role == 'admin'
+      ||
+      get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      ).data.role == 'gerente'
+    );
+}
+
+
+// 4.5 FLUXO DE CAIXA
+//
+// O aplicativo pode consultar e registrar lançamentos.
+// Depois de criado, um lançamento financeiro é imutável.
+// Exclusão física não é permitida.
+
+match /stores/{storeId}/cash_flow/{entryId} {
+
+  allow read: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId;
+
+  allow create: if request.auth != null
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId
+
+    && request.resource.data.keys().hasOnly([
+      'description',
+      'amount',
+      'type',
+      'createdAt'
+    ])
+
+    && request.resource.data.keys().hasAll([
+      'description',
+      'amount',
+      'type',
+      'createdAt'
+    ])
+
+    && request.resource.data.description is string
+    && request.resource.data.amount is number
+    && request.resource.data.amount > 0
+
+    && (
+      request.resource.data.type == 'Entrada'
+      ||
+      request.resource.data.type == 'Saída'
+    )
+
+    && request.resource.data.createdAt is timestamp;
+
+  // Lançamentos existentes não são alterados pelo cliente.
+  allow update: if false;
+
+  // Lançamentos financeiros não são apagados fisicamente.
+  allow delete: if false;
+}
+
+// 5. DEMAIS SUBCOLEÇÕES DA LOJA
+//
+// Mantém a política atual:
+// • mesma loja pode ler/criar/editar
+// • somente admin/gerente pode excluir
+//
+// "sales" possui regra própria.
+// "auditLogs" possui regra própria e é somente backend para escrita.
+
+match /stores/{storeId}/{subcollection}/{document=**} {
+
+  allow read: if request.auth != null
+    && subcollection != 'sales'
+    && subcollection != 'auditLogs'
+    && subcollection != 'products'
+    && subcollection != 'customers'
+    && subcollection != 'categories'
+    && subcollection != 'cash_flow'
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId;
+
+  allow create, update: if request.auth != null
+    && subcollection != 'sales'
+    && subcollection != 'auditLogs'
+    && subcollection != 'products'
+    && subcollection != 'customers'
+    && subcollection != 'categories'
+    && subcollection != 'cash_flow'
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId;
+
+  allow delete: if request.auth != null
+    && subcollection != 'sales'
+    && subcollection != 'auditLogs'
+    && subcollection != 'products'
+    && subcollection != 'customers'
+    && subcollection != 'categories'
+    && subcollection != 'cash_flow'
+    && exists(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    )
+    && get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data.storeId == storeId
+    && (
+      get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      ).data.role == 'admin'
+      ||
+      get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      ).data.role == 'gerente'
+    );
+}
+  }
+}
