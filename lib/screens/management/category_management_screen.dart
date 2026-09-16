@@ -63,6 +63,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
@@ -670,115 +671,179 @@ class _CategoryManagementScreenState
   // ==========================================================================
 
   void _deleteCategory(
-      String categoryId,
-      ) {
+    String categoryId,
+  ) {
     showDialog(
       context: context,
 
       builder: (ctx) =>
           AlertDialog(
-            title:
+        title:
+        const Text(
+          'Confirmar Eliminação',
+        ),
+
+        content:
+        const Text(
+          'Tem a certeza de que deseja eliminar esta categoria?',
+        ),
+
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(ctx)
+                    .pop(),
+
+            child:
             const Text(
-              'Confirmar Eliminação',
+              'Cancelar',
             ),
-
-            content:
-            const Text(
-              'Tem a certeza de que deseja eliminar esta categoria?',
-            ),
-
-            actions: [
-              TextButton(
-                onPressed: () =>
-                    Navigator.of(ctx)
-                        .pop(),
-
-                child:
-                const Text(
-                  'Cancelar',
-                ),
-              ),
-
-              ElevatedButton(
-                style:
-                ElevatedButton
-                    .styleFrom(
-                  backgroundColor:
-                  Colors.red,
-
-                  foregroundColor:
-                  Colors.white,
-                ),
-
-                onPressed: () async {
-                  try {
-                    await FirebaseFirestore.instance
-                        .collection('stores')
-                        .doc(widget.storeId)
-                        .collection('categories')
-                        .doc(categoryId)
-                        .delete();
-
-                    if (!ctx.mounted) {
-                      return;
-                    }
-
-                    Navigator.of(ctx).pop();
-                  } on FirebaseException catch (e) {
-                    if (!ctx.mounted) {
-                      return;
-                    }
-
-                    Navigator.of(ctx).pop();
-
-                    if (!mounted) {
-                      return;
-                    }
-
-                    final message = e.code == 'permission-denied'
-                        ? 'Você não possui permissão para excluir categorias.'
-                        : 'Não foi possível excluir a categoria.';
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(message),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  } catch (e) {
-                    debugPrint('Erro ao excluir categoria: $e');
-
-                    if (ctx.mounted) {
-                      Navigator.of(ctx).pop();
-                    }
-
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Não foi possível excluir a categoria.',
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
-
-                child:
-                const Text(
-                  'Eliminar',
-                ),
-              ),
-            ],
           ),
+
+          ElevatedButton(
+            style:
+            ElevatedButton
+                .styleFrom(
+              backgroundColor:
+              Colors.red,
+
+              foregroundColor:
+              Colors.white,
+            ),
+
+            onPressed: () async {
+              try {
+                final callable =
+                    FirebaseFunctions.instance.httpsCallable(
+                  'deleteCategory',
+                  options: HttpsCallableOptions(
+                    timeout: const Duration(seconds: 30),
+                  ),
+                );
+
+                final response =
+                    await callable.call(
+                  <String, dynamic>{
+                    'categoryId': categoryId,
+                  },
+                );
+
+                final data =
+                    response.data;
+
+                if (data is! Map) {
+                  throw StateError(
+                    'Resposta inválida ao excluir categoria.',
+                  );
+                }
+
+                final resultData =
+                    Map<String, dynamic>.from(
+                  data,
+                );
+
+                if (resultData['success'] != true ||
+                    resultData['deleted'] != true ||
+                    resultData['categoryId'] != categoryId) {
+                  throw StateError(
+                    'Resposta inválida ao excluir categoria.',
+                  );
+                }
+
+                if (!ctx.mounted) {
+                  return;
+                }
+
+                Navigator.of(ctx).pop();
+              } on FirebaseFunctionsException catch (e) {
+                if (ctx.mounted) {
+                  Navigator.of(ctx).pop();
+                }
+
+                if (!mounted) {
+                  return;
+                }
+
+                String? reason;
+
+                final details =
+                    e.details;
+
+                if (details is Map) {
+                  reason =
+                      details['reason']
+                          ?.toString();
+                }
+
+                final String message;
+
+                if (e.code == 'failed-precondition' &&
+                    reason == 'category-in-use') {
+                  message =
+                      'Esta categoria não pode ser excluída porque está vinculada a um ou mais produtos.';
+                } else if (e.code == 'not-found' &&
+                    reason == 'category-not-found') {
+                  message =
+                      'Esta categoria já não está disponível.';
+                } else if (e.code == 'permission-denied') {
+                  message =
+                      'Você não possui permissão para excluir categorias.';
+                } else {
+                  final backendMessage =
+                      e.message?.trim();
+
+                  message =
+                      backendMessage != null &&
+                              backendMessage.isNotEmpty
+                          ? backendMessage
+                          : 'Não foi possível excluir a categoria.';
+                }
+
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(
+                  SnackBar(
+                    content:
+                    Text(message),
+
+                    backgroundColor:
+                    Colors.red,
+                  ),
+                );
+              } catch (e) {
+                debugPrint(
+                  'Erro ao excluir categoria: $e',
+                );
+
+                if (ctx.mounted) {
+                  Navigator.of(ctx).pop();
+                }
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(
+                    const SnackBar(
+                      content:
+                      Text(
+                        'Não foi possível excluir a categoria.',
+                      ),
+
+                      backgroundColor:
+                      Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+
+            child:
+            const Text(
+              'Eliminar',
+            ),
+          ),
+        ],
+      ),
     );
   }
-
-  // ==========================================================================
-  // BUILD
-  // ==========================================================================
-
   @override
   Widget build(
       BuildContext context,
