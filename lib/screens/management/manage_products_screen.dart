@@ -140,6 +140,15 @@ class _ProductDialogState extends State<_ProductDialog> {
   Uint8List? _selectedImageBytes;
   String? _existingImageUrl;
 
+  // Estado local da tentativa de criacao.
+  //
+  // requestId permanece estavel enquanto este dialogo estiver aberto.
+  // O URL da imagem enviada tambem e reutilizado em retry da mesma
+  // selecao, evitando mudar o requestHash apos resposta ambigua.
+  String? _createProductRequestId;
+  String? _pendingCreateImageUrl;
+  Object? _pendingCreateImageSource;
+
   List<Map<String, dynamic>> _lotes = [];
 
   DateTime? _dataValidadeSelecionada;
@@ -558,6 +567,7 @@ class _ProductDialogState extends State<_ProductDialog> {
           ),
         );
       }
+
       return;
     }
 
@@ -588,22 +598,49 @@ class _ProductDialogState extends State<_ProductDialog> {
     try {
       // =======================================================================
       // 1. UPLOAD DA IMAGEM
+      //
+      // Na criacao, se a mesma selecao ja foi enviada antes de uma resposta
+      // ambigua da callable, reutilizamos o mesmo URL no retry.
+      //
+      // Na edicao, o comportamento anterior permanece.
       // =======================================================================
 
-      if (_selectedImageFile != null || _selectedImageBytes != null) {
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final bool hasSelectedImage =
+          _selectedImageFile != null || _selectedImageBytes != null;
 
-        final path = 'product_images/${widget.storeId}/$fileName';
+      if (hasSelectedImage) {
+        final Object? currentImageSource = kIsWeb
+            ? _selectedImageBytes
+            : _selectedImageFile;
 
-        final ref = FirebaseStorage.instance.ref(path);
+        final bool reusePendingCreateImage =
+            !_isEditing &&
+            _pendingCreateImageUrl != null &&
+            identical(_pendingCreateImageSource, currentImageSource);
 
-        final metadata = SettableMetadata(contentType: 'image/jpeg');
+        if (reusePendingCreateImage) {
+          imageUrl = _pendingCreateImageUrl!;
+        } else {
+          final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-        final TaskSnapshot snapshot = kIsWeb
-            ? await ref.putData(_selectedImageBytes!, metadata)
-            : await ref.putFile(_selectedImageFile!, metadata);
+          final path = 'product_images/${widget.storeId}/$fileName';
 
-        imageUrl = await snapshot.ref.getDownloadURL();
+          final ref = FirebaseStorage.instance.ref(path);
+
+          final metadata = SettableMetadata(contentType: 'image/jpeg');
+
+          final TaskSnapshot snapshot = kIsWeb
+              ? await ref.putData(_selectedImageBytes!, metadata)
+              : await ref.putFile(_selectedImageFile!, metadata);
+
+          imageUrl = await snapshot.ref.getDownloadURL();
+
+          if (!_isEditing) {
+            _pendingCreateImageSource = currentImageSource;
+
+            _pendingCreateImageUrl = imageUrl;
+          }
+        }
       }
 
       // =======================================================================
@@ -629,9 +666,10 @@ class _ProductDialogState extends State<_ProductDialog> {
       final int finalQuantidade = _lotes.isEmpty ? manualQuantidade : somaLotes;
 
       // =======================================================================
-      // 4. MAPA BASE DO PRODUTO
+      // 4. MAPA LEGADO DE EDICAO
       //
-      // Este continua sendo o mesmo conteúdo utilizado pelo PRO.
+      // Este mapa continua existindo somente para preservar o writer de edicao
+      // neste incremento. A criacao nova nao envia os campos derivados.
       // =======================================================================
 
       final Map<String, dynamic> productData = {
@@ -647,14 +685,13 @@ class _ProductDialogState extends State<_ProductDialog> {
       };
 
       // =======================================================================
-      // 5. DADOS FISCAIS - SOMENTE BUSINESS
+      // 5. DADOS FISCAIS
       //
-      // PRO:
-      // não cria nem altera o campo fiscal.
-      //
-      // BUSINESS:
-      // grava os dados necessários para utilização posterior na NFC-e.
+      // Para criacao, fiscal.updatedAt NAO e enviado: o backend o gera.
+      // Para edicao, preservamos o comportamento atual.
       // =======================================================================
+
+      Map<String, dynamic>? createFiscalData;
 
       if (widget.isBusiness) {
         final ncm = _ncmController.text.replaceAll(RegExp(r'\D'), '');
@@ -673,35 +710,31 @@ class _ProductDialogState extends State<_ProductDialog> {
               '',
             );
 
-        productData['fiscal'] = {
+        final fiscalData = <String, dynamic>{
           'ncm': ncm,
           'origem': _selectedOrigem,
           'cfop': cfop,
           'unidade': _selectedUnidade,
-
-          // CEST é opcional.
           'cest': cest.isEmpty ? null : cest,
-
           'icmsSituacaoTributaria': _selectedIcmsSituacaoTributaria,
           'pisSituacaoTributaria': _selectedPisSituacaoTributaria,
           'cofinsSituacaoTributaria': _selectedCofinsSituacaoTributaria,
-
-          // Reforma Tributária 2026.
-          //
-          // Esses nomes são internos do Store Connect. Na montagem do payload
-          // Focus serão convertidos para:
-          // - ibs_cbs_situacao_tributaria
-          // - ibs_cbs_classificacao_tributaria
           'ibsCbsSituacaoTributaria': ibsCbsSituacaoTributaria,
           'ibsCbsClassificacaoTributaria': ibsCbsClassificacaoTributaria,
-
-          // Ajuda futuramente em auditoria / sincronização.
-          'updatedAt': Timestamp.now(),
         };
+
+        if (_isEditing) {
+          productData['fiscal'] = {...fiscalData, 'updatedAt': Timestamp.now()};
+        } else {
+          createFiscalData = fiscalData;
+        }
       }
 
       // =======================================================================
-      // 6. SALVA / ATUALIZA
+      // 6. EDITAR PRODUTO EXISTENTE
+      //
+      // Ainda permanece no writer atual. A migracao de edicao sera feita
+      // separadamente.
       // =======================================================================
 
       if (_isEditing) {
@@ -712,14 +745,84 @@ class _ProductDialogState extends State<_ProductDialog> {
             .doc(widget.product!.id)
             .update(productData);
       } else {
-        productData['createdAt'] = Timestamp.now();
-        //productData['isArchived'] = false;
+        // =====================================================================
+        // 7. CRIAR PRODUTO NOVO PELO BACKEND
+        // =====================================================================
 
-        await FirebaseFirestore.instance
-            .collection('stores')
-            .doc(widget.storeId)
-            .collection('products')
-            .add(productData);
+        final createLotes = lotesFiltrados.map<Map<String, dynamic>>((lote) {
+          final quantidade = (lote['quantidade'] as num?)?.toInt() ?? 0;
+
+          final validadeRaw = lote['validade'];
+
+          final int validadeMs;
+
+          if (validadeRaw is Timestamp) {
+            validadeMs = validadeRaw.toDate().millisecondsSinceEpoch;
+          } else if (validadeRaw is DateTime) {
+            validadeMs = validadeRaw.millisecondsSinceEpoch;
+          } else {
+            throw StateError('Lote sem validade valida para criacao.');
+          }
+
+          return <String, dynamic>{
+            'quantidade': quantidade,
+            'validadeMs': validadeMs,
+          };
+        }).toList();
+
+        final selectedCategoryId = _selectedCategoryId?.trim();
+
+        final categoryIds =
+            selectedCategoryId == null || selectedCategoryId.isEmpty
+            ? <String>[]
+            : <String>[selectedCategoryId];
+
+        // Auto-ID do SDK e gerado apenas localmente.
+        // Nenhum documento _clientRequestIds e gravado.
+        final requestId = _createProductRequestId ??= FirebaseFirestore.instance
+            .collection('_clientRequestIds')
+            .doc()
+            .id;
+
+        final createProductData = <String, dynamic>{
+          'name': name,
+          'price': price,
+          'quantidade': finalQuantidade,
+          'lotes': createLotes,
+          'minimumStock': minimumStock,
+          'imageUrl': imageUrl,
+        };
+
+        if (createFiscalData != null) {
+          createProductData['fiscal'] = createFiscalData;
+        }
+
+        final callable = FirebaseFunctions.instance.httpsCallable(
+          'createProduct',
+          options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+        );
+
+        final result = await callable.call(<String, dynamic>{
+          'requestId': requestId,
+          'product': createProductData,
+          'categoryIds': categoryIds,
+        });
+
+        final resultRaw = result.data;
+
+        if (resultRaw is! Map) {
+          throw StateError('Resposta invalida ao criar produto.');
+        }
+
+        final resultData = Map<String, dynamic>.from(resultRaw);
+
+        final productId = resultData['productId'];
+
+        if (resultData['success'] != true ||
+            productId is! String ||
+            productId.trim().isEmpty) {
+          throw StateError('Resposta incompleta ao criar produto.');
+        }
       }
 
       if (!mounted) return;
@@ -730,6 +833,33 @@ class _ProductDialogState extends State<_ProductDialog> {
         const SnackBar(
           content: Text('Produto salvo com sucesso!'),
           backgroundColor: Colors.green,
+        ),
+      );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+
+      final message = error.message?.trim();
+
+      String? reason;
+
+      final details = error.details;
+
+      if (details is Map) {
+        reason = details['reason']?.toString();
+      }
+
+      final reasonSuffix = reason == null || reason.trim().isEmpty
+          ? ''
+          : ' [$reason]';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Erro ao salvar: '
+            '${message == null || message.isEmpty ? error.code : message}'
+            '$reasonSuffix',
+          ),
+          backgroundColor: Colors.red,
         ),
       );
     } catch (error) {
