@@ -2346,6 +2346,17 @@ const {
 exports.createProduct =
   createProduct;
 
+// ============================================================================
+// STORE CONNECT - EXCLUSAO SEGURA DE CATEGORIAS
+// ============================================================================
+
+const {
+  deleteCategory,
+} = require("./categories/deleteCategory");
+
+exports.deleteCategory =
+  deleteCategory;
+
 
 
 
