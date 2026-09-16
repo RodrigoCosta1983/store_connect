@@ -154,7 +154,20 @@ class _ProductDialogState extends State<_ProductDialog> {
   DateTime? _dataValidadeSelecionada;
 
   String? _selectedCategoryId;
-  String? _selectedCategoryName;
+
+  // Estado taxonomico observado quando a edicao foi aberta.
+  //
+  // O mapa preserva exatamente presenca/ausencia de categoryIds,
+  // categoryId e categoryName para o controle otimista do backend.
+  Map<String, dynamic> _originalExpectedTaxonomy = <String, dynamic>{};
+
+  // Estado efetivo usado somente para detectar se o usuario alterou
+  // a categoria nesta UI de categoria unica.
+  List<String> _originalEffectiveCategoryIds = <String>[];
+
+  // categoryIds canonico com mais de uma categoria, ou estruturalmente
+  // invalido, nao pode ser alterado pela UI single-category.
+  bool _categoryEditingLocked = false;
 
   bool get _isEditing => widget.product != null;
 
@@ -374,10 +387,78 @@ class _ProductDialogState extends State<_ProductDialog> {
       // 3. CATEGORIA
       // ======================================================================
 
-      if (productData.containsKey('categoryId')) {
-        _selectedCategoryId = productData['categoryId'];
+      // Captura exatamente o estado visto pelo cliente.
+      _originalExpectedTaxonomy = <String, dynamic>{};
 
-        _selectedCategoryName = productData['categoryName'];
+      for (final field in <String>[
+        'categoryIds',
+        'categoryId',
+        'categoryName',
+      ]) {
+        if (productData.containsKey(field)) {
+          _originalExpectedTaxonomy[field] = productData[field];
+        }
+      }
+
+      _originalEffectiveCategoryIds = <String>[];
+      _categoryEditingLocked = false;
+      _selectedCategoryId = null;
+
+      // categoryIds presente e sempre canonico para leitura.
+      // Nao fazemos fallback para categoryId se o array existir.
+      if (productData.containsKey('categoryIds')) {
+        final rawCategoryIds = productData['categoryIds'];
+
+        if (rawCategoryIds is List) {
+          final parsedCategoryIds = <String>[];
+          final seenCategoryIds = <String>{};
+
+          bool validCategoryIds = rawCategoryIds.length <= 10;
+
+          for (final rawId in rawCategoryIds) {
+            if (rawId is! String ||
+                rawId.isEmpty ||
+                rawId.trim() != rawId ||
+                rawId.contains('/') ||
+                !seenCategoryIds.add(rawId)) {
+              validCategoryIds = false;
+              break;
+            }
+
+            parsedCategoryIds.add(rawId);
+          }
+
+          if (validCategoryIds) {
+            _originalEffectiveCategoryIds = List<String>.from(
+              parsedCategoryIds,
+            );
+
+            _categoryEditingLocked = parsedCategoryIds.length > 1;
+
+            if (parsedCategoryIds.isNotEmpty) {
+              _selectedCategoryId = parsedCategoryIds.first;
+            }
+          } else {
+            // Taxonomia canonica malformada nao e reparada silenciosamente.
+            _categoryEditingLocked = true;
+          }
+        } else {
+          // categoryIds presente com tipo invalido continua sendo autoridade;
+          // nao fazemos fallback para o singular legado.
+          _categoryEditingLocked = true;
+        }
+      } else {
+        // Produto legado: somente na ausencia de categoryIds usamos categoryId.
+        final legacyCategoryId = productData['categoryId'];
+
+        if (legacyCategoryId is String &&
+            legacyCategoryId.isNotEmpty &&
+            legacyCategoryId.trim() == legacyCategoryId &&
+            !legacyCategoryId.contains('/')) {
+          _originalEffectiveCategoryIds = <String>[legacyCategoryId];
+
+          _selectedCategoryId = legacyCategoryId;
+        }
       }
 
       // ======================================================================
@@ -597,6 +678,61 @@ class _ProductDialogState extends State<_ProductDialog> {
 
     try {
       // =======================================================================
+      // TAXONOMIA DA EDICAO
+      //
+      // A taxonomia e tratada pelo backend antes do update comercial.
+      // Se houver conflito otimista, nenhum campo comercial e gravado.
+      //
+      // Se esta chamada tiver sucesso e o update comercial falhar depois,
+      // o retry continua seguro: o backend reconhece o estado ja desejado.
+      // =======================================================================
+
+      if (_isEditing && !_categoryEditingLocked) {
+        final selectedCategoryId = _selectedCategoryId?.trim();
+
+        final desiredCategoryIds =
+            selectedCategoryId == null || selectedCategoryId.isEmpty
+            ? <String>[]
+            : <String>[selectedCategoryId];
+
+        final bool taxonomyChanged =
+            desiredCategoryIds.length != _originalEffectiveCategoryIds.length ||
+            (desiredCategoryIds.length == 1 &&
+                _originalEffectiveCategoryIds.length == 1 &&
+                desiredCategoryIds.first !=
+                    _originalEffectiveCategoryIds.first);
+
+        if (taxonomyChanged) {
+          final taxonomyCallable = FirebaseFunctions.instance.httpsCallable(
+            'setProductCategories',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+          );
+
+          final taxonomyResult = await taxonomyCallable.call(<String, dynamic>{
+            'productId': widget.product!.id,
+            'categoryIds': desiredCategoryIds,
+            'expectedTaxonomy': Map<String, dynamic>.from(
+              _originalExpectedTaxonomy,
+            ),
+          });
+
+          final taxonomyResultRaw = taxonomyResult.data;
+
+          if (taxonomyResultRaw is! Map) {
+            throw StateError('Resposta invalida ao atualizar categorias.');
+          }
+
+          final taxonomyResultData = Map<String, dynamic>.from(
+            taxonomyResultRaw,
+          );
+
+          if (taxonomyResultData['success'] != true) {
+            throw StateError('Resposta incompleta ao atualizar categorias.');
+          }
+        }
+      }
+
+      // =======================================================================
       // 1. UPLOAD DA IMAGEM
       //
       // Na criacao, se a mesma selecao ja foi enviada antes de uma resposta
@@ -680,8 +816,6 @@ class _ProductDialogState extends State<_ProductDialog> {
         'quantidade': finalQuantidade,
         'minimumStock': minimumStock,
         'imageUrl': imageUrl,
-        'categoryId': _selectedCategoryId,
-        'categoryName': _selectedCategoryName,
       };
 
       // =======================================================================
@@ -848,6 +982,20 @@ class _ProductDialogState extends State<_ProductDialog> {
         reason = details['reason']?.toString();
       }
 
+      if (error.code == 'aborted' && reason == 'taxonomy-conflict') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'A categoria deste produto foi alterada em outro acesso. '
+              'Reabra o produto para carregar a taxonomia atual e tente novamente.',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+
+        return;
+      }
+
       final reasonSuffix = reason == null || reason.trim().isEmpty
           ? ''
           : ' [$reason]';
@@ -993,22 +1141,17 @@ class _ProductDialogState extends State<_ProductDialog> {
                             ),
                           )
                           .toList(),
-                      onChanged: (value) {
-                        if (value == null) {
-                          return;
-                        }
+                      onChanged: _categoryEditingLocked
+                          ? null
+                          : (value) {
+                              if (value == null) {
+                                return;
+                              }
 
-                        final selectedCat = categories.firstWhere(
-                          (doc) => doc.id == value,
-                        );
-
-                        setState(() {
-                          _selectedCategoryId = value;
-
-                          _selectedCategoryName = selectedCat['name']
-                              .toString();
-                        });
-                      },
+                              setState(() {
+                                _selectedCategoryId = value;
+                              });
+                            },
                     );
                   },
                 ),
