@@ -14,6 +14,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   List<Map<String, dynamic>> _catalogs = [];
+  final Set<int> _expandedCatalogIndexes = <int>{};
 
   @override
   void initState() {
@@ -68,6 +69,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
 
       setState(() {
         _catalogs = catalogs;
+        _expandedCatalogIndexes.clear();
       });
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) {
@@ -202,7 +204,10 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
     );
   }
 
-  Widget _buildCatalogCard(Map<String, dynamic> catalog) {
+  Widget _buildCatalogCard(
+    Map<String, dynamic> catalog,
+    int index,
+  ) {
     final title = catalog['title']?.toString().trim() ?? '';
 
     final productCount = (catalog['productCount'] as num?)?.toInt() ?? 0;
@@ -212,10 +217,64 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
     final linkAvailable =
         catalog['linkAvailable'] == true && publicUrl.isNotEmpty;
 
+    final isExpanded = _expandedCatalogIndexes.contains(index);
+
+    void toggleExpanded() {
+      setState(() {
+        if (isExpanded) {
+          _expandedCatalogIndexes.remove(index);
+        } else {
+          _expandedCatalogIndexes.add(index);
+        }
+      });
+    }
+
+    if (!isExpanded) {
+      return Card(
+        elevation: 3,
+        margin: const EdgeInsets.only(bottom: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 10,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title.isEmpty ? 'Catálogo sem título' : title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              _buildStatusBadge(context, catalog['status']),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: 'Abrir catálogo',
+                visualDensity: VisualDensity.compact,
+                onPressed: toggleExpanded,
+                icon: const Icon(Icons.expand_more),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Card(
       elevation: 3,
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -254,6 +313,13 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                 ),
                 const SizedBox(width: 12),
                 _buildStatusBadge(context, catalog['status']),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Recolher catálogo',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: toggleExpanded,
+                  icon: const Icon(Icons.expand_less),
+                ),
               ],
             ),
             const SizedBox(height: 18),
@@ -268,7 +334,9 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  productCount == 1 ? '1 produto' : '$productCount produtos',
+                  productCount == 1
+                      ? '1 produto'
+                      : '$productCount produtos',
                   style: const TextStyle(fontSize: 15),
                 ),
               ],
@@ -284,7 +352,9 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                 const SizedBox(width: 8),
                 Text(
                   'Criado: ${_formatDate(catalog['createdAt'])}',
-                  style: TextStyle(color: Colors.grey.shade700),
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                  ),
                 ),
               ],
             ),
@@ -299,7 +369,9 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                 const SizedBox(width: 8),
                 Text(
                   'Expira: ${_formatDate(catalog['expiresAt'])}',
-                  style: TextStyle(color: Colors.grey.shade700),
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                  ),
                 ),
               ],
             ),
@@ -364,7 +436,6 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
       ),
     );
   }
-
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
@@ -446,7 +517,10 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
             itemCount: _catalogs.length,
             itemBuilder: (context, index) {
-              return _buildCatalogCard(_catalogs[index]);
+              return _buildCatalogCard(
+                _catalogs[index],
+                index,
+              );
             },
           ),
         ),

@@ -835,12 +835,23 @@ const listCatalogs = onCall(
         const createdAt = catalogData.createdAt;
         const expiresAt = catalogData.expiresAt;
 
+        const storedStatus =
+          normalizeString(catalogData.status).toLowerCase() ||
+          "unknown";
+
+        const isExpired =
+          storedStatus === "active" &&
+          expiresAt &&
+          typeof expiresAt.toMillis === "function" &&
+          Date.now() >= expiresAt.toMillis();
+
+        const effectiveStatus =
+          isExpired ? "expired" : storedStatus;
+
         catalogs.push({
           catalogId: catalogSnapshot.id,
           title: normalizeString(catalogData.title),
-          status:
-            normalizeString(catalogData.status).toLowerCase() ||
-            "unknown",
+          status: effectiveStatus,
           createdAt:
             createdAt &&
             typeof createdAt.toDate === "function" ?
