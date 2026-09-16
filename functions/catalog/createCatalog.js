@@ -881,6 +881,100 @@ const listCatalogs = onCall(
     },
 );
 
+// F7.8-C1: leitura interna, sem enriquecimento ou escrita.
+const listCatalogRequests = onCall(
+    {timeoutSeconds: 30, memory: "256MiB"},
+    async (request) => {
+      // Mesma semantica de autorizacao de listCatalogs.
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated", "É necessário estar autenticado.",
+        );
+      }
+
+      const db = admin.firestore();
+      const userSnapshot = await db.collection("users")
+          .doc(request.auth.uid).get();
+      if (!userSnapshot.exists) {
+        throw new HttpsError(
+            "permission-denied", "Perfil do usuário não encontrado.",
+        );
+      }
+
+      const userData = userSnapshot.data() || {};
+      if (normalizeString(userData.accessStatus).toLowerCase() === "revoked") {
+        throw new HttpsError(
+            "permission-denied", "O acesso deste usuário está revogado.",
+        );
+      }
+      if (!normalizeRole(userData.role)) {
+        throw new HttpsError(
+            "permission-denied",
+            "O perfil deste usuário não possui um papel válido.",
+        );
+      }
+      const storeId = normalizeString(userData.storeId);
+      if (!storeId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Nenhuma loja válida está vinculada ao usuário.",
+        );
+      }
+      const storeSnapshot = await db.collection("stores").doc(storeId).get();
+      if (!storeSnapshot.exists) {
+        throw new HttpsError("not-found", "Loja não encontrada.");
+      }
+
+      const data = request.data;
+      if (data != null && (
+        typeof data !== "object" || Array.isArray(data) ||
+        Object.getPrototypeOf(data) !== Object.prototype ||
+        Object.keys(data).length !== 0
+      )) {
+        throw new HttpsError(
+            "invalid-argument", "Esta operação não aceita parâmetros.",
+        );
+      }
+
+      const snapshot = await storeSnapshot.ref.collection("catalogRequests")
+          .orderBy("createdAt", "desc").limit(50).get();
+      const requests = snapshot.docs.map((document) => {
+        const saved = document.data();
+        // Validacao estrutural: nao inventar valores nem definir novos status.
+        if (
+          !normalizeString(saved.catalogId) || saved.catalogId.includes("/") ||
+          !normalizeString(saved.status) || !normalizeString(saved.source) ||
+          !Number.isSafeInteger(saved.itemCount) || saved.itemCount < 1 ||
+          saved.itemCount > MAX_PRODUCTS ||
+          !Number.isSafeInteger(saved.totalUnits) ||
+          saved.totalUnits < saved.itemCount ||
+          typeof saved.totalAmount !== "number" ||
+          !Number.isFinite(saved.totalAmount) || saved.totalAmount < 0 ||
+          !Number.isSafeInteger(Math.round(saved.totalAmount * 100))
+        ) {
+          throw new HttpsError(
+              "internal", "Não foi possível carregar as solicitações.",
+          );
+        }
+
+        return {
+          requestId: document.id,
+          catalogId: saved.catalogId,
+          status: saved.status,
+          itemCount: saved.itemCount,
+          totalUnits: saved.totalUnits,
+          totalAmount: saved.totalAmount,
+          createdAt: saved.createdAt instanceof Timestamp ?
+            saved.createdAt.toDate().toISOString() : null,
+          updatedAt: saved.updatedAt instanceof Timestamp ?
+            saved.updatedAt.toDate().toISOString() : null,
+          source: saved.source,
+        };
+      });
+      return {success: true, requests};
+    },
+);
+
 const getPublicCatalog = onCall(
     {
       timeoutSeconds: 30,
@@ -1740,6 +1834,7 @@ const submitPublicCatalogSelection = onCall(
 module.exports = {
   createCatalog,
   listCatalogs,
+  listCatalogRequests,
   getPublicCatalog,
   submitPublicCatalogSelection,
 };

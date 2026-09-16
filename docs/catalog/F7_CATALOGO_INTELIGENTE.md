@@ -2,6 +2,10 @@
 
 Documentação oficial da arquitetura, decisões, segurança, implementação e evolução do Catálogo Inteligente do Store&Connect.
 
+> Estado atual F7.8-C1: F7.7 concluída e validada em produção conforme
+> informado por Rodrigo. Os registros anteriores abaixo são históricos;
+> o contrato e a implementação local de listCatalogRequests estão no final.
+
 > Este documento é a referência oficial da F7.
 > Toda decisão arquitetural relevante e toda etapa concluída devem ser registradas aqui.
 
@@ -2950,3 +2954,45 @@ Implementação local concluída, sem publicação ou deploy.
 - Reenvios após resposta perdida ainda podem duplicar solicitações:
   a proteção desta etapa cobre somente chamadas simultâneas.
 - F7.8, recebimento interno e deploy não iniciados.
+
+## F7.8-C1 — leitura interna de solicitações
+
+Após auditoria F7.8-A e aprovação do contrato F7.8-B, foi implementada
+localmente somente `listCatalogRequests`, exportada no módulo e no index.
+Não houve deploy. F7.8-C2 / getCatalogRequest e Flutter não foram iniciados.
+
+Autorização: reproduz a semântica de listCatalogs. Exige autenticação,
+perfil existente, accessStatus diferente de revoked, role reconhecida
+(admin, gerente, operador, caixa/vendedor normalizados para operador),
+storeId do perfil e loja existente. Não adiciona bloqueio por assinatura.
+
+Entrada: ausente, null ou objeto vazio. Outros tipos ou campos extras
+geram invalid-argument. Não aceita storeId informado pelo cliente.
+
+Consulta exclusiva: stores/{storeId}/catalogRequests, createdAt DESC,
+limit 50. Sem filtros, paginação, collectionGroup, leitura de itens,
+catálogos ou produtos. Sem solicitações: {success: true, requests: []}.
+
+Cada entrada retorna apenas requestId, catalogId, status, itemCount,
+totalUnits, totalAmount, createdAt, updatedAt e source. Valores persistidos
+não são recalculados; catálogo é somente referência.
+
+Validação estrutural: catalogId não vazio e sem barra; status/source são
+strings não vazias (sem definir novos estados); itemCount inteiro seguro
+entre 1 e 200; totalUnits inteiro seguro >= itemCount; totalAmount numérico
+finito não negativo e representável em centavos inteiros seguros.
+Inconsistência rejeita toda a resposta com internal e mensagem genérica.
+Timestamps Firestore válidos viram ISO UTC; ausentes/inválidos viram null.
+createdAt ausente exclui o documento da consulta, por semântica do orderBy.
+
+Nenhuma escrita, alteração de updatedAt/status ou marcação de leitura.
+Nenhum schema, migration, índice composto ou secret novo.
+Teste dedicado no Emulator cobre autorização, payload, isolamento,
+ordenação/limite, resposta restrita, timestamps, inconsistências e ausência
+de escritas/leituras fora dos caminhos autorizados. Runner preservado.
+
+Validação local: teste isolado aprovado e suíte oficial 8/8 no Firestore
+Emulator com JDK 21 (sete testes anteriores preservados). Checks Node e
+git diff --check aprovados. A primeira execução isolada revelou um erro
+na assinatura da instrumentação do SDK no teste; corrigido antes da
+validação final. Rules de clientes diretos continuam fora desta cobertura.

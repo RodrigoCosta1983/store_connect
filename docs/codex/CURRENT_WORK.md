@@ -5,6 +5,28 @@ Atualizado em: 15/09/2026
 Este arquivo registra onde o desenvolvimento está no momento.
 O Git é sempre a autoridade sobre o HEAD atual.
 
+## Estado atual — F7.8-C1
+
+Esta seção prevalece sobre os registros históricos abaixo.
+F7.7 concluída e validada em produção conforme informado por Rodrigo;
+`submitPublicCatalogSelection` já está exportada no index.
+F7.8-A auditada; contrato F7.8-B aprovado. F7.8-C1 implementa localmente
+somente `listCatalogRequests`, exportada no módulo e no index, sem deploy.
+
+- Autorização semanticamente igual a `listCatalogs`, sem bloqueio por assinatura.
+- Entrada ausente, null ou objeto vazio; outros payloads são rejeitados.
+- Leitura exclusiva dos 50 pais mais recentes por `createdAt DESC` em
+  `stores/{storeId}/catalogRequests`, sem paginação ou enriquecimento.
+- Resposta explícita com requestId e os oito campos persistidos do pai.
+- Campos estruturais inválidos geram erro internal genérico; timestamps
+  inválidos/ausentes retornam null. Documentos sem createdAt são omitidos
+  pela ordenação do Firestore.
+- Sem escrita, atualização de status, leitura de itens ou integração Flutter.
+- Novo teste: `functions/tests/catalog/listCatalogRequests.emulator.test.js`.
+- Validação: teste isolado aprovado; regressão oficial 8/8 no Emulator com
+  JDK 21; checks de sintaxe Node e git diff --check aprovados.
+- F7.8-C2 / getCatalogRequest não iniciada. Sem commit, push ou deploy nesta etapa.
+
 ## Branch
 
 `feat/f7-intelligent-catalog`

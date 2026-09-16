@@ -2113,12 +2113,14 @@ exports.changeAsaasPlan = onCall(
 const {
   createCatalog,
   listCatalogs,
+  listCatalogRequests,
   getPublicCatalog,
   submitPublicCatalogSelection,
 } = require("./catalog/createCatalog");
 
 exports.createCatalog = createCatalog;
 exports.listCatalogs = listCatalogs;
+exports.listCatalogRequests = listCatalogRequests;
 exports.getPublicCatalog = getPublicCatalog;
 exports.submitPublicCatalogSelection = submitPublicCatalogSelection;
 
