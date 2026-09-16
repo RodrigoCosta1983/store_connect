@@ -2,9 +2,9 @@
 
 Documentação oficial da arquitetura, decisões, segurança, implementação e evolução do Catálogo Inteligente do Store&Connect.
 
-> Estado atual F7.8-C1: F7.7 concluída e validada em produção conforme
+> Estado atual F7.8-C2: F7.7 concluída e validada em produção conforme
 > informado por Rodrigo. Os registros anteriores abaixo são históricos;
-> o contrato e a implementação local de listCatalogRequests estão no final.
+> os contratos e implementações locais de leitura interna estão no final.
 
 > Este documento é a referência oficial da F7.
 > Toda decisão arquitetural relevante e toda etapa concluída devem ser registradas aqui.
@@ -2996,3 +2996,50 @@ Emulator com JDK 21 (sete testes anteriores preservados). Checks Node e
 git diff --check aprovados. A primeira execução isolada revelou um erro
 na assinatura da instrumentação do SDK no teste; corrigido antes da
 validação final. Rules de clientes diretos continuam fora desta cobertura.
+
+## F7.8-C2 — detalhe histórico da solicitação
+
+Implementada localmente `getCatalogRequest({requestId})`, exportada no
+módulo de catálogo e em functions/index.js. Base: checkpoint 4797e1b.
+Sem deploy, Flutter ou início de F7.8-D.
+
+Contrato aprovado F7.8-B/C2: autorização semanticamente igual a
+listCatalogRequests/listCatalogs, antes de ler a solicitação; storeId somente
+do perfil autenticado e nenhum bloqueio novo por assinatura.
+Payload deve ser objeto contendo exclusivamente requestId string; trim,
+ID não vazio, sem barra/caminho, sem exigir auto-ID de 20 caracteres.
+IDs reservados pelo Firestore ou acima de 1500 bytes também são rejeitados.
+Entrada inválida: invalid-argument. Pai ausente na própria loja, inclusive
+quando o ID existir só em outra loja: not-found, "Solicitação não encontrada.".
+
+Leituras exclusivas após autorização:
+stores/{storeId}/catalogRequests/{requestId} e, se o pai existir,
+stores/{storeId}/catalogRequests/{requestId}/items. Todos os itens são lidos,
+ordenados por ID crescente; isso não representa a ordem original da seleção.
+Sem consulta a produtos, catálogo, token público ou estoque atual.
+
+Resposta: {success: true, request: {...}}. O objeto request contém apenas
+requestId, catalogId, status, itemCount, totalUnits, totalAmount, createdAt,
+updatedAt, source e items. Cada item contém apenas itemId, productId, name,
+quantity, price e subtotal. IDs vêm dos documentos; demais valores vêm
+dos snapshots, sem recalcular ou preencher valores ausentes.
+Timestamps Firestore viram ISO UTC; ausentes/inválidos viram null.
+
+Pai usa os mesmos limites estruturais de C1. Itens exigem productId não
+vazio/sem barra, sem duplicação, nome não vazio, quantidade inteira segura
+positiva e preço/subtotal numéricos finitos não negativos dentro do limite
+de centavos seguros. itemCount deve coincidir com todos os documentos lidos.
+Inconsistência rejeita a resposta inteira com internal e mensagem genérica;
+nenhum item é ignorado e nenhuma correção é escrita. Catálogo expirado ou
+removido e produto alterado, arquivado ou removido não afetam a leitura.
+
+Novo teste: functions/tests/catalog/getCatalogRequest.emulator.test.js.
+Runner automático preservado. Sem alteração de status, updatedAt, vendas,
+estoque, regras, schema, collections, migrations ou notificações.
+
+Validação: node --check aprovado nos três JS alterados/criados; teste
+isolado aprovado; suíte oficial encontrou nove arquivos e passou 9/9 no
+Firestore Emulator com JDK 21. Os oito arquivos anteriores passaram.
+git diff --check aprovado. Chave de criptografia da suíte temporária no
+processo, sem exposição. Testes com Admin SDK não validam rules de clientes.
+Sem commit, push ou deploy nesta etapa.

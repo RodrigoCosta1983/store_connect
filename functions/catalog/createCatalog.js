@@ -975,6 +975,133 @@ const listCatalogRequests = onCall(
     },
 );
 
+// F7.8-C2: detalhe historico, exclusivamente a partir do snapshot persistido.
+const getCatalogRequest = onCall(
+    {timeoutSeconds: 30, memory: "256MiB"},
+    async (request) => {
+      // Mesma semantica de autorizacao de listCatalogRequests/listCatalogs.
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated", "É necessário estar autenticado.",
+        );
+      }
+      const db = admin.firestore();
+      const userSnapshot = await db.collection("users")
+          .doc(request.auth.uid).get();
+      if (!userSnapshot.exists) {
+        throw new HttpsError(
+            "permission-denied", "Perfil do usuário não encontrado.",
+        );
+      }
+      const userData = userSnapshot.data() || {};
+      if (normalizeString(userData.accessStatus).toLowerCase() === "revoked") {
+        throw new HttpsError(
+            "permission-denied", "O acesso deste usuário está revogado.",
+        );
+      }
+      if (!normalizeRole(userData.role)) {
+        throw new HttpsError(
+            "permission-denied",
+            "O perfil deste usuário não possui um papel válido.",
+        );
+      }
+      const storeId = normalizeString(userData.storeId);
+      if (!storeId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Nenhuma loja válida está vinculada ao usuário.",
+        );
+      }
+      const storeSnapshot = await db.collection("stores").doc(storeId).get();
+      if (!storeSnapshot.exists) {
+        throw new HttpsError("not-found", "Loja não encontrada.");
+      }
+
+      const data = request.data;
+      const requestId = normalizeString(data?.requestId);
+      if (
+        !data || typeof data !== "object" || Array.isArray(data) ||
+        Object.getPrototypeOf(data) !== Object.prototype ||
+        Object.keys(data).length !== 1 ||
+        !Object.prototype.hasOwnProperty.call(data, "requestId") ||
+        !requestId || requestId.includes("/") ||
+        requestId === "." || requestId === ".." ||
+        /^__.*__$/.test(requestId) || Buffer.byteLength(requestId, "utf8") > 1500
+      ) {
+        throw new HttpsError("invalid-argument", "Solicitação inválida.");
+      }
+
+      const document = await storeSnapshot.ref.collection("catalogRequests")
+          .doc(requestId).get();
+      if (!document.exists) {
+        throw new HttpsError("not-found", "Solicitação não encontrada.");
+      }
+      const saved = document.data();
+      const invalidSnapshot = () => new HttpsError(
+          "internal", "Não foi possível carregar a solicitação.",
+      );
+      const validMoney = (value) => typeof value === "number" &&
+        Number.isFinite(value) && value >= 0 &&
+        Number.isSafeInteger(Math.round(value * 100));
+      // Mesmos limites estruturais do pai usados na listagem.
+      if (
+        !normalizeString(saved.catalogId) || saved.catalogId.includes("/") ||
+        !normalizeString(saved.status) || !normalizeString(saved.source) ||
+        !Number.isSafeInteger(saved.itemCount) || saved.itemCount < 1 ||
+        saved.itemCount > MAX_PRODUCTS ||
+        !Number.isSafeInteger(saved.totalUnits) ||
+        saved.totalUnits < saved.itemCount || !validMoney(saved.totalAmount)
+      ) {
+        throw invalidSnapshot();
+      }
+
+      // Sem limit: todos os itens. A ordem por ID nao e a ordem da selecao.
+      const itemsSnapshot = await document.ref.collection("items")
+          .orderBy(admin.firestore.FieldPath.documentId(), "asc").get();
+      if (itemsSnapshot.size !== saved.itemCount) {
+        throw invalidSnapshot();
+      }
+      const productIds = new Set();
+      const items = itemsSnapshot.docs.map((itemDocument) => {
+        const item = itemDocument.data();
+        if (
+          !normalizeString(item.productId) || item.productId.includes("/") ||
+          productIds.has(item.productId) || !normalizeString(item.name) ||
+          !Number.isSafeInteger(item.quantity) || item.quantity < 1 ||
+          !validMoney(item.price) || !validMoney(item.subtotal)
+        ) {
+          throw invalidSnapshot();
+        }
+        productIds.add(item.productId);
+        return {
+          itemId: itemDocument.id,
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.subtotal,
+        };
+      });
+      return {
+        success: true,
+        request: {
+          requestId: document.id,
+          catalogId: saved.catalogId,
+          status: saved.status,
+          itemCount: saved.itemCount,
+          totalUnits: saved.totalUnits,
+          totalAmount: saved.totalAmount,
+          createdAt: saved.createdAt instanceof Timestamp ?
+            saved.createdAt.toDate().toISOString() : null,
+          updatedAt: saved.updatedAt instanceof Timestamp ?
+            saved.updatedAt.toDate().toISOString() : null,
+          source: saved.source,
+          items,
+        },
+      };
+    },
+);
+
 const getPublicCatalog = onCall(
     {
       timeoutSeconds: 30,
@@ -1835,6 +1962,7 @@ module.exports = {
   createCatalog,
   listCatalogs,
   listCatalogRequests,
+  getCatalogRequest,
   getPublicCatalog,
   submitPublicCatalogSelection,
 };

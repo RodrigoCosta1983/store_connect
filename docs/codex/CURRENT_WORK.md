@@ -5,7 +5,23 @@ Atualizado em: 15/09/2026
 Este arquivo registra onde o desenvolvimento está no momento.
 O Git é sempre a autoridade sobre o HEAD atual.
 
-## Estado atual — F7.8-C1
+## Estado atual — F7.8-C2
+
+Base conferida: `4797e1b`, branch `feat/f7-intelligent-catalog`, Git limpo.
+Implementada localmente somente `getCatalogRequest({requestId})`, exportada
+no módulo de catálogo e no index, conforme contrato aprovado F7.8-B/C2.
+Autorização igual à listagem; consulta restrita ao pai da própria loja e
+seus itens, ordenados por ID crescente, sem paginação ou enriquecimento.
+Resposta explícita preserva os snapshots e serializa timestamps em ISO UTC
+ou null. Dados estruturais inválidos, produto duplicado nos itens ou
+itemCount divergente rejeitam o detalhe inteiro com internal genérico.
+Nenhuma escrita, mudança de status, estoque ou Flutter. F7.8-D não iniciada.
+Sem commit, push ou deploy nesta etapa.
+Validação: novo teste isolado aprovado; runner encontrou nove arquivos e
+a suíte oficial passou 9/9 no Firestore Emulator com JDK 21. Checks Node
+dos três JS e git diff --check aprovados. Regressão anterior preservada.
+
+## Checkpoint anterior — F7.8-C1
 
 Esta seção prevalece sobre os registros históricos abaixo.
 F7.7 concluída e validada em produção conforme informado por Rodrigo;
