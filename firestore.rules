@@ -180,6 +180,7 @@ match /stores/{storeId}/auditLogs/{document=**} {
 // 4.2 PRODUTOS
 // Usuários da própria loja podem ler/criar/editar.
 // Campos de arquivamento são exclusivos do backend.
+// Campos taxonômicos não podem ser escritos diretamente pelo cliente.
 // Exclusão física não é permitida.
 
 match /stores/{storeId}/products/{productId} {
@@ -200,6 +201,9 @@ match /stores/{storeId}/products/{productId} {
     /databases/$(database)/documents/users/$(request.auth.uid)
   ).data.storeId == storeId
   && !request.resource.data.keys().hasAny([
+    'categoryIds',
+    'categoryId',
+    'categoryName',
     'isArchived',
     'archivedAt',
     'archivedBy',
@@ -217,6 +221,9 @@ match /stores/{storeId}/products/{productId} {
         .diff(resource.data)
         .affectedKeys()
         .hasAny([
+          'categoryIds',
+          'categoryId',
+          'categoryName',
           'isArchived',
           'archivedAt',
           'archivedBy',
@@ -279,7 +286,7 @@ match /stores/{storeId}/customers/{customerId} {
 
 // 4.4 CATEGORIAS
 // Usuários da própria loja podem ler/criar/editar.
-// Exclusão permitida somente para admin/gerente.
+// Exclusão pertence exclusivamente ao backend.
 
 match /stores/{storeId}/categories/{categoryId} {
 
@@ -299,22 +306,7 @@ match /stores/{storeId}/categories/{categoryId} {
       /databases/$(database)/documents/users/$(request.auth.uid)
     ).data.storeId == storeId;
 
-  allow delete: if request.auth != null
-    && exists(
-      /databases/$(database)/documents/users/$(request.auth.uid)
-    )
-    && get(
-      /databases/$(database)/documents/users/$(request.auth.uid)
-    ).data.storeId == storeId
-    && (
-      get(
-        /databases/$(database)/documents/users/$(request.auth.uid)
-      ).data.role == 'admin'
-      ||
-      get(
-        /databases/$(database)/documents/users/$(request.auth.uid)
-      ).data.role == 'gerente'
-    );
+  allow delete: if false;
 }
 
 
