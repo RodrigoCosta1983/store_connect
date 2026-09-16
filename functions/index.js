@@ -62,6 +62,14 @@ const {
   "./financeiro/subscriptionPricing"
 );
 
+const {
+  classifySubscriptionCpfRegistry,
+  resolveExistingPaidSubscriptionType,
+  evaluateLegacyFinancialProof,
+} = require(
+  "./financeiro/subscriptionLegacyRegistry"
+);
+
 /**
  * 🔵 FUNÇÃO: createAsaasSubscription
  * * Descrição: Responsável por converter uma loja em um cliente pagante no Asaas.
@@ -300,30 +308,49 @@ const {
              cpfRegistryRef
            );
 
-           if (cpfRegistryDoc.exists) {
-             const cpfRegistryData =
-               cpfRegistryDoc.data() || {};
+           const cpfRegistryDecision =
+             classifySubscriptionCpfRegistry({
+               exists: cpfRegistryDoc.exists,
+               data: cpfRegistryDoc.exists
+                 ? cpfRegistryDoc.data() || {}
+                 : null,
+               userId,
+               storeId,
+             });
 
-             const registeredUid = String(
-               cpfRegistryData.uid || ""
-             ).trim();
-
-             const registeredStoreId = String(
-               cpfRegistryData.storeId || ""
-             ).trim();
-
-             if (
-               !registeredUid ||
-               !registeredStoreId ||
-               registeredUid !== userId ||
-               registeredStoreId !== storeId
-             ) {
-               throw new HttpsError(
-                 "already-exists",
-                 "Este CPF/CNPJ já está vinculado a outra conta do Store Connect."
-               );
-             }
+           if (
+             cpfRegistryDecision.action === "reject"
+           ) {
+             throw new HttpsError(
+               "already-exists",
+               "Este CPF/CNPJ já está vinculado a outra conta do Store Connect."
+             );
            }
+
+           // UID legado diferente + storeId ausente.
+           //
+           // Nao escrevemos nada nesta primeira transacao.
+           // O fluxo retorna apenas o contexto necessario
+           // para a prova financeira externa.
+           const cpfRegistryRequiresFinancialProof =
+             cpfRegistryDecision.action ===
+             "require_financial_proof";
+
+           if (cpfRegistryRequiresFinancialProof) {
+             return {
+               cleanDocument,
+               userEmail:
+                 userData.email || null,
+               cpfRegistryAction:
+                 cpfRegistryDecision.action,
+               legacyRegisteredUid:
+                 cpfRegistryDecision.registeredUid,
+             };
+           }
+
+           const cpfRegistryNeedsStoreIdBackfill =
+             cpfRegistryDecision.action ===
+             "backfill_store_id";
 
            const creationStatus =
              freshData.subscriptionCreationStatus;
@@ -393,6 +420,19 @@ const {
                    "Cadastro financeiro Store Connect",
                }
              );
+           } else if (cpfRegistryNeedsStoreIdBackfill) {
+             transaction.set(
+               cpfRegistryRef,
+               {
+                 storeId,
+                 document: cleanDocument,
+                 storeIdLinkedAt: serverTimestamp,
+                 storeIdLinkedBy: userId,
+                 storeIdLinkReason:
+                   "subscription_legacy_cpf_registry_backfill",
+               },
+               { merge: true }
+             );
            }
 
            if (documentWasMissing) {
@@ -432,14 +472,20 @@ const {
          }
        );
 
-       creationLockAcquired = true;
-
        const cleanDocument =
          transactionResult.cleanDocument;
 
-       console.log(
-         `🔒 Autorização validada e trava adquirida para loja ${storeId}`
-       );
+       const requiresLegacyFinancialProof =
+         transactionResult.cpfRegistryAction ===
+         "require_financial_proof";
+
+       if (!requiresLegacyFinancialProof) {
+         creationLockAcquired = true;
+
+         console.log(
+           `🔒 Autorização validada e trava adquirida para loja ${storeId}`
+         );
+       }
 
        // ============================================================
        // 3. BUSCA DADOS CANÔNICOS DA LOJA APÓS A TRANSAÇÃO
@@ -460,6 +506,483 @@ const {
 
        const storeData =
          storeDoc.data() || {};
+
+       let legacyVerifiedSubscriptionId = null;
+       let legacyVerifiedSubscription = null;
+
+       // ============================================================
+       // 3.1 PROVA FINANCEIRA DE REGISTRO LEGADO
+       // ============================================================
+       //
+       // Este caminho existe somente quando:
+       //
+       // - a reserva CPF/CNPJ e legada;
+       // - possui UID diferente do owner atual;
+       // - nao possui storeId.
+       //
+       // A primeira transacao terminou SEM writes e SEM lock.
+       //
+       // Antes de migrar a reserva, comprovamos no Asaas que os IDs
+       // financeiros ja salvos na loja pertencem exatamente a ela.
+       // ============================================================
+
+       if (requiresLegacyFinancialProof) {
+         const legacyRegisteredUid = String(
+           transactionResult.legacyRegisteredUid || ""
+         ).trim();
+
+         const legacyCustomerId = String(
+           storeData.asaasCustomerId || ""
+         ).trim();
+
+         const legacySubscriptionId = String(
+           storeData.asaasSubscriptionId || ""
+         ).trim();
+
+         if (
+           !legacyRegisteredUid ||
+           !legacyCustomerId ||
+           !legacySubscriptionId
+         ) {
+           throw new HttpsError(
+             "failed-precondition",
+             "O cadastro financeiro legado desta loja não possui vínculos suficientes para regularização automática."
+           );
+         }
+
+         let legacyCustomer = null;
+         let legacySubscription = null;
+
+         try {
+           const [
+             legacyCustomerResponse,
+             legacySubscriptionResponse,
+           ] = await Promise.all([
+             axios.get(
+               `${ASAAS_URL}/customers/${legacyCustomerId}`,
+               {
+                 headers,
+               }
+             ),
+             axios.get(
+               `${ASAAS_URL}/subscriptions/${legacySubscriptionId}`,
+               {
+                 headers,
+               }
+             ),
+           ]);
+
+           legacyCustomer =
+             legacyCustomerResponse.data || {};
+
+           legacySubscription =
+             legacySubscriptionResponse.data || {};
+         } catch (error) {
+           console.error(
+             `❌ Falha na prova financeira legada da loja ${storeId}:`,
+             error.response?.data ||
+             error.message ||
+             error
+           );
+
+           throw new HttpsError(
+             "internal",
+             "Não foi possível validar o cadastro financeiro legado desta loja."
+           );
+         }
+
+         const financialProof =
+           evaluateLegacyFinancialProof({
+             storeId,
+             cleanDocument,
+             storeData,
+             customer:
+               legacyCustomer,
+             subscription:
+               legacySubscription,
+           });
+
+         if (!financialProof.ok) {
+           console.error(
+             `🚨 Prova financeira legada recusada para loja ${storeId}. ` +
+             `Motivo: ${financialProof.reason}`
+           );
+
+           throw new HttpsError(
+             "failed-precondition",
+             "O vínculo financeiro legado desta loja não pôde ser validado automaticamente. Entre em contato com o suporte."
+           );
+         }
+
+         // ==========================================================
+         // 3.2 SEGUNDA TRANSACAO
+         // ==========================================================
+         //
+         // Entre a prova no Asaas e este ponto qualquer dado poderia
+         // ter mudado. Por isso revalidamos TUDO antes de escrever:
+         //
+         // - usuario;
+         // - accessStatus;
+         // - storeId;
+         // - role;
+         // - ownerId;
+         // - documento;
+         // - plano pago;
+         // - IDs financeiros;
+         // - reserva CPF/CNPJ;
+         // - UID legado original;
+         // - lock.
+         //
+         // Somente depois disso:
+         //
+         // - migramos a reserva;
+         // - preservamos o UID anterior;
+         // - registramos auditoria;
+         // - adquirimos o lock atomicamente.
+         // ==========================================================
+
+         const legacyCpfMigrationAuditRef =
+           storeRef
+             .collection("auditLogs")
+             .doc();
+
+         await db.runTransaction(
+           async (transaction) => {
+             const userDoc =
+               await transaction.get(userRef);
+
+             const freshStoreDoc =
+               await transaction.get(storeRef);
+
+             const cpfRegistryRef = db
+               .collection("cpfs_cadastrados")
+               .doc(cleanDocument);
+
+             const cpfRegistryDoc =
+               await transaction.get(
+                 cpfRegistryRef
+               );
+
+             if (!userDoc.exists) {
+               throw new HttpsError(
+                 "permission-denied",
+                 "Usuário sem cadastro válido no Store Connect."
+               );
+             }
+
+             if (!freshStoreDoc.exists) {
+               throw new HttpsError(
+                 "not-found",
+                 "Loja não encontrada."
+               );
+             }
+
+             const userData =
+               userDoc.data() || {};
+
+             const freshData =
+               freshStoreDoc.data() || {};
+
+             const userStoreId = String(
+               userData.storeId || ""
+             ).trim();
+
+             const role = String(
+               userData.role || ""
+             ).trim().toLowerCase();
+
+             const accessStatus = String(
+               userData.accessStatus || "active"
+             ).trim().toLowerCase();
+
+             const ownerId = String(
+               freshData.ownerId || ""
+             ).trim();
+
+             if (accessStatus === "revoked") {
+               throw new HttpsError(
+                 "permission-denied",
+                 "Seu acesso a esta loja foi revogado."
+               );
+             }
+
+             if (userStoreId !== storeId) {
+               throw new HttpsError(
+                 "permission-denied",
+                 "Esta conta não pertence à loja informada."
+               );
+             }
+
+             if (role !== "admin") {
+               throw new HttpsError(
+                 "permission-denied",
+                 "Somente o administrador proprietário pode gerenciar a assinatura."
+               );
+             }
+
+             if (
+               !ownerId ||
+               ownerId !== userId
+             ) {
+               throw new HttpsError(
+                 "permission-denied",
+                 "Somente o proprietário da loja pode gerenciar a assinatura."
+               );
+             }
+
+             const freshStoredDocument =
+               String(
+                 freshData.document || ""
+               ).replace(/\D/g, "");
+
+             if (
+               !freshStoredDocument ||
+               freshStoredDocument !==
+                 cleanDocument
+             ) {
+               throw new HttpsError(
+                 "failed-precondition",
+                 "O documento cadastrado na loja mudou durante a validação financeira."
+               );
+             }
+
+             const freshPlan =
+               String(
+                 freshData.subscriptionType ||
+                 ""
+               )
+                 .trim()
+                 .toLowerCase();
+
+             if (
+               freshPlan !== "pro" &&
+               freshPlan !== "business"
+             ) {
+               throw new HttpsError(
+                 "failed-precondition",
+                 "Esta loja não possui um plano pago compatível com a regularização financeira."
+               );
+             }
+
+             const freshCustomerId =
+               String(
+                 freshData.asaasCustomerId ||
+                 ""
+               ).trim();
+
+             const freshSubscriptionId =
+               String(
+                 freshData.asaasSubscriptionId ||
+                 ""
+               ).trim();
+
+             if (
+               freshCustomerId !==
+                 financialProof.customerId ||
+               freshSubscriptionId !==
+                 financialProof.subscriptionId
+             ) {
+               throw new HttpsError(
+                 "failed-precondition",
+                 "Os vínculos financeiros da loja mudaram durante a validação."
+               );
+             }
+
+             const registryDecision =
+               classifySubscriptionCpfRegistry({
+                 exists:
+                   cpfRegistryDoc.exists,
+                 data:
+                   cpfRegistryDoc.exists
+                     ? cpfRegistryDoc.data() || {}
+                     : null,
+                 userId,
+                 storeId,
+               });
+
+             const currentLegacyUid =
+               String(
+                 registryDecision.registeredUid ||
+                 ""
+               ).trim();
+
+             if (
+               registryDecision.action !==
+                 "require_financial_proof" ||
+               currentLegacyUid !==
+                 legacyRegisteredUid
+             ) {
+               throw new HttpsError(
+                 "failed-precondition",
+                 "O cadastro financeiro legado mudou durante a validação. Tente novamente."
+               );
+             }
+
+             const creationStatus =
+               freshData
+                 .subscriptionCreationStatus;
+
+             const creationStartedAt =
+               freshData
+                 .subscriptionCreationStartedAt;
+
+             let lockStillValid = false;
+
+             if (
+               creationStatus === "creating" &&
+               creationStartedAt
+             ) {
+               const started =
+                 creationStartedAt.toDate
+                   ? creationStartedAt.toDate()
+                   : new Date(
+                       creationStartedAt
+                     );
+
+               const ageMs =
+                 Date.now() -
+                 started.getTime();
+
+               lockStillValid =
+                 ageMs < 3 * 60 * 1000;
+             }
+
+             if (lockStillValid) {
+               throw new HttpsError(
+                 "already-exists",
+                 "Já existe uma assinatura sendo criada. Aguarde alguns segundos."
+               );
+             }
+
+             const serverTimestamp =
+               admin.firestore.FieldValue
+                 .serverTimestamp();
+
+             transaction.update(
+               storeRef,
+               {
+                 subscriptionCreationStatus:
+                   "creating",
+                 subscriptionCreationStartedAt:
+                   serverTimestamp,
+               }
+             );
+
+             transaction.set(
+               cpfRegistryRef,
+               {
+                 uid:
+                   userId,
+
+                 storeId,
+
+                 document:
+                   cleanDocument,
+
+                 legacyUid:
+                   legacyRegisteredUid,
+
+                 legacyUidMigratedAt:
+                   serverTimestamp,
+
+                 legacyUidMigratedBy:
+                   userId,
+
+                 legacyUidMigrationReason:
+                   "subscription_legacy_financial_proof",
+
+                 storeIdLinkedAt:
+                   serverTimestamp,
+
+                 storeIdLinkedBy:
+                   userId,
+
+                 storeIdLinkReason:
+                   "subscription_legacy_financial_proof",
+               },
+               {
+                 merge: true,
+               }
+             );
+
+             transaction.set(
+               legacyCpfMigrationAuditRef,
+               {
+                 action:
+                   "legacy_cpf_registry_owner_migrated",
+
+                 entityType:
+                   "cpf_registry",
+
+                 entityId:
+                   storeId,
+
+                 storeId,
+
+                 performedBy: {
+                   uid:
+                     userId,
+                   role:
+                     "admin",
+                 },
+
+                 reason:
+                   "subscription_legacy_financial_proof",
+
+                 before: {
+                   uid:
+                     legacyRegisteredUid,
+                   storeId:
+                     null,
+                 },
+
+                 after: {
+                   uid:
+                     userId,
+                   storeId,
+                 },
+
+                 financialProof: {
+                   customerId:
+                     financialProof.customerId,
+
+                   subscriptionId:
+                     financialProof.subscriptionId,
+
+                   customerExternalReference:
+                     storeId,
+
+                   subscriptionExternalReference:
+                     storeId,
+
+                   subscriptionStatus:
+                     String(
+                       legacySubscription.status ||
+                       ""
+                     )
+                       .trim()
+                       .toUpperCase(),
+                 },
+
+                 createdAt:
+                   serverTimestamp,
+               }
+             );
+           }
+         );
+
+         creationLockAcquired = true;
+
+         legacyVerifiedSubscriptionId =
+           financialProof.subscriptionId;
+
+         legacyVerifiedSubscription =
+           legacySubscription;
+
+         console.log(
+           `✅ Reserva financeira legada migrada com prova Asaas para loja ${storeId}.`
+         );
+       }
 
        const name = String(
          storeData.name ||
@@ -774,6 +1297,26 @@ const {
        const activeSubscriptions =
          subscriptionsRes.data?.data || [];
 
+       // No caminho legado, a assinatura oficial ja foi validada
+       // diretamente por ID no Asaas.
+       //
+       // Se a listagem ainda nao a devolver, usamos o objeto
+       // diretamente comprovado. Isso evita criar uma duplicata.
+       if (
+         legacyVerifiedSubscriptionId &&
+         !activeSubscriptions.some(
+           (subscription) =>
+             String(
+               subscription?.id || ""
+             ).trim() ===
+             legacyVerifiedSubscriptionId
+         )
+       ) {
+         activeSubscriptions.push(
+           legacyVerifiedSubscription
+         );
+       }
+
        if (
          activeSubscriptions.length > 0
        ) {
@@ -791,7 +1334,22 @@ const {
          );
 
          const existingSubscription =
-           activeSubscriptions[0];
+           legacyVerifiedSubscriptionId
+             ? activeSubscriptions.find(
+                 (subscription) =>
+                   String(
+                     subscription?.id || ""
+                   ).trim() ===
+                   legacyVerifiedSubscriptionId
+               )
+             : activeSubscriptions[0];
+
+         if (!existingSubscription) {
+           throw new HttpsError(
+             "failed-precondition",
+             "A assinatura financeira oficial desta loja não foi encontrada."
+           );
+         }
 
          if (
            activeSubscriptions.length > 1
@@ -817,7 +1375,9 @@ const {
              customerId,
 
            subscriptionType:
-             "pro",
+             resolveExistingPaidSubscriptionType(
+               storeData.subscriptionType
+             ),
 
            // Não forçamos "active" aqui porque
            // ACTIVE no objeto assinatura não significa
