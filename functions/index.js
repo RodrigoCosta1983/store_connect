@@ -1367,6 +1367,91 @@ const {
            );
          }
 
+          // ----------------------------------------------------------
+          // NORMALIZA FORMA DE PAGAMENTO DA ASSINATURA EXISTENTE
+          //
+          // O Store Connect permite ao cliente escolher a forma
+          // de pagamento na fatura.
+          //
+          // Novas assinaturas ja sao criadas como UNDEFINED.
+          // Assinaturas antigas podem permanecer como CREDIT_CARD,
+          // BOLETO ou PIX.
+          //
+          // Alteramos somente a assinatura.
+          // Isso faz as proximas cobrancas seguirem UNDEFINED.
+          //
+          // Nao alteramos cobrancas ja emitidas.
+          // Nao alteramos vencimento.
+          // Nao usamos updatePendingPayments.
+          // ----------------------------------------------------------
+
+          const existingBillingType =
+            String(
+              existingSubscription.billingType || ""
+            )
+              .trim()
+              .toUpperCase();
+
+          if (
+            existingBillingType &&
+            existingBillingType !== "UNDEFINED"
+          ) {
+            try {
+              const billingTypeUpdate =
+                await axios.put(
+                  `${ASAAS_URL}/subscriptions/${existingSubscription.id}`,
+                  {
+                    billingType:
+                      "UNDEFINED",
+                  },
+                  {
+                    headers,
+                  }
+                );
+
+              const confirmedBillingType =
+                String(
+                  billingTypeUpdate.data?.billingType || ""
+                )
+                  .trim()
+                  .toUpperCase();
+
+              if (
+                confirmedBillingType === "UNDEFINED"
+              ) {
+                existingSubscription.billingType =
+                  "UNDEFINED";
+
+                console.log(
+                  `✅ Assinatura ${existingSubscription.id} normalizada para billingType UNDEFINED.`
+                );
+              } else {
+                console.warn(
+                  `⚠️ Asaas não confirmou billingType UNDEFINED para assinatura ${existingSubscription.id}.`
+                );
+              }
+            } catch (billingTypeError) {
+              const billingTypeStatus =
+                billingTypeError.response?.status ||
+                billingTypeError.code ||
+                "sem_status";
+
+              console.warn(
+                `⚠️ Não foi possível normalizar billingType da assinatura ${existingSubscription.id}. Status: ${billingTypeStatus}.`
+              );
+            }
+          } else if (
+            existingBillingType === "UNDEFINED"
+          ) {
+            console.log(
+              `✅ Assinatura ${existingSubscription.id} já usa billingType UNDEFINED.`
+            );
+          } else {
+            console.warn(
+              `⚠️ Assinatura ${existingSubscription.id} não informou billingType. Nenhuma alteração automática foi feita.`
+            );
+          }
+
          await storeRef.update({
            asaasSubscriptionId:
              existingSubscription.id,

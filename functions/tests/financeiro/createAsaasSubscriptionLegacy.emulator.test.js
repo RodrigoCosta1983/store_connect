@@ -1201,6 +1201,153 @@ async function testConcurrentCreationLockBlocksMigration() {
   );
 }
 
+async function testExistingCreditCardSubscriptionIsNormalizedToUndefined() {
+  const fixture =
+    await createFixture({
+      label:
+        "billing-type-credit-card",
+
+      registryMode:
+        "different-owner",
+
+      plan:
+        "business",
+    });
+
+  // Reproduz assinatura financeira antiga:
+  // a assinatura e a cobranca ja existem no Asaas
+  // usando CREDIT_CARD.
+  fixture.subscription.billingType =
+    "CREDIT_CARD";
+
+  fixture.scenario.subscription = {
+    ...fixture.scenario.subscription,
+    billingType:
+      "CREDIT_CARD",
+  };
+
+  fixture.scenario.activeSubscriptions =
+    fixture.scenario.activeSubscriptions.map(
+      (subscription) =>
+        subscription.id ===
+        fixture.subscription.id
+          ? {
+              ...subscription,
+              billingType:
+                "CREDIT_CARD",
+            }
+          : subscription,
+    );
+
+  fixture.scenario.payments =
+    fixture.scenario.payments.map(
+      (payment) => ({
+        ...payment,
+        billingType:
+          "CREDIT_CARD",
+      }),
+    );
+
+  const originalPayment =
+    clone(
+      fixture.scenario.payments[0],
+    );
+
+  setScenario(
+    fixture.scenario,
+  );
+
+  const result =
+    await callSubscription(
+      fixture,
+    );
+
+  assert.strictEqual(
+    result.success,
+    true,
+  );
+
+  assert.strictEqual(
+    result.alreadyExists,
+    true,
+  );
+
+  assert.strictEqual(
+    result.subscriptionId,
+    fixture.subscription.id,
+  );
+
+  // A cobranca existente precisa continuar sendo
+  // devolvida normalmente ao aplicativo.
+  assert.strictEqual(
+    result.paymentUrl,
+    originalPayment.invoiceUrl,
+  );
+
+  // ----------------------------------------------------------
+  // PUT DA ASSINATURA
+  // ----------------------------------------------------------
+
+  const subscriptionPuts =
+    axiosCalls.filter(
+      (call) =>
+        call.method === "PUT" &&
+        call.path.endsWith(
+          `/subscriptions/${fixture.subscription.id}`,
+        ),
+    );
+
+  assert.strictEqual(
+    subscriptionPuts.length,
+    1,
+    "Assinatura CREDIT_CARD deve receber exatamente um PUT de normalizacao.",
+  );
+
+  assert.deepStrictEqual(
+    subscriptionPuts[0].body,
+    {
+      billingType:
+        "UNDEFINED",
+    },
+    "PUT deve alterar somente billingType da assinatura.",
+  );
+
+  assert.strictEqual(
+    hasOwn(
+      subscriptionPuts[0].body,
+      "updatePendingPayments",
+    ),
+    false,
+    "Normalizacao nao pode alterar cobrancas ja emitidas.",
+  );
+
+  // ----------------------------------------------------------
+  // COBRANCA EXISTENTE NAO PODE SER ALTERADA
+  // ----------------------------------------------------------
+
+  const paymentPuts =
+    axiosCalls.filter(
+      (call) =>
+        call.method === "PUT" &&
+        call.path.includes(
+          "/payments/",
+        ),
+    );
+
+  assert.strictEqual(
+    paymentPuts.length,
+    0,
+    "Cobranca ja emitida nao pode receber PUT durante esta normalizacao.",
+  );
+
+  // Nenhuma nova assinatura/customer pode ser criada.
+  assertNoAsaasPost();
+
+  console.log(
+    "✅ billingType legado: CREDIT_CARD -> UNDEFINED sem alterar cobranca emitida",
+  );
+}
+
 async function testMultipleActiveSubscriptionsKeepVerifiedId() {
   const fixture =
     await createFixture({
@@ -1341,6 +1488,7 @@ async function run() {
 
     await testRegistryChangedDuringFinancialProof();
     await testConcurrentCreationLockBlocksMigration();
+    await testExistingCreditCardSubscriptionIsNormalizedToUndefined();
     await testMultipleActiveSubscriptionsKeepVerifiedId();
 
     console.log("");
