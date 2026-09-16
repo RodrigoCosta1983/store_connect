@@ -2324,6 +2324,18 @@ const {
 exports.restoreProduct =
   restoreProduct;
 
+// ============================================================================
+// STORE CONNECT - TAXONOMIA SEGURA DE PRODUTOS
+// ============================================================================
+
+const {
+  setProductCategories,
+} = require("./products/setProductCategories");
+
+exports.setProductCategories =
+  setProductCategories;
+
+
 
 // -----------------------------------------------------------------------
 // 💾 BACKUP / SNAPSHOT GERAL DA LOJA
