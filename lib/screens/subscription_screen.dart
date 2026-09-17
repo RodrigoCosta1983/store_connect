@@ -192,11 +192,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         document = inputDoc;
         setState(() => _isLoading = true); // Retoma o loading
 
-        // Salva o documento no banco da loja para nunca mais precisar pedir
-        await FirebaseFirestore.instance
-            .collection('stores')
-            .doc(widget.storeId)
-            .update({'document': document});
+
       }
 
       // 2. Chama a Cloud Function do Asaas enviando os dados garantidos
