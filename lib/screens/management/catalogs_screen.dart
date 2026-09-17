@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'catalog_requests_screen.dart';
+
 class CatalogsScreen extends StatefulWidget {
   const CatalogsScreen({super.key});
 
@@ -534,6 +536,19 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
       appBar: AppBar(
         title: const Text('Catálogo Inteligente'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'Solicitações recebidas',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const CatalogRequestsScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.inbox_outlined),
+          ),
+        ],
       ),
       body: _buildBody(),
     );
