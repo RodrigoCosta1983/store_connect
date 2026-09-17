@@ -17,6 +17,9 @@
 //
 // ============================================================================
 
+import 'dart:async';
+
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import 'package:store_connect/models/product_import_item.dart';
@@ -99,7 +102,7 @@ class _ProductImportConfirmationScreenState
 
       setState(() {
         _error =
-            e.toString();
+            _importErrorMessage(e);
 
         _isLoading = false;
       });
@@ -109,6 +112,76 @@ class _ProductImportConfirmationScreenState
   // ==========================================================================
   // IMPORTAR
   // ==========================================================================
+
+  String _importErrorMessage(Object error) {
+    const fallback =
+        'Não foi possível concluir a importação. Tente novamente.';
+
+    if (error is TimeoutException) {
+      return 'A importação excedeu o tempo limite de comunicação. Tente novamente.';
+    }
+
+    if (error is! FirebaseFunctionsException) {
+      return fallback;
+    }
+
+    final details = error.details;
+    final rawReason = details is Map ? details['reason'] : null;
+    final reason = rawReason is String && rawReason.trim().isNotEmpty
+        ? rawReason.trim()
+        : null;
+
+    switch (error.code) {
+      case 'unauthenticated':
+        return 'Sua sessão expirou. Entre novamente e tente outra vez.';
+      case 'permission-denied':
+        return 'Você não possui permissão para importar produtos.';
+      case 'not-found':
+        return 'A loja vinculada à sua conta não foi encontrada.';
+      case 'invalid-argument':
+        return 'Um dos produtos possui dados inválidos. Revise a planilha e tente novamente.';
+      case 'already-exists':
+        if (reason == 'request-id-reused') {
+          return 'A tentativa anterior entrou em conflito com esta importação. Atualize a análise antes de tentar novamente.';
+        }
+        break;
+      case 'failed-precondition':
+        if (reason == 'fiscal-business-required') {
+          return 'Os dados fiscais informados exigem um plano Business ativo.';
+        }
+        if (reason == 'category-unavailable') {
+          return 'Uma categoria usada na importação não está mais disponível. Atualize a análise e tente novamente.';
+        }
+        if (reason == 'invalid-category-data') {
+          return 'Uma categoria usada na importação possui dados inválidos. Revise as categorias e tente novamente.';
+        }
+        break;
+      case 'aborted':
+        if (reason == 'generated-product-id-collision') {
+          return 'Não foi possível reservar um identificador para o produto. Tente novamente.';
+        }
+        break;
+      case 'deadline-exceeded':
+      case 'unavailable':
+        return 'Não foi possível concluir a comunicação com o servidor. Tente novamente.';
+    }
+
+    // Mensagens desconhecidas do backend podem conter detalhes técnicos.
+    return fallback;
+  }
+
+  void _showImportError(Object error) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_importErrorMessage(error)),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
 
   Future<void> _importProducts() async {
     final analysis =
@@ -242,21 +315,44 @@ class _ProductImportConfirmationScreenState
             route.settings.name ==
                 '/manage-products',
       );
-    } catch (e) {
+    } on ProductImportException catch (error) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        SnackBar(
-          content: Text(
-            'Erro na importação: $e',
+      if (error.importedProducts > 0 || error.createdCategories > 0) {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Importação interrompida'),
+            content: SingleChildScrollView(
+              child: Text(
+                '${error.importedProducts} produto(s) importado(s) nesta tentativa.\n'
+                '${error.createdCategories} categoria(s) criada(s) nesta tentativa.\n'
+                '${error.skippedDuplicates} duplicado(s) ignorado(s) nesta tentativa.\n\n'
+                '${_importErrorMessage(error.cause)}\n\n'
+                'Você pode tentar novamente. A análise será refeita antes da importação '
+                'e os itens já cadastrados serão reavaliados.',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Entendi'),
+              ),
+            ],
           ),
-          backgroundColor:
-          Colors.red,
-        ),
-      );
+        );
+      } else {
+        _showImportError(error.cause);
+      }
+    } on FirebaseFunctionsException catch (error) {
+      _showImportError(error);
+    } on TimeoutException catch (error) {
+      _showImportError(error);
+    } catch (error) {
+      _showImportError(error);
     } finally {
       if (mounted) {
         setState(() {
