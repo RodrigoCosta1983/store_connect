@@ -1,30 +1,32 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
-import 'catalog_request_detail_screen.dart';
+class CatalogRequestDetailScreen extends StatefulWidget {
+  const CatalogRequestDetailScreen({
+    super.key,
+    required this.requestId,
+  });
 
-class CatalogRequestsScreen extends StatefulWidget {
-  const CatalogRequestsScreen({super.key});
+  final String requestId;
 
   @override
-  State<CatalogRequestsScreen> createState() =>
-      _CatalogRequestsScreenState();
+  State<CatalogRequestDetailScreen> createState() =>
+      _CatalogRequestDetailScreenState();
 }
 
-class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
+class _CatalogRequestDetailScreenState
+    extends State<CatalogRequestDetailScreen> {
   bool _isLoading = true;
   String? _errorMessage;
-
-  List<Map<String, dynamic>> _requests =
-      <Map<String, dynamic>>[];
+  Map<String, dynamic>? _request;
 
   @override
   void initState() {
     super.initState();
-    _loadRequests();
+    _loadRequest();
   }
 
-  Future<void> _loadRequests() async {
+  Future<void> _loadRequest() async {
     if (mounted) {
       setState(() {
         _isLoading = true;
@@ -35,50 +37,80 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
     try {
       final callable =
           FirebaseFunctions.instance.httpsCallable(
-        'listCatalogRequests',
+        'getCatalogRequest',
         options: HttpsCallableOptions(
           timeout: const Duration(seconds: 30),
         ),
       );
 
-      final response = await callable.call();
+      final response = await callable.call({
+        'requestId': widget.requestId,
+      });
 
       final rawData = response.data;
 
       if (rawData is! Map) {
         throw const FormatException(
-          'Resposta inválida ao carregar solicitações.',
+          'Resposta inválida ao carregar a solicitação.',
         );
       }
 
       if (rawData['success'] != true) {
         throw const FormatException(
-          'O backend não confirmou a listagem das solicitações.',
+          'O backend não confirmou a solicitação.',
         );
       }
 
-      final rawRequests = rawData['requests'];
+      final rawRequest = rawData['request'];
 
-      if (rawRequests is! List) {
+      if (rawRequest is! Map) {
         throw const FormatException(
-          'Lista de solicitações não encontrada na resposta.',
+          'Dados da solicitação não encontrados.',
         );
       }
 
-      final requests = rawRequests
+      final request =
+          Map<String, dynamic>.from(rawRequest);
+
+      final returnedRequestId =
+          request['requestId']?.toString().trim() ?? '';
+
+      if (returnedRequestId != widget.requestId) {
+        throw const FormatException(
+          'Identificador da solicitação inválido.',
+        );
+      }
+
+      final rawItems = request['items'];
+
+      if (rawItems is! List) {
+        throw const FormatException(
+          'Itens da solicitação não encontrados.',
+        );
+      }
+
+      final items = rawItems
           .whereType<Map>()
           .map(
-            (request) =>
-                Map<String, dynamic>.from(request),
+            (item) =>
+                Map<String, dynamic>.from(item),
           )
           .toList();
+
+      if (items.length != rawItems.length) {
+        throw const FormatException(
+          'Um ou mais itens da solicitação são inválidos.',
+        );
+      }
+
+      request['items'] = items;
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _requests = requests;
+        _request = request;
       });
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) {
@@ -91,8 +123,8 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
       });
     } catch (error) {
       debugPrint(
-        '[CatalogRequestsScreen] '
-        'Erro ao carregar solicitacoes: $error',
+        '[CatalogRequestDetailScreen] '
+        'Erro ao carregar detalhe: $error',
       );
 
       if (!mounted) {
@@ -101,7 +133,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
 
       setState(() {
         _errorMessage =
-            'Não foi possível carregar as solicitações.';
+            'Não foi possível carregar a solicitação.';
       });
     } finally {
       if (mounted) {
@@ -122,15 +154,17 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
 
       case 'permission-denied':
         return 'Você não possui permissão para '
-            'visualizar as solicitações desta loja.';
+            'visualizar esta solicitação.';
 
       case 'failed-precondition':
         return 'Não foi possível identificar '
             'a loja vinculada à sua conta.';
 
+      case 'invalid-argument':
+        return 'A solicitação informada é inválida.';
+
       case 'not-found':
-        return 'A loja vinculada à sua conta '
-            'não foi encontrada.';
+        return 'Esta solicitação não foi encontrada.';
 
       case 'deadline-exceeded':
       case 'unavailable':
@@ -138,7 +172,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
             'com o servidor. Tente novamente.';
 
       default:
-        return 'Não foi possível carregar as solicitações.';
+        return 'Não foi possível carregar a solicitação.';
     }
   }
 
@@ -149,7 +183,8 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
       return 'Data não disponível';
     }
 
-    final parsed = DateTime.tryParse(raw)?.toLocal();
+    final parsed =
+        DateTime.tryParse(raw)?.toLocal();
 
     if (parsed == null) {
       return 'Data não disponível';
@@ -175,10 +210,10 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
   }
 
   int _readInt(
-    Map<String, dynamic> request,
+    Map<String, dynamic> data,
     String field,
   ) {
-    final value = request[field];
+    final value = data[field];
 
     if (value is int) {
       return value;
@@ -191,35 +226,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
     return 0;
   }
 
-  Future<void> _openRequestDetail(
-    Map<String, dynamic> request,
-  ) async {
-    final requestId =
-        request['requestId']?.toString().trim() ?? '';
-
-    if (requestId.isEmpty) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Não foi possível abrir esta solicitação.',
-            ),
-          ),
-        );
-      return;
-    }
-
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => CatalogRequestDetailScreen(
-          requestId: requestId,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRequestCard(
+  Widget _buildSummaryCard(
     Map<String, dynamic> request,
   ) {
     final itemCount =
@@ -228,15 +235,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
     final totalUnits =
         _readInt(request, 'totalUnits');
 
-    final totalAmount =
-        request['totalAmount'];
-
-    final createdAt =
-        _formatDateTime(request['createdAt']);
-
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
@@ -258,7 +257,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
                         BorderRadius.circular(12),
                   ),
                   child: Icon(
-                    Icons.shopping_bag_outlined,
+                    Icons.receipt_long_outlined,
                     color: Theme.of(context)
                         .colorScheme
                         .onPrimaryContainer,
@@ -273,14 +272,16 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
                       const Text(
                         'Solicitação recebida',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 17,
                           fontWeight:
                               FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        createdAt,
+                        _formatDateTime(
+                          request['createdAt'],
+                        ),
                         style: TextStyle(
                           color:
                               Colors.grey.shade600,
@@ -296,14 +297,14 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
               spacing: 12,
               runSpacing: 8,
               children: [
-                _InfoChip(
+                _DetailInfoChip(
                   icon:
                       Icons.inventory_2_outlined,
                   label: itemCount == 1
                       ? '1 produto'
                       : '$itemCount produtos',
                 ),
-                _InfoChip(
+                _DetailInfoChip(
                   icon:
                       Icons.format_list_numbered,
                   label: totalUnits == 1
@@ -326,23 +327,15 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  _formatCurrency(totalAmount),
+                  _formatCurrency(
+                    request['totalAmount'],
+                  ),
                   style: const TextStyle(
-                    fontSize: 19,
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 14),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () =>
-                    _openRequestDetail(request),
-                icon: const Icon(Icons.arrow_forward),
-                label: const Text('Ver detalhes'),
-              ),
             ),
           ],
         ),
@@ -350,41 +343,64 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return RefreshIndicator(
-      onRefresh: _loadRequests,
-      child: ListView(
-        physics:
-            const AlwaysScrollableScrollPhysics(),
-        padding:
-            const EdgeInsets.fromLTRB(32, 120, 32, 32),
-        children: [
-          Icon(
-            Icons.inbox_outlined,
-            size: 72,
-            color: Colors.grey.shade400,
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Nenhuma solicitação recebida',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+  Widget _buildItemCard(
+    Map<String, dynamic> item,
+  ) {
+    final rawName =
+        item['name']?.toString().trim() ?? '';
+
+    final name = rawName.isEmpty
+        ? 'Produto'
+        : rawName;
+
+    final quantity =
+        _readInt(item, 'quantity');
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight:
+                          FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  _formatCurrency(
+                    item['subtotal'],
+                  ),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Quando um cliente selecionar produtos '
-            'no catálogo e enviar a solicitação, '
-            'ela aparecerá aqui.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              height: 1.4,
+            const SizedBox(height: 8),
+            Text(
+              '$quantity × '
+              '${_formatCurrency(item['price'])}',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -406,17 +422,64 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
             Text(
               _errorMessage ??
                   'Não foi possível carregar '
-                      'as solicitações.',
+                      'a solicitação.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 18),
             ElevatedButton.icon(
-              onPressed: _loadRequests,
+              onPressed: _loadRequest,
               icon: const Icon(Icons.refresh),
               label:
                   const Text('Tentar novamente'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRequestBody(
+    Map<String, dynamic> request,
+  ) {
+    final items =
+        List<Map<String, dynamic>>.from(
+      request['items'] as List,
+    );
+
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints:
+            const BoxConstraints(maxWidth: 900),
+        child: RefreshIndicator(
+          onRefresh: _loadRequest,
+          child: ListView(
+            physics:
+                const AlwaysScrollableScrollPhysics(),
+            padding:
+                const EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              32,
+            ),
+            children: [
+              _buildSummaryCard(request),
+              const SizedBox(height: 24),
+              const Text(
+                'Produtos selecionados',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              for (final item in items) ...[
+                _buildItemCard(item),
+                const SizedBox(height: 10),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -433,37 +496,17 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
       return _buildErrorState();
     }
 
-    if (_requests.isEmpty) {
-      return _buildEmptyState();
+    final request = _request;
+
+    if (request == null) {
+      return const Center(
+        child: Text(
+          'Solicitação não disponível.',
+        ),
+      );
     }
 
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints:
-            const BoxConstraints(maxWidth: 900),
-        child: RefreshIndicator(
-          onRefresh: _loadRequests,
-          child: ListView.builder(
-            physics:
-                const AlwaysScrollableScrollPhysics(),
-            padding:
-                const EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              32,
-            ),
-            itemCount: _requests.length,
-            itemBuilder: (context, index) {
-              return _buildRequestCard(
-                _requests[index],
-              );
-            },
-          ),
-        ),
-      ),
-    );
+    return _buildRequestBody(request);
   }
 
   @override
@@ -471,13 +514,13 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
     return Scaffold(
       appBar: AppBar(
         title:
-            const Text('Solicitações recebidas'),
+            const Text('Detalhes da solicitação'),
         centerTitle: true,
         actions: [
           IconButton(
             tooltip: 'Atualizar',
             onPressed:
-                _isLoading ? null : _loadRequests,
+                _isLoading ? null : _loadRequest,
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -487,8 +530,8 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({
+class _DetailInfoChip extends StatelessWidget {
+  const _DetailInfoChip({
     required this.icon,
     required this.label,
   });
@@ -508,7 +551,8 @@ class _InfoChip extends StatelessWidget {
         color: Theme.of(context)
             .colorScheme
             .surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius:
+            BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
