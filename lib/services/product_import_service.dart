@@ -63,6 +63,7 @@
 // ============================================================================
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:store_connect/models/product_import_item.dart';
 
@@ -113,12 +114,19 @@ class ProductImportResult {
 
 class ProductImportService {
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
+  final Map<ProductImportItem, String> _createProductRequestIds =
+      <ProductImportItem, String>{};
 
   ProductImportService({
     FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
   }) : _firestore =
       firestore ??
-          FirebaseFirestore.instance;
+          FirebaseFirestore.instance,
+       _functions =
+      functions ??
+          FirebaseFunctions.instance;
 
   // ==========================================================================
   // NORMALIZAR
@@ -372,13 +380,6 @@ class ProductImportService {
     required bool isBusiness,
     required List<ProductImportItem> products,
   }) async {
-    // ========================================================================
-    // ANALISA NOVAMENTE
-    //
-    // Mesmo que a tela já tenha analisado antes, repetimos aqui para evitar
-    // que algum produto tenha sido criado entre a confirmação e a importação.
-    // ========================================================================
-
     final analysis =
     await analyze(
       storeId: storeId,
@@ -390,29 +391,19 @@ class ProductImportService {
         .collection('stores')
         .doc(storeId);
 
-    final productsRef =
-    storeRef.collection(
-      'products',
-    );
-
     final categoriesRef =
     storeRef.collection(
       'categories',
     );
 
     // ========================================================================
-    // MAPA FINAL DE CATEGORIAS
-    //
-    // chave = nome normalizado
-    // valor = DocumentReference
+    // RESOLUCAO DE CATEGORIAS
     // ========================================================================
 
     final categoryRefs =
     <String,
         DocumentReference<
             Map<String, dynamic>>>{};
-
-    // Categorias existentes.
 
     for (final entry
     in analysis
@@ -423,10 +414,6 @@ class ProductImportService {
             entry.value,
           );
     }
-
-    // ========================================================================
-    // PREPARAR CATEGORIAS NOVAS
-    // ========================================================================
 
     final newCategoryRefs =
     <String,
@@ -451,20 +438,15 @@ class ProductImportService {
     }
 
     // ========================================================================
-    // CRIAR OPERAÇÕES
+    // CATEGORIAS NOVAS
     //
-    // Firestore possui limite de operações por batch.
-    // Usamos blocos menores por segurança.
+    // Continuam como write direto neste incremento.
     // ========================================================================
 
-    final operations =
+    final categoryOperations =
     <void Function(
         WriteBatch batch,
         )>[];
-
-    // ------------------------------------------------------------------------
-    // CATEGORIAS
-    // ------------------------------------------------------------------------
 
     for (final entry
     in newCategoryRefs.entries) {
@@ -476,7 +458,7 @@ class ProductImportService {
             entry.key,
       );
 
-      operations.add(
+      categoryOperations.add(
             (batch) {
           batch.set(
             entry.value,
@@ -496,150 +478,21 @@ class ProductImportService {
       );
     }
 
-    // ------------------------------------------------------------------------
-    // PRODUTOS
-    // ------------------------------------------------------------------------
-
-    for (final product
-    in analysis.newProducts) {
-      operations.add(
-            (batch) {
-          final productRef =
-          productsRef.doc();
-
-          final categoryName =
-          product.category
-              .trim();
-
-          String categoryId = '';
-
-          if (categoryName
-              .isNotEmpty) {
-            final categoryRef =
-            categoryRefs[
-            _normalize(
-              categoryName,
-            )];
-
-            categoryId =
-                categoryRef?.id ??
-                    '';
-          }
-
-          final productData =
-          <String, dynamic>{
-            // ================================================================
-            // CAMPOS PADRÃO DO STORE CONNECT
-            // ================================================================
-
-            'name':
-            product.name.trim(),
-
-            'name_lowercase':
-            product.name
-                .trim()
-                .toLowerCase(),
-
-            'price':
-            product.price,
-
-            // Importação inicial não cria lotes.
-            'lotes':
-            <Map<String, dynamic>>[],
-
-            'quantidade':
-            product.integerQuantity,
-
-            // Sem informação na planilha = padrão 0.
-            'minimumStock':
-            0,
-
-            // Sem imagem durante importação.
-            'imageUrl':
-            '',
-
-            'categoryId':
-            categoryId,
-
-            'categoryName':
-            categoryName,
-
-            'createdAt':
-            FieldValue
-                .serverTimestamp(),
-          };
-
-          // ================================================================
-          // CAMPOS ADICIONAIS DA IMPORTAÇÃO
-          //
-          // Não interferem no cadastro antigo.
-          // ================================================================
-
-          if (product.barcode
-              .trim()
-              .isNotEmpty) {
-            productData['barcode'] =
-                product.barcode
-                    .trim();
-          }
-
-          if (product.costPrice !=
-              null) {
-            productData[
-            'costPrice'] =
-                product.costPrice;
-          }
-
-          // ================================================================
-          // FISCAL - BUSINESS
-          //
-          // Só criamos o mapa fiscal se houver NCM.
-          //
-          // Não inventamos CFOP, origem ou unidade.
-          // Esses dados poderão ser completados depois pelo lojista.
-          // ================================================================
-
-          if (isBusiness &&
-              product.ncm
-                  .trim()
-                  .isNotEmpty) {
-            productData['fiscal'] = {
-              'ncm':
-              product.ncm.trim(),
-
-              'updatedAt':
-              FieldValue
-                  .serverTimestamp(),
-            };
-          }
-
-          batch.set(
-            productRef,
-            productData,
-          );
-        },
-      );
-    }
-
-    // ========================================================================
-    // EXECUTAR EM LOTES
-    // ========================================================================
-
     const operationsPerBatch =
     400;
 
     for (
     int start = 0;
-    start < operations.length;
+    start < categoryOperations.length;
     start += operationsPerBatch
     ) {
       final end =
       (start +
           operationsPerBatch <
-          operations.length)
+          categoryOperations.length)
           ? start +
           operationsPerBatch
-          : operations.length;
+          : categoryOperations.length;
 
       final batch =
       _firestore.batch();
@@ -649,7 +502,7 @@ class ProductImportService {
       i < end;
       i++
       ) {
-        operations[i](
+        categoryOperations[i](
           batch,
         );
       }
@@ -657,9 +510,163 @@ class ProductImportService {
       await batch.commit();
     }
 
+    // ========================================================================
+    // PRODUTOS
+    //
+    // Nenhum produto e gravado diretamente no Firestore.
+    // ========================================================================
+
+    final callable =
+    _functions.httpsCallable(
+      'createProduct',
+      options:
+      HttpsCallableOptions(
+        timeout:
+        const Duration(
+          seconds: 30,
+        ),
+      ),
+    );
+
+    int importedProducts = 0;
+
+    for (final product
+    in analysis.newProducts) {
+      final categoryName =
+      product.category.trim();
+
+      final categoryIds =
+      <String>[];
+
+      if (categoryName.isNotEmpty) {
+        final categoryRef =
+        categoryRefs[
+        _normalize(
+          categoryName,
+        )];
+
+        if (
+        categoryRef == null ||
+            categoryRef.id.trim().isEmpty
+        ) {
+          throw StateError(
+            'Nao foi possivel resolver a categoria do produto "${product.name.trim()}".',
+          );
+        }
+
+        categoryIds.add(
+          categoryRef.id,
+        );
+      }
+
+      final createProductData =
+      <String, dynamic>{
+        'name':
+        product.name.trim(),
+
+        'price':
+        product.price,
+
+        'quantidade':
+        product.integerQuantity,
+
+        'lotes':
+        <Map<String, dynamic>>[],
+
+        'minimumStock':
+        0,
+
+        'imageUrl':
+        '',
+      };
+
+      final barcode =
+      product.barcode.trim();
+
+      if (barcode.isNotEmpty) {
+        createProductData[
+        'barcode'] = barcode;
+      }
+
+      if (product.costPrice != null) {
+        createProductData[
+        'costPrice'] =
+            product.costPrice;
+      }
+
+      final ncm =
+      product.ncm.trim();
+
+      if (
+      isBusiness &&
+          ncm.isNotEmpty
+      ) {
+        createProductData[
+        'fiscal'] =
+        <String, dynamic>{
+          'ncm': ncm,
+        };
+      }
+
+      // Mantemos o mesmo requestId para este item enquanto o service estiver
+      // ativo. Assim, um retry apos resposta ambigua continua idempotente.
+      final requestId =
+      _createProductRequestIds.putIfAbsent(
+        product,
+        () => _firestore
+            .collection('_clientRequestIds')
+            .doc()
+            .id,
+      );
+
+      final response =
+      await callable.call(
+        <String, dynamic>{
+          'requestId':
+          requestId,
+
+          'product':
+          createProductData,
+
+          'categoryIds':
+          categoryIds,
+        },
+      );
+
+      final responseRaw =
+          response.data;
+
+      if (responseRaw is! Map) {
+        throw StateError(
+          'Resposta invalida ao criar produto importado.',
+        );
+      }
+
+      final responseData =
+      Map<String, dynamic>.from(
+        responseRaw,
+      );
+
+      final productId =
+      responseData[
+      'productId'];
+
+      if (
+      responseData['success'] != true ||
+          productId is! String ||
+          productId.trim().isEmpty
+      ) {
+        throw StateError(
+          'Resposta incompleta ao criar produto importado.',
+        );
+      }
+
+      importedProducts++;
+    }
+
     return ProductImportResult(
       importedProducts:
-      analysis.newProducts.length,
+      importedProducts,
 
       skippedDuplicates:
       analysis
