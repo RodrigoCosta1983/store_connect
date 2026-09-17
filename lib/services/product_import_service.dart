@@ -108,6 +108,26 @@ class ProductImportResult {
   });
 }
 
+class ProductImportException implements Exception {
+  final int importedProducts;
+  final int createdCategories;
+  final int skippedDuplicates;
+  final Object cause;
+
+  const ProductImportException({
+    required this.importedProducts,
+    required this.createdCategories,
+    required this.skippedDuplicates,
+    required this.cause,
+  });
+
+  @override
+  String toString() => 'Importação interrompida: '
+      '$importedProducts produto(s) importado(s), '
+      '$createdCategories categoria(s) criada(s), '
+      '$skippedDuplicates duplicado(s) ignorado(s).';
+}
+
 // ============================================================================
 // SERVIÇO
 // ============================================================================
@@ -481,6 +501,10 @@ class ProductImportService {
     const operationsPerBatch =
     400;
 
+    var createdCategories = 0;
+    var importedProducts = 0;
+
+    try {
     for (
     int start = 0;
     start < categoryOperations.length;
@@ -508,6 +532,7 @@ class ProductImportService {
       }
 
       await batch.commit();
+      createdCategories += end - start;
     }
 
     // ========================================================================
@@ -527,8 +552,6 @@ class ProductImportService {
         ),
       ),
     );
-
-    int importedProducts = 0;
 
     for (final product
     in analysis.newProducts) {
@@ -663,6 +686,19 @@ class ProductImportService {
 
       importedProducts++;
     }
+    } on ProductImportException {
+      rethrow;
+    } catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        ProductImportException(
+          importedProducts: importedProducts,
+          createdCategories: createdCategories,
+          skippedDuplicates: analysis.duplicateProducts.length,
+          cause: error,
+        ),
+        stackTrace,
+      );
+    }
 
     return ProductImportResult(
       importedProducts:
@@ -674,9 +710,7 @@ class ProductImportService {
           .length,
 
       createdCategories:
-      analysis
-          .newCategories
-          .length,
+      createdCategories,
     );
   }
 }
