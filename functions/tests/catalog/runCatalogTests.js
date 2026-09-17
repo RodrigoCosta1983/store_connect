@@ -3,11 +3,18 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const {spawnSync} = require("node:child_process");
+const crypto = require("node:crypto");
 
 const tests = fs
     .readdirSync(__dirname)
     .filter((fileName) => fileName.endsWith(".test.js"))
     .sort();
+
+const testEnv = {
+  ...process.env,
+  CATALOG_TOKEN_ENCRYPTION_KEY:
+    crypto.randomBytes(32).toString("base64"),
+};
 
 console.log("");
 console.log("============================================================");
@@ -30,7 +37,7 @@ for (const testFile of tests) {
       [testPath],
       {
         stdio: "inherit",
-        env: process.env,
+        env: testEnv,
       },
   );
 
