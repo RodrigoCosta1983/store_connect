@@ -693,27 +693,11 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
       );
     }).toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(flex: 2, child: filters[0]),
-            const SizedBox(width: 8),
-            Expanded(flex: 2, child: filters[1]),
-            const SizedBox(width: 8),
-            Expanded(flex: 4, child: filters[2]),
-          ],
-        ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(child: filters[3]),
-            const SizedBox(width: 8),
-            Flexible(child: filters[4]),
-          ],
-        ),
-      ],
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: filters,
     );
   }
 
