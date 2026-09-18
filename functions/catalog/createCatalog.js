@@ -33,6 +33,7 @@ const {
 const crypto = require("crypto");
 const {
   CatalogRequestContractError,
+  validateCatalogRequestPublicPayload,
   normalizeCatalogRequestRole,
   resolveCatalogRequestActorName,
   decideCatalogRequestTransition,
@@ -1703,6 +1704,20 @@ const submitPublicCatalogSelection = onCall(
       // 1. ENTRADA PÚBLICA
       // ======================================================================
 
+      let publicPayload;
+      try {
+        publicPayload = validateCatalogRequestPublicPayload(request.data);
+      } catch (error) {
+        if (error instanceof CatalogRequestContractError) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Seleção de catálogo inválida.",
+              {reason: error.reason},
+          );
+        }
+        throw error;
+      }
+
       const publicSlug = normalizeString(
           request.data?.publicSlug,
       ).toLowerCase();
@@ -2137,7 +2152,7 @@ const submitPublicCatalogSelection = onCall(
       const totalAmount = totalCents / 100;
       const batch = db.batch();
 
-      batch.create(requestRef, {
+      const requestDocument = {
         catalogId,
         status: "pending",
         itemCount: validatedItems.length,
@@ -2146,7 +2161,18 @@ const submitPublicCatalogSelection = onCall(
         createdAt: serverTimestamp,
         updatedAt: serverTimestamp,
         source: "public_catalog",
-      });
+      };
+
+      if (publicPayload.version === 2) {
+        Object.assign(requestDocument, {
+          requestVersion: 2,
+          customerName: publicPayload.customerName,
+          customerPhone: publicPayload.customerPhone,
+          note: publicPayload.note,
+        });
+      }
+
+      batch.create(requestRef, requestDocument);
 
       for (const item of validatedItems) {
         batch.create(requestRef.collection("items").doc(), item);

@@ -686,28 +686,115 @@ async function run() {
         quantity: 2, price: 49.9, subtotal: 99.8,
       }],
   );
+
+  // F7.9-E1: V2 persiste identificacao normalizada sem alterar o retorno.
+  const v2Data = {
+    publicSlug,
+    publicToken,
+    requestVersion: 2,
+    customerName: "  Maria Silva  ",
+    customerPhone: "(21) 98505-0120",
+    note: "  Retirar hoje  ",
+    items: [{productId: activeProductId, quantity: 1}],
+  };
+  const v2Result = await submitPublicCatalogSelection.run({data: v2Data});
+  assert.deepStrictEqual(v2Result, {
+    success: true,
+    requestId: v2Result.requestId,
+    validatedItemCount: 1,
+    totalUnits: 1,
+    totalAmount: 49.9,
+  });
+  const v2Ref = requestsRef.doc(v2Result.requestId);
+  const v2Saved = (await v2Ref.get()).data();
+  assert.deepStrictEqual(Object.keys(v2Saved).sort(), [
+    "catalogId", "createdAt", "customerName", "customerPhone",
+    "itemCount", "note", "requestVersion", "source", "status",
+    "totalAmount", "totalUnits", "updatedAt",
+  ].sort());
+  assert.strictEqual(v2Saved.requestVersion, 2);
+  assert.strictEqual(v2Saved.customerName, "Maria Silva");
+  assert.strictEqual(v2Saved.customerPhone, "5521985050120");
+  assert.strictEqual(v2Saved.note, "Retirar hoje");
+  assert.strictEqual(v2Saved.status, "pending");
+  assert.strictEqual(v2Saved.source, "public_catalog");
+
+  // note ausente em V2 deve ser persistida explicitamente como null.
+  const v2WithoutNote = {...v2Data};
+  delete v2WithoutNote.note;
+  v2WithoutNote.customerName = "Cliente sem nota";
+  const v2WithoutNoteResult = await submitPublicCatalogSelection.run({
+    data: v2WithoutNote,
+  });
+  assert.strictEqual(
+      (await requestsRef.doc(v2WithoutNoteResult.requestId).get()).data().note,
+      null,
+  );
+
+  // Campos de cliente sem requestVersion nunca fazem fallback para V1.
+  await expectHttpsError(
+      () => submitPublicCatalogSelection.run({
+        data: {
+          publicSlug, publicToken,
+          customerName: "Maria", customerPhone: "21985050120",
+          items: [{productId: activeProductId, quantity: 1}],
+        },
+      }),
+      "invalid-argument", "customer-fields-require-version",
+  );
+
+  // Versao explicita invalida nao faz fallback para legado.
+  await expectHttpsError(
+      () => submitPublicCatalogSelection.run({
+        data: {...v2Data, requestVersion: 1},
+      }),
+      "invalid-argument", "unsupported-request-version",
+  );
+
+  // null explicito nao equivale a note ausente.
+  await expectHttpsError(
+      () => submitPublicCatalogSelection.run({
+        data: {...v2Data, note: null},
+      }),
+      "invalid-argument", "invalid-note",
+  );
+
   const submit = (items, extra = {}) => submitPublicCatalogSelection.run({
     data: {publicSlug, publicToken, items, ...extra},
   });
 
-  // Dados atuais do servidor prevalecem sobre campos forjados.
+  // Contrato estrito rejeita campos forjados; snapshot vem do servidor.
   await productsRef.doc(activeProductId).update({
     name: "Nome Atual", price: 0.1, quantidade: 10,
   });
   await productsRef.doc(zeroStockProductId).update({
     price: 0.2, quantidade: 10,
   });
-  const forgedItems = [
-    {
-      productId: activeProductId, quantity: 3,
-      name: "Forjado", price: 999, subtotal: 999,
-      imageUrl: "https://invalid.example/image", quantidade: 999,
-    },
-    {productId: zeroStockProductId, quantity: 1, price: 999},
+  const cleanItems = [
+    {productId: activeProductId, quantity: 3},
+    {productId: zeroStockProductId, quantity: 1},
   ];
-  const fresh = await submit(forgedItems, {
-    storeId: "forged-store", catalogId: "forged-catalog", totalAmount: 999,
-  });
+
+  await expectHttpsError(
+      () => submit([
+        {
+          productId: activeProductId, quantity: 3,
+          name: "Forjado", price: 999, subtotal: 999,
+        },
+      ]),
+      "invalid-argument", "unexpected-item-fields",
+  );
+
+  await expectHttpsError(
+      () => submit(cleanItems, {
+        storeId: "forged-store",
+        catalogId: "forged-catalog",
+        totalAmount: 999,
+      }),
+      "invalid-argument", "unexpected-fields",
+  );
+
+  const fresh = await submit(cleanItems);
   assert.strictEqual(fresh.totalAmount, 0.5);
   assert.strictEqual(fresh.totalUnits, 4);
   const freshItems = (await requestsRef.doc(fresh.requestId)
@@ -720,7 +807,7 @@ async function run() {
       },
   );
   assert.strictEqual((await savedRef.get()).data().totalAmount, 99.8);
-  const repeated = await submit(forgedItems);
+  const repeated = await submit(cleanItems);
   assert.notStrictEqual(repeated.requestId, fresh.requestId);
 
   // Falha em item posterior nao pode persistir solicitacao parcial.
