@@ -2795,6 +2795,7 @@ const {
   listCatalogs,
   listCatalogRequests,
   getCatalogRequest,
+  transitionCatalogRequest,
   getPublicCatalog,
   submitPublicCatalogSelection,
 } = require("./catalog/createCatalog");
@@ -2803,6 +2804,7 @@ exports.createCatalog = createCatalog;
 exports.listCatalogs = listCatalogs;
 exports.listCatalogRequests = listCatalogRequests;
 exports.getCatalogRequest = getCatalogRequest;
+exports.transitionCatalogRequest = transitionCatalogRequest;
 exports.getPublicCatalog = getPublicCatalog;
 exports.submitPublicCatalogSelection = submitPublicCatalogSelection;
 

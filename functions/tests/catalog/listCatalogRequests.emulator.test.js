@@ -127,7 +127,8 @@ async function main() {
     assert.deepEqual(result.requests.map((entry) => entry.requestId),
         Array.from({length: 50}, (_, i) => "request-" + (54 - i)));
     const keys = ["requestId", "catalogId", "status", "itemCount", "totalUnits",
-      "totalAmount", "createdAt", "updatedAt", "source"].sort();
+      "totalAmount", "createdAt", "updatedAt", "source", "customerName",
+      "customerPhone", "attendedByName"].sort();
     for (const entry of result.requests) {
       assert.deepEqual(Object.keys(entry).sort(), keys);
       assert.equal(entry.totalAmount, 12.34);

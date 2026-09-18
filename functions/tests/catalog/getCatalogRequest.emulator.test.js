@@ -116,6 +116,11 @@ async function main() {
       requestId: parent.id, ...base,
       createdAt: base.createdAt.toDate().toISOString(),
       updatedAt: base.updatedAt.toDate().toISOString(),
+      requestVersion: null,
+      customerName: null, customerPhone: null, note: null,
+      attendedByUid: null, attendedByName: null, attendedAt: null,
+      completedByUid: null, completedByName: null, completedAt: null,
+      cancelledByUid: null, cancelledByName: null, cancelledAt: null,
       items: [{itemId: "a-item", ...first}, {itemId: "z-item", ...second}],
     }};
     for (const role of ["admin", "gerente", "operador", " CAIXA ", "Vendedor"]) {

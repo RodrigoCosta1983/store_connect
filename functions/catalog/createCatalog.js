@@ -31,6 +31,15 @@ const {
   FieldValue,
 } = require("firebase-admin/firestore");
 const crypto = require("crypto");
+const {
+  CatalogRequestContractError,
+  normalizeCatalogRequestRole,
+  resolveCatalogRequestActorName,
+  decideCatalogRequestTransition,
+  validateCatalogRequestLifecycle,
+  projectCatalogRequestListFields,
+  projectCatalogRequestDetailFields,
+} = require("./catalogRequestContract");
 
 const catalogTokenEncryptionKey = defineSecret(
     "CATALOG_TOKEN_ENCRYPTION_KEY",
@@ -50,6 +59,27 @@ const ALLOWED_SUBSCRIPTION_STATUS = new Set([
   "trial",
   "overdue",
 ]);
+
+function isFirestoreTimestamp(value) {
+  return value instanceof Timestamp;
+}
+
+function serializeTimestamp(value) {
+  return value instanceof Timestamp ? value.toDate().toISOString() : null;
+}
+
+function transitionContractError(error) {
+  if (!(error instanceof CatalogRequestContractError)) return error;
+  const code = {
+    permission: "permission-denied",
+    precondition: "failed-precondition",
+    conflict: "aborted",
+    validation: "invalid-argument",
+  }[error.code] || "invalid-argument";
+  return new HttpsError(code, "Transição de solicitação inválida.", {
+    reason: error.reason,
+  });
+}
 
 function normalizeString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -956,6 +986,21 @@ const listCatalogRequests = onCall(
               "internal", "Não foi possível carregar as solicitações.",
           );
         }
+        try {
+          validateCatalogRequestLifecycle(saved, isFirestoreTimestamp);
+        } catch (error) {
+          throw new HttpsError(
+              "internal", "Não foi possível carregar as solicitações.",
+          );
+        }
+        let lifecycle;
+        try {
+          lifecycle = projectCatalogRequestListFields(saved);
+        } catch (error) {
+          throw new HttpsError(
+              "internal", "Não foi possível carregar as solicitações.",
+          );
+        }
 
         return {
           requestId: document.id,
@@ -964,11 +1009,10 @@ const listCatalogRequests = onCall(
           itemCount: saved.itemCount,
           totalUnits: saved.totalUnits,
           totalAmount: saved.totalAmount,
-          createdAt: saved.createdAt instanceof Timestamp ?
-            saved.createdAt.toDate().toISOString() : null,
-          updatedAt: saved.updatedAt instanceof Timestamp ?
-            saved.updatedAt.toDate().toISOString() : null,
+          createdAt: serializeTimestamp(saved.createdAt),
+          updatedAt: serializeTimestamp(saved.updatedAt),
           source: saved.source,
+          ...lifecycle,
         };
       });
       return {success: true, requests};
@@ -1054,6 +1098,17 @@ const getCatalogRequest = onCall(
       ) {
         throw invalidSnapshot();
       }
+      try {
+        validateCatalogRequestLifecycle(saved, isFirestoreTimestamp);
+      } catch (error) {
+        throw invalidSnapshot();
+      }
+      let lifecycle;
+      try {
+        lifecycle = projectCatalogRequestDetailFields(saved);
+      } catch (error) {
+        throw invalidSnapshot();
+      }
 
       // Sem limit: todos os itens. A ordem por ID nao e a ordem da selecao.
       const itemsSnapshot = await document.ref.collection("items")
@@ -1091,14 +1146,165 @@ const getCatalogRequest = onCall(
           itemCount: saved.itemCount,
           totalUnits: saved.totalUnits,
           totalAmount: saved.totalAmount,
-          createdAt: saved.createdAt instanceof Timestamp ?
-            saved.createdAt.toDate().toISOString() : null,
-          updatedAt: saved.updatedAt instanceof Timestamp ?
-            saved.updatedAt.toDate().toISOString() : null,
+          createdAt: serializeTimestamp(saved.createdAt),
+          updatedAt: serializeTimestamp(saved.updatedAt),
           source: saved.source,
+          ...lifecycle,
           items,
         },
       };
+    },
+);
+
+// F7.9-D1: transição interna atômica do lifecycle da solicitação.
+const transitionCatalogRequest = onCall(
+    {timeoutSeconds: 30, memory: "256MiB"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated", "É necessário estar autenticado.",
+        );
+      }
+      const data = request.data;
+      const requestId = normalizeString(data?.requestId);
+      const action = data?.action;
+      if (
+        !data || typeof data !== "object" || Array.isArray(data) ||
+        Object.getPrototypeOf(data) !== Object.prototype ||
+        Object.keys(data).length !== 2 ||
+        !Object.prototype.hasOwnProperty.call(data, "requestId") ||
+        !Object.prototype.hasOwnProperty.call(data, "action") ||
+        !requestId || requestId.includes("/") || requestId === "." ||
+        requestId === ".." || /^__.*__$/.test(requestId) ||
+        Buffer.byteLength(requestId, "utf8") > 1500
+      ) {
+        throw new HttpsError("invalid-argument", "Solicitação inválida.");
+      }
+
+      const db = admin.firestore();
+      const uid = request.auth.uid;
+      const userRef = db.collection("users").doc(uid);
+      const userSnapshot = await userRef.get();
+      if (!userSnapshot.exists) {
+        throw new HttpsError(
+            "permission-denied", "Perfil do usuário não encontrado.",
+        );
+      }
+      const initialUser = userSnapshot.data() || {};
+      if (normalizeString(initialUser.accessStatus).toLowerCase() === "revoked") {
+        throw new HttpsError(
+            "permission-denied", "O acesso deste usuário está revogado.",
+        );
+      }
+      try {
+        normalizeCatalogRequestRole(initialUser.role);
+      } catch (error) {
+        throw new HttpsError(
+            "permission-denied", "O perfil deste usuário não possui um papel válido.",
+        );
+      }
+      const initialStoreId = normalizeString(initialUser.storeId);
+      if (!initialStoreId) {
+        throw new HttpsError(
+            "failed-precondition", "Nenhuma loja válida está vinculada ao usuário.",
+        );
+      }
+      const storeRef = db.collection("stores").doc(initialStoreId);
+      if (!(await storeRef.get()).exists) {
+        throw new HttpsError("not-found", "Loja não encontrada.");
+      }
+
+      const requestRef = storeRef.collection("catalogRequests").doc(requestId);
+      const auditRef = storeRef.collection("auditLogs").doc();
+      try {
+        const result = await db.runTransaction(async (transaction) => {
+          const freshUser = await transaction.get(userRef);
+          const freshStore = await transaction.get(storeRef);
+          const requestDocument = await transaction.get(requestRef);
+          if (!freshUser.exists) {
+            throw new HttpsError("permission-denied", "Perfil do usuário não encontrado.");
+          }
+          if (!freshStore.exists) {
+            throw new HttpsError("not-found", "Loja não encontrada.");
+          }
+          const userData = freshUser.data() || {};
+          if (normalizeString(userData.accessStatus).toLowerCase() === "revoked") {
+            throw new HttpsError("permission-denied", "O acesso deste usuário está revogado.");
+          }
+          let role;
+          try {
+            role = normalizeCatalogRequestRole(userData.role);
+          } catch (error) {
+            throw new HttpsError("permission-denied", "O perfil deste usuário não possui um papel válido.");
+          }
+          const storeId = normalizeString(userData.storeId);
+          if (storeId !== initialStoreId) {
+            throw new HttpsError("permission-denied", "A loja do usuário não corresponde à solicitação.");
+          }
+          if (!requestDocument.exists) {
+            throw new HttpsError("not-found", "Solicitação não encontrada.");
+          }
+          const saved = requestDocument.data() || {};
+          try {
+            validateCatalogRequestLifecycle(saved, isFirestoreTimestamp);
+          } catch (error) {
+            throw new HttpsError("internal", "Não foi possível atualizar a solicitação.");
+          }
+          let decision;
+          try {
+            decision = decideCatalogRequestTransition({
+              status: saved.status,
+              action,
+              role,
+              authUid: uid,
+              attendedByUid: saved.attendedByUid,
+              completedByUid: saved.completedByUid,
+              cancelledByUid: saved.cancelledByUid,
+            });
+          } catch (error) {
+            throw transitionContractError(error);
+          }
+          if (!decision.changed) {
+            return {changed: false, status: decision.status};
+          }
+          const actorName = resolveCatalogRequestActorName(userData);
+          const now = FieldValue.serverTimestamp();
+          const fieldPrefix = {
+            start: "attended",
+            complete: "completed",
+            cancel: "cancelled",
+          }[action];
+          const updates = {
+            status: decision.status,
+            updatedAt: now,
+          };
+          updates[fieldPrefix + "ByUid"] = uid;
+          updates[fieldPrefix + "ByName"] = actorName;
+          updates[fieldPrefix + "At"] = now;
+          transaction.update(requestRef, updates);
+          transaction.set(auditRef, {
+            action: {
+              start: "catalog_request_started",
+              complete: "catalog_request_completed",
+              cancel: "catalog_request_cancelled",
+            }[action],
+            entityType: "catalogRequest",
+            entityId: requestId,
+            storeId,
+            performedBy: {uid, role},
+            before: {status: saved.status},
+            after: {status: decision.status, [fieldPrefix + "ByUid"]: uid},
+            createdAt: now,
+          });
+          return {changed: true, status: decision.status};
+        });
+        return {success: true, requestId, ...result};
+      } catch (error) {
+        if (error instanceof CatalogRequestContractError) {
+          throw transitionContractError(error);
+        }
+        throw error;
+      }
     },
 );
 
@@ -1963,6 +2169,7 @@ module.exports = {
   listCatalogs,
   listCatalogRequests,
   getCatalogRequest,
+  transitionCatalogRequest,
   getPublicCatalog,
   submitPublicCatalogSelection,
 };
