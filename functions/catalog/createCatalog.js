@@ -1293,7 +1293,7 @@ const transitionCatalogRequest = onCall(
             storeId,
             performedBy: {uid, role},
             before: {status: saved.status},
-            after: {status: decision.status, [fieldPrefix + "ByUid"]: uid},
+            after: {status: decision.status},
             createdAt: now,
           });
           return {changed: true, status: decision.status};

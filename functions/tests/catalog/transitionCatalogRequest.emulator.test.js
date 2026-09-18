@@ -88,6 +88,8 @@ async function main() {
     const startAudits = await auditEntries(requestRef);
     assert.equal(startAudits.length, 1);
     assert.equal(startAudits[0].action, "catalog_request_started");
+    assert.deepEqual(startAudits[0].before, {status: "pending"});
+    assert.deepEqual(startAudits[0].after, {status: "in_progress"});
     const replay = await call(operatorUid, {requestId, action: "start"});
     assert.deepEqual(replay, {success: true, requestId, changed: false, status: "in_progress"});
     assert.equal((await store.collection("auditLogs").get()).size, 1);
@@ -201,6 +203,44 @@ async function main() {
       assert.equal((await call(uid, {requestId: aliasRequest.id, action: "start"})).status,
           "in_progress");
     }
+    // Dois STARTs concorrentes: somente um pode assumir a solicitacao.
+    const concurrentStart = await seedRequest("concurrent-start");
+    const raceUids = [operatorUid, otherOperatorUid];
+    const raceResults = await Promise.allSettled(
+        raceUids.map((uid) => call(uid, {
+          requestId: concurrentStart.id, action: "start",
+        })),
+    );
+    const raceEntries = raceResults.map((result, index) => ({
+      result, uid: raceUids[index],
+    }));
+    const raceWinners = raceEntries.filter(
+        ({result}) => result.status === "fulfilled");
+    const raceLosers = raceEntries.filter(
+        ({result}) => result.status === "rejected");
+    assert.equal(raceWinners.length, 1);
+    assert.equal(raceLosers.length, 1);
+    assert.deepEqual(raceWinners[0].result.value, {
+      success: true, requestId: concurrentStart.id,
+      changed: true, status: "in_progress",
+    });
+    assert.equal(raceLosers[0].result.reason.code, "aborted");
+    assert.equal(
+        raceLosers[0].result.reason.details?.reason,
+        "catalog-request-already-attended",
+    );
+    const concurrentSaved = (await concurrentStart.get()).data();
+    assert.equal(concurrentSaved.status, "in_progress");
+    assert.equal(concurrentSaved.attendedByUid, raceWinners[0].uid);
+    const concurrentAudits = await auditEntries(concurrentStart);
+    assert.equal(concurrentAudits.length, 1);
+    assert.equal(
+        concurrentAudits[0].action, "catalog_request_started");
+    assert.deepEqual(
+        concurrentAudits[0].before, {status: "pending"});
+    assert.deepEqual(
+        concurrentAudits[0].after, {status: "in_progress"});
+
     console.log("F7.9-D1 transitionCatalogRequest: lifecycle, replay, autorização e auditoria OK");
   } finally {
     const docs = await store.collection("catalogRequests").get();
