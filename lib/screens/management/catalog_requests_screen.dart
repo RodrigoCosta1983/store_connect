@@ -201,6 +201,10 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
         builder: (_) => CatalogRequestDetailScreen(requestId: requestId),
       ),
     );
+
+    if (mounted) {
+      await _loadRequests();
+    }
   }
 
   void _showMessage(String message) {

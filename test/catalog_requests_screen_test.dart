@@ -413,7 +413,7 @@ void main() {
     expect(transitionCalls(), isEmpty);
   });
 
-  testWidgets('detalhe recebe ID e retorno não recarrega lista', (
+  testWidgets('detalhe recebe ID e retorno recarrega lista', (
     tester,
   ) async {
     requests = [request('a', 'pending')];
@@ -430,7 +430,7 @@ void main() {
       calls
           .where((call) => call['functionName'] == 'listCatalogRequests')
           .length,
-      1,
+      2,
     );
   });
 

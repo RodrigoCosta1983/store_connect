@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CatalogRequestDetailScreen extends StatefulWidget {
   const CatalogRequestDetailScreen({
@@ -17,6 +18,7 @@ class CatalogRequestDetailScreen extends StatefulWidget {
 class _CatalogRequestDetailScreenState
     extends State<CatalogRequestDetailScreen> {
   bool _isLoading = true;
+  bool _isTransitioning = false;
   String? _errorMessage;
   Map<String, dynamic>? _request;
 
@@ -174,6 +176,282 @@ class _CatalogRequestDetailScreenState
       default:
         return 'Não foi possível carregar a solicitação.';
     }
+  }
+
+  String? _optionalText(dynamic value) =>
+      value is String && value.trim().isNotEmpty ? value.trim() : null;
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+  }
+
+  String _statusLabel(dynamic status) {
+    switch (status) {
+      case 'pending':
+        return 'Nova';
+      case 'in_progress':
+        return 'Em atendimento';
+      case 'completed':
+        return 'Finalizada';
+      case 'cancelled':
+        return 'Cancelada';
+      default:
+        return 'Status indisponível';
+    }
+  }
+
+  String _formatCustomerPhone(String phone) {
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (digits.length == 13 && digits.startsWith('55')) {
+      return '+55 (${digits.substring(2, 4)}) '
+          '${digits.substring(4, 9)}-${digits.substring(9)}';
+    }
+
+    if (digits.length == 12 && digits.startsWith('55')) {
+      return '+55 (${digits.substring(2, 4)}) '
+          '${digits.substring(4, 8)}-${digits.substring(8)}';
+    }
+
+    if (digits.length == 11) {
+      return '(${digits.substring(0, 2)}) '
+          '${digits.substring(2, 7)}-${digits.substring(7)}';
+    }
+
+    if (digits.length == 10) {
+      return '(${digits.substring(0, 2)}) '
+          '${digits.substring(2, 6)}-${digits.substring(6)}';
+    }
+
+    return phone.trim();
+  }
+
+  String? _whatsAppDigits(String phone) {
+    var digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (digits.length == 10 || digits.length == 11) {
+      digits = '55$digits';
+    }
+
+    if ((digits.length == 12 || digits.length == 13) &&
+        digits.startsWith('55')) {
+      return digits;
+    }
+
+    return null;
+  }
+
+  Future<void> _openWhatsApp(String phone) async {
+    final digits = _whatsAppDigits(phone);
+
+    if (digits == null) {
+      _showMessage('WhatsApp não disponível para este cliente.');
+      return;
+    }
+
+    try {
+      final launched = await launchUrl(
+        Uri.parse('https://wa.me/$digits'),
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
+        _showMessage('Não foi possível abrir o WhatsApp.');
+      }
+    } catch (error) {
+      debugPrint(
+        '[CatalogRequestDetailScreen] Erro ao abrir WhatsApp: $error',
+      );
+      _showMessage('Não foi possível abrir o WhatsApp.');
+    }
+  }
+
+  String _messageForTransitionError(
+    FirebaseFunctionsException error,
+  ) {
+    switch (error.code) {
+      case 'unauthenticated':
+        return 'Sua sessão expirou. Entre novamente e tente outra vez.';
+
+      case 'permission-denied':
+        return 'Você não possui permissão para realizar esta ação.';
+
+      case 'failed-precondition':
+      case 'aborted':
+        return 'Esta solicitação foi atualizada por outro atendimento. '
+            'Atualize e tente novamente.';
+
+      case 'not-found':
+        return 'Esta solicitação não foi encontrada.';
+
+      case 'deadline-exceeded':
+      case 'unavailable':
+        return 'Não foi possível concluir a comunicação com o servidor. '
+            'Tente novamente.';
+
+      default:
+        return 'Não foi possível atualizar esta solicitação.';
+    }
+  }
+
+  Future<void> _transitionRequest(String action) async {
+    if (_isTransitioning) {
+      return;
+    }
+
+    final expectedStatus = switch (action) {
+      'start' => 'in_progress',
+      'complete' => 'completed',
+      'cancel' => 'cancelled',
+      _ => null,
+    };
+
+    if (expectedStatus == null) {
+      _showMessage('Ação inválida para esta solicitação.');
+      return;
+    }
+
+    setState(() {
+      _isTransitioning = true;
+    });
+
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'transitionCatalogRequest',
+        options: HttpsCallableOptions(
+          timeout: const Duration(seconds: 30),
+        ),
+      );
+
+      final response = await callable.call({
+        'requestId': widget.requestId,
+        'action': action,
+      });
+
+      final rawData = response.data;
+
+      if (rawData is! Map ||
+          rawData['success'] != true ||
+          rawData['requestId']?.toString().trim() != widget.requestId ||
+          rawData['status'] != expectedStatus) {
+        throw const FormatException(
+          'Resposta inválida ao atualizar a solicitação.',
+        );
+      }
+
+      await _loadRequest();
+
+      if (!mounted) {
+        return;
+      }
+
+      final message = switch (action) {
+        'start' => 'Atendimento iniciado.',
+        'complete' => 'Atendimento finalizado.',
+        'cancel' => 'Solicitação cancelada.',
+        _ => 'Solicitação atualizada.',
+      };
+
+      _showMessage(message);
+    } on FirebaseFunctionsException catch (error) {
+      _showMessage(_messageForTransitionError(error));
+    } catch (error) {
+      debugPrint(
+        '[CatalogRequestDetailScreen] '
+        'Erro ao atualizar solicitação: $error',
+      );
+      _showMessage('Não foi possível atualizar esta solicitação.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTransitioning = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _confirmAction({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    required String confirmKey,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            key: ValueKey(confirmKey),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+
+    return result == true;
+  }
+
+  Future<void> _confirmComplete() async {
+    final confirmed = await _confirmAction(
+      title: 'Finalizar atendimento?',
+      message: 'Esta solicitação será marcada como finalizada. '
+          'Essa ação não poderá ser desfeita.',
+      confirmLabel: 'Finalizar atendimento',
+      confirmKey: 'confirm-detail-complete',
+    );
+
+    if (confirmed && mounted) {
+      await _transitionRequest('complete');
+    }
+  }
+
+  Future<void> _confirmCancel() async {
+    final status = _request?['status'];
+
+    final inProgress = status == 'in_progress';
+
+    final confirmed = await _confirmAction(
+      title: inProgress
+          ? 'Cancelar atendimento?'
+          : 'Cancelar solicitação?',
+      message: 'Esta solicitação será marcada como cancelada. '
+          'Essa ação não poderá ser desfeita.',
+      confirmLabel: 'Confirmar cancelamento',
+      confirmKey: 'confirm-detail-cancel',
+    );
+
+    if (confirmed && mounted) {
+      await _transitionRequest('cancel');
+    }
+  }
+
+  bool _hasLifecycleEvent(
+    Map<String, dynamic> request,
+    String prefix,
+  ) {
+    return _optionalText(request['${prefix}ByUid']) != null ||
+        _optionalText(request['${prefix}ByName']) != null ||
+        _optionalText(request['${prefix}At']) != null;
+  }
+
+  bool _hasAvailableActions(Map<String, dynamic> request) {
+    final status = request['status'];
+    return status == 'pending' || status == 'in_progress';
   }
 
   String _formatDateTime(dynamic value) {
@@ -343,6 +621,252 @@ class _CatalogRequestDetailScreenState
     );
   }
 
+  Widget _buildCustomerCard(
+    Map<String, dynamic> request,
+  ) {
+    final name =
+        _optionalText(request['customerName']) ?? 'Cliente não identificado';
+    final phone = _optionalText(request['customerPhone']);
+    final note = _optionalText(request['note']);
+    final whatsappDigits =
+        phone == null ? null : _whatsAppDigits(phone);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  'Cliente',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                _DetailInfoChip(
+                  icon: Icons.flag_outlined,
+                  label: _statusLabel(request['status']),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              name,
+              key: const ValueKey('detail-customer-name'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            if (phone != null) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    _formatCustomerPhone(phone),
+                    key: const ValueKey('detail-customer-phone'),
+                  ),
+                  if (whatsappDigits != null)
+                    OutlinedButton.icon(
+                      key: const ValueKey('detail-whatsapp'),
+                      onPressed: () => _openWhatsApp(phone),
+                      icon: const Icon(Icons.chat_outlined),
+                      label: const Text('WhatsApp'),
+                    ),
+                ],
+              ),
+            ],
+            if (note != null) ...[
+              const SizedBox(height: 18),
+              Text(
+                'Observação',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                note,
+                key: const ValueKey('detail-note'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLifecycleEntry(
+    Map<String, dynamic> request, {
+    required String prefix,
+    required String title,
+    required IconData icon,
+  }) {
+    final name =
+        _optionalText(request['${prefix}ByName']) ??
+            'Responsável não identificado';
+    final at = request['${prefix}At'];
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(name),
+                const SizedBox(height: 2),
+                Text(_formatDateTime(at)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLifecycleCard(
+    Map<String, dynamic> request,
+  ) {
+    final hasAttended = _hasLifecycleEvent(request, 'attended');
+    final hasCompleted = _hasLifecycleEvent(request, 'completed');
+    final hasCancelled = _hasLifecycleEvent(request, 'cancelled');
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Histórico do atendimento',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            if (!hasAttended && !hasCompleted && !hasCancelled) ...[
+              const SizedBox(height: 12),
+              const Text('Atendimento ainda não iniciado.'),
+            ],
+            if (hasAttended)
+              _buildLifecycleEntry(
+                request,
+                prefix: 'attended',
+                title: 'Atendimento iniciado',
+                icon: Icons.play_circle_outline,
+              ),
+            if (hasCompleted)
+              _buildLifecycleEntry(
+                request,
+                prefix: 'completed',
+                title: 'Atendimento finalizado',
+                icon: Icons.check_circle_outline,
+              ),
+            if (hasCancelled)
+              _buildLifecycleEntry(
+                request,
+                prefix: 'cancelled',
+                title: 'Solicitação cancelada',
+                icon: Icons.cancel_outlined,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionsCard(
+    Map<String, dynamic> request,
+  ) {
+    final status = request['status'];
+
+    if (!_hasAvailableActions(request)) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Ações',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                if (status == 'pending')
+                  FilledButton.icon(
+                    key: const ValueKey('detail-start'),
+                    onPressed: _isTransitioning
+                        ? null
+                        : () => _transitionRequest('start'),
+                    icon: _isTransitioning
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.play_arrow),
+                    label: const Text('Iniciar atendimento'),
+                  ),
+                if (status == 'in_progress')
+                  FilledButton.icon(
+                    key: const ValueKey('detail-complete'),
+                    onPressed:
+                        _isTransitioning ? null : _confirmComplete,
+                    icon: _isTransitioning
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.check),
+                    label: const Text('Finalizar atendimento'),
+                  ),
+                OutlinedButton.icon(
+                  key: const ValueKey('detail-cancel'),
+                  onPressed:
+                      _isTransitioning ? null : _confirmCancel,
+                  icon: const Icon(Icons.cancel_outlined),
+                  label: Text(
+                    status == 'in_progress'
+                        ? 'Cancelar atendimento'
+                        : 'Cancelar solicitação',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildItemCard(
     Map<String, dynamic> item,
   ) {
@@ -465,6 +989,14 @@ class _CatalogRequestDetailScreenState
             ),
             children: [
               _buildSummaryCard(request),
+              const SizedBox(height: 16),
+              _buildCustomerCard(request),
+              const SizedBox(height: 16),
+              _buildLifecycleCard(request),
+              if (_hasAvailableActions(request)) ...[
+                const SizedBox(height: 16),
+                _buildActionsCard(request),
+              ],
               const SizedBox(height: 24),
               const Text(
                 'Produtos selecionados',
@@ -520,7 +1052,7 @@ class _CatalogRequestDetailScreenState
           IconButton(
             tooltip: 'Atualizar',
             onPressed:
-                _isLoading ? null : _loadRequest,
+                _isLoading || _isTransitioning ? null : _loadRequest,
             icon: const Icon(Icons.refresh),
           ),
         ],
