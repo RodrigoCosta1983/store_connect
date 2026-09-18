@@ -7,16 +7,16 @@ class CatalogRequestsScreen extends StatefulWidget {
   const CatalogRequestsScreen({super.key});
 
   @override
-  State<CatalogRequestsScreen> createState() =>
-      _CatalogRequestsScreenState();
+  State<CatalogRequestsScreen> createState() => _CatalogRequestsScreenState();
 }
 
 class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
-  bool _isLoading = true;
+  bool _isLoading = false;
+  String? _selectedStatus;
+  final Set<String> _expandedRequestIds = <String>{};
   String? _errorMessage;
 
-  List<Map<String, dynamic>> _requests =
-      <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _requests = <Map<String, dynamic>>[];
 
   @override
   void initState() {
@@ -25,6 +25,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
   }
 
   Future<void> _loadRequests() async {
+    if (_isLoading) return;
     if (mounted) {
       setState(() {
         _isLoading = true;
@@ -33,12 +34,9 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
     }
 
     try {
-      final callable =
-          FirebaseFunctions.instance.httpsCallable(
+      final callable = FirebaseFunctions.instance.httpsCallable(
         'listCatalogRequests',
-        options: HttpsCallableOptions(
-          timeout: const Duration(seconds: 30),
-        ),
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
       );
 
       final response = await callable.call();
@@ -67,10 +65,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
 
       final requests = rawRequests
           .whereType<Map>()
-          .map(
-            (request) =>
-                Map<String, dynamic>.from(request),
-          )
+          .map((request) => Map<String, dynamic>.from(request))
           .toList();
 
       if (!mounted) {
@@ -79,6 +74,8 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
 
       setState(() {
         _requests = requests;
+        final ids = requests.map(_requestId).toSet();
+        _expandedRequestIds.removeWhere((id) => !ids.contains(id));
       });
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) {
@@ -86,8 +83,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
       }
 
       setState(() {
-        _errorMessage =
-            _messageForFunctionsError(error);
+        _errorMessage = _messageForFunctionsError(error);
       });
     } catch (error) {
       debugPrint(
@@ -100,8 +96,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
       }
 
       setState(() {
-        _errorMessage =
-            'Não foi possível carregar as solicitações.';
+        _errorMessage = 'Não foi possível carregar as solicitações.';
       });
     } finally {
       if (mounted) {
@@ -112,9 +107,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
     }
   }
 
-  String _messageForFunctionsError(
-    FirebaseFunctionsException error,
-  ) {
+  String _messageForFunctionsError(FirebaseFunctionsException error) {
     switch (error.code) {
       case 'unauthenticated':
         return 'Sua sessão expirou. '
@@ -155,8 +148,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
       return 'Data não disponível';
     }
 
-    String two(int number) =>
-        number.toString().padLeft(2, '0');
+    String two(int number) => number.toString().padLeft(2, '0');
 
     return '${two(parsed.day)}/'
         '${two(parsed.month)}/'
@@ -174,10 +166,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
         '${value.toDouble().toStringAsFixed(2).replaceAll('.', ',')}';
   }
 
-  int _readInt(
-    Map<String, dynamic> request,
-    String field,
-  ) {
+  int _readInt(Map<String, dynamic> request, String field) {
     final value = request[field];
 
     if (value is int) {
@@ -191,20 +180,15 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
     return 0;
   }
 
-  Future<void> _openRequestDetail(
-    Map<String, dynamic> request,
-  ) async {
-    final requestId =
-        request['requestId']?.toString().trim() ?? '';
+  Future<void> _openRequestDetail(Map<String, dynamic> request) async {
+    final requestId = request['requestId']?.toString().trim() ?? '';
 
     if (requestId.isEmpty) {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(
           const SnackBar(
-            content: Text(
-              'Não foi possível abrir esta solicitação.',
-            ),
+            content: Text('Não foi possível abrir esta solicitação.'),
           ),
         );
       return;
@@ -212,177 +196,275 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
 
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => CatalogRequestDetailScreen(
-          requestId: requestId,
-        ),
+        builder: (_) => CatalogRequestDetailScreen(requestId: requestId),
       ),
     );
   }
 
-  Widget _buildRequestCard(
-    Map<String, dynamic> request,
-  ) {
-    final itemCount =
-        _readInt(request, 'itemCount');
+  String _requestId(Map<String, dynamic> request) =>
+      request['requestId']?.toString().trim() ?? '';
 
-    final totalUnits =
-        _readInt(request, 'totalUnits');
+  String? _optionalText(dynamic value) =>
+      value is String && value.trim().isNotEmpty ? value.trim() : null;
 
-    final totalAmount =
-        request['totalAmount'];
-
-    final createdAt =
-        _formatDateTime(request['createdAt']);
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+  Widget _buildSummary(Map<String, dynamic> request) {
+    final products = _readInt(request, 'itemCount');
+    final units = _readInt(request, 'totalUnits');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
           children: [
-            Row(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primaryContainer,
-                    borderRadius:
-                        BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.shopping_bag_outlined,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onPrimaryContainer,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Solicitação recebida',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight:
-                              FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        createdAt,
-                        style: TextStyle(
-                          color:
-                              Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            _InfoChip(
+              icon: Icons.inventory_2_outlined,
+              label: products == 1 ? '1 produto' : '$products produtos',
             ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                _InfoChip(
-                  icon:
-                      Icons.inventory_2_outlined,
-                  label: itemCount == 1
-                      ? '1 produto'
-                      : '$itemCount produtos',
-                ),
-                _InfoChip(
-                  icon:
-                      Icons.format_list_numbered,
-                  label: totalUnits == 1
-                      ? '1 unidade'
-                      : '$totalUnits unidades',
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            const Divider(height: 1),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Text(
-                  'Total',
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  _formatCurrency(totalAmount),
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () =>
-                    _openRequestDetail(request),
-                icon: const Icon(Icons.arrow_forward),
-                label: const Text('Ver detalhes'),
-              ),
+            _InfoChip(
+              icon: Icons.format_list_numbered,
+              label: units == 1 ? '1 unidade' : '$units unidades',
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        Text(
+          'Total: ${_formatCurrency(request['totalAmount'])}',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildLifecycle(Map<String, dynamic> request) {
+    final lines = <String>[];
+    void addDate(String field, String label) {
+      final raw = _optionalText(request[field]);
+      if (raw != null && DateTime.tryParse(raw) != null) {
+        lines.add('$label ${_formatDateTime(raw)}');
+      }
+    }
+
+    switch (request['status']) {
+      case 'in_progress':
+        final name = _optionalText(request['attendedByName']);
+        if (name != null) lines.add('Atendido por $name');
+        addDate('attendedAt', 'Atendimento em');
+        break;
+      case 'completed':
+        addDate('completedAt', 'Finalizada em');
+        break;
+      case 'cancelled':
+        addDate('cancelledAt', 'Cancelada em');
+        break;
+    }
+    return lines
+        .map(
+          (line) => Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(line, style: Theme.of(context).textTheme.bodyMedium),
+          ),
+        )
+        .toList();
+  }
+
+  Widget _buildRequestCard(Map<String, dynamic> request) {
+    final id = _requestId(request);
+    final expanded = id.isNotEmpty && _expandedRequestIds.contains(id);
+    final customer =
+        _optionalText(request['customerName']) ?? 'Cliente não identificado';
+    final status = _RequestStatus.fromValue(request['status']);
+    final colors = Theme.of(context).colorScheme;
+
+    return Card(
+      key: ValueKey(id),
+      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
+      color: Color.alphaBlend(
+        status.background(context).withAlpha(45),
+        colors.surface,
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            expanded: expanded,
+            child: InkWell(
+              key: ValueKey('toggle-$id'),
+              onTap: id.isEmpty
+                  ? null
+                  : () => setState(() {
+                      if (expanded) {
+                        _expandedRequestIds.remove(id);
+                      } else {
+                        _expandedRequestIds.add(id);
+                      }
+                    }),
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          customer,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        _StatusBadge(status: status),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _formatDateTime(request['createdAt']),
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildSummary(request),
+                    ..._buildLifecycle(request),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Icon(
+                        expanded ? Icons.expand_less : Icons.expand_more,
+                        semanticLabel: expanded
+                            ? 'Recolher solicitação'
+                            : 'Expandir solicitação',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (expanded) ...[
+            const Divider(height: 1),
+            Padding(
+              key: ValueKey('expanded-$id'),
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Cliente',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(customer),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Resumo do pedido',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildSummary(request),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => _openRequestDetail(request),
+                      icon: const Icon(Icons.arrow_forward),
+                      label: const Text('Ver detalhes'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilters() {
+    const labels = <String?, String>{
+      null: 'Todas',
+      'pending': 'Novas',
+      'in_progress': 'Em atendimento',
+      'completed': 'Finalizadas',
+      'cancelled': 'Canceladas',
+    };
+    final filters = labels.entries.map((entry) {
+      final count = entry.key == null
+          ? _requests.length
+          : _requests.where((request) => request['status'] == entry.key).length;
+      return LayoutBuilder(
+        builder: (context, constraints) => ChoiceChip(
+          key: ValueKey('filter-${entry.key ?? 'all'}'),
+          label: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: constraints.maxWidth - 16),
+            child: Builder(
+              builder: (context) => DefaultTextStyle(
+                style: DefaultTextStyle.of(context).style,
+                textAlign: TextAlign.center,
+                softWrap: true,
+                child: Text('${entry.value} ($count)'),
+              ),
+            ),
+          ),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          showCheckmark: false,
+          selected: _selectedStatus == entry.key,
+          onSelected: (_) => setState(() => _selectedStatus = entry.key),
+        ),
+      );
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(flex: 2, child: filters[0]),
+            const SizedBox(width: 8),
+            Expanded(flex: 2, child: filters[1]),
+            const SizedBox(width: 8),
+            Expanded(flex: 4, child: filters[2]),
+          ],
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(child: filters[3]),
+            const SizedBox(width: 8),
+            Flexible(child: filters[4]),
+          ],
+        ),
+      ],
     );
   }
 
   Widget _buildEmptyState() {
-    return RefreshIndicator(
-      onRefresh: _loadRequests,
-      child: ListView(
-        physics:
-            const AlwaysScrollableScrollPhysics(),
-        padding:
-            const EdgeInsets.fromLTRB(32, 120, 32, 32),
+    final filtered = _selectedStatus != null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 64, horizontal: 16),
+      child: Column(
         children: [
           Icon(
             Icons.inbox_outlined,
-            size: 72,
-            color: Colors.grey.shade400,
+            size: 64,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           const SizedBox(height: 20),
-          const Text(
-            'Nenhuma solicitação recebida',
+          Text(
+            filtered
+                ? 'Nenhuma solicitação neste status.'
+                : 'Nenhuma solicitação recebida',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+            style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 8),
           Text(
-            'Quando um cliente selecionar produtos '
-            'no catálogo e enviar a solicitação, '
-            'ela aparecerá aqui.',
+            filtered
+                ? 'Selecione outro filtro para ver as solicitações.'
+                : 'Quando um cliente selecionar produtos no catálogo e enviar a solicitação, ela aparecerá aqui.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              height: 1.4,
-            ),
           ),
         ],
       ),
@@ -394,14 +476,9 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment:
-              MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 56,
-              color: Colors.red,
-            ),
+            const Icon(Icons.error_outline, size: 56, color: Colors.red),
             const SizedBox(height: 16),
             Text(
               _errorMessage ??
@@ -413,8 +490,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
             ElevatedButton.icon(
               onPressed: _loadRequests,
               icon: const Icon(Icons.refresh),
-              label:
-                  const Text('Tentar novamente'),
+              label: const Text('Tentar novamente'),
             ),
           ],
         ),
@@ -424,42 +500,39 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_errorMessage != null) {
       return _buildErrorState();
     }
 
-    if (_requests.isEmpty) {
-      return _buildEmptyState();
-    }
-
+    final visible = _requests
+        .where(
+          (request) =>
+              _selectedStatus == null || request['status'] == _selectedStatus,
+        )
+        .toList();
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
-        constraints:
-            const BoxConstraints(maxWidth: 900),
+        constraints: const BoxConstraints(maxWidth: 900),
         child: RefreshIndicator(
           onRefresh: _loadRequests,
-          child: ListView.builder(
-            physics:
-                const AlwaysScrollableScrollPhysics(),
-            padding:
-                const EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              32,
-            ),
-            itemCount: _requests.length,
-            itemBuilder: (context, index) {
-              return _buildRequestCard(
-                _requests[index],
-              );
-            },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            children: [
+              Text(
+                'Pedidos de produtos do catálogo',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 16),
+              _buildFilters(),
+              const SizedBox(height: 20),
+              if (visible.isEmpty) _buildEmptyState(),
+              ...visible.map(_buildRequestCard),
+            ],
           ),
         ),
       ),
@@ -470,14 +543,12 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text('Solicitações recebidas'),
-        centerTitle: true,
+        title: const Text('Solicitações recebidas'),
+        centerTitle: false,
         actions: [
           IconButton(
             tooltip: 'Atualizar',
-            onPressed:
-                _isLoading ? null : _loadRequests,
+            onPressed: _isLoading ? null : _loadRequests,
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -488,10 +559,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
 }
 
 class _InfoChip extends StatelessWidget {
-  const _InfoChip({
-    required this.icon,
-    required this.label,
-  });
+  const _InfoChip({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -499,33 +567,77 @@ class _InfoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 7,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .surfaceContainerHighest,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 16,
-          ),
+          Icon(icon, size: 16),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
+}
+
+// Unknown persisted values remain neutral and never enter the pending filter.
+enum _RequestStatus {
+  pending('Nova'),
+  inProgress('Em atendimento'),
+  completed('Finalizada'),
+  cancelled('Cancelada'),
+  unknown('Status indisponível');
+
+  const _RequestStatus(this.label);
+  final String label;
+
+  static _RequestStatus fromValue(dynamic value) => switch (value) {
+    'pending' => pending,
+    'in_progress' => inProgress,
+    'completed' => completed,
+    'cancelled' => cancelled,
+    _ => unknown,
+  };
+
+  MaterialColor get palette => switch (this) {
+    pending => Colors.pink,
+    inProgress => Colors.blue,
+    completed => Colors.green,
+    cancelled || unknown => Colors.grey,
+  };
+
+  Color background(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+      ? palette.shade900
+      : palette.shade50;
+
+  Color foreground(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+      ? palette.shade50
+      : palette.shade900;
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.status});
+  final _RequestStatus status;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: status.background(context),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(
+      status.label,
+      style: TextStyle(
+        color: status.foreground(context),
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 }
