@@ -17,6 +17,7 @@ void main() {
   );
   late List<Map<String, dynamic>> requests;
   late Future<List<Object?>> Function() list;
+  late Future<List<Object?>> Function(Map<String, dynamic>) transition;
   final calls = <Map<String, dynamic>>[];
   Map<String, dynamic> request(String id, String status) => {
     'requestId': id,
@@ -36,6 +37,16 @@ void main() {
     list = () async => [
       {'success': true, 'requests': requests},
     ];
+    transition = (parameters) async => [
+      {
+        'success': true,
+        'changed': true,
+        'requestId': parameters['requestId'],
+        'status': parameters['action'] == 'start'
+            ? 'in_progress'
+            : 'cancelled',
+      },
+    ];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockDecodedMessageHandler<Object?>(channel, (message) async {
           final args = Map<String, dynamic>.from(
@@ -43,6 +54,12 @@ void main() {
           );
           calls.add(args);
           if (args['functionName'] == 'listCatalogRequests') return list();
+          if (args['functionName'] == 'transitionCatalogRequest') {
+            final parameters = Map<String, dynamic>.from(
+              args['parameters'] as Map,
+            );
+            return transition(parameters);
+          }
           expect(args['functionName'], 'getCatalogRequest');
           return [
             {
@@ -71,6 +88,10 @@ void main() {
     await tester.tap(finder);
     await tester.pumpAndSettle();
   }
+
+  Iterable<Map<String, dynamic>> transitionCalls() => calls.where(
+        (call) => call['functionName'] == 'transitionCatalogRequest',
+      );
 
   testWidgets('labels, fallback, pluralização e status desconhecido', (
     tester,
@@ -192,6 +213,206 @@ void main() {
     expect(find.text('Tentar novamente'), findsNothing);
   });
 
+  testWidgets('nova mostra cliente, WhatsApp e inicia atendimento com reload', (
+    tester,
+  ) async {
+    requests = [
+      {
+        ...request('a', 'pending'),
+        'customerName': 'Maria Silva',
+        'customerPhone': '5521985050120',
+      },
+    ];
+
+    transition = (parameters) async {
+      expect(parameters, {
+        'requestId': 'a',
+        'action': 'start',
+      });
+
+      requests = [
+        {
+          ...request('a', 'in_progress'),
+          'customerName': 'Maria Silva',
+          'customerPhone': '5521985050120',
+          'attendedByName': 'Rodrigo',
+          'attendedAt': '2026-09-18T19:00:00Z',
+        },
+      ];
+
+      return [
+        {
+          'success': true,
+          'changed': true,
+          'requestId': 'a',
+          'status': 'in_progress',
+        },
+      ];
+    };
+
+    await open(tester);
+    await tap(tester, 'toggle-a');
+
+    expect(find.text('Maria Silva'), findsNWidgets(2));
+    expect(find.text('+55 (21) 98505-0120'), findsOneWidget);
+    expect(find.byKey(const ValueKey('whatsapp-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-request-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('cancel-request-a')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('start-request-a')));
+    await tester.pumpAndSettle();
+
+    expect(transitionCalls().length, 1);
+    expect(transitionCalls().single['parameters'], {
+      'requestId': 'a',
+      'action': 'start',
+    });
+    expect(
+      calls
+          .where((call) => call['functionName'] == 'listCatalogRequests')
+          .length,
+      2,
+    );
+    expect(find.text('Em atendimento'), findsOneWidget);
+    expect(find.text('Atendido por Rodrigo'), findsOneWidget);
+    expect(find.byKey(const ValueKey('open-request-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-request-a')), findsNothing);
+    expect(find.byKey(const ValueKey('cancel-request-a')), findsNothing);
+  });
+
+  testWidgets('cancelamento exige confirmação e recarrega a lista', (
+    tester,
+  ) async {
+    requests = [
+      {
+        ...request('a', 'pending'),
+        'customerName': 'Maria Silva',
+        'customerPhone': '5521985050120',
+      },
+    ];
+
+    transition = (parameters) async {
+      expect(parameters, {
+        'requestId': 'a',
+        'action': 'cancel',
+      });
+
+      requests = [
+        {
+          ...request('a', 'cancelled'),
+          'customerName': 'Maria Silva',
+          'customerPhone': '5521985050120',
+        },
+      ];
+
+      return [
+        {
+          'success': true,
+          'changed': true,
+          'requestId': 'a',
+          'status': 'cancelled',
+        },
+      ];
+    };
+
+    await open(tester);
+    await tap(tester, 'toggle-a');
+
+    await tester.tap(find.byKey(const ValueKey('cancel-request-a')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cancelar solicitação?'), findsOneWidget);
+    expect(
+      find.text(
+        'Esta solicitação será marcada como cancelada. '
+        'Essa ação não poderá ser desfeita.',
+      ),
+      findsOneWidget,
+    );
+    expect(transitionCalls(), isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('confirm-cancel-a')));
+    await tester.pumpAndSettle();
+
+    expect(transitionCalls().length, 1);
+    expect(transitionCalls().single['parameters'], {
+      'requestId': 'a',
+      'action': 'cancel',
+    });
+    expect(
+      calls
+          .where((call) => call['functionName'] == 'listCatalogRequests')
+          .length,
+      2,
+    );
+    expect(find.text('Cancelada'), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-request-a')), findsNothing);
+    expect(find.byKey(const ValueKey('cancel-request-a')), findsNothing);
+    expect(find.byKey(const ValueKey('details-a')), findsOneWidget);
+  });
+
+  testWidgets('em atendimento abre detalhe sem ações indevidas', (
+    tester,
+  ) async {
+    requests = [
+      {
+        ...request('a', 'in_progress'),
+        'customerName': 'Maria Silva',
+        'customerPhone': '5521985050120',
+        'attendedByName': 'Rodrigo',
+        'attendedAt': '2026-09-18T19:00:00Z',
+      },
+    ];
+
+    await open(tester, width: 320);
+    await tap(tester, 'toggle-a');
+
+    expect(find.text('+55 (21) 98505-0120'), findsOneWidget);
+    expect(find.byKey(const ValueKey('whatsapp-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('open-request-a')), findsOneWidget);
+    expect(find.text('Abrir atendimento'), findsOneWidget);
+
+    expect(find.byKey(const ValueKey('start-request-a')), findsNothing);
+    expect(find.byKey(const ValueKey('cancel-request-a')), findsNothing);
+    expect(find.byKey(const ValueKey('details-a')), findsNothing);
+    expect(transitionCalls(), isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('estados terminais oferecem somente consulta do detalhe', (
+    tester,
+  ) async {
+    requests = [
+      {
+        ...request('c', 'completed'),
+        'customerName': 'Cliente C',
+        'customerPhone': '5521985050120',
+      },
+      {
+        ...request('d', 'cancelled'),
+        'customerName': 'Cliente D',
+        'customerPhone': '5521985050121',
+      },
+    ];
+
+    await open(tester);
+    await tap(tester, 'toggle-c');
+    await tap(tester, 'toggle-d');
+
+    expect(find.byKey(const ValueKey('details-c')), findsOneWidget);
+    expect(find.byKey(const ValueKey('details-d')), findsOneWidget);
+    expect(find.byKey(const ValueKey('whatsapp-c')), findsNothing);
+    expect(find.byKey(const ValueKey('whatsapp-d')), findsNothing);
+
+    expect(find.byKey(const ValueKey('start-request-c')), findsNothing);
+    expect(find.byKey(const ValueKey('start-request-d')), findsNothing);
+    expect(find.byKey(const ValueKey('cancel-request-c')), findsNothing);
+    expect(find.byKey(const ValueKey('cancel-request-d')), findsNothing);
+    expect(find.byKey(const ValueKey('open-request-c')), findsNothing);
+    expect(find.byKey(const ValueKey('open-request-d')), findsNothing);
+    expect(transitionCalls(), isEmpty);
+  });
+
   testWidgets('detalhe recebe ID e retorno não recarrega lista', (
     tester,
   ) async {
@@ -231,7 +452,8 @@ void main() {
     expect(find.textContaining('Atendimento em'), findsOneWidget);
     expect(find.text('Data não disponível'), findsOneWidget);
     await tap(tester, 'toggle-a');
-    expect(find.text('Ver detalhes'), findsOneWidget);
+    expect(find.text('Abrir atendimento'), findsOneWidget);
+    expect(find.text('Ver detalhes'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

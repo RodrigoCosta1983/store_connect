@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'catalog_request_detail_screen.dart';
 
@@ -14,6 +15,7 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
   bool _isLoading = false;
   String? _selectedStatus;
   final Set<String> _expandedRequestIds = <String>{};
+  final Set<String> _transitioningRequestIds = <String>{};
   String? _errorMessage;
 
   List<Map<String, dynamic>> _requests = <Map<String, dynamic>>[];
@@ -201,6 +203,200 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
     );
   }
 
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+  }
+
+  String _formatCustomerPhone(String phone) {
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (digits.length == 13 && digits.startsWith('55')) {
+      return '+55 (${digits.substring(2, 4)}) '
+          '${digits.substring(4, 9)}-${digits.substring(9)}';
+    }
+
+    if (digits.length == 12 && digits.startsWith('55')) {
+      return '+55 (${digits.substring(2, 4)}) '
+          '${digits.substring(4, 8)}-${digits.substring(8)}';
+    }
+
+    if (digits.length == 11) {
+      return '(${digits.substring(0, 2)}) '
+          '${digits.substring(2, 7)}-${digits.substring(7)}';
+    }
+
+    if (digits.length == 10) {
+      return '(${digits.substring(0, 2)}) '
+          '${digits.substring(2, 6)}-${digits.substring(6)}';
+    }
+
+    return phone.trim();
+  }
+
+  Future<void> _openWhatsApp(String phone) async {
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+
+    if (digits.isEmpty) {
+      _showMessage('WhatsApp não disponível para este cliente.');
+      return;
+    }
+
+    final uri = Uri.parse('https://wa.me/$digits');
+
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
+        _showMessage('Não foi possível abrir o WhatsApp.');
+      }
+    } catch (error) {
+      debugPrint(
+        '[CatalogRequestsScreen] '
+        'Erro ao abrir WhatsApp: $error',
+      );
+      _showMessage('Não foi possível abrir o WhatsApp.');
+    }
+  }
+
+  String _messageForTransitionError(FirebaseFunctionsException error) {
+    switch (error.code) {
+      case 'unauthenticated':
+        return 'Sua sessão expirou. Entre novamente e tente outra vez.';
+
+      case 'permission-denied':
+        return 'Você não possui permissão para alterar esta solicitação.';
+
+      case 'failed-precondition':
+      case 'aborted':
+        return 'Esta solicitação foi atualizada por outro atendimento. '
+            'Atualize e tente novamente.';
+
+      case 'not-found':
+        return 'Esta solicitação não foi encontrada.';
+
+      case 'deadline-exceeded':
+      case 'unavailable':
+        return 'Não foi possível concluir a comunicação com o servidor. '
+            'Tente novamente.';
+
+      default:
+        return 'Não foi possível atualizar esta solicitação.';
+    }
+  }
+
+  Future<void> _transitionRequest(
+    Map<String, dynamic> request,
+    String action,
+  ) async {
+    final requestId = _requestId(request);
+
+    if (requestId.isEmpty || _transitioningRequestIds.contains(requestId)) {
+      return;
+    }
+
+    setState(() {
+      _transitioningRequestIds.add(requestId);
+    });
+
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'transitionCatalogRequest',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      );
+
+      final response = await callable.call(
+        <String, dynamic>{
+          'requestId': requestId,
+          'action': action,
+        },
+      );
+
+      final rawData = response.data;
+
+      if (rawData is! Map ||
+          rawData['success'] != true ||
+          rawData['requestId']?.toString().trim() != requestId ||
+          (rawData['status']?.toString().trim().isEmpty ?? true)) {
+        throw const FormatException(
+          'Resposta inválida ao atualizar solicitação.',
+        );
+      }
+
+      await _loadRequests();
+
+      if (!mounted) {
+        return;
+      }
+
+      _showMessage(
+        action == 'start'
+            ? 'Atendimento iniciado.'
+            : 'Solicitação cancelada.',
+      );
+    } on FirebaseFunctionsException catch (error) {
+      _showMessage(_messageForTransitionError(error));
+    } catch (error) {
+      debugPrint(
+        '[CatalogRequestsScreen] '
+        'Erro ao atualizar solicitacao: $error',
+      );
+      _showMessage('Não foi possível atualizar esta solicitação.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _transitioningRequestIds.remove(requestId);
+        });
+      }
+    }
+  }
+
+  Future<void> _confirmCancelRequest(
+    Map<String, dynamic> request,
+  ) async {
+    final requestId = _requestId(request);
+
+    if (requestId.isEmpty) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancelar solicitação?'),
+        content: const Text(
+          'Esta solicitação será marcada como cancelada. '
+          'Essa ação não poderá ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            key: ValueKey('confirm-cancel-$requestId'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Confirmar cancelamento'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await _transitionRequest(request, 'cancel');
+    }
+  }
+
   String _requestId(Map<String, dynamic> request) =>
       request['requestId']?.toString().trim() ?? '';
 
@@ -275,7 +471,10 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
     final expanded = id.isNotEmpty && _expandedRequestIds.contains(id);
     final customer =
         _optionalText(request['customerName']) ?? 'Cliente não identificado';
+    final customerPhone = _optionalText(request['customerPhone']);
     final status = _RequestStatus.fromValue(request['status']);
+    final transitioning =
+        id.isNotEmpty && _transitioningRequestIds.contains(id);
     final colors = Theme.of(context).colorScheme;
 
     return Card(
@@ -356,6 +555,28 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(customer),
+                  if (customerPhone != null &&
+                      (status == _RequestStatus.pending ||
+                          status == _RequestStatus.inProgress)) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          _formatCustomerPhone(customerPhone),
+                          key: ValueKey('phone-$id'),
+                        ),
+                        OutlinedButton.icon(
+                          key: ValueKey('whatsapp-$id'),
+                          onPressed: () => _openWhatsApp(customerPhone),
+                          icon: const Icon(Icons.chat_outlined),
+                          label: const Text('WhatsApp'),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Text(
                     'Resumo do pedido',
@@ -363,13 +584,65 @@ class _CatalogRequestsScreenState extends State<CatalogRequestsScreen> {
                   ),
                   const SizedBox(height: 8),
                   _buildSummary(request),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () => _openRequestDetail(request),
-                      icon: const Icon(Icons.arrow_forward),
-                      label: const Text('Ver detalhes'),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.end,
+                      children: [
+                        if (status == _RequestStatus.pending) ...[
+                          FilledButton.icon(
+                            key: ValueKey('start-request-$id'),
+                            onPressed: transitioning || id.isEmpty
+                                ? null
+                                : () => _transitionRequest(request, 'start'),
+                            icon: transitioning
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.play_arrow),
+                            label: const Text('Iniciar atendimento'),
+                          ),
+                          OutlinedButton.icon(
+                            key: ValueKey('cancel-request-$id'),
+                            onPressed: transitioning || id.isEmpty
+                                ? null
+                                : () => _confirmCancelRequest(request),
+                            icon: const Icon(Icons.cancel_outlined),
+                            label: const Text('Cancelar solicitação'),
+                          ),
+                          TextButton.icon(
+                            key: ValueKey('details-$id'),
+                            onPressed: transitioning
+                                ? null
+                                : () => _openRequestDetail(request),
+                            icon: const Icon(Icons.arrow_forward),
+                            label: const Text('Ver detalhes'),
+                          ),
+                        ] else if (status == _RequestStatus.inProgress) ...[
+                          FilledButton.icon(
+                            key: ValueKey('open-request-$id'),
+                            onPressed: transitioning
+                                ? null
+                                : () => _openRequestDetail(request),
+                            icon: const Icon(Icons.support_agent),
+                            label: const Text('Abrir atendimento'),
+                          ),
+                        ] else ...[
+                          TextButton.icon(
+                            key: ValueKey('details-$id'),
+                            onPressed: () => _openRequestDetail(request),
+                            icon: const Icon(Icons.arrow_forward),
+                            label: const Text('Ver detalhes'),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],
