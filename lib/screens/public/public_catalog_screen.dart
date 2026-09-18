@@ -43,6 +43,13 @@ class _PublicCatalogScreenState
   bool _isSelectionMode = false;
   bool _isEnteringSelectionMode = false;
 
+  final TextEditingController _customerNameController =
+      TextEditingController();
+  final TextEditingController _customerPhoneController =
+      TextEditingController();
+  final TextEditingController _customerNoteController =
+      TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +84,9 @@ class _PublicCatalogScreenState
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _customerNameController.dispose();
+    _customerPhoneController.dispose();
+    _customerNoteController.dispose();
     super.dispose();
   }
 
@@ -280,6 +290,49 @@ class _PublicCatalogScreenState
     return total;
   }
 
+  String? _validateCustomerName(String? value) {
+    final normalized = (value ?? '').trim();
+
+    if (normalized.isEmpty) {
+      return 'Informe seu nome.';
+    }
+
+    if (normalized.length > 120) {
+      return 'O nome deve ter no máximo 120 caracteres.';
+    }
+
+    return null;
+  }
+
+  String? _validateCustomerPhone(String? value) {
+    final digits =
+        (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+
+    final isLocal =
+        digits.length == 10 ||
+        digits.length == 11;
+
+    final hasBrazilCountryCode =
+        (digits.length == 12 || digits.length == 13) &&
+        digits.startsWith('55');
+
+    if (!isLocal && !hasBrazilCountryCode) {
+      return 'Informe um WhatsApp válido com DDD.';
+    }
+
+    return null;
+  }
+
+  String? _validateCustomerNote(String? value) {
+    final normalized = (value ?? '').trim();
+
+    if (normalized.length > 500) {
+      return 'A observação deve ter no máximo 500 caracteres.';
+    }
+
+    return null;
+  }
+
   Future<void> _openSelectionSummary() async {
     if (
       !mounted ||
@@ -311,6 +364,7 @@ class _PublicCatalogScreenState
     // Mantem o resumo e o payload no mesmo snapshot durante o dialogo.
     final submittedQuantities =
         Map<String, int>.from(_selectedQuantities);
+    final customerFormKey = GlobalKey<FormState>();
     var sent = false;
     var refreshAfterSubmit = false;
     String? submitError;
@@ -332,7 +386,9 @@ class _PublicCatalogScreenState
           ),
           content: SizedBox(
             width: 560,
-            child: Column(
+            child: Form(
+              key: customerFormKey,
+              child: Column(
               mainAxisSize:
                   MainAxisSize.min,
               crossAxisAlignment:
@@ -510,6 +566,70 @@ class _PublicCatalogScreenState
                         ),
                       ),
                 ),
+                const Divider(height: 28),
+                Text(
+                  'Seus dados',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Informe quem está enviando esta solicitação.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(
+                        color: const Color(0xFF6B7280),
+                      ),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  key: const ValueKey('customer-name'),
+                  controller: _customerNameController,
+                  enabled: !_isSubmittingSelection,
+                  maxLength: 120,
+                  textInputAction: TextInputAction.next,
+                  validator: _validateCustomerName,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome *',
+                    hintText: 'Ex.: Maria Silva',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  key: const ValueKey('customer-phone'),
+                  controller: _customerPhoneController,
+                  enabled: !_isSubmittingSelection,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  validator: _validateCustomerPhone,
+                  decoration: const InputDecoration(
+                    labelText: 'WhatsApp *',
+                    hintText: '(21) 99999-9999',
+                    helperText: 'Informe DDD + número.',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  key: const ValueKey('customer-note'),
+                  controller: _customerNoteController,
+                  enabled: !_isSubmittingSelection,
+                  maxLength: 500,
+                  maxLines: 3,
+                  validator: _validateCustomerNote,
+                  decoration: const InputDecoration(
+                    labelText: 'Observação (opcional)',
+                    hintText: 'Ex.: separar para retirada hoje',
+                    alignLabelWithHint: true,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
                 if (submitError != null) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -520,6 +640,7 @@ class _PublicCatalogScreenState
                   ),
                 ],
               ],
+            ),
             ),
           ),
           actions: [
@@ -538,6 +659,21 @@ class _PublicCatalogScreenState
                 if (_isSubmittingSelection) {
                   return;
                 }
+
+                final isCustomerDataValid =
+                    customerFormKey.currentState?.validate() ?? false;
+
+                if (!isCustomerDataValid) {
+                  return;
+                }
+
+                final customerName =
+                    _customerNameController.text.trim();
+                final customerPhone =
+                    _customerPhoneController.text.trim();
+                final customerNote =
+                    _customerNoteController.text.trim();
+
                 setDialogState(() {
                   _isSubmittingSelection = true;
                   submitError = null;
@@ -550,17 +686,26 @@ class _PublicCatalogScreenState
                       timeout: const Duration(seconds: 30),
                     ),
                   );
+                  final payload = <String, dynamic>{
+                    'publicSlug': widget.publicSlug,
+                    'publicToken': widget.publicToken,
+                    'requestVersion': 2,
+                    'customerName': customerName,
+                    'customerPhone': customerPhone,
+                    'items': submittedQuantities.entries.map((entry) {
+                      return <String, dynamic>{
+                        'productId': entry.key,
+                        'quantity': entry.value,
+                      };
+                    }).toList(growable: false),
+                  };
+
+                  if (customerNote.isNotEmpty) {
+                    payload['note'] = customerNote;
+                  }
+
                   final response = await callable.call(
-                    <String, dynamic>{
-                      'publicSlug': widget.publicSlug,
-                      'publicToken': widget.publicToken,
-                      'items': submittedQuantities.entries.map((entry) {
-                        return <String, dynamic>{
-                          'productId': entry.key,
-                          'quantity': entry.value,
-                        };
-                      }).toList(growable: false),
-                    },
+                    payload,
                   );
                   final data = response.data;
                   if (data is! Map ||
@@ -632,6 +777,10 @@ class _PublicCatalogScreenState
       return;
     }
     if (sent) {
+      _customerNameController.clear();
+      _customerPhoneController.clear();
+      _customerNoteController.clear();
+
       setState(() {
         _selectedQuantities = <String, int>{};
         _isSelectionMode = false;

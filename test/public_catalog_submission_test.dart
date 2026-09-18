@@ -69,7 +69,11 @@ void main() {
         .setMockDecodedMessageHandler<Object?>(channel, null);
   });
 
-  Future<void> openSummary(WidgetTester tester, {bool mobile = false}) async {
+  Future<void> openSummary(
+    WidgetTester tester, {
+    bool mobile = false,
+    bool fillCustomer = true,
+  }) async {
     tester.view.physicalSize = mobile ? const Size(390, 844) : const Size(1200, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -94,10 +98,72 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Resumo da sele\u00e7\u00e3o'), findsOneWidget);
     expect(find.text('2 \u00d7 R\$ 10,00'), findsOneWidget);
+    if (fillCustomer) {
+      await tester.enterText(
+        find.byKey(const ValueKey('customer-name')),
+        'Maria Silva',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('customer-phone')),
+        '(21) 98505-0120',
+      );
+      await tester.pump();
+    }
   }
 
   Iterable<Map<String, dynamic>> submits() =>
       calls.where((call) => call['functionName'] == 'submitPublicCatalogSelection');
+
+  testWidgets(
+    'V2 exige nome e WhatsApp e envia observacao opcional',
+    (tester) async {
+      await openSummary(
+        tester,
+        fillCustomer: false,
+      );
+
+      await tester.tap(find.text('Enviar'));
+      await tester.pump();
+
+      expect(submits(), isEmpty);
+      expect(find.text('Informe seu nome.'), findsOneWidget);
+      expect(
+        find.text('Informe um WhatsApp válido com DDD.'),
+        findsOneWidget,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('customer-name')),
+        '  Maria Silva  ',
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('customer-phone')),
+        '  (21) 98505-0120  ',
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('customer-note')),
+        '  Separar para retirada  ',
+      );
+
+      await tester.tap(find.text('Enviar'));
+      await tester.pumpAndSettle();
+
+      expect(submits().length, 1);
+      expect(submits().single['parameters'], {
+        'publicSlug': 'loja-teste',
+        'publicToken': 'fixture-token',
+        'requestVersion': 2,
+        'customerName': 'Maria Silva',
+        'customerPhone': '(21) 98505-0120',
+        'note': 'Separar para retirada',
+        'items': [
+          {'productId': 'p1', 'quantity': 2},
+        ],
+      });
+    },
+  );
 
   for (final mobile in [false, true]) {
     testWidgets('payload, clique duplo e sucesso; mobile=$mobile', (tester) async {
@@ -114,6 +180,9 @@ void main() {
       expect(submits().single['parameters'], {
         'publicSlug': 'loja-teste',
         'publicToken': 'fixture-token',
+        'requestVersion': 2,
+        'customerName': 'Maria Silva',
+        'customerPhone': '(21) 98505-0120',
         'items': [{'productId': 'p1', 'quantity': 2}],
       });
       expect(tester.widget<TextButton>(
