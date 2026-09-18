@@ -385,6 +385,7 @@ match /stores/{storeId}/{subcollection}/{document=**} {
     && subcollection != 'customers'
     && subcollection != 'categories'
     && subcollection != 'cash_flow'
+    && subcollection != 'catalogRequests'
     && exists(
       /databases/$(database)/documents/users/$(request.auth.uid)
     )
@@ -399,6 +400,7 @@ match /stores/{storeId}/{subcollection}/{document=**} {
     && subcollection != 'customers'
     && subcollection != 'categories'
     && subcollection != 'cash_flow'
+    && subcollection != 'catalogRequests'
     && exists(
       /databases/$(database)/documents/users/$(request.auth.uid)
     )
@@ -413,6 +415,7 @@ match /stores/{storeId}/{subcollection}/{document=**} {
     && subcollection != 'customers'
     && subcollection != 'categories'
     && subcollection != 'cash_flow'
+    && subcollection != 'catalogRequests'
     && exists(
       /databases/$(database)/documents/users/$(request.auth.uid)
     )
@@ -428,6 +431,10 @@ match /stores/{storeId}/{subcollection}/{document=**} {
         /databases/$(database)/documents/users/$(request.auth.uid)
       ).data.role == 'gerente'
     );
+}
+
+match /stores/{storeId}/catalogRequests/{document=**} {
+  allow read, write: if false;
 }
   }
 }
