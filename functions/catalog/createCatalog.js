@@ -967,8 +967,22 @@ const listCatalogRequests = onCall(
         );
       }
 
-      const snapshot = await storeSnapshot.ref.collection("catalogRequests")
-          .orderBy("createdAt", "desc").limit(50).get();
+      const requestsRef =
+        storeSnapshot.ref.collection("catalogRequests");
+
+      const [snapshot, openCountSnapshot] = await Promise.all([
+        requestsRef
+            .orderBy("createdAt", "desc")
+            .limit(50)
+            .get(),
+        requestsRef
+            .where("status", "in", ["pending", "in_progress"])
+            .count()
+            .get(),
+      ]);
+
+      const openRequestCount =
+        openCountSnapshot.data().count;
       const requests = snapshot.docs.map((document) => {
         const saved = document.data();
         // Validacao estrutural: nao inventar valores nem definir novos status.
@@ -1016,7 +1030,7 @@ const listCatalogRequests = onCall(
           ...lifecycle,
         };
       });
-      return {success: true, requests};
+      return {success: true, requests, openRequestCount};
     },
 );
 

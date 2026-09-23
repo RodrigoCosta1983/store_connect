@@ -15,6 +15,7 @@ class CatalogsScreen extends StatefulWidget {
 class _CatalogsScreenState extends State<CatalogsScreen> {
   bool _isLoading = true;
   String? _errorMessage;
+  int _openRequestCount = 0;
   List<Map<String, dynamic>> _catalogs = [];
   final Set<int> _expandedCatalogIndexes = <int>{};
 
@@ -22,6 +23,62 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   void initState() {
     super.initState();
     _loadCatalogs();
+    _loadOpenRequestCount();
+  }
+
+  Future<void> _loadOpenRequestCount() async {
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'listCatalogRequests',
+        options: HttpsCallableOptions(
+          timeout: const Duration(seconds: 30),
+        ),
+      );
+
+      final response = await callable.call();
+      final rawData = response.data;
+
+      if (rawData is! Map || rawData['success'] != true) {
+        throw const FormatException(
+          'Resposta inválida ao carregar solicitações em aberto.',
+        );
+      }
+
+      final rawCount = rawData['openRequestCount'];
+
+      if (rawCount is! num ||
+          !rawCount.isFinite ||
+          rawCount < 0 ||
+          rawCount.toDouble() != rawCount.truncateToDouble()) {
+        throw const FormatException(
+          'Quantidade de solicitações em aberto inválida.',
+        );
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _openRequestCount = rawCount.toInt();
+      });
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint(
+        '[CatalogsScreen] Erro ao carregar contador de solicitações: '
+        '${error.code} - ${error.message}',
+      );
+    } catch (error) {
+      debugPrint(
+        '[CatalogsScreen] Erro ao carregar contador de solicitações: $error',
+      );
+    }
+  }
+
+  Future<void> _refreshCatalogsAndRequests() async {
+    await Future.wait<void>([
+      _loadCatalogs(),
+      _loadOpenRequestCount(),
+    ]);
   }
 
   Future<void> _loadCatalogs() async {
@@ -513,7 +570,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
           maxWidth: 1100,
         ),
         child: RefreshIndicator(
-          onRefresh: _loadCatalogs,
+          onRefresh: _refreshCatalogsAndRequests,
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -537,16 +594,34 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         title: const Text('Catálogo Inteligente'),
         centerTitle: true,
         actions: [
-          IconButton(
-            tooltip: 'Solicitações recebidas',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const CatalogRequestsScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.inbox_outlined),
+          Badge(
+            alignment: Alignment.topRight,
+            offset: const Offset(-6, -4),
+            label: Text(
+              _openRequestCount > 99
+                  ? '99+'
+                  : _openRequestCount.toString(),
+            ),
+            isLabelVisible: _openRequestCount > 0,
+            child: IconButton(
+              tooltip: _openRequestCount > 0
+                  ? 'Solicitações recebidas ($_openRequestCount em aberto)'
+                  : 'Solicitações recebidas',
+              onPressed: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const CatalogRequestsScreen(),
+                  ),
+                );
+
+                if (!mounted) {
+                  return;
+                }
+
+                await _loadOpenRequestCount();
+              },
+              icon: const Icon(Icons.inbox_outlined),
+            ),
           ),
         ],
       ),

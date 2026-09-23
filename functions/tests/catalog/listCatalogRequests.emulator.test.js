@@ -56,22 +56,95 @@ async function main() {
           assert([user.path, allowedStore.path].some(
               (allowed) => path.endsWith("/documents/" + allowed)), path);
         }
-      } else {
-        assert.equal(method, "runQuery", "Operacao inesperada: " + method);
+      } else if (method === "runQuery") {
         assert(request.parent.endsWith("/documents/" + allowedStore.path));
         assert.deepEqual(request.structuredQuery.from,
             [{collectionId: "catalogRequests"}]);
+      } else if (method === "runAggregationQuery") {
+        assert(
+            request.parent.endsWith("/documents/" + allowedStore.path),
+            "Aggregation fora da loja autorizada",
+        );
+
+        const aggregationQuery =
+          request.structuredAggregationQuery;
+
+        assert(
+            aggregationQuery,
+            "structuredAggregationQuery ausente",
+        );
+
+        assert.deepEqual(
+            aggregationQuery.structuredQuery.from,
+            [{collectionId: "catalogRequests"}],
+        );
+
+        assert.equal(
+            aggregationQuery.aggregations.length,
+            1,
+            "Esperada exatamente uma agregacao",
+        );
+
+        assert(
+            Object.prototype.hasOwnProperty.call(
+                aggregationQuery.aggregations[0],
+                "count",
+            ),
+            "A agregacao autorizada precisa ser count",
+        );
+      } else {
+        assert.fail("Operacao inesperada: " + method);
       }
     }
-    return originalStream.call(this, method, bidirectional, request, ...rest);
+
+    return originalStream.call(
+        this,
+        method,
+        bidirectional,
+        request,
+        ...rest,
+    );
   };
   const read = async (data) => {
     guarded = true;
+
+    let result;
+
     try {
-      return await call(data);
+      result = await call(data);
     } finally {
       guarded = false;
     }
+
+    // Consulta independente do teste. Ela ocorre depois de a guarda da
+    // Function ser desligada para nao ser confundida com trafego da Function.
+    const openSnapshot = await allowedStore
+        .collection("catalogRequests")
+        .where("status", "in", ["pending", "in_progress"])
+        .get();
+
+    assert.equal(
+        Number.isSafeInteger(result.openRequestCount),
+        true,
+        "openRequestCount precisa ser inteiro seguro",
+    );
+
+    assert(
+        result.openRequestCount >= 0,
+        "openRequestCount nao pode ser negativo",
+    );
+
+    assert.equal(
+        result.openRequestCount,
+        openSnapshot.size,
+        "openRequestCount deve contar pending + in_progress da loja autorizada",
+    );
+
+    // Mantem os asserts historicos do F7.8-C1 sem reescreve-los.
+    return {
+      success: result.success,
+      requests: result.requests,
+    };
   };
 
   try {
