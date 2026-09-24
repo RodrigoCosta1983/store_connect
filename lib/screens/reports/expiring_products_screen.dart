@@ -13,7 +13,12 @@ class ExpiringProductsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Produtos Próximos ao Vencimento'),
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1100),
+          child: SizedBox.expand(
+            child: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('stores')
             .doc(storeId)
@@ -96,6 +101,9 @@ class ExpiringProductsScreen extends StatelessWidget {
             },
           );
         },
+      ),
+          ),
+        ),
       ),
     );
   }

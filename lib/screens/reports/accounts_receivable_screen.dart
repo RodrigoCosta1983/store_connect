@@ -93,7 +93,12 @@ class _AccountsReceivableScreenState extends State<AccountsReceivableScreen> {
         title: const Text('Contas a Receber (Crédito)'),
       ),
       // MODIFICADO: A lógica de exibição agora checa se há uma mensagem de erro
-      body: _errorMessage != null
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1100),
+          child: SizedBox.expand(
+            child: _errorMessage != null
           ? Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -150,6 +155,9 @@ class _AccountsReceivableScreenState extends State<AccountsReceivableScreen> {
             },
           );
         },
+      ),
+          ),
+        ),
       ),
     );
   }

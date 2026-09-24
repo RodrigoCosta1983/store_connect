@@ -3,8 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:store_connect/screens/reports/accounts_receivable_screen.dart';
 import 'package:store_connect/screens/reports/expiring_products_screen.dart';
 import 'package:store_connect/screens/reports/low_stock_report_screen.dart';
+import 'package:store_connect/screens/reports/sales_by_period_screen.dart';
 import 'package:store_connect/widgets/KpiCard.dart';
 
 import '../widgets/dynamic_background.dart';
@@ -66,6 +68,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .where('quantidade', isLessThanOrEqualTo: lowStockThreshold)
           .get();
 
+      final lowStockProductsCount = lowStockSnapshot.docs
+          .where((doc) => doc.data()['isArchived'] != true)
+          .length;
+
       // Busca os lotes e conta os vencimentos
       final productsSnapshot = await storeRef.collection('products').get();
       int expiringCount = 0;
@@ -106,7 +112,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         setState(() {
           _totalSalesToday = totalSales;
           _salesCountToday = salesTodaySnapshot.docs.length;
-          _lowStockProductsCount = lowStockSnapshot.docs.length;
+          _lowStockProductsCount = lowStockProductsCount;
           _totalFiado = totalFiado;
           _productsExpiringSoonCount = expiringCount; // AGORA O CARD VAI ATUALIZAR!
         });
@@ -160,80 +166,128 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   int crossAxisCount;
                   double childAspectRatio;
 
-                  if (screenWidth > 1200) {
-                    crossAxisCount = 5; // Telas muito largas: 5 colunas
-                    childAspectRatio = 1.2;
-                  } else if (screenWidth > 900) {
-                    crossAxisCount = 4; // Telas largas: 4 colunas
-                    childAspectRatio = 1.1;
+                  // No Web, limitamos o painel para que os cards nao crescam
+                  // indefinidamente em monitores largos.
+                  final double dashboardWidth =
+                      screenWidth > 980 ? 980 : screenWidth;
+
+                  if (screenWidth > 900) {
+                    crossAxisCount = 4;
+                    childAspectRatio = 1.35;
                   } else if (screenWidth > 600) {
-                    crossAxisCount = 3; // Telas médias: 3 colunas
-                    childAspectRatio = 1.0;
+                    crossAxisCount = 3;
+                    childAspectRatio = 1.15;
                   } else {
-                    crossAxisCount = 2; // Telas pequenas (mobile): 2 colunas
+                    // Mobile permanece com 2 colunas.
+                    crossAxisCount = 2;
                     childAspectRatio = 1.1;
                   }
 
-                  return GridView(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: crossAxisCount, // Usa o valor dinâmico
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: childAspectRatio, // Proporção ajustável
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      width: dashboardWidth,
+                      child: GridView(
+                        padding: const EdgeInsets.all(16),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                          childAspectRatio: childAspectRatio,
+                        ),
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    SalesByPeriodScreen(storeId: widget.storeId),
+                              ),
+                            ),
+                            child: KpiCard(
+                              title: 'Vendas de Hoje',
+                              value: formatCurrency.format(_totalSalesToday),
+                              icon: Icons.point_of_sale,
+                              color: Colors.green,
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    SalesByPeriodScreen(storeId: widget.storeId),
+                              ),
+                            ),
+                            child: KpiCard(
+                              title: 'Nº de Vendas (Hoje)',
+                              value: _salesCountToday.toString(),
+                              icon: Icons.receipt_long,
+                              color: Colors.blue,
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    SalesByPeriodScreen(storeId: widget.storeId),
+                              ),
+                            ),
+                            child: KpiCard(
+                              title: 'Ticket Médio (Hoje)',
+                              value: formatCurrency.format(ticketMedio),
+                              icon: Icons.price_check,
+                              color: Colors.purple,
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => AccountsReceivableScreen(
+                                  storeId: widget.storeId,
+                                ),
+                              ),
+                            ),
+                            child: KpiCard(
+                              title: 'Total a Receber (A Prazo)',
+                              value: formatCurrency.format(_totalFiado),
+                              icon: Icons.person_add_disabled,
+                              color: Colors.orange,
+                            ),
+                          ),
+
+                          // 5. Card de Estoque Baixo
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    LowStockReportScreen(storeId: widget.storeId),
+                              ),
+                            ),
+                            child: KpiCard(
+                              title: 'Produtos Estoque Baixo',
+                              value: _lowStockProductsCount.toString(),
+                              icon: Icons.warning_amber,
+                              color: Colors.red,
+                            ),
+                          ),
+
+                          // 6. Card de Vencimento Proximo
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    ExpiringProductsScreen(storeId: widget.storeId),
+                              ),
+                            ),
+                            child: KpiCard(
+                              title: 'Produtos Vencimento Próximo',
+                              value: _productsExpiringSoonCount.toString(),
+                              icon: Icons.calendar_month,
+                              color: Colors.amber.shade800,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    children: [
-                      KpiCard(
-                        title: 'Vendas de Hoje',
-                        value: formatCurrency.format(_totalSalesToday),
-                        icon: Icons.point_of_sale,
-                        color: Colors.green,
-                      ),
-                      KpiCard(
-                        title: 'Nº de Vendas (Hoje)',
-                        value: _salesCountToday.toString(),
-                        icon: Icons.receipt_long,
-                        color: Colors.blue,
-                      ),
-                      KpiCard(
-                        title: 'Ticket Médio (Hoje)',
-                        value: formatCurrency.format(ticketMedio),
-                        icon: Icons.price_check,
-                        color: Colors.purple,
-                      ),
-                      KpiCard(
-                        title: 'Total a Receber (A Prazo)',
-                        value: formatCurrency.format(_totalFiado),
-                        icon: Icons.person_add_disabled,
-                        color: Colors.orange,
-                      ),
-
-                      // 1. Card de Estoque Baixo
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (context) => LowStockReportScreen(storeId: widget.storeId)),
-                        ),
-                        child: KpiCard(
-                          title: 'Produtos Estoque Baixo',
-                          value: _lowStockProductsCount.toString(),
-                          icon: Icons.warning_amber,
-                          color: Colors.red,
-                        ),
-                      ),
-
-                      // 2. Card de Vencimento Próximo
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (context) => ExpiringProductsScreen(storeId: widget.storeId)),
-                        ),
-                        child: KpiCard(
-                          title: 'Produtos Vencimento Próximo',
-                          value: _productsExpiringSoonCount.toString(),
-                          icon: Icons.calendar_month,
-                          color: Colors.amber.shade800,
-                        ),
-                      ),
-                    ],
                   );
                 },
               ),

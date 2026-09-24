@@ -140,7 +140,7 @@ class BusinessInsightsService {
       final productMinimum = (data['minimumStock'] as num?)?.toInt();
       final threshold = productMinimum ?? fallbackLowStockThreshold;
 
-      if (quantity <= threshold) {
+      if (data['isArchived'] != true && quantity <= threshold) {
         lowStockProducts.add(productDoc);
       }
 

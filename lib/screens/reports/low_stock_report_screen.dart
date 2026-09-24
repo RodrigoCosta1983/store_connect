@@ -14,7 +14,12 @@ class LowStockReportScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Produtos Estoque Baixo'),
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1100),
+          child: SizedBox.expand(
+            child: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('stores')
             .doc(storeId)
@@ -39,7 +44,9 @@ class LowStockReportScreen extends StatelessWidget {
             final productData = doc.data() as Map<String, dynamic>;
             final quantidade = (productData['quantidade'] as num? ?? 0).toInt();
             final minimumStock = (productData['minimumStock'] as num? ?? 0).toInt();
-            return quantidade <= minimumStock;
+            final isArchived = productData['isArchived'] == true;
+
+            return !isArchived && quantidade <= minimumStock;
           }).toList();
           // --- FIM DO FILTRO ---
 
@@ -84,6 +91,9 @@ class LowStockReportScreen extends StatelessWidget {
             },
           );
         },
+      ),
+          ),
+        ),
       ),
     );
   }

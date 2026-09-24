@@ -91,7 +91,12 @@ class _SalesByPeriodScreenState extends State<SalesByPeriodScreen> {
       appBar: AppBar(
         title: const Text('Vendas por Período'),
       ),
-      body: Column(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1100),
+          child: SizedBox.expand(
+            child: Column(
         children: [
           // Seletor de Datas e Botão
           Padding(
@@ -149,6 +154,9 @@ class _SalesByPeriodScreenState extends State<SalesByPeriodScreen> {
             ),
           ),
         ],
+      ),
+          ),
+        ),
       ),
     );
   }
