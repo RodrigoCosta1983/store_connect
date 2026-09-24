@@ -1,9 +1,10 @@
 # Store&Connect — Catálogo Inteligente
 ## Taxonomia, Coleções Comerciais e Seções Dinâmicas
 
-**Status:** proposta arquitetural / backlog técnico — **não implementada**
-**Data:** 16/09/2026
-**Objetivo:** registrar a evolução planejada do catálogo público antes de alterar o modelo de dados, aproveitando que o projeto ainda está majoritariamente em ambiente de testes e sem clientes reais.
+**Status:** implementação parcial — **taxonomia de categorias/subcategorias implementada e validada**; **coleções comerciais e seções dinâmicas permanecem em backlog**
+**Documento original:** 16/09/2026
+**Última atualização:** 23/09/2026
+**Objetivo:** registrar a arquitetura e o estado real da evolução do catálogo público, separando com clareza o que já foi implementado na taxonomia de produtos do que continua planejado para coleções comerciais, seções dinâmicas e recomendações.
 
 ---
 
@@ -38,9 +39,65 @@ O cliente deve conseguir encontrar, selecionar e solicitar produtos com clareza,
 
 ---
 
+# 2.1. Estado implementado em 23/09/2026
+
+A arquitetura deixou de ser apenas proposta na parte de **taxonomia de categorias**.
+
+Estado atual confirmado:
+
+```text
+TAXONOMIA DE CATEGORIAS
+✅ categoryIds como associação canônica nos fluxos novos
+✅ produto pode possuir zero, uma ou várias categorias/subcategorias
+✅ limite operacional atual de até 10 associações por produto
+✅ categoria raiz e subcategoria representadas na hierarquia atual
+✅ associação por ID estável
+✅ edição múltipla no cadastro/edição de produto
+✅ criação de produto integrada à taxonomia
+✅ importação de produtos integrada à taxonomia
+✅ criação/edição segura de categorias via backend
+✅ exclusão segura de categorias via backend
+✅ compatibilidade com dados legados preservada nos pontos necessários
+✅ validações backend/emulador e validações Flutter realizadas
+✅ Functions de taxonomia publicadas
+
+INTERFACE
+✅ seleção independente de categorias e subcategorias
+✅ contador de seleção até 10
+✅ layout responsivo da lista no Editar Produto
+   - mobile: 2 colunas
+   - tela média/tablet: até 3 colunas conforme espaço
+   - desktop/web: até 4 colunas conforme espaço
+✅ validação visual realizada
+✅ Web atualizada para 1.0.3+46
+
+AINDA NÃO IMPLEMENTADO NESTA FRENTE
+❌ collectionIds / coleções comerciais
+❌ gestão de coleções comerciais
+❌ seções dinâmicas alimentadas por coleção/categoria
+❌ “Complete seu pedido” baseado em coleção/recomendação
+❌ “Ofertas para você” baseado em coleção
+❌ recomendações comportamentais/IA
+```
+
+As Cloud Functions atualmente envolvidas na taxonomia incluem:
+
+```text
+createProduct
+setProductCategories
+upsertCategory
+deleteCategory
+```
+
+A publicação das alterações específicas de **Firestore Rules** preparadas para a taxonomia continua sendo uma etapa operacional separada e não deve ser presumida como concluída apenas porque as Functions e a interface já estão funcionando.
+
+A referência `1.0.3+46` acima corresponde ao estado Flutter/Web validado nesta atualização e não deve ser interpretada, por si só, como confirmação de publicação do build `+46` na Play Store.
+
+---
+
 # 3. Experiência desejada no catálogo público
 
-A estrutura visual planejada é:
+A seleção/resumo/envio básico do cliente já existe no fluxo atual do Catálogo Inteligente. A composição comercial abaixo continua sendo a visão planejada para integrar essa seleção às futuras seções de recomendação e oferta:
 
 ```text
 ────────────────────────────────────────
@@ -134,7 +191,7 @@ A proposta é usar **grupos reutilizáveis**.
 
 # 6. Separação conceitual: Categorias x Coleções Comerciais
 
-A arquitetura proposta separa dois conceitos.
+A arquitetura separa dois conceitos. A parte de **categorias** já possui implementação técnica; a parte de **coleções comerciais** continua conceitual/backlog.
 
 ## 6.1. Categorias
 
@@ -178,98 +235,98 @@ Coleções comerciais podem ser temporárias e ligadas a campanhas.
 
 ---
 
-# 7. Relação muitos-para-muitos
+# 7. Relação muitos-para-muitos — estado atual
 
-Um produto poderá pertencer a:
+A relação muitos-para-muitos já está implementada para **categorias**.
 
-- zero, uma ou várias categorias;
-- zero, uma ou várias coleções comerciais.
+Um produto pode possuir de zero a várias associações de categoria/subcategoria dentro do limite operacional atual de 10 associações.
 
-Exemplo conceitual:
+Exemplo atual:
 
 ```text
 Produto: Shampoo X
 
-Categorias:
+categoryIds:
+- cat_feminino
+- cat_cabelo
+```
+
+Isso significa:
+
+```text
+um produto
+→ pode pertencer a várias categorias/subcategorias
+
+uma categoria/subcategoria
+→ pode estar associada a vários produtos
+```
+
+A associação utiliza IDs estáveis, não o nome textual da categoria como identidade.
+
+Para **coleções comerciais**, a mesma relação muitos-para-muitos continua sendo a direção arquitetural planejada, mas ainda não foi implementada.
+
+Exemplo futuro:
+
+```text
+Produto: Shampoo X
+
+Categorias — IMPLEMENTADO:
 - Feminino
 - Cabelo
 
-Coleções comerciais:
+Coleções comerciais — BACKLOG:
 - Promoção
 - Destaques
 ```
 
-Outro exemplo:
+Portanto, a regra consolidada é:
 
-```text
-Produto: Protetor Solar Y
-
-Categorias:
-- Feminino
-- Proteção solar
-- Verão
-
-Coleções comerciais:
-- Promoção
-- Mais vendidos
-```
-
-A relação desejada é **muitos-para-muitos**.
-
-Um produto pode estar em vários grupos e um grupo pode conter vários produtos.
+> **Múltiplas categorias já fazem parte do modelo atual; múltiplas coleções comerciais permanecem no desenho futuro.**
 
 ---
 
-# 8. Produto sem categoria também deve ser possível
+# 8. Produto sem categoria — regra implementada
 
-A proposta inicial é aceitar cardinalidade `0..N`.
+A cardinalidade da taxonomia atual permite `0..10` associações por produto.
 
-Exemplos:
+Exemplos conceituais compatíveis com o contrato atual:
 
 ```text
 Produto A
-Categorias: []
+categoryIds: []
 
 Produto B
-Categorias:
-- Higiene
+categoryIds:
+- cat_higiene
 
 Produto C
-Categorias:
-- Feminino
-- Cabelo
-- Higiene
+categoryIds:
+- cat_feminino
+- cat_cabelo
+- cat_higiene
 ```
 
-Isso permite cadastrar produtos ainda não classificados sem bloquear o fluxo operacional.
+Isso permite cadastrar ou manter um produto ainda não classificado sem bloquear o fluxo operacional.
 
-A obrigatoriedade de pelo menos uma categoria poderá ser reavaliada posteriormente.
+A interface de edição exibe a quantidade selecionada em relação ao limite atual, por exemplo `1/10`, e impede ultrapassar 10 associações.
+
+A obrigatoriedade futura de ao menos uma categoria, se algum dia for desejada, deverá ser tratada como uma mudança explícita de contrato — não é a regra atual.
 
 ---
 
-# 9. Referências por ID, não por nome
+# 9. Referências por ID, não por nome — implementado para categorias
 
-A proposta conceitual é que produtos armazenem referências estáveis por ID.
+A decisão arquitetural foi confirmada na implementação de categorias: produtos utilizam referências estáveis por ID.
 
-Exemplo:
+Contrato canônico atual da taxonomia:
 
 ```text
 categoryIds:
 - cat_feminino
 - cat_cabelo
-
-collectionIds:
-- col_promocao
-- col_destaques
 ```
 
-Evitar depender do nome textual como identificador:
-
-```text
-categories:
-- Feminino
-- Cabelo
-```
+O nome textual da categoria não é a identidade da associação.
 
 Motivo:
 
@@ -285,17 +342,23 @@ para:
 Cuidados Femininos
 ```
 
-não deverá ser necessário atualizar todos os produtos associados.
+a relação do produto continua apontando para o mesmo ID da categoria e não depende de regravar todos os produtos apenas por causa da alteração do nome.
 
-## Atenção
+A hierarquia atual também utiliza referência por ID para representar subcategorias através de `parentCategoryId`.
 
-Essa é uma **proposta arquitetural**, ainda sujeita à auditoria do modelo Firestore atual.
+Para coleções comerciais, permanece planejado aplicar o mesmo princípio:
 
-Nenhuma alteração de schema deve ser feita antes dessa auditoria.
+```text
+collectionIds:
+- col_promocao
+- col_destaques
+```
+
+`collectionIds` ainda não faz parte do modelo implementado; é backlog arquitetural.
 
 ---
 
-# 10. Seções dinâmicas do catálogo
+# 10. Seções dinâmicas do catálogo — backlog
 
 Uma seção do catálogo poderá apontar para uma fonte dinâmica.
 
@@ -415,7 +478,7 @@ Essas regras combinadas pertencem a uma etapa posterior.
 
 ---
 
-# 14. “Complete seu pedido” — evolução planejada
+# 14. “Complete seu pedido” — backlog / evolução planejada
 
 ## Versão inicial
 
@@ -460,7 +523,7 @@ Esse nível não faz parte da primeira implementação.
 
 ---
 
-# 15. “Ofertas para você”
+# 15. “Ofertas para você” — backlog
 
 A seção de promoções deve poder ser controlada pela loja.
 
@@ -478,7 +541,7 @@ Isso permite utilizar o catálogo como ferramenta de exposição comercial e nã
 
 ---
 
-# 16. Campanhas comerciais futuras
+# 16. Campanhas comerciais futuras — backlog
 
 Coleções poderão futuramente suportar metadados adicionais.
 
@@ -511,23 +574,58 @@ Não implementar esses campos antes de fechar o contrato da primeira versão.
 
 ---
 
-# 17. Cadastro e edição de produto
+# 17. Cadastro e edição de produto — estado atual
 
-A futura interface de produto deverá considerar seleção múltipla.
+A interface de produto já suporta **seleção múltipla de categorias e subcategorias**.
 
-Exemplo conceitual:
+Estado implementado:
 
 ```text
 PRODUTO
 Nome: Shampoo X
 Preço: R$ 29,90
 
-Categorias:
+Categorias / subcategorias:
 [x] Feminino
 [x] Cabelo
 [ ] Infantil
 [ ] Masculino
 
+Limite atual:
+0..10 associações
+```
+
+Regras preservadas na interface atual:
+
+- categorias e subcategorias podem ser selecionadas de forma independente;
+- o contador mostra a quantidade selecionada em relação ao limite de 10;
+- a tentativa de ultrapassar 10 associações é bloqueada;
+- associações indisponíveis são tratadas de forma explícita pela interface atual;
+- a taxonomia canônica utiliza `categoryIds`;
+- a compatibilidade com dados legados é tratada sem transformar o nome da categoria em identidade canônica.
+
+## 17.1. Layout responsivo validado em 23/09/2026
+
+A lista deixou de ser exclusivamente vertical e passou a distribuir as opções conforme a largura disponível:
+
+```text
+mobile / largura estreita
+→ 2 colunas
+
+tela média / tablet
+→ até 3 colunas
+
+desktop / web
+→ até 4 colunas
+```
+
+O ajuste foi validado visualmente e faz parte da Web `1.0.3+46` publicada no Hosting.
+
+## 17.2. Coleções comerciais
+
+A segunda parte da interface originalmente imaginada continua em backlog:
+
+```text
 Coleções / grupos comerciais:
 [x] Promoção
 [x] Destaques
@@ -535,11 +633,11 @@ Coleções / grupos comerciais:
 [ ] Mais vendidos
 ```
 
-A UX final será definida depois da auditoria do fluxo atual de cadastro.
+Essa área só deverá ser implementada depois de fechado o contrato de coleções comerciais.
 
 ---
 
-# 18. Configuração de seções no catálogo
+# 18. Configuração de seções no catálogo — backlog
 
 Exemplo conceitual:
 
@@ -628,106 +726,160 @@ Esses eventos não fazem parte da primeira implementação desta arquitetura.
 
 ---
 
-# 22. Migração e compatibilidade
+# 22. Migração e compatibilidade — estado após implementação da taxonomia
 
-O projeto ainda está majoritariamente com lojas e produtos de teste.
+A auditoria que era obrigatória antes da mudança de schema foi realizada para a frente de categorias, e a implementação adotou uma estratégia incremental de compatibilidade.
 
-Isso cria uma janela favorável para rever o modelo antes da entrada de clientes reais.
+Estado atual:
 
-Mesmo assim:
+```text
+categoryIds
+→ contrato canônico para múltiplas associações nos fluxos novos
 
-> **não assumir que podemos apagar ou transformar dados sem auditoria.**
+categoryId / categoryName legados
+→ não devem voltar a ser a autoridade do novo modelo
+→ compatibilidade é preservada nos pontos de leitura/transição necessários
+```
 
-Antes de qualquer mudança de schema:
+A implementação foi distribuída entre backend, Flutter, importação, gestão de categorias e testes, evitando uma conversão cega de toda a base.
 
-1. mapear estrutura atual;
-2. localizar todos os leitores/escritores;
-3. identificar dependências no Flutter;
+Princípios que permanecem válidos para qualquer evolução futura:
+
+1. mapear estrutura existente;
+2. localizar todos os leitores e escritores;
+3. identificar dependências Flutter;
 4. identificar dependências nas Cloud Functions;
-5. mapear testes;
-6. decidir estratégia de compatibilidade;
-7. decidir se dados de teste serão migrados ou recriados;
-8. criar testes de regressão;
-9. implementar de forma incremental.
+5. mapear testes e regras de segurança;
+6. definir compatibilidade antes da escrita;
+7. testar regressão;
+8. implementar de forma incremental;
+9. validar em runtime antes de considerar a etapa concluída.
+
+Esses cuidados deverão ser repetidos quando a implementação avançar para `collectionIds`, coleções comerciais e seções dinâmicas.
 
 ---
 
-# 23. Auditoria obrigatória antes da implementação
+# 23. Auditoria técnica — concluída para categorias
 
-A próxima etapa desta frente deve ser **somente leitura**.
+A auditoria somente leitura prevista na versão inicial deste documento já foi executada para a taxonomia de categorias/produtos.
 
-Precisamos descobrir no código atual:
+Ela permitiu localizar e adaptar os principais pontos de leitura e escrita relacionados a:
 
-- como categorias são persistidas;
-- se produto possui uma categoria, várias ou nenhuma;
-- campos exatos usados atualmente;
-- onde categorias são criadas;
-- onde são editadas;
-- onde são lidas;
-- onde produtos são filtrados por categoria;
-- como catálogo público usa categorias atualmente;
-- dependências do cadastro/edição de produto;
-- dependências no backend;
-- testes existentes;
+- criação e edição de categorias;
+- hierarquia por `parentCategoryId`;
+- criação de produto;
+- edição das associações do produto;
+- importação de produtos;
+- exclusão segura de categoria;
+- compatibilidade com campos legados;
+- testes backend/emulador;
 - regras Firestore relacionadas;
-- necessidade ou não de migração.
+- telas Flutter dependentes da taxonomia.
 
-Nenhuma decisão de schema deverá ser tratada como definitiva sem essa auditoria.
+O resultado dessa auditoria levou ao contrato atual com `categoryIds` e às Functions dedicadas de taxonomia.
 
----
+## Auditorias futuras ainda necessárias
 
-# 24. Bloco técnico proposto
+Antes de implementar coleções comerciais e seções dinâmicas, uma nova auditoria deverá responder especificamente:
 
-Nome provisório:
+- onde `collectionIds` será persistido;
+- como coleções serão criadas, editadas e removidas;
+- como uma seção dinâmica resolverá produtos por categoria ou coleção;
+- quais índices serão necessários;
+- como o catálogo público receberá essas seções sem expor dados privados;
+- como preço, estoque e arquivamento continuarão sendo revalidados;
+- como compatibilizar catálogos já existentes.
 
-```text
-F7-CAT-TAXONOMIA
-```
+Portanto, a regra continua sendo:
 
-## Etapas
-
-```text
-A. Auditar modelo atual de categorias
-B. Fechar contrato de múltiplas categorias
-C. Fechar contrato de coleções comerciais
-D. Fechar contrato de seções dinâmicas
-E. Planejar compatibilidade/migração
-F. Implementar modelo de dados
-G. Adaptar cadastro e edição de produto
-H. Adaptar gestão de categorias/coleções
-I. Adaptar catálogo público
-J. Criar área "Sua seleção"
-K. Criar seções dinâmicas
-L. Criar "Complete seu pedido"
-M. Criar "Ofertas para você"
-N. Testes backend
-O. Testes Flutter
-P. Validação visual
-Q. Validação comercial
-```
-
-Esse bloco não substitui nem mistura responsabilidades com a F7.8 atual.
+> **Não transformar uma ideia de backlog em schema definitivo sem auditoria do impacto real no código atual.**
 
 ---
 
-# 25. Relação com a F7.8
+# 24. Bloco técnico `F7-CAT-TAXONOMIA` — andamento
 
-A F7.8 atual trata do fluxo:
+O bloco deixou de ser apenas proposto. A parte de **taxonomia de categorias** foi implementada; a parte de **coleções e seções dinâmicas** continua pendente.
+
+## Etapas atualizadas
+
+```text
+✅ A. Auditar modelo atual de categorias
+✅ B. Fechar contrato de múltiplas categorias
+❌ C. Fechar contrato de coleções comerciais
+❌ D. Fechar contrato de seções dinâmicas
+✅ E. Planejar compatibilidade/migração da taxonomia de categorias
+✅ F. Implementar modelo de dados de categorias/subcategorias
+✅ G. Adaptar cadastro e edição de produto
+🟡 H. Adaptar gestão de categorias/coleções
+      ✅ categorias/subcategorias
+      ❌ coleções comerciais
+🟡 I. Adaptar catálogo público
+      ✅ catálogo atual continua funcional com dados atuais
+      ❌ seções dinâmicas por categoria/coleção
+❌ J. Criar área comercial “Sua seleção” integrada às novas seções
+❌ K. Criar seções dinâmicas
+❌ L. Criar “Complete seu pedido” por coleção/recomendação
+❌ M. Criar “Ofertas para você” por coleção
+🟡 N. Testes backend
+      ✅ taxonomia de categorias
+      ❌ coleções/seções futuras
+🟡 O. Testes Flutter
+      ✅ taxonomia de categorias
+      ❌ coleções/seções futuras
+✅ P. Validação visual da taxonomia atual
+❌ Q. Validação comercial das coleções/seções futuras
+```
+
+## Estado operacional da taxonomia
+
+As Functions de taxonomia foram publicadas e a interface foi validada em runtime.
+
+A publicação das alterações específicas de Firestore Rules preparadas para essa frente permanece uma pendência separada e requer seu próprio ciclo de autorização e validação.
+
+Este bloco continua separado das responsabilidades de recebimento e tratamento das solicitações do catálogo.
+
+---
+
+# 25. Relação com a F7.8 — estado atualizado
+
+Na versão inicial deste documento, a F7.8 ainda estava em desenvolvimento. Esse contexto mudou.
+
+O fluxo operacional de solicitação do catálogo já avançou para:
 
 ```text
 Cliente envia seleção
 → backend persiste solicitação
 → Store&Connect lista solicitações
 → Store&Connect abre detalhe
+→ solicitação possui ciclo operacional de status
+→ loja visualiza contador de solicitações abertas no Catálogo Inteligente
 ```
 
-O trabalho de taxonomia/coleções/seções dinâmicas é uma evolução paralela do **catálogo público e da gestão de produtos**.
+O catálogo público V2 também passou a solicitar os dados necessários definidos para o fluxo atual, incluindo nome e WhatsApp do cliente antes do envio da solicitação.
 
-A recomendação é:
+No Store&Connect, o contador operacional considera como abertas as solicitações com status:
 
-1. concluir a F7.8-D e fechar o fluxo interno já iniciado;
-2. auditar a arquitetura atual de categorias;
-3. só então iniciar alterações estruturais de taxonomia.
+```text
+pending
+in_progress
+```
+
+Solicitações `completed` e `cancelled` não entram nesse contador.
+
+A taxonomia/coleções/seções dinâmicas continua sendo uma frente **paralela**: ela melhora classificação, descoberta e exposição comercial dos produtos, mas não substitui o fluxo F7 de criação, envio e atendimento das solicitações.
+
+Regra de separação:
+
+```text
+F7 solicitação
+→ captura e operação do pedido/solicitação do cliente
+
+F7-CAT-TAXONOMIA
+→ classificação e organização de produtos
+
+coleções + seções futuras
+→ descoberta comercial, promoção e recomendação opcional
+```
 
 ---
 
@@ -750,86 +902,151 @@ Não incluir inicialmente:
 
 ---
 
-# 27. Critérios de sucesso da arquitetura
+# 27. Critérios de sucesso — progresso atual
 
-A arquitetura será considerada adequada se permitir:
+## Já atendidos pela taxonomia de categorias
 
-- produto em múltiplas categorias;
+- produto em múltiplas categorias/subcategorias;
+- associação por IDs estáveis;
+- produto sem categoria permitido;
+- limite operacional explícito de associações;
+- cadastro, edição e importação integrados ao modelo;
+- gestão segura de categorias;
+- compatibilidade incremental com dados legados;
+- interface compreensível em mobile, tablet e desktop/web;
+- preservação da segurança e validação pelo backend.
+
+## Ainda dependem de coleções/seções futuras
+
 - produto em múltiplas coleções comerciais;
-- categoria e coleção como conceitos separados;
+- categoria e coleção existindo como conceitos técnicos separados no modelo implementado;
 - seções alimentadas dinamicamente;
-- manutenção sem selecionar produto por produto;
-- renomear grupos sem alterar cada produto;
-- reutilizar o mesmo grupo em diferentes catálogos;
-- evoluir futuramente para filtros combinados;
-- preservar segurança e validação do backend;
-- suportar catálogos grandes;
-- continuar compreensível para pequenos comerciantes.
+- manutenção comercial sem selecionar produto por produto em cada catálogo;
+- reutilização da mesma coleção em diferentes catálogos;
+- regras combinadas de categoria + coleção + outros filtros;
+- ordenação/priorização comercial de seções;
+- recomendações contextuais ou comportamentais.
+
+A arquitetura completa desta documentação só poderá ser considerada concluída quando a camada de coleções comerciais e seções dinâmicas também tiver contrato, implementação e validação próprios.
 
 ---
 
-# 28. Decisões já aceitas conceitualmente
+# 28. Decisões consolidadas e estado
 
-Até o momento:
+Até 23/09/2026:
 
-1. Um produto poderá ter múltiplas categorias.
-2. Um produto poderá participar de múltiplos grupos/coleções comerciais.
-3. `Promoção` é melhor tratada como coleção comercial do que como categoria permanente.
-4. Categorias e coleções devem ter identificadores estáveis.
-5. Seções do catálogo poderão usar categorias ou coleções como fonte.
-6. A entrada/saída de produtos das seções deve ser dinâmica conforme associação.
-7. Recomendações são opcionais.
-8. Nenhum item adicional entra automaticamente na seleção do cliente.
-9. A primeira versão deve ser simples.
-10. Regras combinadas e recomendação inteligente ficam para evolução futura.
+1. ✅ **Um produto pode ter múltiplas categorias/subcategorias.** Implementado por IDs canônicos.
+2. ✅ **Produto sem categoria é permitido.** O contrato atual aceita zero associações.
+3. ✅ **Existe limite operacional atual de até 10 associações de categoria/subcategoria por produto.**
+4. ✅ **Categorias usam identificadores estáveis.** Renomear a categoria não deve redefinir a identidade da associação.
+5. ✅ **A hierarquia atual usa `parentCategoryId` para representar a relação de subcategoria.**
+6. ✅ **Cadastro, edição e importação foram adaptados à taxonomia atual.**
+7. ✅ **A seleção de categorias/subcategorias é independente na interface atual.**
+8. 🟡 **Um produto poderá participar de múltiplas coleções comerciais.** Decisão conceitual mantida, implementação pendente.
+9. 🟡 **`Promoção` deve ser tratada como coleção comercial, não como categoria estrutural permanente.** Decisão conceitual mantida.
+10. 🟡 **Seções do catálogo poderão usar categorias ou coleções como fonte.** Backlog.
+11. 🟡 **A entrada/saída de produtos das seções deverá ser dinâmica conforme associação.** Backlog.
+12. ✅ **Recomendações adicionais devem ser opcionais e nunca inserir produto automaticamente na seleção.** Regra arquitetural preservada.
+13. ✅ **A primeira implementação deve permanecer simples e incremental.**
+14. 🟡 **Regras combinadas e recomendação inteligente ficam para evolução futura.**
 
-Essas decisões ainda precisam ser confrontadas com a auditoria do modelo atual antes de virar schema definitivo.
+A distinção mais importante agora é:
+
+```text
+DECISÃO IMPLEMENTADA
+→ categorias/subcategorias múltiplas
+
+DECISÃO ARQUITETURAL AINDA EM BACKLOG
+→ coleções comerciais + seções dinâmicas + recomendações
+```
 
 ---
 
-# 29. Questões ainda em aberto
+# 29. Questões resolvidas e questões ainda em aberto
 
-A auditoria deverá ajudar a responder:
+## 29.1. Resolvido na implementação atual de categorias
 
-- categoria será coleção Firestore própria?
-- coleção comercial será coleção Firestore própria?
-- associações ficarão no produto ou em subcoleções?
-- será necessário índice adicional?
-- como ordenar categorias?
-- como ordenar produtos dentro de uma seção?
-- como tratar produto sem estoque?
-- como tratar produto arquivado?
+```text
+Onde ficam as categorias?
+→ coleção de categorias da própria loja
+
+Como o produto referencia categorias?
+→ categoryIds
+
+Nome é identificador?
+→ não; associação usa ID estável
+
+Como representar subcategoria?
+→ relação hierárquica através de parentCategoryId
+
+Produto pode ficar sem categoria?
+→ sim
+
+Produto pode ter várias categorias/subcategorias?
+→ sim
+
+Qual o limite operacional atual?
+→ até 10 associações por produto
+
+Como editar associações de produto existente?
+→ fluxo seguro dedicado de taxonomia no backend
+```
+
+## 29.2. Ainda em aberto para coleções comerciais e seções dinâmicas
+
+- coleção comercial será uma nova coleção Firestore por loja?
+- o produto armazenará `collectionIds` diretamente ou haverá outra estrutura de associação?
+- haverá índice adicional para resolver seções em escala?
+- como ordenar produtos dentro de uma seção comercial?
+- como tratar produto sem estoque em uma seção?
+- como tratar produto arquivado em uma seção já configurada?
 - como lidar com produto pertencente simultaneamente a várias seções?
 - haverá limite de seções por catálogo?
 - haverá limite de produtos por seção?
 - uma seção poderá ter título e descrição customizados?
-- loja poderá ocultar uma seção temporariamente?
-- coleções serão por loja?
+- a loja poderá ocultar uma seção temporariamente?
 - coleções poderão ser reutilizadas em todos os catálogos da loja?
-- campanhas futuras terão período de validade?
-- como será feita a migração dos dados atuais?
+- campanhas terão período de validade?
+- como será feita a compatibilidade dos catálogos já existentes?
+- como a página pública receberá as seções sem ampliar indevidamente a superfície de dados públicos?
 
-Nenhuma dessas respostas deve ser inventada antes da auditoria técnica.
+Nenhuma dessas respostas deve ser inventada antes da auditoria específica dessa próxima camada.
 
 ---
 
 # 30. Próximo passo
 
-**Próxima ação recomendada: auditoria técnica somente leitura do modelo atual de categorias/produtos.**
+A auditoria e a implementação da taxonomia básica de categorias já não são o próximo passo; essa parte está operacionalmente avançada.
 
-Objetivo:
+A próxima etapa arquitetural desta documentação é:
 
-> descobrir o que já existe antes de definir a estrutura final.
+> **definir e auditar o contrato de coleções comerciais antes de criar seções dinâmicas no catálogo público.**
 
-Depois da auditoria:
+Sequência recomendada:
 
 ```text
-modelo atual
-→ riscos
-→ alternativas
-→ contrato
-→ implementação incremental
+1. auditar impactos de collectionIds / associações comerciais
+2. fechar contrato de coleção comercial
+3. definir segurança e ciclo de vida da coleção
+4. definir como uma seção dinâmica referencia categoria ou coleção
+5. definir consulta, ordenação e limites
+6. definir contrato público sanitizado dessas seções
+7. criar testes backend
+8. adaptar Flutter de gestão
+9. adaptar catálogo público
+10. validar visual e comercialmente
 ```
+
+Pendência operacional separada da arquitetura de coleções:
+
+```text
+Firestore Rules da taxonomia
+→ alterações preparadas/validadas localmente
+→ publicação não deve ser presumida
+→ eventual deploy exige autorização específica
+```
+
+O objetivo continua sendo avançar sem misturar a taxonomia já estável com uma implementação prematura de campanhas e recomendações.
 
 ---
 

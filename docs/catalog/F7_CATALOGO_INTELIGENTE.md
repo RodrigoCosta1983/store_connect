@@ -2,14 +2,14 @@
 
 Documentação oficial da arquitetura, decisões, segurança, implementação e evolução do Catálogo Inteligente do Store&Connect.
 
-> Estado atual F7.8-C2: F7.7 concluída e validada em produção conforme
-> informado por Rodrigo. Os registros anteriores abaixo são históricos;
-> os contratos e implementações locais de leitura interna estão no final.
+> **Estado atual em 23/09/2026:** o núcleo operacional da F7 está concluído e validado em produção. O fluxo público permite abrir o catálogo sem login, selecionar quantidades, revisar a seleção, identificar o cliente por nome + WhatsApp e enviar uma solicitação. No Store&Connect, a loja consegue listar, abrir, atender, finalizar ou cancelar solicitações e visualizar o contador de solicitações abertas no acesso ao Catálogo Inteligente.
+
+> Os registros anteriores permanecem neste documento como histórico técnico. Quando houver divergência entre uma seção histórica e a seção **“Estado consolidado em 23/09/2026”**, prevalece o estado consolidado mais recente.
 
 > Este documento é a referência oficial da F7.
 > Toda decisão arquitetural relevante e toda etapa concluída devem ser registradas aqui.
 
-**Última atualização:** 15/09/2026 — F7.6 concluída e publicada em produção LIVE. A seleção pública de quantidades foi validada em mobile e desktop, com incremento/decremento limitado ao estoque atual, reconciliação após atualização do catálogo e teste real de redução dinâmica de estoque: uma seleção de 10 unidades foi ajustada automaticamente para 7 após a venda de 3 unidades na loja.
+**Última atualização:** 23/09/2026 — Catálogo Público V2 e fluxo interno de solicitações validados; badge de solicitações abertas concluído; Flutter Web `1.0.3+46` publicado no Firebase Hosting. O deploy Web mais recente foi exclusivamente de Hosting, sem Functions, Firestore Rules ou Play Console.
 
 =====================================================================
 
@@ -17,75 +17,88 @@ Documentação oficial da arquitetura, decisões, segurança, implementação e 
 
 ```text
 ✅ F7.1 — Arquitetura e modelo do catálogo
-    ✅ F7.1-A — Modelo Product atual identificado
+    ✅ F7.1-A — Modelo Product identificado
     ✅ F7.1-B — Pontos de acesso à collection products mapeados
     ✅ F7.1-C — Persistência do cadastro manual mapeada
-    ✅ F7.1-D — Persistência da importação de produtos mapeada
-    ✅ F7.1-E — Schema canônico do Catálogo Inteligente definido
-    ✅ F7.1-F — Entrega pública do catálogo e estratégia de imagens definida
+    ✅ F7.1-D — Persistência da importação mapeada
+    ✅ F7.1-E — Schema canônico do catálogo definido
+    ✅ F7.1-F — Entrega pública e estratégia de imagens definidas
 
 ✅ F7.2 — Backend seguro para criação do catálogo
 ✅ F7.3 — Seleção de produtos dentro da loja
-    ✅ modo de seleção de catálogo
-    ✅ seleção individual desktop/web
-    ✅ seleção individual mobile
-    ✅ seleção em massa por categoria
-    ✅ contador de produtos selecionados
-    ✅ configuração de título e validade
-    ✅ integração Flutter → createCatalog
-    ✅ cabeçalho responsivo mobile
-    ✅ produtos sem estoque bloqueados na UI
-    ✅ produtos sem estoque bloqueados no backend
-    ✅ regressão automática do catálogo 4/4
-    ✅ validação runtime Android
-    ✅ createCatalog publicado em produção
-✅ F7.4 — Geração e gestão do link público temporário
-    ✅ F7.4-B1 — contrato de publicSlug definido
-    ✅ F7.4-B2 — URL canônica definida com publicSlug + publicToken
-    ✅ F7.4-B3 — Flutter monta publicUrl
-    ✅ F7.4-B4 — copiar e compartilhar link após a criação
-    ✅ F7.4-B5 — dialog de catálogo criado extraído para componente próprio
-    ✅ F7.4-B6 — criação/cópia/compartilhamento validados em runtime Android
-    ✅ F7.4-B7 — persistência segura para recuperação futura do link
-    ✅ F7.4-B8 — listCatalogs + tela base Catálogo Inteligente implementadas
-    ✅ F7.4-B9 — item Catálogo Inteligente inserido abaixo de Gerenciar Clientes
-    ✅ createCatalog + listCatalogs publicados em produção
-    ✅ tela Catálogo Inteligente validada em runtime Android
-    ✅ F7.4-B10 — copiar e compartilhar catálogo existente
-    ✅ F7.4-B10 validada em runtime Android
+✅ F7.4 — Geração, recuperação e compartilhamento do link público
 ✅ F7.5 — Página pública responsiva
-    ✅ getPublicCatalog público e sanitizado
-    ✅ rota /{publicSlug}/catalogo/{publicToken} sem AuthGate
-    ✅ layout responsivo desktop/mobile
-    ✅ Firebase Hosting Preview + live
-    ✅ domínio definitivo app.storeconnect.com.br
-    ✅ comportamento de estoque dinâmico validado por nova consulta
-⏳ F7.5-P — Performance + atualização inteligente da página pública
-    ✅ P1 — diagnóstico de performance mobile
-    ✅ P2 — redução de repaints + diagnóstico de imagens/dispositivo
-    ✅ P3 — isolamento completo da rota pública dos providers privados
-    ✅ P4 — Slivers, lazy rendering, layout mobile e escala de 200 produtos
-    ✅ P5 — atualização inteligente / refresh orientado à ação do cliente
-    ⏳ P6 — validação final em dispositivos reais
-✅ F7.6 — Seleção de quantidades
-    ✅ estado local da seleção pública por productId
-    ✅ entrada no modo de seleção precedida por refresh silencioso
-    ✅ incremento e decremento de quantidade
-    ✅ limite máximo pela quantidade disponível
-    ✅ remoção da seleção ao retornar para zero
-    ✅ reconciliação das quantidades após atualização do catálogo
-    ✅ seleção reduzida automaticamente quando o estoque diminui
-    ✅ controle responsivo de quantidade no mobile
-    ✅ controle responsivo de quantidade no desktop
-    ✅ validação runtime LIVE em mobile e desktop
-    ✅ teste real de estoque dinâmico: selecionado 10 → venda de 3 → seleção reconciliada para 7
-⏳ F7.7 — Resumo e envio da seleção
-⏳ F7.8 — Recebimento da solicitação no Store&Connect
-⏳ F7.9 — Expiração, bloqueio, segurança, retenção e limpeza
-⏳ F7.10 — Testes completos do MVP
-⏳ F7.11 — Demo comercial
-```
+✅ F7.5-P — Performance e atualização inteligente
+    ✅ P1 — diagnóstico
+    ✅ P2 — redução de repaints / diagnóstico
+    ✅ P3 — isolamento da rota pública
+    ✅ P4 — Slivers, lazy rendering e escala de 200 produtos
+    ✅ P5 — refresh silencioso orientado à ação + refresh manual
+    ✅ P6 — absorvida pelas validações runtime/live posteriores
 
+✅ F7.6 — Seleção pública de quantidades
+    ✅ incremento/decremento
+    ✅ limite pelo estoque atual
+    ✅ reconciliação quando estoque diminui
+    ✅ mobile e desktop
+    ✅ revalidação antes de entrar no modo de seleção
+
+✅ F7.7 — Resumo e envio da seleção
+    ✅ resumo local
+    ✅ submitPublicCatalogSelection
+    ✅ revalidação de catálogo/produto/preço/estoque no backend
+    ✅ persistência atômica em catalogRequests + items
+    ✅ integração Flutter
+    ✅ prevenção de chamadas simultâneas na UI
+    ✅ validação runtime/produção
+
+✅ F7.8 — Recebimento e operação da solicitação no Store&Connect
+    ✅ listCatalogRequests
+    ✅ getCatalogRequest
+    ✅ telas internas de listagem e detalhe
+    ✅ lifecycle: pending → in_progress → completed
+    ✅ cancelamento conforme contrato
+    ✅ histórico de atendimento
+    ✅ filtros por status
+    ✅ isolamento por loja
+    ✅ leitura histórica a partir do snapshot persistido
+
+✅ Catálogo Público V2
+    ✅ requestVersion = 2
+    ✅ nome do cliente obrigatório
+    ✅ WhatsApp do cliente obrigatório
+    ✅ backend valida e persiste identificação
+    ✅ compatibilidade histórica preservada
+    ✅ smoke funcional LIVE confirmado
+
+✅ Badge de solicitações abertas
+    ✅ openRequestCount no backend
+    ✅ aberto = pending + in_progress
+    ✅ contagem por aggregation, independente do limit(50) da listagem
+    ✅ 0 oculto
+    ✅ 1..99 numérico
+    ✅ >99 exibido como 99+
+    ✅ refresh ao retornar da tela de solicitações
+    ✅ Function listCatalogRequests publicada
+    ✅ commit/push do badge: 70b7ef6892d183ea08cf5dff87596140aee79aad
+
+✅ Publicação Web atual
+    ✅ versão 1.0.3+46
+    ✅ Firebase Hosting LIVE atualizado
+    ✅ modal Sobre mais compacto no desktop/web
+    ✅ ajustes responsivos recentes validados visualmente
+
+📌 F7 — núcleo operacional: CONCLUÍDO
+
+↪ Itens de evolução/hardening que não bloqueiam o núcleo operacional
+   foram reclassificados para backlog posterior/F8:
+    ⏳ consulta histórica específica de catálogos arquivados/expirados
+    ⏳ edição de catálogo já publicado preservando o mesmo link
+    ⏳ área "Seu pedido" / "Outras opções"
+    ⏳ coleções comerciais e seções dinâmicas
+    ⏳ retenção/limpeza automática avançada
+    ⏳ demo comercial estruturada
+```
 
 =====================================================================
 
@@ -386,6 +399,31 @@ fiscal.updatedAt
 
 =====================================================================
 
+## Atualização de taxonomia — 23/09/2026
+
+A documentação acima de `categoryId` / `categoryName` representa o schema
+histórico auditado durante a abertura da F7.
+
+A evolução de taxonomia implementada posteriormente adotou `categoryIds`
+como associação canônica de múltiplas categorias por produto, com
+compatibilidade para campos legados durante a transição. A gestão atual
+também suporta categorias e subcategorias.
+
+O contrato detalhado dessa frente está documentado separadamente em:
+
+```text
+CATALOGO_TAXONOMIA_COLECOES_DINAMICAS
+```
+
+Essa evolução não altera a regra principal da F7:
+
+```text
+stores/{storeId}/products/{productId}
+→ continua sendo a fonte operacional de verdade
+```
+
+=====================================================================
+
 ## Controle de arquivamento
 
 O campo:
@@ -549,10 +587,11 @@ itens pertencentes ao catálogo
 estado atual dos produtos
 ```
 
-O contrato definitivo de envio da F7.6/F7.7 ainda deverá decidir qual
-identificador será enviado pelo cliente. Independentemente disso, o
-backend deverá revalidar que cada produto solicitado pertence ao
-catálogo e continua elegível antes de aceitar a solicitação.
+A decisão foi fechada na F7.7: o cliente envia `productId` dentro de
+`items[{productId, quantity}]`. Isso não concede acesso direto ao documento
+operacional do produto. O backend continua responsável por revalidar que
+cada `productId` pertence ao catálogo e permanece elegível antes de aceitar
+a solicitação.
 
 =====================================================================
 
@@ -590,10 +629,12 @@ ESTOQUE ALTERADO
 → próxima chamada recalcula quantidade e elegibilidade
 ```
 
-IMPORTANTE: uma página que já permaneça aberta não recebe essas mudanças
-automaticamente no estado atual da F7.5. É necessária uma nova chamada
-a `getPublicCatalog`, hoje provocada por recarregamento da página.
-A estratégia de atualização inteligente será tratada na F7.5-P.
+ATUALIZAÇÃO POSTERIOR: a F7.5-P implementou infraestrutura de refresh
+silencioso reutilizando `getPublicCatalog`. O catálogo pode ser atualizado
+antes de iniciar a seleção e através do controle manual “Atualizar”; no iOS,
+o retorno ao app também foi validado com atualização por lifecycle. O backend
+continua sendo a autoridade final e nenhuma dessas atualizações substitui a
+revalidação feita no envio.
 
 O objetivo é manter:
 
@@ -2867,179 +2908,565 @@ desviar o MVP.
 
 =====================================================================
 
-## F7.7-D — persistência segura da solicitação
+# ✅ ESTADO CONSOLIDADO EM 23/09/2026
 
-Concluída localmente, sem publicação da Function ou deploy.
-
-- Coleção: `stores/{storeId}/catalogRequests/{requestId}`.
-- Itens: subcoleção `items/{itemId}`; ambos os IDs gerados pelo Firestore.
-- Pai: `catalogId`, `status: pending`, `itemCount`, `totalUnits`,
-  `totalAmount`, `createdAt`, `updatedAt`, `source: public_catalog`.
-- Timestamps gerados pelo servidor.
-- Item: `productId`, `name`, `quantity`, `price`, `subtotal`.
-- Nome e preço vêm do produto atual reconsultado pelo backend.
-- Preço deve ser número finito não negativo; zero explícito é permitido.
-  Nome vazio e preço ausente/inválido são rejeitados.
-- Arredondamento unitário: `Math.round(price * 100)`, seguindo o padrão
-  monetário existente. Subtotais e total são calculados em centavos;
-  valores persistidos/retornados usam unidade monetária com duas casas.
-  Quantidades, centavos e somas precisam permanecer em inteiros seguros.
-- Gravação em batch atômico após revalidação: pai e todos os itens,
-  ou nenhum deles. Sem alteração de estoque, lotes ou vendas.
-- Retorno: `success`, `requestId`, `validatedItemCount`, `totalUnits`,
-  `totalAmount`. Sem storeId/catalogId nem token público.
-- Solicitação anônima, sem vínculo com customers, sem imagem ou título
-  adicional no snapshot nesta etapa.
-
-### Limitações preservadas
-
-- Reenvios independentes podem criar novas solicitações; sem chave de
-  idempotência. Prevenção de clique duplo fica para F7.7-E.
-- Leituras e escrita não são uma transação conjunta: o snapshot registra
-  disponibilidade observada, sem reserva ou garantia futura.
-- Sem integração Flutter de envio, recebimento interno, transições de
-  status, retenção ou limpeza.
-- Function permanece fora de `functions/index.js`.
-- Rules não alteradas. O repositório não fornece regras Firestore;
-  a suíte com Admin SDK não comprova permissões de clientes diretos.
-  A fonte oficial das rules continua pendente para auditoria de acesso.
-
-### Validação
-
-`npm run test:catalog` no Firestore Emulator com JDK 21: 6/6 arquivos.
-Cobertura inclui snapshot atual, campos públicos forjados, contrato de
-retorno, centavos, dados inválidos, limites numéricos, rollback de batch,
-reenvios, limite de 200 itens e ausência de venda/alteração de estoque.
-Checks de sintaxe Node e `git diff --check` aprovados.
+Esta seção substitui, para fins de estado atual, os checkpoints locais
+registrados anteriormente para F7.7 e F7.8. As decisões de arquitetura
+descritas nas seções históricas continuam válidas quando não forem
+explicitamente revistas abaixo.
 
 =====================================================================
 
-## F7.7-E — integração Flutter do envio público
+## ✅ F7.7 — resumo, envio e persistência segura da solicitação
 
-Implementação local concluída, sem publicação ou deploy.
+O fluxo público foi concluído e validado:
 
-- O resumo local existente oferece a ação Enviar.
-- Usa `FirebaseFunctions.instance.httpsCallable`, com timeout de 30 segundos,
-  seguindo o padrão existente da tela.
-- Envia exclusivamente `publicSlug`, `publicToken` e
-  `items[{productId, quantity}]`.
-- O resumo mantém um snapshot estável durante sua abertura; refresh de
-  lifecycle não altera a seleção por trás do diálogo.
-- Envio em andamento bloqueia chamadas duplicadas, mostra Enviando e impede
-  fechar o diálogo por Voltar/back. Nenhuma chave de idempotência foi criada.
-- Sucesso exige confirmação do backend e requestId válido; fecha o resumo,
-  limpa a seleção, sai do modo de seleção e confirma solicitação enviada.
-  Não cria venda, não reserva e não reduz estoque.
-- Erros transitórios ou resposta não confirmada preservam o resumo/seleção,
-  mostram mensagem amigável e liberam nova tentativa.
-- Erros estruturados de produto/estoque reconciliam a seleção antes do
-  refresh existente. availableQuantity limita a quantidade; produtos
-  inelegíveis são removidos da seleção. Se o refresh falhar, o ajuste
-  conhecido pelo erro do servidor permanece.
-- Erros de catálogo provocam refresh pelo caminho existente, que determina
-  o estado público de catálogo expirado/inativo/indisponível.
-- Backend, contrato F7.7-D e `functions/index.js` não foram alterados.
+```text
+cliente abre catálogo
+        ↓
+seleciona quantidades
+        ↓
+confere resumo
+        ↓
+informa identificação exigida pelo contrato atual
+        ↓
+envia solicitação
+        ↓
+backend revalida catálogo + produtos + preço + estoque
+        ↓
+persiste catalogRequest + items
+        ↓
+retorna requestId
+```
 
-### Validação e limites
+### Persistência
 
-- `flutter analyze --no-pub lib/screens/public/public_catalog_screen.dart test/public_catalog_submission_test.dart`: sem problemas.
-- `flutter test --no-pub test/public_catalog_submission_test.dart`: 15 testes passaram.
-- Testes de widgets usam canal Firebase simulado, sem acesso a produção:
-  payload, clique duplo, mobile/desktop, lifecycle, sucesso, retry,
-  resposta incompleta, reconciliação com/sem refresh, catálogo indisponível
-  e desmontagem durante chamada.
-- `git diff --check` aprovado.
-- A integração ainda não foi validada em dispositivo real com Function
-  publicada. `submitPublicCatalogSelection` permanece fora do index.
-- Reenvios após resposta perdida ainda podem duplicar solicitações:
-  a proteção desta etapa cobre somente chamadas simultâneas.
-- F7.8, recebimento interno e deploy não iniciados.
+Coleção:
 
-## F7.8-C1 — leitura interna de solicitações
+```text
+stores/{storeId}/catalogRequests/{requestId}
+```
 
-Após auditoria F7.8-A e aprovação do contrato F7.8-B, foi implementada
-localmente somente `listCatalogRequests`, exportada no módulo e no index.
-Não houve deploy. F7.8-C2 / getCatalogRequest e Flutter não foram iniciados.
+Itens:
 
-Autorização: reproduz a semântica de listCatalogs. Exige autenticação,
-perfil existente, accessStatus diferente de revoked, role reconhecida
-(admin, gerente, operador, caixa/vendedor normalizados para operador),
-storeId do perfil e loja existente. Não adiciona bloqueio por assinatura.
+```text
+stores/{storeId}/catalogRequests/{requestId}/items/{itemId}
+```
 
-Entrada: ausente, null ou objeto vazio. Outros tipos ou campos extras
-geram invalid-argument. Não aceita storeId informado pelo cliente.
+O snapshot da solicitação preserva os dados comerciais validados no momento
+do envio. O backend continua sem criar venda, reservar estoque ou baixar
+estoque automaticamente.
 
-Consulta exclusiva: stores/{storeId}/catalogRequests, createdAt DESC,
-limit 50. Sem filtros, paginação, collectionGroup, leitura de itens,
-catálogos ou produtos. Sem solicitações: {success: true, requests: []}.
+Campos centrais do pai permanecem:
 
-Cada entrada retorna apenas requestId, catalogId, status, itemCount,
-totalUnits, totalAmount, createdAt, updatedAt e source. Valores persistidos
-não são recalculados; catálogo é somente referência.
+```text
+catalogId
+status
+itemCount
+totalUnits
+totalAmount
+createdAt
+updatedAt
+source
+```
 
-Validação estrutural: catalogId não vazio e sem barra; status/source são
-strings não vazias (sem definir novos estados); itemCount inteiro seguro
-entre 1 e 200; totalUnits inteiro seguro >= itemCount; totalAmount numérico
-finito não negativo e representável em centavos inteiros seguros.
-Inconsistência rejeita toda a resposta com internal e mensagem genérica.
-Timestamps Firestore válidos viram ISO UTC; ausentes/inválidos viram null.
-createdAt ausente exclui o documento da consulta, por semântica do orderBy.
+Estado inicial:
 
-Nenhuma escrita, alteração de updatedAt/status ou marcação de leitura.
-Nenhum schema, migration, índice composto ou secret novo.
-Teste dedicado no Emulator cobre autorização, payload, isolamento,
-ordenação/limite, resposta restrita, timestamps, inconsistências e ausência
-de escritas/leituras fora dos caminhos autorizados. Runner preservado.
+```text
+status = pending
+```
 
-Validação local: teste isolado aprovado e suíte oficial 8/8 no Firestore
-Emulator com JDK 21 (sete testes anteriores preservados). Checks Node e
-git diff --check aprovados. A primeira execução isolada revelou um erro
-na assinatura da instrumentação do SDK no teste; corrigido antes da
-validação final. Rules de clientes diretos continuam fora desta cobertura.
+Os itens preservam:
 
-## F7.8-C2 — detalhe histórico da solicitação
+```text
+productId
+name
+quantity
+price
+subtotal
+```
 
-Implementada localmente `getCatalogRequest({requestId})`, exportada no
-módulo de catálogo e em functions/index.js. Base: checkpoint 4797e1b.
-Sem deploy, Flutter ou início de F7.8-D.
+Nome, preço e disponibilidade são revalidados contra o produto atual antes
+da aceitação da solicitação. Totais são calculados pelo backend em centavos
+inteiros seguros.
 
-Contrato aprovado F7.8-B/C2: autorização semanticamente igual a
-listCatalogRequests/listCatalogs, antes de ler a solicitação; storeId somente
-do perfil autenticado e nenhum bloqueio novo por assinatura.
-Payload deve ser objeto contendo exclusivamente requestId string; trim,
-ID não vazio, sem barra/caminho, sem exigir auto-ID de 20 caracteres.
-IDs reservados pelo Firestore ou acima de 1500 bytes também são rejeitados.
-Entrada inválida: invalid-argument. Pai ausente na própria loja, inclusive
-quando o ID existir só em outra loja: not-found, "Solicitação não encontrada.".
+### Contrato enviado pela interface pública
 
-Leituras exclusivas após autorização:
-stores/{storeId}/catalogRequests/{requestId} e, se o pai existir,
-stores/{storeId}/catalogRequests/{requestId}/items. Todos os itens são lidos,
-ordenados por ID crescente; isso não representa a ordem original da seleção.
-Sem consulta a produtos, catálogo, token público ou estoque atual.
+O cliente não envia `storeId`, preço, subtotal ou autoridade sobre estoque.
 
-Resposta: {success: true, request: {...}}. O objeto request contém apenas
-requestId, catalogId, status, itemCount, totalUnits, totalAmount, createdAt,
-updatedAt, source e items. Cada item contém apenas itemId, productId, name,
-quantity, price e subtotal. IDs vêm dos documentos; demais valores vêm
-dos snapshots, sem recalcular ou preencher valores ausentes.
-Timestamps Firestore viram ISO UTC; ausentes/inválidos viram null.
+O núcleo do payload utiliza:
 
-Pai usa os mesmos limites estruturais de C1. Itens exigem productId não
-vazio/sem barra, sem duplicação, nome não vazio, quantidade inteira segura
-positiva e preço/subtotal numéricos finitos não negativos dentro do limite
-de centavos seguros. itemCount deve coincidir com todos os documentos lidos.
-Inconsistência rejeita a resposta inteira com internal e mensagem genérica;
-nenhum item é ignorado e nenhuma correção é escrita. Catálogo expirado ou
-removido e produto alterado, arquivado ou removido não afetam a leitura.
+```text
+publicSlug
+publicToken
+items[
+  {
+    productId,
+    quantity
+  }
+]
+```
 
-Novo teste: functions/tests/catalog/getCatalogRequest.emulator.test.js.
-Runner automático preservado. Sem alteração de status, updatedAt, vendas,
-estoque, regras, schema, collections, migrations ou notificações.
+Na evolução V2 também são enviados os campos de identificação do cliente
+definidos pelo contrato público atual.
 
-Validação: node --check aprovado nos três JS alterados/criados; teste
-isolado aprovado; suíte oficial encontrou nove arquivos e passou 9/9 no
-Firestore Emulator com JDK 21. Os oito arquivos anteriores passaram.
-git diff --check aprovado. Chave de criptografia da suíte temporária no
-processo, sem exposição. Testes com Admin SDK não validam rules de clientes.
-Sem commit, push ou deploy nesta etapa.
+### Segurança preservada
+
+```text
+✅ token do catálogo revalidado
+✅ catálogo ativo e não expirado
+✅ produto pertence ao catálogo
+✅ produto existe
+✅ produto não está arquivado
+✅ preço atual reconsultado
+✅ estoque atual reconsultado
+✅ quantidade validada
+✅ batch atômico para pai + itens
+❌ sem venda automática
+❌ sem reserva automática
+❌ sem baixa automática de estoque
+```
+
+=====================================================================
+
+## ✅ CATÁLOGO PÚBLICO V2 — IDENTIFICAÇÃO DO CLIENTE
+
+O contrato público evoluiu para `requestVersion = 2`.
+
+A interface pública solicita:
+
+```text
+Nome
+WhatsApp
+```
+
+O backend exige, normaliza, valida e persiste os dados de identificação
+previstos no contrato V2.
+
+Campos centrais:
+
+```text
+requestVersion: 2
+customerName
+customerPhone
+```
+
+O contrato mantém tratamento explícito de versão para preservar leitura
+histórica de solicitações anteriores.
+
+O Catálogo Público V2 foi:
+
+```text
+✅ testado
+✅ incluído no build Web
+✅ publicado no Firebase Hosting
+✅ validado funcionalmente em LIVE
+```
+
+=====================================================================
+
+## ✅ F7.8 — RECEBIMENTO INTERNO DA SOLICITAÇÃO
+
+O Store&Connect possui fluxo interno para receber e operar as solicitações
+enviadas pelo catálogo público.
+
+Arquivos centrais:
+
+```text
+functions/catalog/createCatalog.js
+functions/catalog/catalogRequestContract.js
+lib/screens/management/catalog_requests_screen.dart
+lib/screens/management/catalog_request_detail_screen.dart
+```
+
+Functions envolvidas:
+
+```text
+listCatalogRequests
+getCatalogRequest
+transitionCatalogRequest
+```
+
+Todas utilizam o `storeId` obtido do perfil autenticado; o cliente interno
+não escolhe a loja por payload.
+
+=====================================================================
+
+## ✅ F7.8-C1 — listCatalogRequests
+
+Consulta:
+
+```text
+stores/{storeId}/catalogRequests
+orderBy createdAt DESC
+limit 50
+```
+
+A listagem continua limitada aos 50 registros mais recentes.
+
+Cada solicitação retorna apenas o contrato interno necessário à interface,
+sem consultar novamente produto, estoque ou catálogo para reconstruir o
+snapshot histórico.
+
+A listagem é isolada por loja e exige usuário interno autorizado.
+
+=====================================================================
+
+## ✅ F7.8-C2 — getCatalogRequest
+
+`getCatalogRequest({requestId})` retorna o snapshot histórico completo da
+solicitação dentro do contrato interno permitido.
+
+Leituras:
+
+```text
+stores/{storeId}/catalogRequests/{requestId}
+stores/{storeId}/catalogRequests/{requestId}/items/*
+```
+
+O detalhe histórico não depende do produto continuar existindo nem do
+catálogo continuar ativo. Alterações posteriores de preço, estoque, nome ou
+arquivamento não reescrevem a solicitação já registrada.
+
+=====================================================================
+
+## ✅ F7.8-D — LIFECYCLE OPERACIONAL
+
+O fluxo operacional consolidado utiliza os estados:
+
+```text
+pending
+→ Nova
+
+in_progress
+→ Em atendimento
+
+completed
+→ Finalizada
+
+cancelled
+→ Cancelada
+```
+
+Transições operacionais são feitas por `transitionCatalogRequest`.
+
+Ações centrais:
+
+```text
+start
+complete
+cancel
+```
+
+O backend grava os metadados de lifecycle correspondentes, incluindo
+responsável e timestamp quando aplicável.
+
+Exemplos de grupos persistidos:
+
+```text
+attendedByUid
+attendedByName
+attendedAt
+
+completedByUid
+completedByName
+completedAt
+
+cancelledByUid
+cancelledByName
+cancelledAt
+```
+
+A transição atualiza `updatedAt` e registra auditoria de mudança de status.
+
+A interface interna apresenta o histórico de atendimento e permite distinguir
+solicitações novas, em atendimento, finalizadas e canceladas.
+
+=====================================================================
+
+## ✅ F7.8 — TELAS INTERNAS
+
+### Lista de solicitações
+
+A tela de solicitações oferece:
+
+```text
+✅ carregamento das solicitações
+✅ filtros por status
+✅ contagem visual por filtro
+✅ status legível
+✅ acesso ao detalhe
+✅ ação "Abrir atendimento" quando aplicável
+```
+
+Filtros atuais:
+
+```text
+Todas
+Novas
+Em atendimento
+Finalizadas
+Canceladas
+```
+
+### Detalhe
+
+A tela de detalhe apresenta:
+
+```text
+✅ itens do snapshot
+✅ quantidades
+✅ preço
+✅ subtotal
+✅ total
+✅ identificação disponível do cliente
+✅ status
+✅ histórico do atendimento
+✅ ações compatíveis com o lifecycle atual
+```
+
+=====================================================================
+
+## ✅ BADGE DE SOLICITAÇÕES ABERTAS
+
+O acesso ao Catálogo Inteligente recebeu um badge semelhante ao indicador
+utilizado no carrinho.
+
+Definição de solicitação aberta:
+
+```text
+pending
++
+in_progress
+```
+
+O backend retorna:
+
+```text
+openRequestCount
+```
+
+A contagem utiliza aggregation `count()` sobre os estados abertos e é
+independente da listagem limitada aos 50 registros mais recentes.
+
+Regras visuais:
+
+```text
+0
+→ badge oculto
+
+1..99
+→ número exibido
+
+> 99
+→ 99+
+```
+
+O contador é atualizado no carregamento da tela e novamente após retornar
+do fluxo de solicitações.
+
+Checkpoint Git específico do badge:
+
+```text
+70b7ef6892d183ea08cf5dff87596140aee79aad
+feat(catalog): add open request badge
+```
+
+Esse commit foi enviado para:
+
+```text
+origin/feat/f7-intelligent-catalog
+```
+
+=====================================================================
+
+## ✅ PUBLICAÇÃO E VERSÃO WEB ATUAL
+
+Versão atual publicada:
+
+```text
+1.0.3+46
+```
+
+O build Web foi validado antes do deploy:
+
+```text
+version      = 1.0.3
+build_number = 46
+```
+
+O deploy mais recente foi feito exclusivamente para:
+
+```text
+Firebase Hosting
+```
+
+Fora do escopo desse deploy:
+
+```text
+Functions
+Firestore Rules
+Play Console
+```
+
+A versão Web atual também inclui refinamentos responsivos validados
+visualmente no mesmo ciclo, incluindo o modal “Sobre” mais compacto.
+
+=====================================================================
+
+## ✅ FUNCTIONS DO CATÁLOGO — ESTADO OPERACIONAL
+
+O conjunto operacional atual inclui:
+
+```text
+createCatalog
+listCatalogs
+getPublicCatalog
+submitPublicCatalogSelection
+listCatalogRequests
+getCatalogRequest
+transitionCatalogRequest
+```
+
+O badge adicionou o campo `openRequestCount` ao retorno de
+`listCatalogRequests` sem remover a lista existente.
+
+A Function `listCatalogRequests` foi publicada de forma direcionada para
+ativar o contador remoto.
+
+=====================================================================
+
+## 📌 RELAÇÃO COM A TAXONOMIA DE PRODUTOS
+
+A evolução de categorias/subcategorias ocorreu em paralelo ao Catálogo
+Inteligente.
+
+O produto atualmente pode utilizar múltiplas associações por `categoryIds`,
+com compatibilidade do legado conforme o contrato específico da taxonomia.
+
+A documentação detalhada permanece separada para evitar misturar:
+
+```text
+F7 — fluxo de publicação, seleção e solicitação
+```
+
+com:
+
+```text
+Taxonomia — organização de produtos, categorias, subcategorias,
+            coleções e futuras seções dinâmicas
+```
+
+O documento de referência dessa frente é:
+
+```text
+CATALOGO_TAXONOMIA_COLECOES_DINAMICAS
+```
+
+=====================================================================
+
+# ✅ FECHAMENTO OPERACIONAL DA F7
+
+Em 23/09/2026, o núcleo operacional da F7 pode ser considerado concluído:
+
+```text
+LOJA
+  ↓
+seleciona produtos
+  ↓
+cria catálogo
+  ↓
+compartilha link
+
+CLIENTE
+  ↓
+abre sem login
+  ↓
+consulta preço/estoque atual
+  ↓
+seleciona quantidades
+  ↓
+informa nome + WhatsApp
+  ↓
+envia solicitação
+
+STORE&CONNECT
+  ↓
+badge informa solicitações abertas
+  ↓
+lista solicitações
+  ↓
+abre detalhe
+  ↓
+inicia atendimento
+  ↓
+finaliza ou cancela
+```
+
+Princípios preservados:
+
+```text
+✅ produto da loja continua sendo a fonte de verdade
+✅ navegador público não acessa documento privado diretamente
+✅ backend revalida autoridade comercial
+✅ catálogo não vira checkout
+✅ solicitação não baixa estoque automaticamente
+✅ preço e estoque continuam dinâmicos
+✅ snapshot histórico da solicitação não é reescrito
+```
+
+=====================================================================
+
+# ↪ BACKLOG POSTERIOR / F8
+
+Itens que permanecem fora do fechamento operacional atual:
+
+```text
+❌ consulta histórica dedicada de catálogos arquivados/expirados
+
+❌ edição de catálogo depois da publicação
+   regra desejada: preservar o mesmo link quando essa capacidade existir
+
+❌ área pública "Seu pedido" / "Outras opções"
+
+❌ coleções comerciais e seções dinâmicas
+
+❌ cross-sell/upsell configurável por coleção
+
+❌ retenção e limpeza automática avançadas
+
+❌ recomendação inteligente/IA
+
+❌ demo comercial estruturada
+```
+
+Fundação já existente para evoluções futuras:
+
+```text
+✅ requestedItems no backend
+✅ preço/estoque dinâmicos preservados
+✅ taxonomia de múltiplas categorias disponível em paralelo
+```
+
+Nenhum item deste backlog deve ser tratado como implementado apenas por
+estar registrado na arquitetura.
+
+=====================================================================
+
+# 📌 CHECKPOINT DE DOCUMENTAÇÃO — 23/09/2026
+
+```text
+F7 núcleo operacional          : ✅ CONCLUÍDO
+Catálogo Público V2            : ✅ LIVE
+Recebimento interno            : ✅ OPERACIONAL
+Lifecycle de solicitações      : ✅ OPERACIONAL
+Badge solicitações abertas     : ✅ IMPLEMENTADO / PUBLICADO
+Web                            : ✅ 1.0.3+46
+Functions do catálogo          : ✅ operacionais conforme escopo acima
+Firestore Rules da taxonomia   : ⏳ não tratar como publicadas
+F8 / evoluções                 : ⏳ BACKLOG
+```
+
+Este checkpoint não apaga os registros históricos anteriores. Ele consolida
+o estado atual para que futuras etapas não dependam de checkpoints locais
+antigos já superados.

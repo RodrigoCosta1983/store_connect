@@ -1,9 +1,13 @@
 # Store&Connect — Marketing, Posicionamento e Estratégia Comercial
 
-**Status:** Documento-base de trabalho
-**Versão:** 0.1
-**Data:** 16/09/2026
+**Status:** Documento-base ativo — atualizado com o Catálogo Inteligente operacional
+**Versão:** 0.2
+**Data:** 23/09/2026
 **Objetivo:** registrar decisões, hipóteses, mensagens, ideias e próximos passos de marketing do Store&Connect para que a estratégia comercial evolua junto com o produto, sem perder contexto.
+
+> **Atualização de produto relevante para marketing:** o Catálogo Inteligente já possui um fluxo operacional completo e demonstrável: a loja cria e compartilha o catálogo, o cliente abre sem login, seleciona produtos e quantidades, informa nome + WhatsApp, envia a solicitação e a equipe recebe e acompanha o atendimento dentro do Store&Connect. A versão Web atual publicada é `1.0.3+46`.
+
+> As definições de público, slogan, oferta e lançamento continuam em validação. O fato de uma funcionalidade estar pronta não transforma hipóteses de marketing em decisões comerciais definitivas.
 
 ---
 
@@ -87,6 +91,10 @@ Exemplos de sintomas desse público:
 
 O Store&Connect pode atender outros perfis no futuro, mas o marketing inicial precisa falar com um público concreto. Uma comunicação que tenta atender todo mundo desde o começo tende a ficar genérica.
 
+**Hipótese comercial fortalecida:** empresas que recebem pedidos e consultas de produtos pelo WhatsApp e ainda transformam essas conversas manualmente em atendimento, separação ou registro interno.
+
+Farmácias continuam sendo um **forte candidato de validação**, porque o problema de consulta de preço, disponibilidade e envio manual de fotos apareceu como uma origem concreta da ideia do Catálogo Inteligente. Isso **não significa que farmácias já tenham sido definidas como nicho oficial**.
+
 **Decisão pendente:** definir o primeiro nicho ou perfil de empresa a ser atacado comercialmente.
 
 ---
@@ -125,17 +133,23 @@ A proposta precisa evoluir conforme o produto amadurecer e conforme aprendermos 
 
 ## 7. O catálogo inteligente como exemplo de diferencial
 
-O catálogo inteligente é uma excelente demonstração da filosofia do Store&Connect.
+O Catálogo Inteligente deixou de ser apenas uma hipótese de demonstração e passou a ser um dos **principais exemplos reais do posicionamento do Store&Connect**.
 
-### Fluxo que queremos comunicar
+### Fluxo operacional já demonstrável
 
 1. A empresa cria um catálogo no Store&Connect.
 2. Compartilha um link com o cliente.
-3. O cliente abre o catálogo sem precisar obrigatoriamente criar conta.
-4. Seleciona os produtos e quantidades.
-5. Envia a solicitação.
-6. A solicitação entra no Store&Connect.
-7. A empresa visualiza e trata a solicitação dentro da própria operação.
+3. O cliente abre o catálogo sem precisar criar conta ou instalar aplicativo.
+4. Consulta os produtos com preço e disponibilidade atualizados pelo fluxo seguro do sistema.
+5. Seleciona produtos e quantidades.
+6. Confere o resumo.
+7. Informa nome e WhatsApp.
+8. Envia a solicitação.
+9. A solicitação entra no Store&Connect.
+10. A equipe visualiza, abre o atendimento e acompanha o status.
+11. A solicitação pode ser finalizada ou cancelada conforme o fluxo operacional.
+
+O acesso interno ao Catálogo Inteligente também possui um **badge de solicitações abertas**, considerando solicitações **Novas** e **Em atendimento**.
 
 O valor comercial não é simplesmente "ter um catálogo".
 
@@ -143,11 +157,33 @@ O valor está em:
 
 > **tirar o pedido da conversa desestruturada e trazê-lo para dentro da operação da empresa.**
 
-Essa história deve ser uma das primeiras demonstrações comerciais do sistema.
+Essa história deve ser uma das primeiras demonstrações comerciais do sistema porque mostra, em poucos passos, o conceito de **Connect** funcionando de ponta a ponta.
+
+### O que podemos afirmar hoje
+
+Podemos demonstrar de forma concreta que o Store&Connect:
+
+- gera um catálogo compartilhável;
+- permite acesso público sem login;
+- permite seleção de produtos e quantidades;
+- recebe a identificação básica do cliente;
+- registra a solicitação dentro da loja;
+- organiza o atendimento por status;
+- mantém preço e disponibilidade vinculados à operação real do produto;
+- não transforma automaticamente a solicitação em venda nem reduz estoque sem ação operacional.
 
 ### Importante
 
-A comunicação deve respeitar o estágio real do produto. Não anunciar como concluídas etapas ainda em desenvolvimento.
+A comunicação deve continuar respeitando o estágio real do produto.
+
+Não anunciar como prontas funcionalidades que ainda pertencem ao backlog, como:
+
+- edição de catálogo já publicado preservando o mesmo link;
+- coleções comerciais e seções dinâmicas;
+- "Seu pedido" / "Outras opções";
+- recomendações inteligentes;
+- cross-sell/upsell automatizado;
+- campanhas automáticas.
 
 ---
 
@@ -203,15 +239,20 @@ Um vídeo curto pode comunicar mais do que uma página cheia de texto.
 
 Cena 1 — comerciante cria ou abre um catálogo.
 Cena 2 — copia o link.
-Cena 3 — cliente abre o catálogo.
+Cena 3 — cliente abre o catálogo sem login.
 Cena 4 — seleciona produtos e quantidades.
-Cena 5 — envia a solicitação.
-Cena 6 — a solicitação aparece dentro do Store&Connect.
-Cena 7 — comerciante abre os detalhes.
+Cena 5 — confere o resumo e informa nome + WhatsApp.
+Cena 6 — envia a solicitação.
+Cena 7 — a solicitação aparece dentro do Store&Connect.
+Cena 8 — o contador de solicitações abertas sinaliza novo atendimento.
+Cena 9 — comerciante abre os detalhes.
+Cena 10 — inicia e acompanha o atendimento até finalizar ou cancelar.
 
 Mensagem final possível:
 
 > **Do link ao atendimento. Tudo conectado.**
+
+Essa demonstração agora pode ser gravada a partir do produto real, sem precisar simular telas conceituais do fluxo principal.
 
 ---
 
@@ -339,9 +380,11 @@ Testa o sistema.
 
 Executa uma ação que demonstra valor real.
 
-Exemplo futuro:
+Exemplo já disponível no produto:
 
-> criar catálogo → compartilhar → receber primeira solicitação.
+> criar catálogo → compartilhar → cliente enviar → receber primeira solicitação → iniciar atendimento.
+
+Essa sequência pode ser tratada como uma forte candidata a **evento de ativação comercial**, porque demonstra rapidamente o valor central de conexão entre cliente e operação.
 
 ### Conversão
 
@@ -434,7 +477,13 @@ Quando começarmos a operar comercialmente, acompanhar:
 - empresas que chegam à primeira ação de valor;
 - catálogos criados;
 - links compartilhados;
+- catálogos públicos abertos;
+- clientes que iniciam seleção;
 - solicitações recebidas;
+- solicitações que entram em atendimento;
+- solicitações finalizadas/canceladas;
+- tempo entre solicitação e início do atendimento;
+- conversão de catálogo aberto em solicitação;
 - conversão de teste para plano pago;
 - cancelamentos;
 - motivos de cancelamento;
@@ -449,7 +498,7 @@ As métricas devem ajudar a decidir produto e marketing juntos.
 
 Pontos estratégicos em aberto:
 
-1. Primeiro segmento/nicho comercial.
+1. Primeiro segmento/nicho comercial — farmácias são hipótese forte, mas não decisão fechada.
 2. Persona principal.
 3. Posicionamento institucional definitivo.
 4. Slogan.
@@ -473,18 +522,24 @@ Essas decisões não devem ser tomadas todas de uma vez. Devem ser validadas con
 
 ### MKT-0 — Fundamentos
 
-- definir público inicial;
-- mapear principais dores;
-- definir proposta de valor;
-- consolidar posicionamento.
+**Estado:** em andamento.
+
+- ⏳ definir público inicial;
+- ✅ principais dores iniciais mapeadas;
+- ✅ proposta de valor-base registrada;
+- ✅ direção de posicionamento registrada;
+- ⏳ validar posicionamento com empresas reais.
 
 ### MKT-1 — Mensagem
 
-- headline;
-- slogan;
-- pitch de 15 segundos;
-- pitch de 1 minuto;
-- mensagens por problema.
+**Estado:** parcialmente preparado.
+
+- ⏳ headline definitiva;
+- ⏳ slogan definitivo;
+- ⏳ pitch de 15 segundos;
+- ⏳ pitch de 1 minuto;
+- ✅ banco inicial de mensagens por problema;
+- ✅ mensagens candidatas ligadas ao conceito de conexão.
 
 ### MKT-2 — Presença comercial
 
@@ -556,17 +611,79 @@ A preferência deve ser pela segunda opção.
 
 ## 23. Próximo passo recomendado
 
-Antes de trabalhar em slogan, anúncios ou landing page, definir:
+O produto já possui um fluxo comercial forte o suficiente para demonstração. Portanto, o próximo passo de marketing não é criar mais promessa: é **escolher quem verá essa demonstração primeiro**.
+
+Definir:
 
 > **Qual é o primeiro tipo de empresa que queremos conquistar com o Store&Connect?**
 
+Hipótese prioritária para validação:
+
+> empresas que recebem consultas e pedidos de produtos por WhatsApp e ainda organizam o atendimento manualmente.
+
+Farmácias são um candidato forte, mas a escolha precisa ser validada comercialmente antes de virar posicionamento oficial.
+
 A partir dessa resposta, construir:
 
-**público → problema → proposta de valor → mensagem → demonstração → oferta → aquisição.**
+**público → problema → proposta de valor → mensagem → demonstração real → oferta → aquisição.**
+
+Primeira prova comercial recomendada:
+
+```text
+criar catálogo
+→ compartilhar link
+→ cliente seleciona
+→ cliente envia
+→ solicitação entra no Store&Connect
+→ equipe inicia atendimento
+```
 
 ---
 
-## 24. Regra de manutenção deste documento
+## 24. Checkpoint de marketing — 23/09/2026
+
+### O que mudou desde a versão 0.1
+
+Na versão anterior, o Catálogo Inteligente era tratado principalmente como uma demonstração em construção. Agora o fluxo central está operacional e pode ser utilizado como **prova de produto**.
+
+Estado relevante para comunicação:
+
+```text
+Catálogo compartilhável                  ✅
+Acesso público sem login                 ✅
+Seleção de produtos/quantidades          ✅
+Resumo da seleção                        ✅
+Nome + WhatsApp do cliente               ✅
+Envio da solicitação                     ✅
+Recebimento interno                      ✅
+Lista e detalhe                          ✅
+Atendimento por status                   ✅
+Badge de solicitações abertas            ✅
+Web publicada 1.0.3+46                   ✅
+Coleções/seções comerciais dinâmicas     ⏳ backlog
+Recomendações inteligentes               ⏳ backlog
+```
+
+### Implicação estratégica
+
+A mensagem:
+
+> **Do link ao atendimento. Tudo conectado.**
+
+deixou de descrever apenas uma visão futura e agora corresponde a um fluxo que pode ser demonstrado no produto atual.
+
+Isso fortalece três pontos do posicionamento:
+
+1. **Conexão** — o cliente inicia fora do sistema e a solicitação entra na operação estruturada.
+2. **Organização** — pedidos deixam de depender apenas de conversa solta.
+3. **Produtividade** — a equipe recebe uma solicitação estruturada em vez de reconstruí-la manualmente.
+
+Ainda não existe evidência suficiente neste documento para afirmar ganhos quantitativos de produtividade, conversão ou faturamento. Esses resultados deverão ser medidos nos primeiros pilotos antes de virar promessa comercial.
+
+---
+
+## 25. Regra de manutenção deste documento
+
 
 Este arquivo deve evoluir junto com o produto.
 
