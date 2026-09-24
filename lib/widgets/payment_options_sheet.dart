@@ -786,7 +786,7 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
         return AlertDialog(
           title: const Text('Selecionar Cliente – Crédito'),
           content: SizedBox(
-            width: double.maxFinite,
+            width: MediaQuery.sizeOf(ctx).width > 768 ? 680 : double.maxFinite,
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('stores')
@@ -798,12 +798,23 @@ class _PaymentOptionsSheetState extends State<PaymentOptionsSheet> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                if (!snapshot.hasData) {
                   return const Center(
                     child: Text('Nenhum cliente cadastrado.'),
                   );
                 }
-                final customersDocs = snapshot.data!.docs;
+
+                final customersDocs = snapshot.data!.docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+
+                  return data['isArchived'] != true;
+                }).toList();
+
+                if (customersDocs.isEmpty) {
+                  return const Center(
+                    child: Text('Nenhum cliente ativo cadastrado.'),
+                  );
+                }
                 return ListView.builder(
                   shrinkWrap: true,
                   itemCount: customersDocs.length,

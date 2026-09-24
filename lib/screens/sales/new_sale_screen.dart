@@ -68,6 +68,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:internet_connection_checker_plus/internet_connection_checker_plus.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -111,6 +112,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   bool _isSearching = false;
 
   String _selectedCategoryId = '';
+
+  final ScrollController _categoryScrollController = ScrollController();
 
   // --------------------------------------------------------------------------
   // INTERNET REAL
@@ -175,6 +178,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
 
     // O repositório usa o banco compartilhado do aplicativo.
     // Portanto, a tela não deve encerrar o SQLite ao ser destruída.
+    _categoryScrollController.dispose();
     _searchController.dispose();
 
     super.dispose();
@@ -734,7 +738,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   context: context,
                   builder: (context) => AlertDialog(
                     title: const Text("Sobre"),
-                    content: Column(
+                    content: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: 520,
+                      ),
+                      child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -764,6 +772,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           ),
                         ),
                       ],
+                    ),
                     ),
                     actions: [
                       TextButton(
@@ -926,11 +935,46 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                             bool matchesCategory = true;
 
                             if (_selectedCategoryId.isNotEmpty) {
-                              final prodCatId =
-                                  productData['categoryId'] as String? ?? '';
+                              if (productData.containsKey('categoryIds')) {
+                                final rawCategoryIds =
+                                    productData['categoryIds'];
 
-                              matchesCategory =
-                                  prodCatId == _selectedCategoryId;
+                                if (rawCategoryIds is List) {
+                                  final parsedCategoryIds = <String>[];
+                                  final seenCategoryIds = <String>{};
+
+                                  bool validCategoryIds =
+                                      rawCategoryIds.length <= 10;
+
+                                  for (final rawId in rawCategoryIds) {
+                                    if (rawId is! String ||
+                                        rawId.isEmpty ||
+                                        rawId.trim() != rawId ||
+                                        rawId.contains('/') ||
+                                        !seenCategoryIds.add(rawId)) {
+                                      validCategoryIds = false;
+                                      break;
+                                    }
+
+                                    parsedCategoryIds.add(rawId);
+                                  }
+
+                                  matchesCategory =
+                                      validCategoryIds &&
+                                      parsedCategoryIds.contains(
+                                        _selectedCategoryId,
+                                      );
+                                } else {
+                                  matchesCategory = false;
+                                }
+                              } else {
+                                final legacyCategoryId =
+                                    productData['categoryId'];
+
+                                matchesCategory =
+                                    legacyCategoryId is String &&
+                                    legacyCategoryId == _selectedCategoryId;
+                              }
                             }
 
                             return matchesSearch && matchesCategory;
@@ -1009,7 +1053,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                                         .isNotEmpty)
                                                 ? CachedNetworkImage(
                                                     imageUrl: product.imageUrl!,
-                                                    fit: BoxFit.cover,
+                                                    fit: BoxFit.contain,
                                                     placeholder:
                                                         (
                                                           context,
@@ -1083,25 +1127,6 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                             8,
                                             8,
                                           ),
-                                          child: Text(
-                                            'R\$ ${product.price.toStringAsFixed(2)}',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              color: isDarkMode
-                                                  ? Colors.white70
-                                                  : theme.primaryColor,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.fromLTRB(
-                                            8,
-                                            0,
-                                            8,
-                                            8,
-                                          ),
                                           child: ElevatedButton.icon(
                                             icon: const Icon(
                                               Icons.add_shopping_cart,
@@ -1110,7 +1135,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                                             label: Text(
                                               isOutOfStock
                                                   ? 'Sem Estoque'
-                                                  : 'Adicionar',
+                                                  : 'R\$ ${product.price.toStringAsFixed(2)}',
                                             ),
                                             style: ElevatedButton.styleFrom(
                                               padding:
@@ -1204,13 +1229,11 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         return Container(
           height: 65,
           padding: const EdgeInsets.symmetric(vertical: 8),
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
             children: [
-              // 1. NOVO BOTÃO: Abre o Menu de Categorias (BottomSheet)
+              // Botao fixo: abre o menu completo de categorias.
               Padding(
-                padding: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.only(left: 10, right: 8),
                 child: ActionChip(
                   avatar: Icon(
                     Icons.grid_view,
@@ -1235,59 +1258,114 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                           : Colors.grey.shade300,
                     ),
                   ),
-                  onPressed: () => _showCategoriesModal(context, categories),
+                  onPressed: () => _showCategoriesModal(
+                    context,
+                    categories,
+                  ),
                 ),
               ),
 
-              // 2. Botão fixo "Todos" (Para limpar os filtros rapidamente)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: const Text(
-                    'Todos',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  selected: _selectedCategoryId.isEmpty,
-                  onSelected: (selected) {
-                    if (selected) setState(() => _selectedCategoryId = '');
+              // Apenas esta area se move horizontalmente.
+              Expanded(
+                child: Listener(
+                  onPointerSignal: (event) {
+                    if (event is! PointerScrollEvent ||
+                        !_categoryScrollController.hasClients) {
+                      return;
+                    }
+
+                    final delta = event.scrollDelta.dx != 0
+                        ? event.scrollDelta.dx
+                        : event.scrollDelta.dy;
+
+                    final position = _categoryScrollController.position;
+
+                    final target = (position.pixels + delta).clamp(
+                      position.minScrollExtent,
+                      position.maxScrollExtent,
+                    );
+
+                    _categoryScrollController.jumpTo(
+                      target.toDouble(),
+                    );
                   },
-                  selectedColor: Colors.deepPurple.shade100,
-                  labelStyle: TextStyle(
-                    color: _selectedCategoryId.isEmpty
-                        ? Colors.deepPurple.shade900
-                        : null,
-                  ),
-                ),
-              ),
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                      dragDevices: const {
+                        PointerDeviceKind.touch,
+                        PointerDeviceKind.mouse,
+                        PointerDeviceKind.trackpad,
+                      },
+                    ),
+                    child: ListView(
+                      controller: _categoryScrollController,
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.only(right: 10),
+                      children: [
+                        // "Todos" limpa rapidamente o filtro.
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: const Text(
+                              'Todos',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            selected: _selectedCategoryId.isEmpty,
+                            onSelected: (selected) {
+                              if (selected) {
+                                setState(
+                                  () => _selectedCategoryId = '',
+                                );
+                              }
+                            },
+                            selectedColor: Colors.deepPurple.shade100,
+                            labelStyle: TextStyle(
+                              color: _selectedCategoryId.isEmpty
+                                  ? Colors.deepPurple.shade900
+                                  : null,
+                            ),
+                          ),
+                        ),
 
-              // 3. Botões dinâmicos do Firebase
-              ...categories.map((doc) {
-                final isSelected = _selectedCategoryId == doc.id;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(doc['name']),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() {
-                        _selectedCategoryId = selected ? doc.id : '';
-                      });
-                    },
-                    selectedColor: Colors.deepPurple.shade100,
-                    labelStyle: TextStyle(
-                      color: isSelected ? Colors.deepPurple.shade900 : null,
+                        // Categorias dinamicas do Firebase.
+                        ...categories.map((doc) {
+                          final isSelected =
+                              _selectedCategoryId == doc.id;
+
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: Text(doc['name']),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                setState(() {
+                                  _selectedCategoryId =
+                                      selected ? doc.id : '';
+                                });
+                              },
+                              selectedColor:
+                                  Colors.deepPurple.shade100,
+                              labelStyle: TextStyle(
+                                color: isSelected
+                                    ? Colors.deepPurple.shade900
+                                    : null,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ],
                     ),
                   ),
-                );
-              }).toList(),
+                ),
+              ),
             ],
           ),
         );
       },
     );
   }
-
-  // --- NOVO MÉTODO: GAVETA (BOTTOM SHEET) DE CATEGORIAS ---
   void _showCategoriesModal(
     BuildContext context,
     List<QueryDocumentSnapshot> categories,

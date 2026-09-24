@@ -153,7 +153,7 @@ class _ProductDialogState extends State<_ProductDialog> {
 
   DateTime? _dataValidadeSelecionada;
 
-  String? _selectedCategoryId;
+  List<String> _selectedCategoryIds = <String>[];
 
   // Estado taxonomico observado quando a edicao foi aberta.
   //
@@ -162,11 +162,11 @@ class _ProductDialogState extends State<_ProductDialog> {
   Map<String, dynamic> _originalExpectedTaxonomy = <String, dynamic>{};
 
   // Estado efetivo usado somente para detectar se o usuario alterou
-  // a categoria nesta UI de categoria unica.
+  // as categorias nesta UI multi-categoria.
   List<String> _originalEffectiveCategoryIds = <String>[];
 
-  // categoryIds canonico com mais de uma categoria, ou estruturalmente
-  // invalido, nao pode ser alterado pela UI single-category.
+  // Apenas taxonomia canonica estruturalmente invalida fica bloqueada.
+  // Arrays validos com 0..10 IDs sao editaveis nesta UI multi-categoria.
   bool _categoryEditingLocked = false;
 
   bool get _isEditing => widget.product != null;
@@ -402,7 +402,7 @@ class _ProductDialogState extends State<_ProductDialog> {
 
       _originalEffectiveCategoryIds = <String>[];
       _categoryEditingLocked = false;
-      _selectedCategoryId = null;
+      _selectedCategoryIds = <String>[];
 
       // categoryIds presente e sempre canonico para leitura.
       // Nao fazemos fallback para categoryId se o array existir.
@@ -433,11 +433,7 @@ class _ProductDialogState extends State<_ProductDialog> {
               parsedCategoryIds,
             );
 
-            _categoryEditingLocked = parsedCategoryIds.length > 1;
-
-            if (parsedCategoryIds.isNotEmpty) {
-              _selectedCategoryId = parsedCategoryIds.first;
-            }
+            _selectedCategoryIds = List<String>.from(parsedCategoryIds);
           } else {
             // Taxonomia canonica malformada nao e reparada silenciosamente.
             _categoryEditingLocked = true;
@@ -457,7 +453,7 @@ class _ProductDialogState extends State<_ProductDialog> {
             !legacyCategoryId.contains('/')) {
           _originalEffectiveCategoryIds = <String>[legacyCategoryId];
 
-          _selectedCategoryId = legacyCategoryId;
+          _selectedCategoryIds = <String>[legacyCategoryId];
         }
       }
 
@@ -688,19 +684,14 @@ class _ProductDialogState extends State<_ProductDialog> {
       // =======================================================================
 
       if (_isEditing && !_categoryEditingLocked) {
-        final selectedCategoryId = _selectedCategoryId?.trim();
-
-        final desiredCategoryIds =
-            selectedCategoryId == null || selectedCategoryId.isEmpty
-            ? <String>[]
-            : <String>[selectedCategoryId];
+        final desiredCategoryIds = List<String>.from(_selectedCategoryIds);
 
         final bool taxonomyChanged =
             desiredCategoryIds.length != _originalEffectiveCategoryIds.length ||
-            (desiredCategoryIds.length == 1 &&
-                _originalEffectiveCategoryIds.length == 1 &&
-                desiredCategoryIds.first !=
-                    _originalEffectiveCategoryIds.first);
+            desiredCategoryIds.asMap().entries.any(
+              (entry) =>
+                  _originalEffectiveCategoryIds[entry.key] != entry.value,
+            );
 
         if (taxonomyChanged) {
           final taxonomyCallable = FirebaseFunctions.instance.httpsCallable(
@@ -904,12 +895,7 @@ class _ProductDialogState extends State<_ProductDialog> {
           };
         }).toList();
 
-        final selectedCategoryId = _selectedCategoryId?.trim();
-
-        final categoryIds =
-            selectedCategoryId == null || selectedCategoryId.isEmpty
-            ? <String>[]
-            : <String>[selectedCategoryId];
+        final categoryIds = List<String>.from(_selectedCategoryIds);
 
         // Auto-ID do SDK e gerado apenas localmente.
         // Nenhum documento _clientRequestIds e gravado.
@@ -1099,7 +1085,11 @@ class _ProductDialogState extends State<_ProductDialog> {
                 const SizedBox(height: 16),
 
                 // ============================================================
-                // CATEGORIA
+                // CATEGORIAS - T4-A1
+                //
+                // Selecao explicita e independente:
+                // marcar uma subcategoria NAO marca automaticamente o pai.
+                // Maximo definido pelo contrato backend: 10 IDs.
                 // ============================================================
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
@@ -1115,49 +1105,266 @@ class _ProductDialogState extends State<_ProductDialog> {
 
                     final categories = snapshot.data!.docs;
 
-                    String? safeValue = _selectedCategoryId;
+                    final rootCategories = categories.where((category) {
+                      final data = category.data() as Map<String, dynamic>;
 
-                    if (safeValue != null &&
-                        !categories.any((doc) => doc.id == safeValue)) {
-                      safeValue = null;
+                      return !data.containsKey('parentCategoryId') ||
+                          data['parentCategoryId'] == null;
+                    }).toList();
+
+                    final rootCategoryIds = rootCategories
+                        .map((category) => category.id)
+                        .toSet();
+
+                    final rootNameById = <String, String>{};
+
+                    final validSubcategoryIds = <String>{};
+
+                    final invalidHierarchyIds = <String>{};
+
+                    final orderedCategories = categories.take(0).toList();
+
+                    for (final root in rootCategories) {
+                      final rootData = root.data() as Map<String, dynamic>;
+
+                      rootNameById[root.id] =
+                          rootData['name']?.toString() ?? 'Sem nome';
+
+                      orderedCategories.add(root);
+
+                      for (final candidate in categories) {
+                        final candidateData =
+                            candidate.data() as Map<String, dynamic>;
+
+                        if (candidateData['parentCategoryId'] == root.id) {
+                          orderedCategories.add(candidate);
+
+                          validSubcategoryIds.add(candidate.id);
+                        }
+                      }
                     }
 
-                    return DropdownButtonFormField<String>(
-                      value: safeValue,
+                    for (final category in categories) {
+                      if (!rootCategoryIds.contains(category.id) &&
+                          !validSubcategoryIds.contains(category.id)) {
+                        orderedCategories.add(category);
 
-                      // Evita overflow
-                      // em telas pequenas.
-                      isExpanded: true,
+                        invalidHierarchyIds.add(category.id);
+                      }
+                    }
 
-                      decoration: const InputDecoration(labelText: 'Categoria'),
-                      items: categories
-                          .map(
-                            (doc) => DropdownMenuItem<String>(
-                              value: doc.id,
+                    final availableCategoryIds = categories
+                        .map((category) => category.id)
+                        .toSet();
+
+                    final unavailableSelectedIds = _selectedCategoryIds
+                        .where(
+                          (categoryId) =>
+                              !availableCategoryIds.contains(categoryId),
+                        )
+                        .toList();
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Expanded(
                               child: Text(
-                                doc['name'].toString(),
-                                overflow: TextOverflow.ellipsis,
+                                'Categorias',
+                                style: TextStyle(fontWeight: FontWeight.w600),
                               ),
                             ),
-                          )
-                          .toList(),
-                      onChanged: _categoryEditingLocked
-                          ? null
-                          : (value) {
-                              if (value == null) {
-                                return;
-                              }
+                            Text('${_selectedCategoryIds.length}/10'),
+                          ],
+                        ),
 
-                              setState(() {
-                                _selectedCategoryId = value;
-                              });
-                            },
+                        const SizedBox(height: 6),
+
+                        const Text(
+                          'Selecione até 10 categorias ou subcategorias. '
+                          'A seleção é independente.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+
+                        if (_categoryEditingLocked) ...[
+                          const SizedBox(height: 10),
+                          const Text(
+                            'A taxonomia atual possui dados inválidos. '
+                            'A edição das categorias foi bloqueada para evitar '
+                            'correção silenciosa.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 8),
+
+                        LayoutBuilder(
+                          builder: (context, categoryConstraints) {
+                            const categorySpacing = 8.0;
+
+                            final categoryWidth =
+                                categoryConstraints.maxWidth;
+
+                            final categoryColumnCount =
+                                categoryWidth >= 840
+                                    ? 4
+                                    : categoryWidth >= 560
+                                    ? 3
+                                    : 2;
+
+                            final categoryItemWidth =
+                                (categoryWidth -
+                                    categorySpacing *
+                                        (categoryColumnCount - 1)) /
+                                categoryColumnCount;
+
+                            return Wrap(
+                              spacing: categorySpacing,
+                              runSpacing: 4,
+                              children: orderedCategories.map((categoryDoc) {
+                          final data =
+                              categoryDoc.data() as Map<String, dynamic>;
+
+                          final categoryName =
+                              data['name']?.toString() ?? 'Sem nome';
+
+                          final rawParentCategoryId = data['parentCategoryId'];
+
+                          final isSubcategory = validSubcategoryIds.contains(
+                            categoryDoc.id,
+                          );
+
+                          final hasInvalidHierarchy = invalidHierarchyIds
+                              .contains(categoryDoc.id);
+
+                          final isSelected = _selectedCategoryIds.contains(
+                            categoryDoc.id,
+                          );
+
+                          String? subtitle;
+
+                          if (hasInvalidHierarchy) {
+                            subtitle = 'Vínculo hierárquico inválido';
+                          } else if (isSubcategory) {
+                            subtitle =
+                                'Subcategoria de '
+                                '${rootNameById[rawParentCategoryId] ?? 'Categoria principal'}';
+                          }
+
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              left: isSubcategory || hasInvalidHierarchy
+                                  ? 24
+                                  : 0,
+                            ),
+                            child: CheckboxListTile(
+                              value: isSelected,
+                              dense: true,
+                              visualDensity: VisualDensity.compact,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: Text(categoryName),
+                              subtitle: subtitle == null
+                                  ? null
+                                  : Text(subtitle),
+                              onChanged: _categoryEditingLocked
+                                  ? null
+                                  : (selected) {
+                                      if (selected == null) {
+                                        return;
+                                      }
+
+                                      if (selected &&
+                                          !isSelected &&
+                                          _selectedCategoryIds.length >= 10) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'É possível selecionar no máximo 10 categorias.',
+                                            ),
+                                          ),
+                                        );
+
+                                        return;
+                                      }
+
+                                      setState(() {
+                                        if (selected) {
+                                          if (!_selectedCategoryIds.contains(
+                                            categoryDoc.id,
+                                          )) {
+                                            _selectedCategoryIds.add(
+                                              categoryDoc.id,
+                                            );
+                                          }
+                                        } else {
+                                          _selectedCategoryIds.remove(
+                                            categoryDoc.id,
+                                          );
+                                        }
+                                      });
+                                    },
+                            ),
+                          );
+                              })
+                              .map(
+                                (categoryTile) => SizedBox(
+                                  width: categoryItemWidth,
+                                  child: categoryTile,
+                                ),
+                              )
+                              .toList(),
+                            );
+                          },
+                        ),
+
+                        if (unavailableSelectedIds.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Associações indisponíveis',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: unavailableSelectedIds.map((categoryId) {
+                              return InputChip(
+                                avatar: const Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 18,
+                                ),
+                                label: Text(
+                                  'Categoria indisponível ($categoryId)',
+                                ),
+                                onDeleted: _categoryEditingLocked
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          _selectedCategoryIds.remove(
+                                            categoryId,
+                                          );
+                                        });
+                                      },
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ],
                     );
                   },
                 ),
 
                 const SizedBox(height: 16),
-
                 // ============================================================
                 // PREÇO
                 // ============================================================
@@ -1925,37 +2132,85 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     });
   }
 
+  List<String> _effectiveCatalogCategoryIds(Map<String, dynamic> productData) {
+    if (productData.containsKey('categoryIds')) {
+      final rawCategoryIds = productData['categoryIds'];
+
+      if (rawCategoryIds is! List || rawCategoryIds.length > 10) {
+        return const <String>[];
+      }
+
+      final categoryIds = <String>[];
+      final seenCategoryIds = <String>{};
+
+      for (final rawId in rawCategoryIds) {
+        if (rawId is! String ||
+            rawId.isEmpty ||
+            rawId.trim() != rawId ||
+            rawId.contains('/') ||
+            !seenCategoryIds.add(rawId)) {
+          return const <String>[];
+        }
+
+        categoryIds.add(rawId);
+      }
+
+      return categoryIds;
+    }
+
+    final legacyCategoryId = productData['categoryId'];
+
+    if (legacyCategoryId is String &&
+        legacyCategoryId.isNotEmpty &&
+        legacyCategoryId.trim() == legacyCategoryId &&
+        !legacyCategoryId.contains('/')) {
+      return <String>[legacyCategoryId];
+    }
+
+    return const <String>[];
+  }
+
+  Set<String> _catalogCategoryProductIds(
+    String categoryId,
+    List<QueryDocumentSnapshot> products,
+  ) {
+    final normalizedCategoryId = categoryId.trim();
+
+    if (normalizedCategoryId.isEmpty) {
+      return <String>{};
+    }
+
+    return products
+        .where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+
+          return _isCatalogProductAvailable(data) &&
+              _effectiveCatalogCategoryIds(data).contains(normalizedCategoryId);
+        })
+        .map((doc) => doc.id)
+        .toSet();
+  }
+
   bool _isCatalogCategoryFullySelected(
     String categoryId,
     List<QueryDocumentSnapshot> products,
   ) {
-    final categoryProducts = products.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
+    final categoryProductIds = _catalogCategoryProductIds(categoryId, products);
 
-      return data['categoryId']?.toString().trim() == categoryId &&
-          _isCatalogProductAvailable(data);
-    }).toList();
-
-    if (categoryProducts.isEmpty) {
+    if (categoryProductIds.isEmpty) {
       return false;
     }
 
-    return categoryProducts.every(
-      (doc) => _selectedCatalogProductIds.contains(doc.id),
-    );
+    return categoryProductIds.every(_selectedCatalogProductIds.contains);
   }
 
   int _selectedCatalogCategoryProductCount(
     String categoryId,
     List<QueryDocumentSnapshot> products,
   ) {
-    return products.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
+    final categoryProductIds = _catalogCategoryProductIds(categoryId, products);
 
-      return data['categoryId']?.toString().trim() == categoryId &&
-          _isCatalogProductAvailable(data) &&
-          _selectedCatalogProductIds.contains(doc.id);
-    }).length;
+    return categoryProductIds.where(_selectedCatalogProductIds.contains).length;
   }
 
   void _toggleCatalogCategory(
@@ -1966,22 +2221,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       return;
     }
 
-    final normalizedCategoryId = categoryId.trim();
-
-    if (normalizedCategoryId.isEmpty) {
-      return;
-    }
-
-    final categoryProductIds = products
-        .where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-
-          return data['categoryId']?.toString().trim() ==
-                  normalizedCategoryId &&
-              _isCatalogProductAvailable(data);
-        })
-        .map((doc) => doc.id)
-        .toSet();
+    final categoryProductIds = _catalogCategoryProductIds(categoryId, products);
 
     if (categoryProductIds.isEmpty) {
       return;
@@ -2003,27 +2243,61 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   Future<void> _showCatalogCategorySelector(
     List<QueryDocumentSnapshot> products,
   ) async {
-    final categories = <String, String>{};
+    final effectiveCategoryIds = <String>{};
 
     for (final productDoc in products) {
       final data = productDoc.data() as Map<String, dynamic>;
 
-      final categoryId = data['categoryId']?.toString().trim() ?? '';
-
-      final categoryName = data['categoryName']?.toString().trim() ?? '';
-
-      if (categoryId.isEmpty || categoryName.isEmpty) {
+      if (!_isCatalogProductAvailable(data)) {
         continue;
       }
 
-      categories[categoryId] = categoryName;
+      effectiveCategoryIds.addAll(_effectiveCatalogCategoryIds(data));
     }
 
-    if (categories.isEmpty) {
+    if (effectiveCategoryIds.isEmpty) {
       if (!mounted) {
         return;
       }
 
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nenhuma categoria disponível para seleção.'),
+        ),
+      );
+
+      return;
+    }
+
+    final categorySnapshot = await FirebaseFirestore.instance
+        .collection('stores')
+        .doc(widget.storeId)
+        .collection('categories')
+        .orderBy('name')
+        .get();
+
+    if (!mounted) {
+      return;
+    }
+
+    final categories = <String, String>{};
+
+    for (final categoryDoc in categorySnapshot.docs) {
+      if (!effectiveCategoryIds.contains(categoryDoc.id)) {
+        continue;
+      }
+
+      final categoryData = categoryDoc.data();
+      final categoryName = categoryData['name']?.toString().trim() ?? '';
+
+      if (categoryName.isEmpty) {
+        continue;
+      }
+
+      categories[categoryDoc.id] = categoryName;
+    }
+
+    if (categories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Nenhuma categoria disponível para seleção.'),
@@ -2052,13 +2326,10 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                   itemBuilder: (context, index) {
                     final category = sortedCategories[index];
 
-                    final totalCount = products.where((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-
-                      return data['categoryId']?.toString().trim() ==
-                              category.key &&
-                          _isCatalogProductAvailable(data);
-                    }).length;
+                    final totalCount = _catalogCategoryProductIds(
+                      category.key,
+                      products,
+                    ).length;
 
                     final selectedCount = _selectedCatalogCategoryProductCount(
                       category.key,
@@ -2803,8 +3074,9 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     );
 
     return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: ConstrainedBox(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
         constraints: BoxConstraints(minWidth: constraints.maxWidth),
         child: DataTable(
           columnSpacing: 24,
@@ -2938,6 +3210,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
             );
           }).toList(),
         ),
+      ),
       ),
     );
   }

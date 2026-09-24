@@ -81,6 +81,29 @@ class _WarningBannerState extends State<WarningBanner> {
     }
   }
 
+  DateTime? _parseFlexibleDate(dynamic rawValue) {
+    if (rawValue == null) return null;
+
+    if (rawValue is DateTime) {
+      return rawValue;
+    }
+
+    if (rawValue is String) {
+      return DateTime.tryParse(rawValue);
+    }
+
+    try {
+      final converted = rawValue.toDate();
+
+      if (converted is DateTime) {
+        return converted;
+      }
+    } catch (_) {
+      // Tipo de data não suportado.
+    }
+
+    return null;
+  }
   Widget _buildBannerUI(Map<String, dynamic> storeData) {
     final status = storeData['subscriptionStatus'] as String? ?? 'trial';
     final type = storeData['subscriptionType'] as String? ?? 'free';
@@ -89,7 +112,7 @@ class _WarningBannerState extends State<WarningBanner> {
     final bool isPaidPlan = type == 'pro' || type == 'business';
 
     // Data final do período de teste
-    final trialEndDateStr = storeData['trialEndDate'] as String?;
+    final trialEndDate = _parseFlexibleDate(storeData['trialEndDate']);
 
     // 🔴 1. LÓGICA PARA FATURA EM ATRASO (OVERDUE)
     //
@@ -206,9 +229,9 @@ class _WarningBannerState extends State<WarningBanner> {
     // 🟠 2. LÓGICA PARA PERÍODO DE TESTE (TRIAL)
     if ((status == 'trial' || status == 'active') &&
         !isPaidPlan &&
-        trialEndDateStr != null) {
+        trialEndDate != null) {
       try {
-        DateTime dataFimTrial = DateTime.parse(trialEndDateStr);
+        final dataFimTrial = trialEndDate;
         DateTime hoje = DateTime.now();
         DateTime dataFimFormatada = DateTime(dataFimTrial.year, dataFimTrial.month, dataFimTrial.day);
         DateTime hojeFormatada = DateTime(hoje.year, hoje.month, hoje.day);

@@ -36,6 +36,29 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   /// Monitora se o pagamento foi confirmado via Webhook
   /// Listener para monitorar mudanças de status da assinatura
+  DateTime? _parseFlexibleDate(dynamic rawValue) {
+    if (rawValue == null) return null;
+
+    if (rawValue is DateTime) {
+      return rawValue;
+    }
+
+    if (rawValue is String) {
+      return DateTime.tryParse(rawValue);
+    }
+
+    try {
+      final converted = rawValue.toDate();
+
+      if (converted is DateTime) {
+        return converted;
+      }
+    } catch (_) {
+      // Tipo de data não suportado.
+    }
+
+    return null;
+  }
   void _startListeningToStatus() {
     _statusListener = FirebaseFirestore.instance
         .collection('stores')
@@ -46,14 +69,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             final data = docSnapshot.data();
             final status = data?['subscriptionStatus'] as String?;
             final type = data?['subscriptionType'] as String?;
-            final trialEndDate = data?['trialEndDate'] as String?;
+            final trialEndDate = _parseFlexibleDate(data?['trialEndDate']);
 
             // 1. Calcula se o trial ainda é válido
             bool isTrialActive = false;
             if (trialEndDate != null) {
               try {
                 isTrialActive = DateTime.now().isBefore(
-                  DateTime.parse(trialEndDate),
+                  trialEndDate,
                 );
               } catch (e) {}
             }

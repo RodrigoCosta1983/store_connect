@@ -224,6 +224,25 @@ class _ProductImportMappingScreenState
     ),
 
     _ImportField(
+      key: 'subcategory',
+      label: 'Subcategoria',
+      description: 'Subcategoria vinculada à categoria principal.',
+      icon: Icons.category_outlined,
+      aliases: [
+        'subcategoria',
+        'sub categoria',
+        'subgrupo',
+        'sub grupo',
+        'subdepartamento',
+        'sub departamento',
+        'subsecao',
+        'sub secao',
+        'subfamilia',
+        'sub familia',
+      ],
+    ),
+
+    _ImportField(
       key: 'barcode',
       label: 'Código de barras',
       description: 'EAN, GTIN ou código de barras do produto.',
@@ -371,6 +390,17 @@ class _ProductImportMappingScreenState
     return result.trim();
   }
 
+  bool _isSubcategoryHeader(String normalizedHeader) {
+    final subcategoryField = _fields.firstWhere(
+      (field) => field.key == 'subcategory',
+    );
+
+    return subcategoryField.aliases
+        .map(_normalize)
+        .where((alias) => alias.length >= 4)
+        .any(normalizedHeader.contains);
+  }
+
   // ==========================================================================
   // MAPEAMENTO AUTOMÁTICO
   // ==========================================================================
@@ -422,6 +452,10 @@ class _ProductImportMappingScreenState
           final header = _normalize(_headers[index]);
 
           if (header.isEmpty) {
+            continue;
+          }
+
+          if (field.key == 'category' && _isSubcategoryHeader(header)) {
             continue;
           }
 

@@ -94,11 +94,7 @@ import 'package:store_connect/screens/management/product_import_confirmation_scr
 // STATUS DE VALIDAÇÃO
 // ============================================================================
 
-enum _ImportValidationStatus {
-  ready,
-  warning,
-  error,
-}
+enum _ImportValidationStatus { ready, warning, error }
 
 // ============================================================================
 // PRODUTO VALIDADO TEMPORÁRIO
@@ -123,6 +119,8 @@ class _ValidatedImportProduct {
 
   final String category;
 
+  final String subcategory;
+
   final String barcode;
 
   final double? costPrice;
@@ -141,6 +139,7 @@ class _ValidatedImportProduct {
     required this.price,
     required this.quantity,
     required this.category,
+    required this.subcategory,
     required this.barcode,
     required this.costPrice,
     required this.ncm,
@@ -157,15 +156,11 @@ class _ValidatedImportProduct {
 
   ProductImportItem toImportItem() {
     if (name.trim().isEmpty) {
-      throw StateError(
-        'Não é possível converter um produto sem nome.',
-      );
+      throw StateError('Não é possível converter um produto sem nome.');
     }
 
     if (price == null) {
-      throw StateError(
-        'Não é possível converter um produto sem preço.',
-      );
+      throw StateError('Não é possível converter um produto sem preço.');
     }
 
     return ProductImportItem(
@@ -179,6 +174,8 @@ class _ValidatedImportProduct {
       quantity: quantity ?? 0,
 
       category: category.trim(),
+
+      subcategory: subcategory.trim(),
 
       barcode: barcode.trim(),
 
@@ -262,31 +259,19 @@ class _ProductImportValidationScreenState
 
   int get _readyCount {
     return _products
-        .where(
-          (product) =>
-      product.status ==
-          _ImportValidationStatus.ready,
-    )
+        .where((product) => product.status == _ImportValidationStatus.ready)
         .length;
   }
 
   int get _warningCount {
     return _products
-        .where(
-          (product) =>
-      product.status ==
-          _ImportValidationStatus.warning,
-    )
+        .where((product) => product.status == _ImportValidationStatus.warning)
         .length;
   }
 
   int get _errorCount {
     return _products
-        .where(
-          (product) =>
-      product.status ==
-          _ImportValidationStatus.error,
-    )
+        .where((product) => product.status == _ImportValidationStatus.error)
         .length;
   }
 
@@ -300,19 +285,14 @@ class _ProductImportValidationScreenState
   // consulta o mapeamento e descobre em qual coluna está o nome.
   // ==========================================================================
 
-  String _readField(
-      List<String> row,
-      String fieldKey,
-      ) {
-    final columnIndex =
-    widget.mapping[fieldKey];
+  String _readField(List<String> row, String fieldKey) {
+    final columnIndex = widget.mapping[fieldKey];
 
     if (columnIndex == null) {
       return '';
     }
 
-    if (columnIndex < 0 ||
-        columnIndex >= row.length) {
+    if (columnIndex < 0 || columnIndex >= row.length) {
       return '';
     }
 
@@ -333,11 +313,8 @@ class _ProductImportValidationScreenState
   //
   // ==========================================================================
 
-  double? _parseNumber(
-      String value,
-      ) {
-    var text =
-    value.trim();
+  double? _parseNumber(String value) {
+    var text = value.trim();
 
     if (text.isEmpty) {
       return null;
@@ -347,15 +324,7 @@ class _ProductImportValidationScreenState
     // REMOVE MOEDA / ESPAÇOS
     // ------------------------------------------------------------------------
 
-    text = text
-        .replaceAll(
-      'R\$',
-      '',
-    )
-        .replaceAll(
-      ' ',
-      '',
-    );
+    text = text.replaceAll('R\$', '').replaceAll(' ', '');
 
     // ------------------------------------------------------------------------
     // POSSUI PONTO E VÍRGULA
@@ -363,13 +332,10 @@ class _ProductImportValidationScreenState
     // Precisamos descobrir qual deles representa os centavos.
     // ------------------------------------------------------------------------
 
-    if (text.contains(',') &&
-        text.contains('.')) {
-      final lastComma =
-      text.lastIndexOf(',');
+    if (text.contains(',') && text.contains('.')) {
+      final lastComma = text.lastIndexOf(',');
 
-      final lastDot =
-      text.lastIndexOf('.');
+      final lastDot = text.lastIndexOf('.');
 
       // ----------------------------------------------------------------------
       // PADRÃO BRASILEIRO
@@ -378,84 +344,48 @@ class _ProductImportValidationScreenState
       // ----------------------------------------------------------------------
 
       if (lastComma > lastDot) {
-        text = text
-            .replaceAll(
-          '.',
-          '',
-        )
-            .replaceAll(
-          ',',
-          '.',
-        );
+        text = text.replaceAll('.', '').replaceAll(',', '.');
       }
-
       // ----------------------------------------------------------------------
       // PADRÃO INTERNACIONAL
       //
       // 1,299.90
       // ----------------------------------------------------------------------
-
       else {
-        text =
-            text.replaceAll(
-              ',',
-              '',
-            );
+        text = text.replaceAll(',', '');
       }
     }
-
     // ------------------------------------------------------------------------
     // SOMENTE VÍRGULA
     //
     // 59,90
     // ------------------------------------------------------------------------
-
     else if (text.contains(',')) {
-      text =
-          text.replaceAll(
-            ',',
-            '.',
-          );
+      text = text.replaceAll(',', '.');
     }
 
     // ------------------------------------------------------------------------
     // REMOVE CARACTERES RESIDUAIS
     // ------------------------------------------------------------------------
 
-    text =
-        text.replaceAll(
-          RegExp(
-            r'[^0-9.\-]',
-          ),
-          '',
-        );
+    text = text.replaceAll(RegExp(r'[^0-9.\-]'), '');
 
-    return double.tryParse(
-      text,
-    );
+    return double.tryParse(text);
   }
 
   // ==========================================================================
   // SOMENTE DÍGITOS
   // ==========================================================================
 
-  String _onlyDigits(
-      String value,
-      ) {
-    return value.replaceAll(
-      RegExp(
-        r'\D',
-      ),
-      '',
-    );
+  String _onlyDigits(String value) {
+    return value.replaceAll(RegExp(r'\D'), '');
   }
 
   // ==========================================================================
   // VALIDAR TODOS OS PRODUTOS
   // ==========================================================================
 
-  List<_ValidatedImportProduct>
-  _validateProducts() {
+  List<_ValidatedImportProduct> _validateProducts() {
     // Precisamos pelo menos de:
     //
     // linha 1 = cabeçalho
@@ -465,20 +395,14 @@ class _ProductImportValidationScreenState
       return [];
     }
 
-    final result =
-    <_ValidatedImportProduct>[];
+    final result = <_ValidatedImportProduct>[];
 
     // Começa em 1 porque:
     //
     // rows[0] = cabeçalho.
 
-    for (
-    int index = 1;
-    index < widget.rows.length;
-    index++
-    ) {
-      final row =
-      widget.rows[index];
+    for (int index = 1; index < widget.rows.length; index++) {
+      final row = widget.rows[index];
 
       result.add(
         _validateRow(
@@ -499,85 +423,51 @@ class _ProductImportValidationScreenState
   // VALIDAR UMA LINHA
   // ==========================================================================
 
-  _ValidatedImportProduct _validateRow(
-      List<String> row,
-      int spreadsheetRow,
-      ) {
-    final errors =
-    <String>[];
+  _ValidatedImportProduct _validateRow(List<String> row, int spreadsheetRow) {
+    final errors = <String>[];
 
-    final warnings =
-    <String>[];
+    final warnings = <String>[];
 
     // =========================================================================
     // 1. NOME
     // =========================================================================
 
-    final name =
-    _readField(
-      row,
-      'name',
-    );
+    final name = _readField(row, 'name');
 
     if (name.isEmpty) {
-      errors.add(
-        'Nome do produto não informado.',
-      );
+      errors.add('Nome do produto não informado.');
     }
 
     // =========================================================================
     // 2. PREÇO DE VENDA
     // =========================================================================
 
-    final rawPrice =
-    _readField(
-      row,
-      'price',
-    );
+    final rawPrice = _readField(row, 'price');
 
-    final price =
-    _parseNumber(
-      rawPrice,
-    );
+    final price = _parseNumber(rawPrice);
 
     if (rawPrice.isEmpty) {
-      errors.add(
-        'Preço de venda não informado.',
-      );
+      errors.add('Preço de venda não informado.');
     } else if (price == null) {
-      errors.add(
-        'Preço de venda inválido: "$rawPrice".',
-      );
+      errors.add('Preço de venda inválido: "$rawPrice".');
     } else if (price < 0) {
-      errors.add(
-        'Preço de venda não pode ser negativo.',
-      );
+      errors.add('Preço de venda não pode ser negativo.');
     }
 
     // =========================================================================
     // 3. QUANTIDADE
     // =========================================================================
 
-    final rawQuantity =
-    _readField(
-      row,
-      'quantity',
-    );
+    final rawQuantity = _readField(row, 'quantity');
 
-    final quantity =
-    _parseNumber(
-      rawQuantity,
-    );
+    final quantity = _parseNumber(rawQuantity);
 
     // -------------------------------------------------------------------------
     // Valor preenchido, mas inválido.
     // -------------------------------------------------------------------------
 
-    if (rawQuantity.isNotEmpty &&
-        quantity == null) {
-      errors.add(
-        'Quantidade inválida: "$rawQuantity".',
-      );
+    if (rawQuantity.isNotEmpty && quantity == null) {
+      errors.add('Quantidade inválida: "$rawQuantity".');
     }
 
     // -------------------------------------------------------------------------
@@ -586,11 +476,8 @@ class _ProductImportValidationScreenState
     // Não bloqueamos a importação, mas avisamos.
     // -------------------------------------------------------------------------
 
-    if (quantity != null &&
-        quantity < 0) {
-      warnings.add(
-        'Quantidade negativa. Confira o estoque informado.',
-      );
+    if (quantity != null && quantity < 0) {
+      warnings.add('Quantidade negativa. Confira o estoque informado.');
     }
 
     // -------------------------------------------------------------------------
@@ -602,12 +489,10 @@ class _ProductImportValidationScreenState
     // Por isso avisamos o usuário em vez de alterar silenciosamente.
     // -------------------------------------------------------------------------
 
-    if (quantity != null &&
-        quantity >= 0 &&
-        quantity % 1 != 0) {
+    if (quantity != null && quantity >= 0 && quantity % 1 != 0) {
       warnings.add(
         'Quantidade decimal informada ($rawQuantity). '
-            'O estoque será convertido para um número inteiro na importação.',
+        'O estoque será convertido para um número inteiro na importação.',
       );
     }
 
@@ -615,32 +500,26 @@ class _ProductImportValidationScreenState
     // 4. CATEGORIA
     // =========================================================================
 
-    final category =
-    _readField(
-      row,
-      'category',
-    );
+    final category = _readField(row, 'category');
+
+    final subcategory = _readField(row, 'subcategory');
+
+    if (subcategory.isNotEmpty && category.isEmpty) {
+      errors.add('Subcategoria informada sem categoria.');
+    }
 
     // Só avisa categoria vazia se o usuário realmente mapeou
     // uma coluna de categoria.
 
-    if (widget.mapping['category'] !=
-        null &&
-        category.isEmpty) {
-      warnings.add(
-        'Categoria não informada.',
-      );
+    if (widget.mapping['category'] != null && category.isEmpty) {
+      warnings.add('Categoria não informada.');
     }
 
     // =========================================================================
     // 5. CÓDIGO DE BARRAS
     // =========================================================================
 
-    final barcode =
-    _readField(
-      row,
-      'barcode',
-    );
+    final barcode = _readField(row, 'barcode');
 
     // -------------------------------------------------------------------------
     // Nesta primeira versão:
@@ -655,69 +534,42 @@ class _ProductImportValidationScreenState
     // 6. PREÇO DE CUSTO
     // =========================================================================
 
-    final rawCostPrice =
-    _readField(
-      row,
-      'costPrice',
-    );
+    final rawCostPrice = _readField(row, 'costPrice');
 
-    final costPrice =
-    _parseNumber(
-      rawCostPrice,
-    );
+    final costPrice = _parseNumber(rawCostPrice);
 
-    if (rawCostPrice.isNotEmpty &&
-        costPrice == null) {
-      errors.add(
-        'Preço de custo inválido: "$rawCostPrice".',
-      );
+    if (rawCostPrice.isNotEmpty && costPrice == null) {
+      errors.add('Preço de custo inválido: "$rawCostPrice".');
     }
 
-    if (costPrice != null &&
-        costPrice < 0) {
-      errors.add(
-        'Preço de custo não pode ser negativo.',
-      );
+    if (costPrice != null && costPrice < 0) {
+      errors.add('Preço de custo não pode ser negativo.');
     }
 
     // =========================================================================
     // 7. NCM
     // =========================================================================
 
-    final rawNcm =
-    _readField(
-      row,
-      'ncm',
-    );
+    final rawNcm = _readField(row, 'ncm');
 
-    final ncm =
-    _onlyDigits(
-      rawNcm,
-    );
+    final ncm = _onlyDigits(rawNcm);
 
-    if (rawNcm.isNotEmpty &&
-        ncm.length != 8) {
-      errors.add(
-        'NCM deve possuir 8 dígitos.',
-      );
+    if (rawNcm.isNotEmpty && ncm.length != 8) {
+      errors.add('NCM deve possuir 8 dígitos.');
     }
 
     // =========================================================================
     // 8. STATUS FINAL
     // =========================================================================
 
-    final _ImportValidationStatus
-    status;
+    final _ImportValidationStatus status;
 
     if (errors.isNotEmpty) {
-      status =
-          _ImportValidationStatus.error;
+      status = _ImportValidationStatus.error;
     } else if (warnings.isNotEmpty) {
-      status =
-          _ImportValidationStatus.warning;
+      status = _ImportValidationStatus.warning;
     } else {
-      status =
-          _ImportValidationStatus.ready;
+      status = _ImportValidationStatus.ready;
     }
 
     // =========================================================================
@@ -725,38 +577,29 @@ class _ProductImportValidationScreenState
     // =========================================================================
 
     return _ValidatedImportProduct(
-      sourceRow:
-      spreadsheetRow,
+      sourceRow: spreadsheetRow,
 
-      name:
-      name,
+      name: name,
 
-      price:
-      price,
+      price: price,
 
-      quantity:
-      quantity,
+      quantity: quantity,
 
-      category:
-      category,
+      category: category,
 
-      barcode:
-      barcode,
+      subcategory: subcategory,
 
-      costPrice:
-      costPrice,
+      barcode: barcode,
 
-      ncm:
-      ncm,
+      costPrice: costPrice,
 
-      status:
-      status,
+      ncm: ncm,
 
-      errors:
-      errors,
+      status: status,
 
-      warnings:
-      warnings,
+      errors: errors,
+
+      warnings: warnings,
     );
   }
 
@@ -764,16 +607,10 @@ class _ProductImportValidationScreenState
   // CONVERTER PRODUTOS PARA O MODELO COMPARTILHADO
   // ==========================================================================
 
-  List<ProductImportItem>
-  _buildImportItems() {
+  List<ProductImportItem> _buildImportItems() {
     // Este método só deve ser chamado quando não houver erros.
 
-    return _products
-        .map(
-          (product) =>
-          product.toImportItem(),
-    )
-        .toList();
+    return _products.map((product) => product.toImportItem()).toList();
   }
 
   // ==========================================================================
@@ -786,15 +623,13 @@ class _ProductImportValidationScreenState
     // =========================================================================
 
     if (_errorCount > 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             'Existem $_errorCount produto(s) com erro. '
-                'Corrija a planilha ou volte ao mapeamento antes de continuar.',
+            'Corrija a planilha ou volte ao mapeamento antes de continuar.',
           ),
-          backgroundColor:
-          Colors.red,
+          backgroundColor: Colors.red,
         ),
       );
 
@@ -806,13 +641,8 @@ class _ProductImportValidationScreenState
     // =========================================================================
 
     if (_products.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Nenhum produto válido foi encontrado.',
-          ),
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhum produto válido foi encontrado.')),
       );
 
       return;
@@ -822,8 +652,7 @@ class _ProductImportValidationScreenState
     // CONVERTE PARA ProductImportItem
     // =========================================================================
 
-    final importItems =
-    _buildImportItems();
+    final importItems = _buildImportItems();
 
     // =========================================================================
     // ABRE A ETAPA DE CONFIRMAÇÃO
@@ -842,20 +671,15 @@ class _ProductImportValidationScreenState
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) =>
-            ProductImportConfirmationScreen(
-              storeId:
-              widget.storeId,
+        builder: (context) => ProductImportConfirmationScreen(
+          storeId: widget.storeId,
 
-              isBusiness:
-              widget.isBusiness,
+          isBusiness: widget.isBusiness,
 
-              fileName:
-              widget.fileName,
+          fileName: widget.fileName,
 
-              products:
-              importItems,
-            ),
+          products: importItems,
+        ),
       ),
     );
   }
@@ -865,258 +689,153 @@ class _ProductImportValidationScreenState
   // ==========================================================================
 
   @override
-  Widget build(
-      BuildContext context,
-      ) {
+  Widget build(BuildContext context) {
     return Scaffold(
       // ======================================================================
       // APP BAR
       // ======================================================================
-
-      appBar: AppBar(
-        title:
-        const Text(
-          'Validar Produtos',
-        ),
-      ),
+      appBar: AppBar(title: const Text('Validar Produtos')),
 
       // ======================================================================
       // CONTEÚDO
       // ======================================================================
-
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints:
-            const BoxConstraints(
-              maxWidth: 1100,
-            ),
+            constraints: const BoxConstraints(maxWidth: 1100),
 
-            child:
-            ListView(
-              padding:
-              const EdgeInsets.all(
-                16,
-              ),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
 
               children: [
                 // ============================================================
                 // INTRODUÇÃO
                 // ============================================================
-
                 Container(
-                  padding:
-                  const EdgeInsets.all(
-                    16,
+                  padding: const EdgeInsets.all(16),
+
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.08),
+
+                    borderRadius: BorderRadius.circular(14),
                   ),
 
-                  decoration:
-                  BoxDecoration(
-                    color:
-                    Colors.blue
-                        .withOpacity(
-                      0.08,
-                    ),
-
-                    borderRadius:
-                    BorderRadius.circular(
-                      14,
-                    ),
-                  ),
-
-                  child:
-                  const Row(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
 
                     children: [
-                      Icon(
-                        Icons
-                            .fact_check_outlined,
-                      ),
+                      Icon(Icons.fact_check_outlined),
 
-                      SizedBox(
-                        width: 12,
-                      ),
+                      SizedBox(width: 12),
 
                       Expanded(
-                        child:
-                        Text(
+                        child: Text(
                           'Confira os produtos encontrados na planilha. '
-                              'O Store Connect verificou os campos obrigatórios '
-                              'e possíveis problemas antes da importação.',
+                          'O Store Connect verificou os campos obrigatórios '
+                          'e possíveis problemas antes da importação.',
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(
-                  height: 20,
-                ),
+                const SizedBox(height: 20),
 
                 // ============================================================
                 // ARQUIVO
                 // ============================================================
-
                 _buildFileSummary(),
 
-                const SizedBox(
-                  height: 24,
-                ),
+                const SizedBox(height: 24),
 
                 // ============================================================
                 // TÍTULO RESUMO
                 // ============================================================
-
                 Text(
                   'Resultado da validação',
 
-                  style:
-                  Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(
-                    fontWeight:
-                    FontWeight.bold,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 12,
-                ),
+                const SizedBox(height: 12),
 
                 // ============================================================
                 // CONTADORES
                 // ============================================================
-
                 _buildValidationSummary(),
 
-                const SizedBox(
-                  height: 24,
-                ),
+                const SizedBox(height: 24),
 
                 // ============================================================
                 // PRODUTOS
                 // ============================================================
-
                 Text(
                   'Produtos encontrados',
 
-                  style:
-                  Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(
-                    fontWeight:
-                    FontWeight.bold,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
 
-                const SizedBox(
-                  height: 12,
-                ),
+                const SizedBox(height: 12),
 
-                ..._products.map(
-                  _buildProductCard,
-                ),
+                ..._products.map(_buildProductCard),
 
-                const SizedBox(
-                  height: 20,
-                ),
+                const SizedBox(height: 20),
 
                 // ============================================================
                 // AVISO
                 // ============================================================
-
                 Container(
-                  padding:
-                  const EdgeInsets.all(
-                    12,
+                  padding: const EdgeInsets.all(12),
+
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.08),
+
+                    borderRadius: BorderRadius.circular(10),
                   ),
 
-                  decoration:
-                  BoxDecoration(
-                    color:
-                    Colors.amber
-                        .withOpacity(
-                      0.08,
-                    ),
-
-                    borderRadius:
-                    BorderRadius.circular(
-                      10,
-                    ),
-                  ),
-
-                  child:
-                  const Row(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
 
                     children: [
-                      Icon(
-                        Icons.info_outline,
-                        size: 20,
-                        color:
-                        Colors.amber,
-                      ),
+                      Icon(Icons.info_outline, size: 20, color: Colors.amber),
 
-                      SizedBox(
-                        width: 8,
-                      ),
+                      SizedBox(width: 8),
 
                       Expanded(
-                        child:
-                        Text(
+                        child: Text(
                           'Nenhum dado foi salvo ainda. '
-                              'Na próxima etapa o Store Connect verificará '
-                              'produtos duplicados e categorias antes de pedir '
-                              'a confirmação definitiva.',
-                          style:
-                          TextStyle(
-                            fontSize: 12,
-                          ),
+                          'Na próxima etapa o Store Connect verificará '
+                          'produtos duplicados e categorias antes de pedir '
+                          'a confirmação definitiva.',
+                          style: TextStyle(fontSize: 12),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                const SizedBox(
-                  height: 24,
-                ),
+                const SizedBox(height: 24),
 
                 // ============================================================
                 // CONTINUAR
                 // ============================================================
-
                 SizedBox(
                   height: 52,
 
-                  child:
-                  ElevatedButton.icon(
-                    onPressed:
-                    _errorCount > 0
-                        ? null
-                        : _continueImport,
+                  child: ElevatedButton.icon(
+                    onPressed: _errorCount > 0 ? null : _continueImport,
 
-                    icon:
-                    const Icon(
-                      Icons
-                          .arrow_forward,
-                    ),
+                    icon: const Icon(Icons.arrow_forward),
 
-                    label:
-                    const Text(
-                      'CONTINUAR',
-                    ),
+                    label: const Text('CONTINUAR'),
                   ),
                 ),
 
-                const SizedBox(
-                  height: 16,
-                ),
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -1132,37 +851,24 @@ class _ProductImportValidationScreenState
   Widget _buildFileSummary() {
     return Card(
       child: Padding(
-        padding:
-        const EdgeInsets.all(
-          14,
-        ),
+        padding: const EdgeInsets.all(14),
 
         child: Row(
           children: [
             CircleAvatar(
-              backgroundColor:
-              Colors.green
-                  .withOpacity(
-                0.12,
-              ),
+              backgroundColor: Colors.green.withOpacity(0.12),
 
-              child:
-              const Icon(
-                Icons
-                    .description_outlined,
-                color:
-                Colors.green,
+              child: const Icon(
+                Icons.description_outlined,
+                color: Colors.green,
               ),
             ),
 
-            const SizedBox(
-              width: 12,
-            ),
+            const SizedBox(width: 12),
 
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
 
                 children: [
                   Text(
@@ -1170,31 +876,17 @@ class _ProductImportValidationScreenState
 
                     maxLines: 1,
 
-                    overflow:
-                    TextOverflow.ellipsis,
+                    overflow: TextOverflow.ellipsis,
 
-                    style:
-                    const TextStyle(
-                      fontWeight:
-                      FontWeight.bold,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
 
-                  const SizedBox(
-                    height: 3,
-                  ),
+                  const SizedBox(height: 3),
 
                   Text(
                     '${_products.length} produto(s) encontrado(s)',
 
-                    style:
-                    TextStyle(
-                      fontSize: 12,
-
-                      color:
-                      Colors.grey
-                          .shade600,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ],
               ),
@@ -1215,73 +907,49 @@ class _ProductImportValidationScreenState
         // --------------------------------------------------------------------
         // PRONTOS
         // --------------------------------------------------------------------
-
         Expanded(
-          child:
-          _summaryCard(
-            icon:
-            Icons
-                .check_circle_outline,
+          child: _summaryCard(
+            icon: Icons.check_circle_outline,
 
-            label:
-            'Prontos',
+            label: 'Prontos',
 
-            value:
-            _readyCount,
+            value: _readyCount,
 
-            color:
-            Colors.green,
+            color: Colors.green,
           ),
         ),
 
-        const SizedBox(
-          width: 10,
-        ),
+        const SizedBox(width: 10),
 
         // --------------------------------------------------------------------
         // ATENÇÃO
         // --------------------------------------------------------------------
-
         Expanded(
-          child:
-          _summaryCard(
-            icon:
-            Icons
-                .warning_amber_outlined,
+          child: _summaryCard(
+            icon: Icons.warning_amber_outlined,
 
-            label:
-            'Atenção',
+            label: 'Atenção',
 
-            value:
-            _warningCount,
+            value: _warningCount,
 
-            color:
-            Colors.orange,
+            color: Colors.orange,
           ),
         ),
 
-        const SizedBox(
-          width: 10,
-        ),
+        const SizedBox(width: 10),
 
         // --------------------------------------------------------------------
         // ERROS
         // --------------------------------------------------------------------
-
         Expanded(
-          child:
-          _summaryCard(
-            icon:
-            Icons.error_outline,
+          child: _summaryCard(
+            icon: Icons.error_outline,
 
-            label:
-            'Erros',
+            label: 'Erros',
 
-            value:
-            _errorCount,
+            value: _errorCount,
 
-            color:
-            Colors.red,
+            color: Colors.red,
           ),
         ),
       ],
@@ -1299,67 +967,32 @@ class _ProductImportValidationScreenState
     required Color color,
   }) {
     return Container(
-      padding:
-      const EdgeInsets.symmetric(
-        vertical: 14,
-        horizontal: 8,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
 
-      decoration:
-      BoxDecoration(
-        borderRadius:
-        BorderRadius.circular(
-          12,
-        ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
 
-        border:
-        Border.all(
-          color:
-          color.withOpacity(
-            0.25,
-          ),
-        ),
+        border: Border.all(color: color.withOpacity(0.25)),
 
-        color:
-        color.withOpacity(
-          0.06,
-        ),
+        color: color.withOpacity(0.06),
       ),
 
       child: Column(
         children: [
-          Icon(
-            icon,
-            color: color,
-          ),
+          Icon(icon, color: color),
 
-          const SizedBox(
-            height: 6,
-          ),
+          const SizedBox(height: 6),
 
           Text(
             value.toString(),
 
-            style:
-            const TextStyle(
-              fontSize: 20,
-
-              fontWeight:
-              FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
 
           Text(
             label,
 
-            style:
-            TextStyle(
-              fontSize: 11,
-
-              color:
-              Colors.grey
-                  .shade600,
-            ),
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
           ),
         ],
       ),
@@ -1370,9 +1003,7 @@ class _ProductImportValidationScreenState
   // CARD DO PRODUTO
   // ==========================================================================
 
-  Widget _buildProductCard(
-      _ValidatedImportProduct product,
-      ) {
+  Widget _buildProductCard(_ValidatedImportProduct product) {
     Color statusColor;
 
     IconData statusIcon;
@@ -1385,98 +1016,67 @@ class _ProductImportValidationScreenState
 
     switch (product.status) {
       case _ImportValidationStatus.ready:
-        statusColor =
-            Colors.green;
+        statusColor = Colors.green;
 
-        statusIcon =
-            Icons.check_circle;
+        statusIcon = Icons.check_circle;
 
-        statusText =
-        'Pronto';
+        statusText = 'Pronto';
 
         break;
 
       case _ImportValidationStatus.warning:
-        statusColor =
-            Colors.orange;
+        statusColor = Colors.orange;
 
-        statusIcon =
-            Icons.warning_amber;
+        statusIcon = Icons.warning_amber;
 
-        statusText =
-        'Atenção';
+        statusText = 'Atenção';
 
         break;
 
       case _ImportValidationStatus.error:
-        statusColor =
-            Colors.red;
+        statusColor = Colors.red;
 
-        statusIcon =
-            Icons.error;
+        statusIcon = Icons.error;
 
-        statusText =
-        'Erro';
+        statusText = 'Erro';
 
         break;
     }
 
     return Card(
-      margin:
-      const EdgeInsets.only(
-        bottom: 12,
-      ),
+      margin: const EdgeInsets.only(bottom: 12),
 
       child: Padding(
-        padding:
-        const EdgeInsets.all(
-          14,
-        ),
+        padding: const EdgeInsets.all(14),
 
         child: Column(
-          crossAxisAlignment:
-          CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
 
           children: [
             // ================================================================
             // CABEÇALHO DO PRODUTO
             // ================================================================
-
             Row(
-              crossAxisAlignment:
-              CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
 
               children: [
                 // ------------------------------------------------------------
                 // STATUS
                 // ------------------------------------------------------------
-
                 CircleAvatar(
-                  backgroundColor:
-                  statusColor
-                      .withOpacity(
-                    0.10,
-                  ),
+                  backgroundColor: statusColor.withOpacity(0.10),
 
-                  child: Icon(
-                    statusIcon,
-                    color:
-                    statusColor,
-                  ),
+                  child: Icon(statusIcon, color: statusColor),
                 ),
 
-                const SizedBox(
-                  width: 12,
-                ),
+                const SizedBox(width: 12),
 
                 // ------------------------------------------------------------
                 // NOME / LINHA
                 // ------------------------------------------------------------
-
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
 
                     children: [
                       Text(
@@ -1484,29 +1084,22 @@ class _ProductImportValidationScreenState
                             ? 'Produto sem nome'
                             : product.name,
 
-                        style:
-                        const TextStyle(
-                          fontWeight:
-                          FontWeight.bold,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
 
                           fontSize: 15,
                         ),
                       ),
 
-                      const SizedBox(
-                        height: 3,
-                      ),
+                      const SizedBox(height: 3),
 
                       Text(
                         'Linha ${product.sourceRow} da planilha',
 
-                        style:
-                        TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
 
-                          color:
-                          Colors.grey
-                              .shade600,
+                          color: Colors.grey.shade600,
                         ),
                       ),
                     ],
@@ -1516,54 +1109,38 @@ class _ProductImportValidationScreenState
                 // ------------------------------------------------------------
                 // CHIP DO STATUS
                 // ------------------------------------------------------------
-
                 Container(
-                  padding:
-                  const EdgeInsets.symmetric(
+                  padding: const EdgeInsets.symmetric(
                     horizontal: 9,
                     vertical: 4,
                   ),
 
-                  decoration:
-                  BoxDecoration(
-                    color:
-                    statusColor
-                        .withOpacity(
-                      0.10,
-                    ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.10),
 
-                    borderRadius:
-                    BorderRadius.circular(
-                      20,
-                    ),
+                    borderRadius: BorderRadius.circular(20),
                   ),
 
                   child: Text(
                     statusText,
 
-                    style:
-                    TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
 
-                      fontWeight:
-                      FontWeight.bold,
+                      fontWeight: FontWeight.bold,
 
-                      color:
-                      statusColor,
+                      color: statusColor,
                     ),
                   ),
                 ),
               ],
             ),
 
-            const SizedBox(
-              height: 12,
-            ),
+            const SizedBox(height: 12),
 
             // ================================================================
             // DADOS
             // ================================================================
-
             Wrap(
               spacing: 16,
               runSpacing: 8,
@@ -1572,7 +1149,6 @@ class _ProductImportValidationScreenState
                 // ------------------------------------------------------------
                 // PREÇO
                 // ------------------------------------------------------------
-
                 _productInfo(
                   'Preço',
 
@@ -1584,50 +1160,32 @@ class _ProductImportValidationScreenState
                 // ------------------------------------------------------------
                 // QUANTIDADE
                 // ------------------------------------------------------------
-
                 _productInfo(
                   'Quantidade',
 
                   product.quantity != null
-                      ? product.quantity!
-                      .toStringAsFixed(
-                    product.quantity! %
-                        1 ==
-                        0
-                        ? 0
-                        : 2,
-                  )
+                      ? product.quantity!.toStringAsFixed(
+                          product.quantity! % 1 == 0 ? 0 : 2,
+                        )
                       : '-',
                 ),
 
                 // ------------------------------------------------------------
                 // CATEGORIA
                 // ------------------------------------------------------------
-
-                if (product.category
-                    .isNotEmpty)
-                  _productInfo(
-                    'Categoria',
-                    product.category,
-                  ),
+                if (product.category.isNotEmpty)
+                  _productInfo('Categoria', product.category),
 
                 // ------------------------------------------------------------
                 // CÓDIGO DE BARRAS
                 // ------------------------------------------------------------
-
-                if (product.barcode
-                    .isNotEmpty)
-                  _productInfo(
-                    'Código',
-                    product.barcode,
-                  ),
+                if (product.barcode.isNotEmpty)
+                  _productInfo('Código', product.barcode),
 
                 // ------------------------------------------------------------
                 // PREÇO DE CUSTO
                 // ------------------------------------------------------------
-
-                if (product.costPrice !=
-                    null)
+                if (product.costPrice != null)
                   _productInfo(
                     'Custo',
                     'R\$ ${product.costPrice!.toStringAsFixed(2)}',
@@ -1636,58 +1194,36 @@ class _ProductImportValidationScreenState
                 // ------------------------------------------------------------
                 // NCM
                 // ------------------------------------------------------------
-
-                if (product.ncm
-                    .isNotEmpty)
-                  _productInfo(
-                    'NCM',
-                    product.ncm,
-                  ),
+                if (product.ncm.isNotEmpty) _productInfo('NCM', product.ncm),
               ],
             ),
 
             // ================================================================
             // ERROS
             // ================================================================
-
-            if (product
-                .errors.isNotEmpty) ...[
-              const SizedBox(
-                height: 12,
-              ),
+            if (product.errors.isNotEmpty) ...[
+              const SizedBox(height: 12),
 
               ...product.errors.map(
-                    (message) =>
-                    _messageRow(
-                      message,
-
-                      Colors.red,
-
-                      Icons.error_outline,
-                    ),
+                (message) =>
+                    _messageRow(message, Colors.red, Icons.error_outline),
               ),
             ],
 
             // ================================================================
             // AVISOS
             // ================================================================
-
-            if (product
-                .warnings.isNotEmpty) ...[
-              const SizedBox(
-                height: 12,
-              ),
+            if (product.warnings.isNotEmpty) ...[
+              const SizedBox(height: 12),
 
               ...product.warnings.map(
-                    (message) =>
-                    _messageRow(
-                      message,
+                (message) => _messageRow(
+                  message,
 
-                      Colors.orange,
+                  Colors.orange,
 
-                      Icons
-                          .warning_amber_outlined,
-                    ),
+                  Icons.warning_amber_outlined,
+                ),
               ),
             ],
           ],
@@ -1700,38 +1236,21 @@ class _ProductImportValidationScreenState
   // ITEM DE INFORMAÇÃO
   // ==========================================================================
 
-  Widget _productInfo(
-      String label,
-      String value,
-      ) {
+  Widget _productInfo(String label, String value) {
     return Row(
-      mainAxisSize:
-      MainAxisSize.min,
+      mainAxisSize: MainAxisSize.min,
 
       children: [
         Text(
           '$label: ',
 
-          style:
-          TextStyle(
-            fontSize: 12,
-
-            color:
-            Colors.grey
-                .shade600,
-          ),
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
 
         Text(
           value,
 
-          style:
-          const TextStyle(
-            fontSize: 12,
-
-            fontWeight:
-            FontWeight.w600,
-          ),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         ),
       ],
     );
@@ -1741,48 +1260,20 @@ class _ProductImportValidationScreenState
   // MENSAGEM DE ERRO / AVISO
   // ==========================================================================
 
-  Widget _messageRow(
-      String message,
-      Color color,
-      IconData icon,
-      ) {
+  Widget _messageRow(String message, Color color, IconData icon) {
     return Padding(
-      padding:
-      const EdgeInsets.only(
-        bottom: 4,
-      ),
+      padding: const EdgeInsets.only(bottom: 4),
 
       child: Row(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
 
         children: [
-          Icon(
-            icon,
+          Icon(icon, color: color, size: 16),
 
-            color:
-            color,
-
-            size:
-            16,
-          ),
-
-          const SizedBox(
-            width: 6,
-          ),
+          const SizedBox(width: 6),
 
           Expanded(
-            child: Text(
-              message,
-
-              style:
-              TextStyle(
-                fontSize: 12,
-
-                color:
-                color,
-              ),
-            ),
+            child: Text(message, style: TextStyle(fontSize: 12, color: color)),
           ),
         ],
       ),

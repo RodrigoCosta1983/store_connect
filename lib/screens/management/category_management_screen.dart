@@ -116,6 +116,15 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   String? _existingImageUrl;
 
   // ==========================================================================
+  // HIERARQUIA DE CATEGORIAS - T3-A2
+  // ==========================================================================
+
+  String? _selectedParentCategoryId;
+
+  late final Future<QuerySnapshot<Map<String, dynamic>>>
+      _categoryOptionsFuture;
+
+  // ==========================================================================
   // INDICA SE ESTAMOS EDITANDO
   // ==========================================================================
 
@@ -129,6 +138,14 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   @override
   void initState() {
     super.initState();
+
+    _categoryOptionsFuture =
+        FirebaseFirestore.instance
+            .collection('stores')
+            .doc(widget.storeId)
+            .collection('categories')
+            .orderBy('name')
+            .get();
 
     if (_isEditing) {
       final data =
@@ -144,6 +161,15 @@ class _CategoryDialogState extends State<_CategoryDialog> {
         _existingImageUrl =
         data['imageUrl'];
       }
+
+      final rawParentCategoryId =
+          data['parentCategoryId'];
+
+      _selectedParentCategoryId =
+          rawParentCategoryId is String &&
+                  rawParentCategoryId.isNotEmpty
+              ? rawParentCategoryId
+              : null;
     }
   }
 
@@ -287,49 +313,92 @@ class _CategoryDialogState extends State<_CategoryDialog> {
       }
 
       // ======================================================================
-      // 2. PREPARA OS DADOS
+      // 2. PREPARA O PAYLOAD
+      //
+      // T3-A2:
+      // Categoria raiz envia parentCategoryId null.
+      // Subcategoria envia explicitamente o ID da categoria pai.
       // ======================================================================
 
       final Map<String, dynamic>
-      categoryData = {
+      categoryPayload = {
+        if (_isEditing)
+          'categoryId':
+              widget.category!.id,
         'name': name,
         'imageUrl': imageUrl,
+        'parentCategoryId': _selectedParentCategoryId,
       };
 
       // ======================================================================
-      // 3. SALVA NO FIRESTORE
+      // 3. PERSISTE VIA BACKEND
+      //
+      // A autoridade de create/update deixa de ser escrita direta no
+      // Firestore e passa a ser upsertCategory.
       // ======================================================================
 
-      if (_isEditing) {
-        await FirebaseFirestore
-            .instance
-            .collection('stores')
-            .doc(widget.storeId)
-            .collection(
-          'categories',
-        )
-            .doc(
-          widget.category!.id,
-        )
-            .update(
-          categoryData,
-        );
-      } else {
-        categoryData['createdAt'] =
-            FieldValue.serverTimestamp();
+      final callable =
+          FirebaseFunctions.instance
+              .httpsCallable(
+        'upsertCategory',
+        options:
+            HttpsCallableOptions(
+          timeout:
+              const Duration(
+            seconds: 30,
+          ),
+        ),
+      );
 
-        await FirebaseFirestore
-            .instance
-            .collection('stores')
-            .doc(widget.storeId)
-            .collection(
-          'categories',
-        )
-            .add(
-          categoryData,
+      final response =
+          await callable.call(
+        categoryPayload,
+      );
+
+      final data =
+          response.data;
+
+      if (data is! Map) {
+        throw StateError(
+          'Resposta inválida ao salvar categoria.',
         );
       }
 
+      final resultData =
+          Map<String, dynamic>.from(
+        data,
+      );
+
+      final expectedMode =
+          _isEditing
+              ? 'update'
+              : 'create';
+
+      final returnedCategoryId =
+          resultData['categoryId'];
+
+      final changed =
+          resultData['changed'];
+
+      if (resultData['success'] != true ||
+          resultData['mode'] != expectedMode ||
+          returnedCategoryId is! String ||
+          returnedCategoryId.isEmpty ||
+          resultData['parentCategoryId'] !=
+              _selectedParentCategoryId ||
+          changed is! bool) {
+        throw StateError(
+          'Resposta inválida ao salvar categoria.',
+        );
+      }
+
+      if (_isEditing &&
+          returnedCategoryId !=
+              widget.category!.id) {
+        throw StateError(
+          'Resposta inválida ao salvar categoria.',
+        );
+      }
       // ======================================================================
       // 4. REMOVE IMAGEM ANTIGA
       //
@@ -491,6 +560,202 @@ class _CategoryDialogState extends State<_CategoryDialog> {
               height: 16,
             ),
 
+            // ================================================================
+            // CATEGORIA PAI - T3-A2
+            //
+            // Somente categorias raiz podem ser escolhidas como pai.
+            // Categorias legadas sem parentCategoryId tambem sao raiz.
+            // ================================================================
+
+            FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              future:
+                  _categoryOptionsFuture,
+
+              builder: (
+                context,
+                snapshot,
+              ) {
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return const InputDecorator(
+                    decoration:
+                        InputDecoration(
+                      labelText:
+                          'Categoria pai',
+                      helperText:
+                          'Carregando categorias principais...',
+                      border:
+                          OutlineInputBorder(),
+                    ),
+
+                    child:
+                        LinearProgressIndicator(),
+                  );
+                }
+
+                if (snapshot.hasError ||
+                    !snapshot.hasData) {
+                  return const InputDecorator(
+                    decoration:
+                        InputDecoration(
+                      labelText:
+                          'Categoria pai',
+                      border:
+                          OutlineInputBorder(),
+                    ),
+
+                    child: Text(
+                      'Não foi possível carregar as categorias principais.',
+                    ),
+                  );
+                }
+
+                final allCategories =
+                    snapshot.data!.docs;
+
+                final rootCategories =
+                    allCategories.where(
+                  (doc) {
+                    if (_isEditing &&
+                        doc.id ==
+                            widget.category!.id) {
+                      return false;
+                    }
+
+                    final data =
+                        doc.data();
+
+                    return data['parentCategoryId'] ==
+                        null;
+                  },
+                ).toList();
+
+                final selectedParentAvailable =
+                    _selectedParentCategoryId ==
+                            null ||
+                        rootCategories.any(
+                          (doc) =>
+                              doc.id ==
+                              _selectedParentCategoryId,
+                        );
+
+                String?
+                    unavailableParentName;
+
+                if (!selectedParentAvailable &&
+                    _selectedParentCategoryId !=
+                        null) {
+                  for (final doc
+                      in allCategories) {
+                    if (doc.id ==
+                        _selectedParentCategoryId) {
+                      unavailableParentName =
+                          doc.data()['name']
+                              ?.toString();
+
+                      break;
+                    }
+                  }
+                }
+
+                final items =
+                    <DropdownMenuItem<String>>[
+                  const DropdownMenuItem<String>(
+                    value: '',
+                    child: Text(
+                      'Nenhuma — categoria principal',
+                    ),
+                  ),
+
+                  ...rootCategories.map(
+                    (doc) {
+                      final data =
+                          doc.data();
+
+                      final categoryName =
+                          data['name']
+                                  ?.toString() ??
+                              'Sem nome';
+
+                      return DropdownMenuItem<String>(
+                        value:
+                            doc.id,
+
+                        child: Text(
+                          categoryName,
+                        ),
+                      );
+                    },
+                  ),
+
+                  if (!selectedParentAvailable &&
+                      _selectedParentCategoryId !=
+                          null)
+                    DropdownMenuItem<String>(
+                      value:
+                          _selectedParentCategoryId!,
+
+                      enabled:
+                          false,
+
+                      child: Text(
+                        '${unavailableParentName ?? 'Categoria pai atual'} — indisponível',
+                      ),
+                    ),
+                ];
+
+                return InputDecorator(
+                  decoration:
+                      const InputDecoration(
+                    labelText:
+                        'Categoria pai',
+                    helperText:
+                        'Nenhuma = categoria principal',
+                    border:
+                        OutlineInputBorder(),
+                  ),
+
+                  child:
+                      DropdownButtonHideUnderline(
+                    child:
+                        DropdownButton<String>(
+                      value:
+                          _selectedParentCategoryId ??
+                              '',
+
+                      isExpanded:
+                          true,
+
+                      items:
+                          items,
+
+                      onChanged:
+                          _isLoading
+                              ? null
+                              : (value) {
+                                  if (value ==
+                                      null) {
+                                    return;
+                                  }
+
+                                  setState(
+                                    () {
+                                      _selectedParentCategoryId =
+                                          value.isEmpty
+                                              ? null
+                                              : value;
+                                    },
+                                  );
+                                },
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(
+              height: 16,
+            ),
             // ================================================================
             // NOME
             // ================================================================
@@ -961,6 +1226,116 @@ class _CategoryManagementScreenState
                   snapshot.data!.docs;
 
               // ==============================================================
+              // HIERARQUIA VISUAL - T3-A3
+              //
+              // O Firestore continua entregando uma unica lista ordenada.
+              // A hierarquia abaixo existe somente para apresentacao.
+              // ==============================================================
+
+              final rootCategories =
+                  categories.where(
+                (category) {
+                  final data =
+                      category.data()
+                      as Map<String, dynamic>;
+
+                  return !data.containsKey(
+                        'parentCategoryId',
+                      ) ||
+                      data['parentCategoryId'] ==
+                          null;
+                },
+              ).toList();
+
+              final orderedCategories =
+                  categories
+                      .take(0)
+                      .toList();
+
+              final includedCategoryIds =
+                  <String>{};
+
+              final subcategoryIds =
+                  <String>{};
+
+              final invalidParentIds =
+                  <String>{};
+
+              final parentNameByChildId =
+                  <String, String>{};
+
+              for (final rootCategory
+                  in rootCategories) {
+                orderedCategories.add(
+                  rootCategory,
+                );
+
+                includedCategoryIds.add(
+                  rootCategory.id,
+                );
+
+                final rootData =
+                    rootCategory.data()
+                    as Map<String, dynamic>;
+
+                final rootName =
+                    rootData['name']
+                            ?.toString() ??
+                        'Sem nome';
+
+                for (final candidate
+                    in categories) {
+                  final candidateData =
+                      candidate.data()
+                      as Map<String, dynamic>;
+
+                  if (candidateData[
+                          'parentCategoryId'] ==
+                      rootCategory.id) {
+                    orderedCategories.add(
+                      candidate,
+                    );
+
+                    includedCategoryIds.add(
+                      candidate.id,
+                    );
+
+                    subcategoryIds.add(
+                      candidate.id,
+                    );
+
+                    parentNameByChildId[
+                        candidate.id] =
+                        rootName;
+                  }
+                }
+              }
+
+              // Documentos que nao sao raiz e tambem nao possuem
+              // uma raiz valida como pai permanecem visiveis.
+              //
+              // Exemplos:
+              // - pai inexistente
+              // - auto-parent
+              // - terceiro nivel
+              // - ciclo legado
+              // - valor de parentCategoryId invalido
+
+              for (final category
+                  in categories) {
+                if (!includedCategoryIds
+                    .contains(category.id)) {
+                  orderedCategories.add(
+                    category,
+                  );
+
+                  invalidParentIds.add(
+                    category.id,
+                  );
+                }
+              }
+
+              // ==============================================================
               // LISTA
               // ==============================================================
 
@@ -975,14 +1350,41 @@ class _CategoryManagementScreenState
                 ),
 
                 itemCount:
-                categories.length,
+                orderedCategories.length,
 
                 itemBuilder: (
                     context,
                     index,
                     ) {
                   final categoryDoc =
-                  categories[index];
+                  orderedCategories[index];
+
+                  final isSubcategory =
+                      subcategoryIds
+                          .contains(
+                    categoryDoc.id,
+                  );
+
+                  final hasInvalidParent =
+                      invalidParentIds
+                          .contains(
+                    categoryDoc.id,
+                  );
+
+                  final isNested =
+                      isSubcategory ||
+                      hasInvalidParent;
+
+                  final parentName =
+                      parentNameByChildId[
+                          categoryDoc.id];
+
+                  final categorySubtitle =
+                      hasInvalidParent
+                          ? 'Vínculo hierárquico inválido — edite para corrigir'
+                          : isSubcategory
+                              ? 'Subcategoria de ${parentName ?? 'Categoria principal'}'
+                              : null;
 
                   final categoryData =
                   categoryDoc.data()
@@ -1007,9 +1409,13 @@ class _CategoryManagementScreenState
 
                   return Card(
                     margin:
-                    const EdgeInsets
-                        .symmetric(
-                      vertical: 6,
+                    EdgeInsets.only(
+                      left:
+                          isNested
+                              ? 28
+                              : 0,
+                      top: 6,
+                      bottom: 6,
                     ),
 
                     child:
@@ -1085,6 +1491,13 @@ class _CategoryManagementScreenState
                         ),
                       ),
 
+                      subtitle:
+                      categorySubtitle ==
+                              null
+                          ? null
+                          : Text(
+                        categorySubtitle,
+                      ),
                       // ======================================================
                       // AÇÕES
                       // ======================================================

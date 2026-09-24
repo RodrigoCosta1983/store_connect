@@ -33,6 +33,8 @@ class ProductImportItem {
 
   final String category;
 
+  final String subcategory;
+
   final String barcode;
 
   final double? costPrice;
@@ -45,6 +47,7 @@ class ProductImportItem {
     required this.price,
     required this.quantity,
     required this.category,
+    this.subcategory = '',
     required this.barcode,
     required this.costPrice,
     required this.ncm,
@@ -56,8 +59,7 @@ class ProductImportItem {
   // Utilizado principalmente para detecção de duplicidade.
   // ==========================================================================
 
-  String get normalizedName =>
-      name.trim().toLowerCase();
+  String get normalizedName => name.trim().toLowerCase();
 
   // ==========================================================================
   // QUANTIDADE PARA O SCHEMA ATUAL
@@ -65,6 +67,5 @@ class ProductImportItem {
   // Hoje o Store Connect trabalha com quantidade inteira.
   // ==========================================================================
 
-  int get integerQuantity =>
-      quantity.round();
+  int get integerQuantity => quantity.round();
 }
