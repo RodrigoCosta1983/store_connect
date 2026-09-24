@@ -76,6 +76,7 @@ function captureCategoryAuditState(
     const field of [
       "name",
       "imageUrl",
+      "parentCategoryId",
       "createdAt",
     ]
   ) {
@@ -252,6 +253,41 @@ const deleteCategory =
 
           const categoryData =
             categorySnapshot.data() || {};
+
+          // -----------------------------------------------------
+          // HIERARQUIA DE CATEGORIAS
+          //
+          // Uma categoria com subcategorias nao pode ser
+          // excluida. Nao existe cascade.
+          //
+          // A verificacao ocorre na mesma transacao da exclusao.
+          // -----------------------------------------------------
+
+          const childrenQuery =
+            storeRef
+              .collection("categories")
+              .where(
+                "parentCategoryId",
+                "==",
+                categoryId,
+              )
+              .limit(1);
+
+          const childrenSnapshot =
+            await transaction.get(
+              childrenQuery,
+            );
+
+          if (!childrenSnapshot.empty) {
+            throw new HttpsError(
+              "failed-precondition",
+              "A categoria possui subcategorias e nao pode ser excluida.",
+              {
+                reason:
+                  "category-has-children",
+              },
+            );
+          }
 
           // -----------------------------------------------------
           // INTEGRIDADE REFERENCIAL

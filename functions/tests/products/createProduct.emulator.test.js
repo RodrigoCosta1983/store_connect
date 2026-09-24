@@ -219,6 +219,9 @@ async function seedScenario({
 
           imageUrl:
             "",
+          ...(Object.prototype.hasOwnProperty.call(category, "parentCategoryId")
+            ? {parentCategoryId: category.parentCategoryId}
+            : {}),
         });
     }
   }
@@ -1648,6 +1651,168 @@ function expectedReceiptId(
       );
     },
   );
+
+
+  // T6-A3-A2: stored tree fixtures and atomicity.
+  const root = (id, legacy = false) => ({
+    id, name: id, ...(legacy ? {} : {parentCategoryId: null}),
+  });
+  const child = (id, parentCategoryId) => ({id, name: id, parentCategoryId});
+  async function categoryState(storeRef) {
+    const snapshot = await storeRef.collection("categories").orderBy("__name__").get();
+    return snapshot.docs.map((doc) => ({
+      id: doc.id, data: doc.data(), updateTime: doc.updateTime.toMillis(),
+    }));
+  }
+  async function writesState(scenario) {
+    return {
+      products: (await productDocs(scenario)).map((doc) => ({
+        id: doc.id, data: doc.data(), updateTime: doc.updateTime.toMillis(),
+      })),
+      audits: (await auditDocs(scenario)).map((doc) => ({
+        id: doc.id, data: doc.data(), updateTime: doc.updateTime.toMillis(),
+      })),
+    };
+  }
+  // Instrument only this sequential test invocation; restore even on failure.
+  async function traceCategoryReads(action) {
+    const original = db.runTransaction;
+    const reads = [];
+    db.runTransaction = function(callback, ...options) {
+      return original.call(this, async (transaction) => {
+        const get = transaction.get.bind(transaction);
+        transaction.get = async (ref, ...args) => {
+          if (ref.path && ref.path.includes("/categories/")) reads.push(ref.path);
+          return get(ref, ...args);
+        };
+        return callback(transaction);
+      }, ...options);
+    };
+    try {
+      return {result: await action(), reads};
+    } finally {
+      db.runTransaction = original;
+    }
+  }
+  const positives = [
+    ["root null", [root("r")], ["r"]],
+    ["legacy root", [root("r", true)], ["r"]],
+    ["child only null root", [root("r"), child("c", "r")], ["c"]],
+    ["child only legacy root", [root("r", true), child("c", "r")], ["c"]],
+    ["root child", [root("r"), child("c", "r")], ["r", "c"]],
+    ["child root", [root("r"), child("c", "r")], ["c", "r"]],
+    ["independent roots", [root("a"), root("b")], ["a", "b"]],
+    ["independent children", [root("a"), root("b"), child("c", "a"), child("d", "b")], ["c", "d"]],
+    ["rootA childB", [root("a"), root("b"), child("d", "b")], ["a", "d"]],
+    ["empty", [], []],
+    ["ten children ten roots",
+      Array.from({length: 10}, (_, i) => [root("r" + i), child("c" + i, "r" + i)]).flat(),
+      Array.from({length: 10}, (_, i) => "c" + i)],
+    ["shared parent", [root("r"), child("a", "r"), child("b", "r"), child("c", "r")], ["a", "b", "c"]],
+    ["explicit parent reused", [root("r"), child("a", "r"), child("b", "r")], ["a", "r", "b"]],
+  ];
+  for (const [name, categories, ids] of positives) {
+    await runTest("tree valid: " + name, async () => {
+      const scenario = await seedScenario({categories});
+      const before = await categoryState(scenario.storeRef);
+      const payload = {...basePayload(), categoryIds: ids};
+      const {result, reads} = await traceCategoryReads(() => callCreate(scenario, payload));
+      assert.equal(result.replayed, false);
+      const products = await productDocs(scenario);
+      assert.equal(products.length, 1);
+      const data = products[0].data();
+      assert.deepEqual(data.categoryIds, ids);
+      assert.equal(data.categoryId, ids[0] || null);
+      assert.equal(data.categoryName, ids[0] || null);
+      assert.equal((await auditDocs(scenario)).length, 1);
+      const expectedIds = new Set(ids);
+      for (const id of ids) {
+        const parent = categories.find((category) => category.id === id).parentCategoryId;
+        if (parent != null) expectedIds.add(parent);
+      }
+      assert.deepEqual([...reads].sort(), [...expectedIds].map(
+        (id) => scenario.storeRef.collection("categories").doc(id).path,
+      ).sort());
+      assert.deepEqual(await categoryState(scenario.storeRef), before);
+    });
+  }
+  const negatives = [
+    ["missing parent", [child("c", "missing")], ["c"]],
+    ["third level", [root("r"), child("p", "r"), child("c", "p")], ["c"]],
+    ["self parent", [child("c", "c")], ["c"]],
+    ["two node cycle", [child("c", "p"), child("p", "c")], ["c", "p"]],
+    ["malformed parent document", [child("c", "p"), child("p", 123)], ["c"]],
+    ["later invalid category", [root("r"), child("c", "missing")], ["r", "c"]],
+    ...[
+      ["number", 1], ["boolean", true], ["array", []], ["map", {}],
+      ["empty", ""], ["whitespace", " \t\r\n"], ["external whitespace", " r "],
+      ["slash", "r/other"],
+    ].map(([name, value]) => [name, [child("c", value)], ["c"]]),
+  ];
+  for (const [name, categories, ids] of negatives) {
+    await runTest("tree invalid atomic: " + name, async () => {
+      const scenario = await seedScenario({categories});
+      const before = await categoryState(scenario.storeRef);
+      await expectError(
+        () => callCreate(scenario, {...basePayload(), categoryIds: ids}),
+        "failed-precondition", "invalid-category-hierarchy",
+      );
+      assert.deepEqual(await writesState(scenario), {products: [], audits: []});
+      assert.deepEqual(await categoryState(scenario.storeRef), before);
+    });
+  }
+  for (const localState of ["absent", "invalid", "valid"]) {
+    await runTest("tree parent same ID store isolation: " + localState, async () => {
+      const categories = [child("c", "p")];
+      if (localState === "invalid") categories.push(child("p", "missing"));
+      if (localState === "valid") categories.push(root("p"));
+      const scenario = await seedScenario({categories});
+      const foreign = await seedScenario({
+        categories: [localState === "valid" ? child("p", "missing") : root("p")],
+      });
+      const before = await categoryState(scenario.storeRef);
+      const foreignBefore = await categoryState(foreign.storeRef);
+      const payload = {...basePayload(), categoryIds: ["c"]};
+      if (localState === "valid") {
+        const result = await callCreate(scenario, payload);
+        assert.equal(result.replayed, false);
+        assert.deepEqual((await productDocs(scenario))[0].data().categoryIds, ["c"]);
+      } else {
+        await expectError(() => callCreate(scenario, payload),
+          "failed-precondition", "invalid-category-hierarchy");
+        assert.deepEqual(await writesState(scenario), {products: [], audits: []});
+      }
+      assert.deepEqual(await categoryState(scenario.storeRef), before);
+      assert.deepEqual(await categoryState(foreign.storeRef), foreignBefore);
+      assert.deepEqual(await writesState(foreign), {products: [], audits: []});
+    });
+  }
+  for (const mutation of ["parent corrupt", "parent removed", "category corrupt", "category removed"]) {
+    await runTest("tree replay survives: " + mutation, async () => {
+      const scenario = await seedScenario({categories: [root("r"), child("c", "r")]});
+      const payload = {...basePayload(), categoryIds: ["c"]};
+      const first = await callCreate(scenario, payload);
+      const target = scenario.storeRef.collection("categories").doc(
+        mutation.startsWith("parent") ? "r" : "c",
+      );
+      if (mutation.endsWith("removed")) await target.delete();
+      else await target.update({parentCategoryId: 123});
+      const before = await writesState(scenario);
+      const categoriesBefore = await categoryState(scenario.storeRef);
+      const {result: replay, reads} = await traceCategoryReads(() => callCreate(scenario, payload));
+      assert.equal(replay.replayed, true);
+      assert.equal(replay.productId, first.productId);
+      assert.deepEqual(reads, []);
+      assert.deepEqual(await writesState(scenario), before);
+      await expectError(
+        () => callCreate(scenario, {...payload, requestId: payload.requestId + "-new"}),
+        "failed-precondition",
+        mutation === "category removed" ? "category-unavailable" : "invalid-category-hierarchy",
+      );
+      assert.deepEqual(await writesState(scenario), before);
+      assert.deepEqual(await categoryState(scenario.storeRef), categoriesBefore);
+    });
+  }
 
   console.log("");
   console.log(

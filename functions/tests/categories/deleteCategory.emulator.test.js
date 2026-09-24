@@ -53,6 +53,13 @@ const {
     "../../products/createProduct",
   );
 
+const {
+  upsertCategoryHandler,
+} =
+  require(
+    "../../categories/upsertCategory",
+  );
+
 const db =
   admin.firestore();
 
@@ -1079,6 +1086,448 @@ function rejectionCodes(
         ).exists,
         true,
       );
+    },
+  );
+
+  // ============================================================
+  // HIERARQUIA:
+  // deleteCategory nao pode criar categoria orfa
+  // ============================================================
+
+  await runTest(
+    "hierarchy blocks root deletion when child exists",
+    async () => {
+      const scenario =
+        await seedScenario({
+          categoryData: {
+            parentCategoryId:
+              null,
+          },
+        });
+
+      const childRef =
+        scenario.storeRef
+          .collection("categories")
+          .doc(
+            `child-${uniqueSuffix()}`,
+          );
+
+      await childRef.set({
+        name:
+          "Child",
+
+        imageUrl:
+          "",
+
+        parentCategoryId:
+          scenario.categoryId,
+
+        createdAt:
+          admin.firestore
+            .FieldValue
+            .serverTimestamp(),
+      });
+
+      await expectError(
+        () =>
+          callDelete(
+            scenario,
+          ),
+        "failed-precondition",
+        "category-has-children",
+      );
+
+      assert.strictEqual(
+        (
+          await scenario
+            .categoryRef
+            .get()
+        ).exists,
+        true,
+      );
+
+      assert.strictEqual(
+        (
+          await childRef.get()
+        ).exists,
+        true,
+      );
+    },
+  );
+
+  await runTest(
+    "hierarchy blocks legacy root deletion when child exists",
+    async () => {
+      // seedScenario() cria a categoria legada sem
+      // parentCategoryId por padrao.
+      const scenario =
+        await seedScenario();
+
+      const childRef =
+        scenario.storeRef
+          .collection("categories")
+          .doc(
+            `legacy-child-${uniqueSuffix()}`,
+          );
+
+      await childRef.set({
+        name:
+          "Legacy Child",
+
+        imageUrl:
+          "",
+
+        parentCategoryId:
+          scenario.categoryId,
+
+        createdAt:
+          admin.firestore
+            .FieldValue
+            .serverTimestamp(),
+      });
+
+      await expectError(
+        () =>
+          callDelete(
+            scenario,
+          ),
+        "failed-precondition",
+        "category-has-children",
+      );
+
+      assert.strictEqual(
+        (
+          await scenario
+            .categoryRef
+            .get()
+        ).exists,
+        true,
+      );
+
+      assert.strictEqual(
+        (
+          await childRef.get()
+        ).exists,
+        true,
+      );
+    },
+  );
+
+  await runTest(
+    "subcategory without children can be deleted",
+    async () => {
+      const parentId =
+        `parent-${uniqueSuffix()}`;
+
+      const scenario =
+        await seedScenario({
+          categoryData: {
+            parentCategoryId:
+              parentId,
+          },
+        });
+
+      const parentRef =
+        scenario.storeRef
+          .collection("categories")
+          .doc(parentId);
+
+      await parentRef.set({
+        name:
+          "Root",
+
+        imageUrl:
+          "",
+
+        parentCategoryId:
+          null,
+
+        createdAt:
+          admin.firestore
+            .FieldValue
+            .serverTimestamp(),
+      });
+
+      const result =
+        await callDelete(
+          scenario,
+        );
+
+      assert.strictEqual(
+        result.success,
+        true,
+      );
+
+      assert.strictEqual(
+        result.deleted,
+        true,
+      );
+
+      assert.strictEqual(
+        (
+          await scenario
+            .categoryRef
+            .get()
+        ).exists,
+        false,
+      );
+
+      assert.strictEqual(
+        (
+          await parentRef.get()
+        ).exists,
+        true,
+      );
+    },
+  );
+
+  await runTest(
+    "hierarchy-blocked delete writes no audit",
+    async () => {
+      const scenario =
+        await seedScenario({
+          categoryData: {
+            parentCategoryId:
+              null,
+          },
+        });
+
+      const childRef =
+        scenario.storeRef
+          .collection("categories")
+          .doc(
+            `audit-child-${uniqueSuffix()}`,
+          );
+
+      await childRef.set({
+        name:
+          "Child",
+
+        imageUrl:
+          "",
+
+        parentCategoryId:
+          scenario.categoryId,
+
+        createdAt:
+          admin.firestore
+            .FieldValue
+            .serverTimestamp(),
+      });
+
+      await expectError(
+        () =>
+          callDelete(
+            scenario,
+          ),
+        "failed-precondition",
+        "category-has-children",
+      );
+
+      const audits =
+        await auditEntries(
+          scenario,
+        );
+
+      assert.strictEqual(
+        audits.length,
+        0,
+      );
+    },
+  );
+
+  await runTest(
+    "subcategory delete audit preserves parentCategoryId",
+    async () => {
+      const parentId =
+        `audit-parent-${uniqueSuffix()}`;
+
+      const scenario =
+        await seedScenario({
+          categoryData: {
+            parentCategoryId:
+              parentId,
+          },
+        });
+
+      const parentRef =
+        scenario.storeRef
+          .collection("categories")
+          .doc(parentId);
+
+      await parentRef.set({
+        name:
+          "Root",
+
+        imageUrl:
+          "",
+
+        parentCategoryId:
+          null,
+
+        createdAt:
+          admin.firestore
+            .FieldValue
+            .serverTimestamp(),
+      });
+
+      await callDelete(
+        scenario,
+      );
+
+      const audits =
+        await auditEntries(
+          scenario,
+        );
+
+      const deleteAudits =
+        audits.filter(
+          (audit) =>
+            audit.action ===
+            "category_deleted",
+        );
+
+      assert.strictEqual(
+        deleteAudits.length,
+        1,
+      );
+
+      assert.strictEqual(
+        deleteAudits[0]
+          .before
+          .parentCategoryId,
+        parentId,
+      );
+
+      assert.strictEqual(
+        deleteAudits[0].after,
+        null,
+      );
+    },
+  );
+
+  await runTest(
+    "delete races safely with upsertCategory",
+    async () => {
+      const scenario =
+        await seedScenario({
+          categoryData: {
+            parentCategoryId:
+              null,
+          },
+        });
+
+      const results =
+        await Promise.allSettled([
+          callDelete(
+            scenario,
+          ),
+
+          upsertCategoryHandler({
+            auth: {
+              uid:
+                scenario.uid,
+            },
+
+            data: {
+              name:
+                "Race Child",
+
+              imageUrl:
+                "",
+
+              parentCategoryId:
+                scenario.categoryId,
+            },
+          }),
+        ]);
+
+      assert.strictEqual(
+        fulfilledCount(results),
+        1,
+      );
+
+      const parentExists =
+        (
+          await scenario
+            .categoryRef
+            .get()
+        ).exists;
+
+      const childrenSnapshot =
+        await scenario.storeRef
+          .collection("categories")
+          .where(
+            "parentCategoryId",
+            "==",
+            scenario.categoryId,
+          )
+          .get();
+
+      if (
+        results[0].status ===
+        "fulfilled"
+      ) {
+        assert.strictEqual(
+          results[1].status,
+          "rejected",
+        );
+
+        assert.strictEqual(
+          errorCode(
+            results[1].reason,
+          ),
+          "not-found",
+        );
+
+        assert.strictEqual(
+          results[1]
+            .reason
+            ?.details
+            ?.reason,
+          "parent-category-not-found",
+        );
+
+        assert.strictEqual(
+          parentExists,
+          false,
+        );
+
+        assert.strictEqual(
+          childrenSnapshot.empty,
+          true,
+        );
+      } else {
+        assert.strictEqual(
+          results[1].status,
+          "fulfilled",
+        );
+
+        assert.strictEqual(
+          errorCode(
+            results[0].reason,
+          ),
+          "failed-precondition",
+        );
+
+        assert.strictEqual(
+          results[0]
+            .reason
+            ?.details
+            ?.reason,
+          "category-has-children",
+        );
+
+        assert.strictEqual(
+          parentExists,
+          true,
+        );
+
+        assert.strictEqual(
+          childrenSnapshot.size,
+          1,
+        );
+      }
     },
   );
 

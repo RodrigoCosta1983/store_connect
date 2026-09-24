@@ -178,7 +178,7 @@ match /stores/{storeId}/auditLogs/{document=**} {
 }
 
 // 4.2 PRODUTOS
-// Usuários da própria loja podem ler/criar/editar.
+// Usuários da própria loja podem ler/editar; criação exige createProduct.
 // Campos de arquivamento são exclusivos do backend.
 // Campos taxonômicos não podem ser escritos diretamente pelo cliente.
 // Exclusão física não é permitida.
@@ -193,22 +193,15 @@ match /stores/{storeId}/products/{productId} {
       /databases/$(database)/documents/users/$(request.auth.uid)
     ).data.storeId == storeId;
 
-  allow create: if request.auth != null
-  && exists(
-    /databases/$(database)/documents/users/$(request.auth.uid)
-  )
-  && get(
-    /databases/$(database)/documents/users/$(request.auth.uid)
-  ).data.storeId == storeId
-  && !request.resource.data.keys().hasAny([
-    'categoryIds',
-    'categoryId',
-    'categoryName',
-    'isArchived',
-    'archivedAt',
-    'archivedBy',
-    'archiveReason'
-  ]);
+  allow create: if false;
+
+  function hasOperationalUpdateAccess(profile) {
+    let role = profile.get('role', null);
+    let accessStatus = profile.get('accessStatus', null);
+    return role is string
+      && role.trim().lower() in ['admin', 'gerente', 'operador', 'caixa', 'vendedor']
+      && (!(accessStatus is string) || accessStatus.trim().lower() != 'revoked');
+  }
 
   allow update: if request.auth != null
     && exists(
@@ -217,6 +210,10 @@ match /stores/{storeId}/products/{productId} {
     && get(
       /databases/$(database)/documents/users/$(request.auth.uid)
     ).data.storeId == storeId
+    && exists(/databases/$(database)/documents/stores/$(storeId))
+    && hasOperationalUpdateAccess(get(
+      /databases/$(database)/documents/users/$(request.auth.uid)
+    ).data)
     && !request.resource.data
         .diff(resource.data)
         .affectedKeys()
@@ -285,8 +282,8 @@ match /stores/{storeId}/customers/{customerId} {
 
 
 // 4.4 CATEGORIAS
-// Usuários da própria loja podem ler/criar/editar.
-// Exclusão pertence exclusivamente ao backend.
+// Usuários da própria loja podem ler; criação/edição exigem upsertCategory.
+// Exclusão pertence exclusivamente a deleteCategory no backend.
 
 match /stores/{storeId}/categories/{categoryId} {
 
@@ -298,13 +295,7 @@ match /stores/{storeId}/categories/{categoryId} {
       /databases/$(database)/documents/users/$(request.auth.uid)
     ).data.storeId == storeId;
 
-  allow create, update: if request.auth != null
-    && exists(
-      /databases/$(database)/documents/users/$(request.auth.uid)
-    )
-    && get(
-      /databases/$(database)/documents/users/$(request.auth.uid)
-    ).data.storeId == storeId;
+  allow create, update: if false;
 
   allow delete: if false;
 }

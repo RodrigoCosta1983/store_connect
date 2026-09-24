@@ -241,6 +241,10 @@ async function seedScenario({
         imageUrl:
           "",
 
+        ...(Object.prototype.hasOwnProperty.call(category, "parentCategoryId")
+          ? {parentCategoryId: category.parentCategoryId}
+          : {}),
+
         createdAt:
           admin.firestore
             .FieldValue
@@ -1237,6 +1241,195 @@ async function auditEntries(
       );
     },
   );
+
+
+  // T6-A3-A3: desired tree validation, atomicity and no-op precedence.
+  const root = (id, legacy = false) => ({
+    id, name: id, ...(legacy ? {} : {parentCategoryId: null}),
+  });
+  const child = (id, parentCategoryId) => ({id, name: id, parentCategoryId});
+  async function collectionState(ref) {
+    const snapshot = await ref.orderBy("__name__").get();
+    return snapshot.docs.map((doc) => ({
+      id: doc.id, data: doc.data(), updateTime: doc.updateTime,
+    }));
+  }
+  async function categoryState(scenario) {
+    return collectionState(scenario.storeRef.collection("categories"));
+  }
+  async function writeState(scenario) {
+    const product = await scenario.productRef.get();
+    return {
+      product: product.data(),
+      updateTime: product.updateTime,
+      audits: await collectionState(scenario.storeRef.collection("auditLogs")),
+    };
+  }
+  function projection(ids) {
+    return {categoryIds: ids, categoryId: ids[0] || null, categoryName: ids[0] || null};
+  }
+  async function traceCategoryReads(action) {
+    const original = db.runTransaction;
+    const reads = [];
+    db.runTransaction = function(callback, ...options) {
+      return original.call(this, async (transaction) => {
+        const get = transaction.get.bind(transaction);
+        transaction.get = async (ref, ...args) => {
+          if (ref.path && ref.path.includes("/categories/")) reads.push(ref.path);
+          return get(ref, ...args);
+        };
+        return callback(transaction);
+      }, ...options);
+    };
+    try {
+      return {result: await action(), reads};
+    } finally {
+      db.runTransaction = original;
+    }
+  }
+
+  const positives = [
+    ["root null", [root("r")], ["r"]],
+    ["legacy root", [root("r", true)], ["r"]],
+    ["child only null root", [root("r"), child("c", "r")], ["c"]],
+    ["child only legacy root", [root("r", true), child("c", "r")], ["c"]],
+    ["root child", [root("r"), child("c", "r")], ["r", "c"]],
+    ["child root", [root("r"), child("c", "r")], ["c", "r"]],
+    ["independent roots", [root("a"), root("b")], ["a", "b"]],
+    ["independent children", [root("a"), root("b"), child("c", "a"), child("d", "b")], ["c", "d"]],
+    ["rootA childB", [root("a"), root("b"), child("d", "b")], ["a", "d"]],
+    ["empty", [], []],
+    ["ten children ten roots",
+      Array.from({length: 10}, (_, i) => [root("r" + i), child("c" + i, "r" + i)]).flat(),
+      Array.from({length: 10}, (_, i) => "c" + i)],
+    ["shared parent", [root("r"), child("a", "r"), child("b", "r"), child("c", "r")], ["a", "b", "c"]],
+    ["explicit parent reused", [root("r"), child("a", "r"), child("b", "r")], ["a", "r", "b"]],
+  ];
+
+  positives.push(["archived product", [root("r"), child("c", "r")], ["c"], true]);
+  for (const [name, categories, ids, isArchived = false] of positives) {
+    await runTest("tree valid: " + name, async () => {
+      const scenario = await seedScenario({categories, isArchived});
+      const before = await categoryState(scenario);
+      const {result, reads} = await traceCategoryReads(() => callSetCategories(scenario, ids));
+      assert.strictEqual(result.changed, true);
+      assert.deepStrictEqual(
+        (await scenario.productRef.get()).data(),
+        {...scenario.productData, ...projection(ids)},
+      );
+      assert.strictEqual((await auditEntries(scenario)).length, 1);
+      const expectedIds = new Set(ids);
+      for (const id of ids) {
+        const parent = categories.find((category) => category.id === id).parentCategoryId;
+        if (parent != null) expectedIds.add(parent);
+      }
+      assert.deepStrictEqual([...reads].sort(), [...expectedIds].map(
+        (id) => scenario.storeRef.collection("categories").doc(id).path,
+      ).sort());
+      assert.deepStrictEqual(await categoryState(scenario), before);
+    });
+  }
+  const negatives = [
+    ["missing parent", [child("c", "missing")], ["c"]],
+    ["third level", [root("r"), child("p", "r"), child("c", "p")], ["c"]],
+    ["self parent", [child("c", "c")], ["c"]],
+    ["two node cycle", [child("c", "p"), child("p", "c")], ["c", "p"]],
+    ["malformed parent document", [child("c", "p"), child("p", 123)], ["c"]],
+    ["later invalid category", [root("r"), child("c", "missing")], ["r", "c"]],
+    ...[
+      ["number", 1], ["boolean", true], ["array", []], ["map", {}],
+      ["empty", ""], ["whitespace", " \t\r\n"], ["external whitespace", " r "],
+      ["slash", "r/other"],
+    ].map(([name, value]) => [name, [child("c", value)], ["c"]]),
+  ];
+
+  for (const [name, categories, ids] of negatives) {
+    await runTest("tree invalid atomic: " + name, async () => {
+      const scenario = await seedScenario({categories});
+      const before = await writeState(scenario);
+      const categoriesBefore = await categoryState(scenario);
+      await expectError(() => callSetCategories(scenario, ids),
+        "failed-precondition", "invalid-category-hierarchy");
+      assert.deepStrictEqual(await writeState(scenario), before);
+      assert.deepStrictEqual(await categoryState(scenario), categoriesBefore);
+    });
+  }
+  for (const localState of ["absent", "invalid", "valid"]) {
+    await runTest("tree parent same ID store isolation: " + localState, async () => {
+      const categories = [child("c", "p")];
+      if (localState === "invalid") categories.push(child("p", "missing"));
+      if (localState === "valid") categories.push(root("p"));
+      const scenario = await seedScenario({categories});
+      const foreign = await seedScenario({
+        categories: [localState === "valid" ? child("p", "missing") : root("p")],
+      });
+      const before = await writeState(scenario);
+      const categoriesBefore = await categoryState(scenario);
+      const foreignBefore = await categoryState(foreign);
+      const foreignWrites = await writeState(foreign);
+      if (localState === "valid") {
+        const result = await callSetCategories(scenario, ["c"]);
+        assert.strictEqual(result.changed, true);
+        assert.deepStrictEqual((await scenario.productRef.get()).data(),
+          {...scenario.productData, ...projection(["c"])});
+        assert.strictEqual((await auditEntries(scenario)).length, 1);
+      } else {
+        await expectError(() => callSetCategories(scenario, ["c"]),
+          "failed-precondition", "invalid-category-hierarchy");
+        assert.deepStrictEqual(await writeState(scenario), before);
+      }
+      assert.deepStrictEqual(await categoryState(scenario), categoriesBefore);
+      assert.deepStrictEqual(await categoryState(foreign), foreignBefore);
+      assert.deepStrictEqual(await writeState(foreign), foreignWrites);
+    });
+  }
+  for (const oldState of ["removed", "corrupt"]) {
+    for (const desired of [[], ["r"], ["c"]]) {
+      await runTest("repair old " + oldState + " to " + JSON.stringify(desired), async () => {
+        const scenario = await seedScenario({
+          categories: [root("old"), root("r"), child("c", "r")],
+          productTaxonomy: projection(["old"]),
+        });
+        const oldRef = scenario.storeRef.collection("categories").doc("old");
+        if (oldState === "removed") await oldRef.delete();
+        else await oldRef.update({parentCategoryId: 123});
+        const before = await categoryState(scenario);
+        const {result, reads} = await traceCategoryReads(
+          () => callSetCategories(scenario, desired),
+        );
+        assert.strictEqual(result.changed, true);
+        assert.ok(!reads.includes(oldRef.path));
+        assert.deepStrictEqual((await scenario.productRef.get()).data(),
+          {...scenario.productData, ...projection(desired)});
+        assert.strictEqual((await auditEntries(scenario)).length, 1);
+        assert.deepStrictEqual(await categoryState(scenario), before);
+      });
+    }
+  }
+  for (const corrupt of [false, true]) {
+    for (const staleExpected of [false, true]) {
+      await runTest("tree no-op corrupt=" + corrupt + " staleExpected=" + staleExpected, async () => {
+        const scenario = await seedScenario({
+          categories: [corrupt ? child("r", "missing") : root("r"), child("c", "r")],
+          productTaxonomy: projection(["c"]),
+        });
+        const before = await writeState(scenario);
+        const categoriesBefore = await categoryState(scenario);
+        const expected = staleExpected ? {} : projection(["c"]);
+        if (corrupt) {
+          await expectError(() => callSetCategories(scenario, ["c"], expected),
+            "failed-precondition", "invalid-category-hierarchy");
+        } else {
+          const result = await callSetCategories(scenario, ["c"], expected);
+          assert.strictEqual(result.changed, false);
+        }
+        assert.deepStrictEqual(await writeState(scenario), before);
+        assert.deepStrictEqual(await categoryState(scenario), categoriesBefore);
+        assert.strictEqual((await auditEntries(scenario)).length, 0);
+      });
+    }
+  }
+
 
   console.log("");
   console.log(

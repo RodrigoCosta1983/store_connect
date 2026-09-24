@@ -21,6 +21,10 @@ const {
   projectLegacyCategories,
 } = require("./productCategoryContract");
 
+const {
+  normalizeStoredParentCategoryId,
+} = require("../categories/categoryHierarchyContract");
+
 const ALLOWED_ROLES =
   new Set([
     "admin",
@@ -509,6 +513,7 @@ const createProduct =
 
             const resolvedCategories =
               new Map();
+            const categoryDataById = new Map();
 
             for (
               const categoryId
@@ -545,6 +550,7 @@ const createProduct =
                 categorySnapshot.data() ||
                 {};
 
+              categoryDataById.set(categoryId, categoryData);
               resolvedCategories.set(
                 categoryId,
                 {
@@ -552,6 +558,47 @@ const createProduct =
                     categoryData.name,
                 },
               );
+            }
+
+            // Cache local a esta tentativa; todos os reads precedem os writes.
+            const invalidHierarchy = () => new HttpsError(
+              "failed-precondition",
+              "Uma categoria selecionada possui hierarquia invalida.",
+              {reason: "invalid-category-hierarchy"},
+            );
+            const storedParent = (data) => {
+              try {
+                return normalizeStoredParentCategoryId(data);
+              } catch (error) {
+                if (error instanceof TypeError || error instanceof RangeError) {
+                  throw invalidHierarchy();
+                }
+                throw error;
+              }
+            };
+            const parentIds = new Set();
+            for (const categoryId of categoryIds) {
+              const parentId = storedParent(categoryDataById.get(categoryId));
+              if (parentId === categoryId) {
+                throw invalidHierarchy();
+              }
+              if (parentId !== null) {
+                parentIds.add(parentId);
+              }
+            }
+            for (const parentId of parentIds) {
+              if (!categoryDataById.has(parentId)) {
+                const parentSnapshot = await transaction.get(
+                  storeRef.collection("categories").doc(parentId),
+                );
+                if (!parentSnapshot.exists) {
+                  throw invalidHierarchy();
+                }
+                categoryDataById.set(parentId, parentSnapshot.data());
+              }
+              if (storedParent(categoryDataById.get(parentId)) !== null) {
+                throw invalidHierarchy();
+              }
             }
 
             let projection;

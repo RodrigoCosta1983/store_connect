@@ -2347,7 +2347,17 @@ exports.createProduct =
   createProduct;
 
 // ============================================================================
-// STORE CONNECT - EXCLUSAO SEGURA DE CATEGORIAS
+// STORE CONNECT - CRIACAO E EDICAO SEGURA DE CATEGORIAS
+// ============================================================================
+
+const {
+  upsertCategory,
+} = require("./categories/upsertCategory");
+
+exports.upsertCategory =
+  upsertCategory;
+
+// ============================================================================// STORE CONNECT - EXCLUSAO SEGURA DE CATEGORIAS
 // ============================================================================
 
 const {
