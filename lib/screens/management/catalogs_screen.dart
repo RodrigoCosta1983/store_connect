@@ -4,9 +4,15 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'catalog_requests_screen.dart';
+import 'manage_products_screen.dart';
 
 class CatalogsScreen extends StatefulWidget {
-  const CatalogsScreen({super.key});
+  final String storeId;
+
+  const CatalogsScreen({
+    super.key,
+    required this.storeId,
+  });
 
   @override
   State<CatalogsScreen> createState() => _CatalogsScreenState();
@@ -26,6 +32,141 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
     _loadOpenRequestCount();
   }
 
+  Future<void> _editCatalog(Map<String, dynamic> catalog) async {
+    final catalogId = catalog['catalogId']?.toString().trim() ?? '';
+
+    if (catalogId.isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível identificar este catálogo.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      return;
+    }
+
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'getCatalogForEdit',
+        options: HttpsCallableOptions(
+          timeout: const Duration(seconds: 30),
+        ),
+      );
+
+      final response = await callable.call({
+        'catalogId': catalogId,
+      });
+
+      if (!mounted) {
+        return;
+      }
+
+      final rawData = response.data;
+
+      if (rawData is! Map || rawData['success'] != true) {
+        throw const FormatException(
+          'Resposta inválida ao carregar o catálogo para edição.',
+        );
+      }
+
+      final rawCatalog = rawData['catalog'];
+
+      if (rawCatalog is! Map) {
+        throw const FormatException(
+          'Dados do catálogo para edição são inválidos.',
+        );
+      }
+
+      final editCatalog =
+          Map<String, dynamic>.from(rawCatalog);
+
+      final rawProductIds = editCatalog['productIds'];
+
+      if (rawProductIds is! List) {
+        throw const FormatException(
+          'Produtos do catálogo para edição são inválidos.',
+        );
+      }
+
+      final productIds = rawProductIds
+          .map((value) => value?.toString().trim() ?? '')
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+
+      if (productIds.isEmpty) {
+        throw const FormatException(
+          'O catálogo não possui produtos válidos para edição.',
+        );
+      }
+
+      final edited = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (context) => ManageProductsScreen(
+            storeId: widget.storeId,
+            editCatalogId: catalogId,
+            editCatalogTitle:
+                editCatalog['title']?.toString() ?? '',
+            editCatalogExpiresAt:
+                editCatalog['expiresAt']?.toString(),
+            initialCatalogProductIds: productIds,
+          ),
+        ),
+      );
+
+      if (!mounted || edited != true) {
+        return;
+      }
+
+      await _loadCatalogs();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Catálogo atualizado com sucesso.'),
+          ),
+        );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      final message =
+          error.message?.trim().isNotEmpty == true
+              ? error.message!
+              : 'Não foi possível carregar o catálogo para edição.';
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+          ),
+        );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível carregar o catálogo para edição.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+    }
+  }
   Future<void> _loadOpenRequestCount() async {
     try {
       final callable = FirebaseFunctions.instance.httpsCallable(
@@ -434,7 +575,19 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                 ),
               ],
             ),
-            if (linkAvailable) ...[
+            if (catalog['status']?.toString() == 'active') ...[
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    _editCatalog(catalog);
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Editar catálogo'),
+                ),
+              ),
+            ],            if (linkAvailable) ...[
               const SizedBox(height: 18),
               Row(
                 children: [

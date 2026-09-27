@@ -711,7 +711,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 Navigator.of(context).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const CatalogsScreen(),
+                    builder: (context) => CatalogsScreen(
+                      storeId: widget.storeId,
+                    ),
                   ),
                 );
               },

@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 // Importação do App Check
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:provider/provider.dart';
@@ -19,6 +22,32 @@ import 'package:store_connect/themes/app_theme.dart';
 import 'package:store_connect/services/navigation_service.dart';
 import 'firebase_options.dart';
 
+const bool _useFirebaseEmulators = bool.fromEnvironment(
+  'USE_FIREBASE_EMULATORS',
+  defaultValue: false,
+);
+
+Future<void> _connectFirebaseEmulators() async {
+  if (!_useFirebaseEmulators) {
+    return;
+  }
+
+  // Este fluxo local foi preparado para o teste Flutter Web.
+  // Sem --dart-define=USE_FIREBASE_EMULATORS=true,
+  // o aplicativo continua usando os servicos de producao.
+  const host = '127.0.0.1';
+
+  await FirebaseAuth.instance.useAuthEmulator(host, 9099);
+  FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+  FirebaseFunctions.instance.useFunctionsEmulator(host, 5001);
+  FirebaseStorage.instance.useStorageEmulator(host, 9199);
+
+  debugPrint('Firebase Emulators ATIVOS');
+  debugPrint('Auth      : $host:9099');
+  debugPrint('Firestore : $host:8080');
+  debugPrint('Functions : $host:5001');
+  debugPrint('Storage   : $host:9199');
+}
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -29,6 +58,8 @@ Future<void> main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
+
+    await _connectFirebaseEmulators();
     debugPrint('✅ Firebase.initializeApp() OK');
   } catch (e) {
     debugPrint('❌ Erro Firebase: $e');

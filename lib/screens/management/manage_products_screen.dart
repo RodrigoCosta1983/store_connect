@@ -2051,7 +2051,19 @@ class _ProductDialog extends StatefulWidget {
 class ManageProductsScreen extends StatefulWidget {
   final String storeId;
 
-  const ManageProductsScreen({super.key, required this.storeId});
+  final String? editCatalogId;
+  final String? editCatalogTitle;
+  final String? editCatalogExpiresAt;
+  final List<String> initialCatalogProductIds;
+
+  const ManageProductsScreen({
+    super.key,
+    required this.storeId,
+    this.editCatalogId,
+    this.editCatalogTitle,
+    this.editCatalogExpiresAt,
+    this.initialCatalogProductIds = const <String>[],
+  });
 
   @override
   State<ManageProductsScreen> createState() => _ManageProductsScreenState();
@@ -2079,6 +2091,9 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   // ==========================================================================
 
   bool _isCatalogSelectionMode = false;
+
+  bool get _isEditingCatalog =>
+      widget.editCatalogId?.trim().isNotEmpty == true;
 
   final Set<String> _selectedCatalogProductIds = <String>{};
 
@@ -2390,9 +2405,11 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Selecione pelo menos um produto para criar o catálogo.',
+              _isEditingCatalog
+                  ? 'Selecione pelo menos um produto para manter no catálogo.'
+                  : 'Selecione pelo menos um produto para criar o catálogo.',
             ),
           ),
         );
@@ -2413,7 +2430,11 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       return null;
     }
 
-    String catalogTitle = '';
+    final titleController = TextEditingController(
+      text: _isEditingCatalog
+          ? (widget.editCatalogTitle ?? '')
+          : '',
+    );
 
     int expiresInDays = 7;
     String? titleError;
@@ -2425,7 +2446,11 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
           builder: (context, setDialogState) {
             return AlertDialog(
               scrollable: true,
-              title: const Text('Configurar catálogo'),
+              title: Text(
+                _isEditingCatalog
+                    ? 'Editar catálogo'
+                    : 'Configurar catálogo',
+              ),
               content: SizedBox(
                 width: 460,
                 child: Column(
@@ -2433,6 +2458,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     TextField(
+                      controller: titleController,
                       autofocus: true,
                       maxLength: 100,
                       decoration: InputDecoration(
@@ -2441,8 +2467,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                         errorText: titleError,
                         border: const OutlineInputBorder(),
                       ),
-                      onChanged: (value) {
-                        catalogTitle = value;
+                      onChanged: (_) {
                         if (titleError == null) {
                           return;
                         }
@@ -2453,61 +2478,101 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<int>(
-                      value: expiresInDays,
-                      decoration: const InputDecoration(
-                        labelText: 'Validade do catálogo',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 1, child: Text('1 dia')),
-                        DropdownMenuItem(value: 3, child: Text('3 dias')),
-                        DropdownMenuItem(value: 7, child: Text('7 dias')),
-                        DropdownMenuItem(value: 15, child: Text('15 dias')),
-                        DropdownMenuItem(value: 30, child: Text('30 dias')),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) {
-                          return;
-                        }
+                    if (!_isEditingCatalog)
+                      DropdownButtonFormField<int>(
+                        value: expiresInDays,
+                        decoration: const InputDecoration(
+                          labelText: 'Validade do catálogo',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text('1 dia')),
+                          DropdownMenuItem(value: 3, child: Text('3 dias')),
+                          DropdownMenuItem(value: 7, child: Text('7 dias')),
+                          DropdownMenuItem(value: 15, child: Text('15 dias')),
+                          DropdownMenuItem(value: 30, child: Text('30 dias')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
 
-                        setDialogState(() {
-                          expiresInDays = value;
-                        });
-                      },
-                    ),
+                          setDialogState(() {
+                            expiresInDays = value;
+                          });
+                        },
+                      ),
+                    if (_isEditingCatalog)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.event_outlined,
+                              size: 20,
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'A validade atual será mantida. '
+                                'Editar o catálogo não renova o vencimento.',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     const SizedBox(height: 16),
                     Text(
                       '${selectedProductIds.length} '
                       '${selectedProductIds.length == 1 ? 'produto selecionado' : 'produtos selecionados'}',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  onPressed: () =>
+                      Navigator.of(dialogContext).pop(),
                   child: const Text('Cancelar'),
                 ),
                 FilledButton.icon(
                   onPressed: () {
-                    final title = catalogTitle.trim();
+                    final title =
+                        titleController.text.trim();
 
                     if (title.isEmpty) {
                       setDialogState(() {
-                        titleError = 'Informe um título para o catálogo.';
+                        titleError =
+                            'Informe um título para o catálogo.';
                       });
-
                       return;
                     }
 
-                    Navigator.of(
-                      dialogContext,
-                    ).pop({'title': title, 'expiresInDays': expiresInDays});
+                    Navigator.of(dialogContext).pop({
+                      'title': title,
+                      if (!_isEditingCatalog)
+                        'expiresInDays': expiresInDays,
+                    });
                   },
-                  icon: const Icon(Icons.menu_book_outlined),
-                  label: const Text('Criar catálogo'),
+                  icon: Icon(
+                    _isEditingCatalog
+                        ? Icons.save_outlined
+                        : Icons.menu_book_outlined,
+                  ),
+                  label: Text(
+                    _isEditingCatalog
+                        ? 'Salvar alterações'
+                        : 'Criar catálogo',
+                  ),
                 ),
               ],
             );
@@ -2517,25 +2582,118 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     );
 
     if (config == null || !mounted) {
+      titleController.dispose();
       return null;
     }
 
-    final title = config['title']?.toString().trim() ?? '';
-    final expiresInDaysValue = config['expiresInDays'];
+    final title =
+        config['title']?.toString().trim() ?? '';
 
-    if (title.isEmpty || expiresInDaysValue is! int) {
+    titleController.dispose();
+
+    if (title.isEmpty) {
       return null;
     }
 
-    final result = await _createCatalog(
+    if (_isEditingCatalog) {
+      final result = await _updateCatalog(
+        title: title,
+        productIds: selectedProductIds,
+      );
+
+      if (result == null || !mounted) {
+        return null;
+      }
+
+      Navigator.of(context).pop(true);
+      return null;
+    }
+
+    final expiresInDaysValue =
+        config['expiresInDays'];
+
+    if (expiresInDaysValue is! int) {
+      return null;
+    }
+
+    return _createCatalog(
       title: title,
       productIds: selectedProductIds,
       expiresInDays: expiresInDaysValue,
     );
-
-    return result;
   }
+  Future<Map<String, dynamic>?> _updateCatalog({
+    required String title,
+    required List<String> productIds,
+  }) async {
+    final catalogId = widget.editCatalogId?.trim() ?? '';
 
+    if (catalogId.isEmpty) {
+      return null;
+    }
+
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'updateCatalog',
+        options: HttpsCallableOptions(
+          timeout: const Duration(seconds: 30),
+        ),
+      );
+
+      final response = await callable.call({
+        'catalogId': catalogId,
+        'title': title,
+        'productIds': productIds,
+      });
+
+      final rawData = response.data;
+
+      if (rawData is! Map || rawData['success'] != true) {
+        throw const FormatException(
+          'Resposta inválida ao atualizar catálogo.',
+        );
+      }
+
+      return Map<String, dynamic>.from(rawData);
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) {
+        return null;
+      }
+
+      final message =
+          error.message?.trim().isNotEmpty == true
+              ? error.message!
+              : 'Não foi possível atualizar o catálogo.';
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+      return null;
+    } catch (_) {
+      if (!mounted) {
+        return null;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível atualizar o catálogo.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+      return null;
+    }
+  }
   Future<Map<String, dynamic>?> _createCatalog({
     required String title,
     required List<String> productIds,
@@ -2633,6 +2791,13 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   @override
   void initState() {
     super.initState();
+
+    if (_isEditingCatalog) {
+      _isCatalogSelectionMode = true;
+      _selectedCatalogProductIds
+        ..clear()
+        ..addAll(widget.initialCatalogProductIds);
+    }
 
     _listenStorePlan();
   }

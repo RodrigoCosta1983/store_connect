@@ -2803,6 +2803,8 @@ exports.changeAsaasPlan = onCall(
 const {
   createCatalog,
   listCatalogs,
+  getCatalogForEdit,
+  updateCatalog,
   listCatalogRequests,
   getCatalogRequest,
   transitionCatalogRequest,
@@ -2812,6 +2814,8 @@ const {
 
 exports.createCatalog = createCatalog;
 exports.listCatalogs = listCatalogs;
+exports.getCatalogForEdit = getCatalogForEdit;
+exports.updateCatalog = updateCatalog;
 exports.listCatalogRequests = listCatalogRequests;
 exports.getCatalogRequest = getCatalogRequest;
 exports.transitionCatalogRequest = transitionCatalogRequest;
