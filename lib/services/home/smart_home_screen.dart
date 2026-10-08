@@ -39,6 +39,7 @@ import 'package:store_connect/screens/sales/sales_history_screen.dart';
 import 'package:store_connect/services/business_insights_service.dart';
 import 'package:store_connect/services/home/radar_preferences_screen.dart';
 import 'package:store_connect/widgets/dynamic_background.dart';
+import 'package:store_connect/services/navigation_service.dart';
 
 class SmartHomeScreen extends StatefulWidget {
   final String storeId;
@@ -152,6 +153,11 @@ class _SmartHomeScreenState extends State<SmartHomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Início',
+          icon: const Icon(Icons.home_outlined),
+          onPressed: () => NavigationService.navigateToHome(widget.storeId),
+        ),
         title: const Text('Início'),
         backgroundColor: Colors.transparent,
         elevation: 0,

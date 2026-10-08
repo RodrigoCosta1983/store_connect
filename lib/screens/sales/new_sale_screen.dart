@@ -80,6 +80,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:store_connect/data/local/offline_sales_repository.dart';
 import 'package:store_connect/services/offline_sales_sync_service.dart';
+import 'package:store_connect/services/navigation_service.dart';
 import 'package:store_connect/models/product_model.dart';
 import 'package:store_connect/providers/cart_provider.dart';
 import 'package:store_connect/screens/cart/cart_screen.dart';
@@ -415,6 +416,33 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     }
   }
 
+  Future<void> _navigateToHome() async {
+    final cart = context.read<CartProvider>();
+    if (cart.itemCount > 0) {
+      final leave = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Venda em andamento'),
+          content: const Text(
+            'Você já adicionou produtos a esta venda. Deseja sair e voltar para o início?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Continuar venda'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Sair da venda'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || leave != true) return;
+    }
+    NavigationService.navigateToHome(widget.storeId);
+  }
+
   @override
   Widget build(BuildContext context) {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
@@ -424,29 +452,47 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
+        centerTitle: false,
+        titleSpacing: 0,
         // --- LÓGICA DO TÍTULO VS BARRA DE PESQUISA ---
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                autofocus: true, // Abre o teclado automaticamente
-                style: TextStyle(
-                  color: isDarkMode ? Colors.white : Colors.black87,
-                  fontSize: 18,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Pesquisar produtos...',
-                  hintStyle: TextStyle(
-                    color: isDarkMode ? Colors.white54 : Colors.black54,
-                  ),
-                  border: InputBorder.none, // Remove a linha de baixo do campo
-                ),
-                onChanged: (value) {
-                  setState(() {
-                    _searchQuery = value;
-                  });
-                },
-              )
-            : const Text('Nova Venda'),
+        title: Row(
+          children: [
+            IconButton(
+              tooltip: 'Início',
+              icon: const Icon(Icons.home_outlined),
+              onPressed: _navigateToHome,
+            ),
+            Expanded(
+              child: _isSearching
+                  ? TextField(
+                      controller: _searchController,
+                      autofocus: true, // Abre o teclado automaticamente
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                        fontSize: 18,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Pesquisar produtos...',
+                        hintStyle: TextStyle(
+                          color: isDarkMode ? Colors.white54 : Colors.black54,
+                        ),
+                        border: InputBorder.none, // Remove a linha de baixo do campo
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value;
+                        });
+                      },
+                    )
+                  : const Text(
+                      'Nova Venda',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 18),
+                    ),
+            ),
+          ],
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -457,7 +503,17 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               builder: (context, snapshot) {
                 final pendingCount = snapshot.data ?? 0;
 
-                return _buildConnectivityIndicator(isDarkMode, pendingCount);
+                return ConstrainedBox(
+                  constraints: BoxConstraints(
+                    // Reserva Menu, Home, título e os dois botões à direita.
+                    maxWidth: (MediaQuery.sizeOf(context).width - 264)
+                        .clamp(48.0, double.infinity),
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: _buildConnectivityIndicator(isDarkMode, pendingCount),
+                  ),
+                );
               },
             ),
 
