@@ -47,3 +47,24 @@ app.*.map.json
 
 # Firebase CLI local cache
 /.firebase/
+
+# Dependencies and generated output at any depth
+node_modules/
+build/
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+key.properties
+service-account*.json
+credentials*
+secrets*
+
+# Private Emulator artifacts
+test_emulator/**/chrome-profile/
+test_emulator/**/fixture.private.json
+test_emulator/**/*-dom.private.txt
+test_emulator/**/root-snapshot.json
