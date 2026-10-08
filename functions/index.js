@@ -2801,6 +2801,7 @@ exports.changeAsaasPlan = onCall(
 // =============================================================================
 
 const {
+  previewCatalog,
   createCatalog,
   listCatalogs,
   getCatalogForEdit,
@@ -2812,6 +2813,7 @@ const {
   submitPublicCatalogSelection,
 } = require("./catalog/createCatalog");
 
+exports.previewCatalog = previewCatalog;
 exports.createCatalog = createCatalog;
 exports.listCatalogs = listCatalogs;
 exports.getCatalogForEdit = getCatalogForEdit;

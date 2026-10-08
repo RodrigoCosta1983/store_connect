@@ -57,6 +57,9 @@
 // lib/screens/management/manage_products_screen.dart
 
 import 'dart:async';
+import 'widgets/catalog_dynamic_section_card.dart';
+import 'widgets/catalog_preview_button.dart';
+import 'widgets/catalog_configuration_dialog.dart';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -2055,6 +2058,7 @@ class ManageProductsScreen extends StatefulWidget {
   final String? editCatalogTitle;
   final String? editCatalogExpiresAt;
   final List<String> initialCatalogProductIds;
+  final Map<String, dynamic> initialCatalogDynamicSections;
 
   const ManageProductsScreen({
     super.key,
@@ -2063,6 +2067,7 @@ class ManageProductsScreen extends StatefulWidget {
     this.editCatalogTitle,
     this.editCatalogExpiresAt,
     this.initialCatalogProductIds = const <String>[],
+    this.initialCatalogDynamicSections = const <String, dynamic>{},
   });
 
   @override
@@ -2096,6 +2101,122 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       widget.editCatalogId?.trim().isNotEmpty == true;
 
   final Set<String> _selectedCatalogProductIds = <String>{};
+
+  static const List<String> _catalogDynamicSectionIds = <String>[
+    'suggestions',
+    'offers',
+    'completeOrder',
+  ];
+
+  static const Map<String, String> _catalogDynamicSectionTitles =
+      <String, String>{
+    'suggestions': 'Sugestões para você',
+    'offers': 'Ofertas',
+    'completeOrder': 'Complete seu pedido',
+  };
+
+  static const Map<String, String> _catalogDynamicSectionDescriptions =
+      <String, String>{
+    'suggestions':
+        'Mostre outros produtos que podem interessar ao cliente.',
+    'offers':
+        'Destaque produtos das categorias escolhidas nesta área.',
+    'completeOrder':
+        'Mostre produtos que podem complementar a compra do cliente.',
+  };
+
+  late Map<String, dynamic> _catalogDynamicSections;
+  final Map<String, String> _dynamicCategoryLabels = {};
+
+  Map<String, dynamic> _defaultCatalogDynamicSections() {
+    return <String, dynamic>{
+      for (final sectionId in _catalogDynamicSectionIds)
+        sectionId: <String, dynamic>{
+          'enabled': false,
+          'categoryIds': <String>[],
+        },
+    };
+  }
+
+  Map<String, dynamic> _normalizeCatalogDynamicSections(
+    Map<String, dynamic> rawSections,
+  ) {
+    final normalized = _defaultCatalogDynamicSections();
+
+    for (final sectionId in _catalogDynamicSectionIds) {
+      final rawSection = rawSections[sectionId];
+
+      if (rawSection is! Map) {
+        continue;
+      }
+
+      final rawEnabled = rawSection['enabled'];
+      final rawCategoryIds = rawSection['categoryIds'];
+
+      if (rawEnabled is! bool ||
+          rawCategoryIds is! List ||
+          rawCategoryIds.length > 10) {
+        continue;
+      }
+
+      final categoryIds = <String>[];
+      final seenCategoryIds = <String>{};
+      var valid = true;
+
+      for (final rawId in rawCategoryIds) {
+        if (rawId is! String ||
+            rawId.isEmpty ||
+            rawId.trim() != rawId ||
+            rawId.contains('/') ||
+            !seenCategoryIds.add(rawId)) {
+          valid = false;
+          break;
+        }
+
+        categoryIds.add(rawId);
+      }
+
+      if (!valid || (rawEnabled && categoryIds.isEmpty)) {
+        continue;
+      }
+
+      normalized[sectionId] = <String, dynamic>{
+        'enabled': rawEnabled,
+        'categoryIds': categoryIds,
+      };
+    }
+
+    return normalized;
+  }
+
+  Map<String, dynamic> _catalogDynamicSectionsPayload() {
+    final payload = <String, dynamic>{};
+
+    for (final sectionId in _catalogDynamicSectionIds) {
+      final section = _catalogDynamicSections[sectionId];
+
+      if (section is! Map) {
+        payload[sectionId] = <String, dynamic>{
+          'enabled': false,
+          'categoryIds': <String>[],
+        };
+        continue;
+      }
+
+      final rawCategoryIds = section['categoryIds'];
+
+      payload[sectionId] = <String, dynamic>{
+        'enabled': section['enabled'] == true,
+        'categoryIds': rawCategoryIds is List
+            ? rawCategoryIds
+                .whereType<String>()
+                .toList(growable: false)
+            : <String>[],
+      };
+    }
+
+    return payload;
+  }
 
   int get _selectedCatalogProductCount => _selectedCatalogProductIds.length;
 
@@ -2396,6 +2517,238 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     );
   }
 
+  Future<List<String>?> _showDynamicCatalogCategorySelector({
+    required String sectionTitle,
+    required List<String> initialSelectedCategoryIds,
+  }) async {
+    try {
+      final categorySnapshot = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(widget.storeId)
+          .collection('categories')
+          .orderBy('name')
+          .get();
+
+      if (!mounted) {
+        return null;
+      }
+
+      final categories = categorySnapshot.docs;
+
+      final rootCategories = categories.where((category) {
+        final data = category.data();
+
+        return !data.containsKey('parentCategoryId') ||
+            data['parentCategoryId'] == null;
+      }).toList();
+
+      final options = <Map<String, String?>>[];
+
+      for (final root in rootCategories) {
+        final rootData = root.data();
+        final rootName =
+            rootData['name']?.toString().trim() ?? '';
+
+        if (rootName.isEmpty) {
+          continue;
+        }
+
+        options.add(<String, String?>{
+          'id': root.id,
+          'name': rootName,
+          'parentName': null,
+        });
+
+
+        for (final candidate in categories) {
+          final candidateData = candidate.data();
+
+          if (candidateData['parentCategoryId'] != root.id) {
+            continue;
+          }
+
+          final candidateName =
+              candidateData['name']?.toString().trim() ?? '';
+
+          if (candidateName.isEmpty) {
+            continue;
+          }
+
+          options.add(<String, String?>{
+            'id': candidate.id,
+            'name': candidateName,
+            'parentName': rootName,
+          });
+
+        }
+      }
+
+      for (final option in options) {
+        _dynamicCategoryLabels[option['id']!] = option['parentName'] == null
+            ? option['name']!
+            : '${option['parentName']} └ ${option['name']}';
+      }
+      if (options.isEmpty) {
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Nenhuma categoria válida está cadastrada na loja.',
+              ),
+            ),
+          );
+
+        return null;
+      }
+
+      final selectedCategoryIds = initialSelectedCategoryIds
+          .toSet();
+
+      return showDialog<List<String>>(
+        context: context,
+        builder: (selectorDialogContext) {
+          return StatefulBuilder(
+            builder: (context, setSelectorState) {
+              return AlertDialog(
+                title: Text(
+                  'Categorias — $sectionTitle',
+                ),
+                content: SizedBox(
+                  width: 520,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxHeight: 520,
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: options.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final option = options[index];
+
+                        final categoryId =
+                            option['id'] ?? '';
+
+                        final categoryName =
+                            option['name'] ?? 'Sem nome';
+
+                        final parentName =
+                            option['parentName'];
+
+                        final isSelected =
+                            selectedCategoryIds.contains(
+                          categoryId,
+                        );
+
+                        final isSubcategory =
+                            parentName != null;
+
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            left: isSubcategory ? 24 : 0,
+                          ),
+                          child: CheckboxListTile(
+                            value: isSelected,
+                            dense: true,
+                            visualDensity:
+                                VisualDensity.compact,
+                            controlAffinity:
+                                ListTileControlAffinity.leading,
+                            title: Text(categoryName),
+                            subtitle: isSubcategory
+                                ? Text(
+                                    'Subcategoria de $parentName',
+                                  )
+                                : null,
+                            onChanged: (selected) {
+                              if (selected == null) {
+                                return;
+                              }
+
+                              if (selected &&
+                                  !isSelected &&
+                                  selectedCategoryIds.length >= 10) {
+                                ScaffoldMessenger.of(
+                                  this.context,
+                                )
+                                  ..clearSnackBars()
+                                  ..showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Cada seção pode usar no máximo '
+                                        '10 categorias.',
+                                      ),
+                                    ),
+                                  );
+
+                                return;
+                              }
+
+                              setSelectorState(() {
+                                if (selected) {
+                                  selectedCategoryIds.add(
+                                    categoryId,
+                                  );
+                                } else {
+                                  selectedCategoryIds.remove(
+                                    categoryId,
+                                  );
+                                }
+                              });
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.of(
+                          selectorDialogContext,
+                        ).pop(),
+                    child: const Text('Cancelar'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final orderedSelectedIds = selectedCategoryIds
+                          .toList(growable: false);
+
+                      Navigator.of(
+                        selectorDialogContext,
+                      ).pop(orderedSelectedIds);
+                    },
+                    child: const Text('Concluir'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } catch (_) {
+      if (!mounted) {
+        return null;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível carregar as categorias da loja.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> _showCreateCatalogDialog() async {
     final selectedProductIds = _selectedCatalogProductIds.toList(
       growable: false,
@@ -2430,6 +2783,28 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       return null;
     }
 
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('stores').doc(widget.storeId)
+          .collection('categories').orderBy('name').get();
+      final names = {for (final doc in snapshot.docs)
+        doc.id: doc.data()['name']?.toString() ?? doc.id};
+      for (final doc in snapshot.docs) {
+        final parent = doc.data()['parentCategoryId'];
+        _dynamicCategoryLabels[doc.id] = parent is String
+            ? '${names[parent] ?? parent} └ ${names[doc.id]}'
+            : names[doc.id]!;
+      }
+    } catch (_) {
+      // Preserve persisted IDs when category labels are unavailable.
+    }
+    if (!mounted) return null;
+
+    final draftDynamicSections =
+        _normalizeCatalogDynamicSections(
+      _catalogDynamicSectionsPayload(),
+    );
+
     final titleController = TextEditingController(
       text: _isEditingCatalog
           ? (widget.editCatalogTitle ?? '')
@@ -2437,15 +2812,74 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     );
 
     int expiresInDays = 7;
+    bool previewLoading = false;
     String? titleError;
+    String? dynamicSectionsError;
 
     final config = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              scrollable: true,
+            bool validateDraft() {
+              final title =
+                  titleController.text.trim();
+
+              if (title.isEmpty) {
+                setDialogState(() {
+                  titleError =
+                      'Informe um título para o catálogo.';
+                });
+                return false;
+              }
+
+              String? invalidSectionTitle;
+
+              for (final sectionId
+                  in _catalogDynamicSectionIds) {
+                final rawSection =
+                    draftDynamicSections[sectionId];
+
+                if (rawSection is! Map ||
+                    rawSection['enabled'] != true) {
+                  continue;
+                }
+
+                final rawCategoryIds =
+                    rawSection['categoryIds'];
+
+                final categoryIds =
+                    rawCategoryIds is List
+                        ? rawCategoryIds
+                            .whereType<String>()
+                            .toList(
+                              growable: false,
+                            )
+                        : <String>[];
+
+                if (categoryIds.isEmpty) {
+                  invalidSectionTitle =
+                      _catalogDynamicSectionTitles[
+                            sectionId
+                          ] ??
+                          sectionId;
+                  break;
+                }
+              }
+
+              if (invalidSectionTitle != null) {
+                setDialogState(() {
+                  dynamicSectionsError =
+                      'Selecione pelo menos uma categoria para esta seção.';
+                });
+
+                return false;
+              }
+
+              return true;
+            }
+
+            return CatalogConfigurationDialog(
               title: Text(
                 _isEditingCatalog
                     ? 'Editar catálogo'
@@ -2527,7 +2961,107 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                           ],
                         ),
                       ),
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Seções inteligentes',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Text('Opcional'),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Escolha categorias para preencher automaticamente '
+                      'as áreas extras do catálogo. Produtos novos dessas '
+                      'categorias poderão aparecer sem seleção manual.',
+                      style: TextStyle(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant,
+                      ),
+                    ),
                     const SizedBox(height: 16),
+                    for (final sectionId
+                        in _catalogDynamicSectionIds) ...[
+                      Builder(
+                        builder: (context) {
+                          final rawSection =
+                              draftDynamicSections[sectionId];
+
+                          final section = rawSection is Map
+                              ? rawSection
+                              : const <String, dynamic>{};
+
+                          final enabled =
+                              section['enabled'] == true;
+
+                          final rawCategoryIds =
+                              section['categoryIds'];
+
+                          final categoryIds =
+                              rawCategoryIds is List
+                                  ? rawCategoryIds
+                                      .whereType<String>()
+                                      .toList(
+                                        growable: false,
+                                      )
+                                  : <String>[];
+
+                          final sectionTitle =
+                              _catalogDynamicSectionTitles[
+                                    sectionId
+                                  ] ??
+                                  sectionId;
+
+                          final description =
+                              _catalogDynamicSectionDescriptions[
+                                    sectionId
+                                  ] ??
+                                  '';
+
+                          return CatalogDynamicSectionCard(
+                            title: sectionTitle,
+                            description: description,
+                            enabled: enabled,
+                            categoryLabels: [
+                              for (final id in categoryIds)
+                                _dynamicCategoryLabels[id] ?? id,
+                            ],
+                            showError: dynamicSectionsError != null &&
+                                enabled && categoryIds.isEmpty,
+                            onEnabledChanged: (value) {
+                              setDialogState(() {
+                                draftDynamicSections[sectionId] = {
+                                  'enabled': value,
+                                  'categoryIds': categoryIds,
+                                };
+                              });
+                            },
+                            onSelectCategories: () async {
+                              final updatedCategoryIds =
+                                  await _showDynamicCatalogCategorySelector(
+                                sectionTitle: sectionTitle,
+                                initialSelectedCategoryIds: categoryIds,
+                              );
+                              if (updatedCategoryIds == null ||
+                                  !dialogContext.mounted) {
+                                return;
+                              }
+                              setDialogState(() {
+                                draftDynamicSections[sectionId] = {
+                                  'enabled': enabled,
+                                  'categoryIds': updatedCategoryIds,
+                                };
+                              });
+                            },
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     Text(
                       '${selectedProductIds.length} '
                       '${selectedProductIds.length == 1 ? 'produto selecionado' : 'produtos selecionados'}',
@@ -2539,28 +3073,41 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
                 ),
               ),
               actions: [
+                CatalogPreviewButton(
+                  isEditing: _isEditingCatalog,
+                  onLoadingChanged: (value) => setDialogState(() {
+                    previewLoading = value;
+                  }),
+                  draft: () {
+                    if (!validateDraft()) return null;
+                    return {
+                      'title': titleController.text.trim(),
+                      'productIds': selectedProductIds,
+                      'expiresInDays': expiresInDays,
+                      'dynamicSections': _normalizeCatalogDynamicSections(
+                        draftDynamicSections,
+                      ),
+                    };
+                  },
+                ),
                 TextButton(
-                  onPressed: () =>
+                  onPressed: previewLoading ? null : () =>
                       Navigator.of(dialogContext).pop(),
                   child: const Text('Cancelar'),
                 ),
                 FilledButton.icon(
-                  onPressed: () {
-                    final title =
-                        titleController.text.trim();
-
-                    if (title.isEmpty) {
-                      setDialogState(() {
-                        titleError =
-                            'Informe um título para o catálogo.';
-                      });
-                      return;
-                    }
+                  onPressed: previewLoading ? null : () {
+                    if (!validateDraft()) return;
+                    final title = titleController.text.trim();
 
                     Navigator.of(dialogContext).pop({
                       'title': title,
                       if (!_isEditingCatalog)
                         'expiresInDays': expiresInDays,
+                      'dynamicSections':
+                          _normalizeCatalogDynamicSections(
+                        draftDynamicSections,
+                      ),
                     });
                   },
                   icon: Icon(
@@ -2589,6 +3136,23 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     final title =
         config['title']?.toString().trim() ?? '';
 
+    final rawDynamicSectionsConfig =
+        config['dynamicSections'];
+
+    if (rawDynamicSectionsConfig is! Map) {
+      titleController.dispose();
+      return null;
+    }
+
+    final dynamicSections =
+        _normalizeCatalogDynamicSections(
+      Map<String, dynamic>.from(
+        rawDynamicSectionsConfig,
+      ),
+    );
+
+    _catalogDynamicSections = dynamicSections;
+
     titleController.dispose();
 
     if (title.isEmpty) {
@@ -2599,6 +3163,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       final result = await _updateCatalog(
         title: title,
         productIds: selectedProductIds,
+        dynamicSections: dynamicSections,
       );
 
       if (result == null || !mounted) {
@@ -2620,11 +3185,13 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
       title: title,
       productIds: selectedProductIds,
       expiresInDays: expiresInDaysValue,
+      dynamicSections: dynamicSections,
     );
   }
   Future<Map<String, dynamic>?> _updateCatalog({
     required String title,
     required List<String> productIds,
+    required Map<String, dynamic> dynamicSections,
   }) async {
     final catalogId = widget.editCatalogId?.trim() ?? '';
 
@@ -2644,6 +3211,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         'catalogId': catalogId,
         'title': title,
         'productIds': productIds,
+        'dynamicSections': dynamicSections,
       });
 
       final rawData = response.data;
@@ -2698,6 +3266,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
     required String title,
     required List<String> productIds,
     required int expiresInDays,
+    required Map<String, dynamic> dynamicSections,
   }) async {
     try {
       final callable = FirebaseFunctions.instance.httpsCallable(
@@ -2708,6 +3277,7 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
         'title': title,
         'productIds': productIds,
         'expiresInDays': expiresInDays,
+        'dynamicSections': dynamicSections,
       });
 
       final rawData = response.data;
@@ -2791,6 +3361,12 @@ class _ManageProductsScreenState extends State<ManageProductsScreen> {
   @override
   void initState() {
     super.initState();
+
+    _catalogDynamicSections = _normalizeCatalogDynamicSections(
+      Map<String, dynamic>.from(
+        widget.initialCatalogDynamicSections,
+      ),
+    );
 
     if (_isEditingCatalog) {
       _isCatalogSelectionMode = true;

@@ -101,6 +101,20 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         );
       }
 
+      final rawDynamicSections =
+          editCatalog['dynamicSections'];
+
+      if (rawDynamicSections != null && rawDynamicSections is! Map) {
+        throw const FormatException(
+          'Configuração dinâmica do catálogo é inválida.',
+        );
+      }
+
+      final dynamicSections =
+          Map<String, dynamic>.from(
+            rawDynamicSections ?? const <String, dynamic>{},
+          );
+
       final edited = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (context) => ManageProductsScreen(
@@ -111,6 +125,8 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
             editCatalogExpiresAt:
                 editCatalog['expiresAt']?.toString(),
             initialCatalogProductIds: productIds,
+            initialCatalogDynamicSections:
+                dynamicSections,
           ),
         ),
       );

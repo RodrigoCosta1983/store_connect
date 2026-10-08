@@ -83,9 +83,12 @@ void main() {
     ));
     await tester.pumpAndSettle();
     final start = find.text('Selecionar produtos');
-    await tester.tap(start.evaluate().isNotEmpty
+    await tester.tap(!mobile && start.evaluate().isNotEmpty
         ? start : find.byTooltip('Selecionar produtos'));
     await tester.pumpAndSettle();
+    if (mobile) {
+      expect(find.byType(BottomSheet), findsNothing);
+    }
     final increase = find.byTooltip('Aumentar quantidade').first;
     await tester.ensureVisible(increase);
     await tester.tap(increase);

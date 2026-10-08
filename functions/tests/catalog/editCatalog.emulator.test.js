@@ -80,9 +80,30 @@ async function run() {
     }
     const result = await read();
     assert.deepEqual(Object.keys(result).sort(), ["catalog", "success"]);
-    assert.deepEqual(Object.keys(result.catalog).sort(),
-        ["catalogId", "expiresAt", "productCount", "productIds", "status", "title"]);
+    assert.deepEqual(Object.keys(result.catalog).sort(), [
+      "catalogId",
+      "dynamicSections",
+      "expiresAt",
+      "productCount",
+      "productIds",
+      "status",
+      "title",
+    ]);
     assert.deepEqual(result.catalog.productIds, ["b", "a", "c"]);
+    assert.deepEqual(result.catalog.dynamicSections, {
+      suggestions: {
+        enabled: false,
+        categoryIds: [],
+      },
+      offers: {
+        enabled: false,
+        categoryIds: [],
+      },
+      completeOrder: {
+        enabled: false,
+        categoryIds: [],
+      },
+    });
     assert((await catalog.get()).data().expiresAt.isEqual(before.parent.expiresAt));
     for (const [key, value] of Object.entries(identity)) {
       assert.deepEqual((await catalog.get()).data()[key], value);

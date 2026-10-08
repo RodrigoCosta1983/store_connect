@@ -6,7 +6,17 @@ class PublicCatalogScreen extends StatefulWidget {
     super.key,
     required this.publicSlug,
     required this.publicToken,
-  });
+  }) : previewData = null;
+
+  const PublicCatalogScreen.preview({
+    super.key,
+    required Map<String, dynamic> data,
+  }) : previewData = data,
+       publicSlug = '',
+       publicToken = '';
+
+  final Map<String, dynamic>? previewData;
+  bool get isPreview => previewData != null;
 
   final String publicSlug;
   final String publicToken;
@@ -30,6 +40,9 @@ class _PublicCatalogScreenState
   List<Map<String, dynamic>> _products =
       <Map<String, dynamic>>[];
 
+  List<Map<String, dynamic>> _dynamicSections =
+      <Map<String, dynamic>>[];
+
   Map<String, int> _selectedQuantities =
       <String, int>{};
 
@@ -42,6 +55,10 @@ class _PublicCatalogScreenState
 
   bool _isSelectionMode = false;
   bool _isEnteringSelectionMode = false;
+  final OverlayPortalController _selectionHintController =
+      OverlayPortalController();
+  final LayerLink _selectionButtonLink = LayerLink();
+  bool _selectionHintShown = false;
 
   final TextEditingController _customerNameController =
       TextEditingController();
@@ -54,13 +71,25 @@ class _PublicCatalogScreenState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadCatalog();
+    final draft = widget.previewData;
+    if (draft != null) {
+      _store = _toStringDynamicMap(draft['store']);
+      _catalog = _toStringDynamicMap(draft['catalog']);
+      _products = (draft['products'] as List).whereType<Map>()
+          .map((product) => Map<String, dynamic>.from(product)).toList();
+      _dynamicSections = _parsePublicDynamicSections(draft['dynamicSections']);
+      _availableProducts = _allSelectableProducts().length;
+      _isLoading = false;
+    } else {
+      _loadCatalog();
+    }
   }
 
   @override
   void didChangeAppLifecycleState(
     AppLifecycleState state,
   ) {
+    if (widget.isPreview) return;
     if (state == AppLifecycleState.resumed) {
       if (_refreshOnResumeArmed) {
         _refreshOnResumeArmed = false;
@@ -116,6 +145,10 @@ class _PublicCatalogScreenState
   }
 
   Future<void> _startSelectionMode() async {
+    if (widget.isPreview) return;
+    if (_selectionHintController.isShowing) {
+      _selectionHintController.hide();
+    }
     if (
       !mounted ||
       _isSelectionMode ||
@@ -180,6 +213,77 @@ class _PublicCatalogScreenState
     }
   }
 
+  Widget _buildSelectionButton(bool isMobileViewport) {
+    if (isMobileViewport && !_selectionHintShown) {
+      _selectionHintShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_isSelectionMode && !_isEnteringSelectionMode &&
+            MediaQuery.sizeOf(context).width < 600) {
+          _selectionHintController.show();
+        }
+      });
+    }
+
+    return OverlayPortal(
+      controller: _selectionHintController,
+      overlayChildBuilder: (context) {
+        final width = MediaQuery.sizeOf(context).width;
+        if (width >= 600 || _isSelectionMode || _isEnteringSelectionMode) {
+          return const SizedBox.shrink();
+        }
+        return Positioned(
+          left: 0,
+          top: 0,
+          width: width < 312 ? width - 32 : 280,
+          child: CompositedTransformFollower(
+            link: _selectionButtonLink,
+            showWhenUnlinked: false,
+            targetAnchor: Alignment.bottomRight,
+            followerAnchor: Alignment.topRight,
+            offset: const Offset(0, 4),
+            child: Material(
+              elevation: 6,
+              borderRadius: BorderRadius.circular(12),
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Align(
+                      alignment: Alignment.centerRight,
+                      child: Icon(Icons.arrow_upward, size: 20),
+                    ),
+                    Text(
+                      'Selecionar produtos',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _selectionHintController.hide,
+                        child: const Text('Entendi'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      child: CompositedTransformTarget(
+        link: _selectionButtonLink,
+        child: IconButton(
+          onPressed: _isManualRefreshInProgress ? null : _startSelectionMode,
+          tooltip: 'Selecionar produtos',
+          icon: const Icon(Icons.check_circle_outline),
+        ),
+      ),
+    );
+  }
+
   void _cancelSelectionMode() {
     if (
       !mounted ||
@@ -224,12 +328,167 @@ class _PublicCatalogScreenState
     return availableRaw.floor();
   }
 
+  static const Map<String, String>
+      _publicDynamicSectionTitles = <String, String>{
+    'suggestions': 'Sugestões para você',
+    'offers': 'Ofertas',
+    'completeOrder': 'Complete seu pedido',
+  };
+
+  List<Map<String, dynamic>> _parsePublicDynamicSections(
+    dynamic rawSections,
+  ) {
+    if (rawSections is! List) {
+      return <Map<String, dynamic>>[];
+    }
+
+    final parsedSections =
+        <Map<String, dynamic>>[];
+
+    final seenSectionIds =
+        <String>{};
+
+    for (final rawSection in rawSections) {
+      if (rawSection is! Map) {
+        continue;
+      }
+
+      final section =
+          Map<String, dynamic>.from(
+        rawSection,
+      );
+
+      final sectionId =
+          section['id']?.toString().trim() ?? '';
+
+      final sectionTitle =
+          _publicDynamicSectionTitles[sectionId];
+
+      if (
+        sectionTitle == null ||
+        !seenSectionIds.add(sectionId)
+      ) {
+        continue;
+      }
+
+      final rawProducts =
+          section['products'];
+
+      if (rawProducts is! List) {
+        continue;
+      }
+
+      final products =
+          <Map<String, dynamic>>[];
+
+      final seenProductIds =
+          <String>{};
+
+      for (final rawProduct in rawProducts) {
+        if (rawProduct is! Map) {
+          continue;
+        }
+
+        final product =
+            Map<String, dynamic>.from(
+          rawProduct,
+        );
+
+        final productId =
+            _selectionProductId(product);
+
+        if (
+          productId.isEmpty ||
+          _selectionAvailableQuantity(product) <= 0 ||
+          !seenProductIds.add(productId)
+        ) {
+          continue;
+        }
+
+        products.add(product);
+      }
+
+      if (products.isEmpty) {
+        continue;
+      }
+
+      parsedSections.add(
+        <String, dynamic>{
+          'id': sectionId,
+          'title': sectionTitle,
+          'products': products,
+        },
+      );
+    }
+
+    return parsedSections;
+  }
+
+  List<Map<String, dynamic>> _allSelectableProducts({
+    List<Map<String, dynamic>>? mainProducts,
+    List<Map<String, dynamic>>? dynamicSections,
+  }) {
+    final allProducts =
+        <Map<String, dynamic>>[];
+
+    final seenProductIds =
+        <String>{};
+
+    void appendProduct(
+      Map<String, dynamic> product,
+    ) {
+      final productId =
+          _selectionProductId(product);
+
+      if (
+        productId.isEmpty ||
+        !seenProductIds.add(productId)
+      ) {
+        return;
+      }
+
+      allProducts.add(product);
+    }
+
+    for (
+      final product
+      in mainProducts ?? _products
+    ) {
+      appendProduct(product);
+    }
+
+    for (
+      final section
+      in dynamicSections ?? _dynamicSections
+    ) {
+      final rawProducts =
+          section['products'];
+
+      if (rawProducts is! List) {
+        continue;
+      }
+
+      for (
+        final rawProduct
+        in rawProducts.whereType<Map>()
+      ) {
+        appendProduct(
+          Map<String, dynamic>.from(
+            rawProduct,
+          ),
+        );
+      }
+    }
+
+    return allProducts;
+  }
+
   List<Map<String, dynamic>>
       _selectedProductsForSummary() {
     final selectedProducts =
         <Map<String, dynamic>>[];
 
-    for (final product in _products) {
+    for (final product in _allSelectableProducts()) {
       final productId =
           _selectionProductId(product);
 
@@ -538,7 +797,10 @@ class _PublicCatalogScreenState
                           ),
                     ),
                     const Spacer(),
-                    Text(
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
                       _formatPrice(
                         totalValue,
                       ),
@@ -549,6 +811,8 @@ class _PublicCatalogScreenState
                             fontWeight:
                                 FontWeight.w700,
                           ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1000,6 +1264,7 @@ class _PublicCatalogScreenState
   Future<bool> _loadCatalog({
     bool showLoading = true,
   }) async {
+    if (widget.isPreview) return false;
     if (
       !mounted ||
       _isCatalogRequestInFlight ||
@@ -1083,9 +1348,20 @@ class _PublicCatalogScreenState
               )
               .toList(growable: false);
 
+      final dynamicSections =
+          _parsePublicDynamicSections(
+        data['dynamicSections'],
+      );
+
+      final selectableProducts =
+          _allSelectableProducts(
+        mainProducts: products,
+        dynamicSections: dynamicSections,
+      );
+
       final reconciledSelectedQuantities =
           _reconcileSelectedQuantities(
-        products,
+        selectableProducts,
       );
 
       if (!mounted) {
@@ -1096,9 +1372,11 @@ class _PublicCatalogScreenState
         _store = store;
         _catalog = catalog;
         _products = products;
+        _dynamicSections = dynamicSections;
         _selectedQuantities =
             reconciledSelectedQuantities;
-        _availableProducts = products.length;
+        _availableProducts =
+            selectableProducts.length;
         _isLoading = false;
         _errorMessage = null;
       });
@@ -1298,8 +1576,29 @@ class _PublicCatalogScreenState
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F8),
+      appBar: widget.isPreview ? AppBar(
+        automaticallyImplyLeading: false,
+        toolbarHeight: 96,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Modo de pré-visualização', softWrap: true),
+            Text('Este catálogo ainda não foi publicado.',
+                style: TextStyle(fontSize: 14), softWrap: true),
+          ],
+        ),
+      ) : null,
       bottomNavigationBar:
-          _isSelectionMode &&
+          widget.isPreview ? SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: FilledButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Voltar e editar'),
+              ),
+            ),
+          ) : _isSelectionMode &&
                   isMobileViewport &&
                   _selectedQuantities.isNotEmpty
               ? SafeArea(
@@ -1412,6 +1711,7 @@ class _PublicCatalogScreenState
                                               .titleMedium,
                                         ),
                                       ),
+                                      if (!widget.isPreview) ...[
                                       const SizedBox(width: 8),
                                       if (_isManualRefreshInProgress)
                                         const SizedBox(
@@ -1491,18 +1791,8 @@ class _PublicCatalogScreenState
                                             'Cancelar',
                                           ),
                                         )
-                                      else if (compactRefresh)
-                                        IconButton(
-                                          onPressed:
-                                              _isManualRefreshInProgress
-                                                  ? null
-                                                  : _startSelectionMode,
-                                          tooltip:
-                                              'Selecionar produtos',
-                                          icon: const Icon(
-                                            Icons.check_circle_outline,
-                                          ),
-                                        )
+                                      else if (isMobileViewport || compactRefresh)
+                                        _buildSelectionButton(isMobileViewport)
                                       else
                                         TextButton.icon(
                                           onPressed:
@@ -1517,6 +1807,7 @@ class _PublicCatalogScreenState
                                             'Selecionar produtos',
                                           ),
                                         ),
+                                      ],
                                     ],
                                   );
                                 },
@@ -1560,6 +1851,7 @@ class _PublicCatalogScreenState
                   context,
                   horizontalPadding,
                 ),
+                ..._buildDynamicSectionSlivers(context, horizontalPadding),
                 const SliverToBoxAdapter(
                   child: SizedBox(height: 24),
                 ),
@@ -1571,11 +1863,52 @@ class _PublicCatalogScreenState
     );
   }
 
-  Widget _buildProductsSliver(
+  List<Widget> _buildDynamicSectionSlivers(
     BuildContext context,
     double horizontalPadding,
   ) {
-    if (_products.isEmpty) {
+    final slivers = <Widget>[];
+    for (final sectionId in _publicDynamicSectionTitles.keys) {
+      for (final section in _dynamicSections) {
+        if (section['id'] != sectionId) continue;
+        final products = section['products'] as List<Map<String, dynamic>>;
+        if (products.isEmpty) continue;
+        slivers.add(SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding, 32, horizontalPadding, 18,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1100),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    _publicDynamicSectionTitles[sectionId]!,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ));
+        slivers.add(_buildProductsSliver(
+          context, horizontalPadding, products: products,
+        ));
+      }
+    }
+    return slivers;
+  }
+
+  Widget _buildProductsSliver(
+    BuildContext context,
+    double horizontalPadding, {
+    List<Map<String, dynamic>>? products,
+  }) {
+    final displayedProducts = products ?? _products;
+    if (displayedProducts.isEmpty) {
       return SliverToBoxAdapter(
         child: Padding(
           padding: EdgeInsets.symmetric(
@@ -1660,7 +1993,7 @@ class _PublicCatalogScreenState
                 : calculatedColumns;
 
         final rowCount =
-            (_products.length / columns).ceil();
+            (displayedProducts.length / columns).ceil();
 
         return SliverList(
           delegate: SliverChildBuilderDelegate(
@@ -1672,8 +2005,8 @@ class _PublicCatalogScreenState
                   startIndex + columns;
 
               final endIndex =
-                  calculatedEnd > _products.length
-                      ? _products.length
+                  calculatedEnd > displayedProducts.length
+                      ? displayedProducts.length
                       : calculatedEnd;
 
               final isLastRow =
@@ -1707,7 +2040,7 @@ class _PublicCatalogScreenState
                               height: cardHeight,
                               child: _buildProductCard(
                                 context,
-                                _products[productIndex],
+                                displayedProducts[productIndex],
                                 isMobile: isMobile,
                               ),
                             ),
@@ -1793,7 +2126,7 @@ class _PublicCatalogScreenState
                       borderRadius:
                           BorderRadius.circular(12),
                       child: SizedBox(
-                        width: 110,
+                        width: MediaQuery.sizeOf(context).width <= 360 ? 90 : 110,
                         height: 110,
                         child: _buildProductImage(
                           imageUrl,
@@ -1827,7 +2160,8 @@ class _PublicCatalogScreenState
                             ),
                             const SizedBox(height: 4),
                           ],
-                          Text(
+                          Flexible(
+                            child: Text(
                             name,
                             maxLines: 2,
                             overflow:
@@ -1839,6 +2173,7 @@ class _PublicCatalogScreenState
                                   fontWeight:
                                       FontWeight.w600,
                                 ),
+                            ),
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -1892,8 +2227,11 @@ class _PublicCatalogScreenState
                 ),
                 child: Row(
                   children: [
-                    Text(
+                    Expanded(
+                      child: Text(
                       'Quantidade',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium
@@ -1901,8 +2239,8 @@ class _PublicCatalogScreenState
                             fontWeight:
                                 FontWeight.w600,
                           ),
+                      ),
                     ),
-                    const Spacer(),
                     IconButton(
                       onPressed:
                           canDecrement
