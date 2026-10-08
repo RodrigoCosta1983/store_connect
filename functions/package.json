@@ -2,6 +2,10 @@
     "name": "functions",
     "description": "Cloud Functions for Firebase",
     "scripts": {
+        "test:restore:r1g": "firebase emulators:exec --config ../firebase.json --project demo-store-connect-restore --only firestore \"node tests/restore/runRestoreFlowTests.js\"",
+        "test:restore:r1f": "firebase emulators:exec --config ../firebase.json --project demo-store-connect-restore --only firestore \"node tests/restore/runRestoreResultTests.js\"",
+        "test:restore:r1d": "firebase emulators:exec --config ../firebase.json --project demo-store-connect-restore --only firestore \"node tests/restore/runRestoreExistingStoreTests.js\"",
+        "test:restore:r1c": "firebase emulators:exec --config ../firebase.json --project demo-store-connect-restore --only firestore \"node tests/restore/runRestoreEmulatorTests.js\"",
         "serve": "firebase emulators:start --only functions",
         "shell": "firebase functions:shell",
         "start": "npm run shell",

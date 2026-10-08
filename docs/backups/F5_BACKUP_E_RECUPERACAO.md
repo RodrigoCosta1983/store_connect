@@ -2788,3 +2788,237 @@ Decisão de 09/09/2026:
 A pausa de F5.7 → F5.13 não cancela essas etapas.
 Elas permanecem no roadmap de recuperação e Disaster Recovery e serão retomadas posteriormente.
 
+
+=====================================================================
+
+# BKP-R1A — parser/validador v1
+
+Implementado e validado localmente em 01/10/2026. Esta etapa recebe bytes
+gzip e metadata técnica injetados e valida somente o formato
+Store&Connect snapshotVersion=1. NÃO é restore operacional: não reconstrói
+objetos SDK, não decide destino, não remapeia referências e não escreve dados.
+Não há Firebase initialization, Firestore, Storage, rede, filesystem,
+callable, Scheduler, endpoint ou acesso dependente do ambiente de produção
+nos módulos. Importá-los não inicia I/O, timers ou servidores.
+
+## API e representação intermediária
+
+CommonJS, sem novas dependências:
+
+- `functions/backups/storeSnapshotContract.js`: versão, nomes das cinco
+  coleções, sete settings, limites default e faixa de segundos Timestamp.
+- `functions/backups/storeSnapshotParser.js`:
+  `parseStoreSnapshotV1(gzipBytes, {expectedMetadata = {}, limits = {}} = {})`.
+  Entrada Buffer ou Uint8Array; saída síncrona
+  `{snapshot, technicalMetadata, inventory}`.
+- `StoreSnapshotValidationError`: `code` e `message` contêm somente um código
+  técnico estável, sem payload, paths ou mensagens internas do descompressor.
+
+Os mapas retornados têm prototype null; arrays permanecem arrays. Os quatro
+marcadores são preservados como representação intermediária, sem conversão
+para Date, milliseconds, Buffer permanente ou objetos Firebase SDK.
+`technicalMetadata` contém checksumSha256, compressedSizeBytes,
+originalSizeBytes, snapshotVersion, storeId e counts. `inventory` contém IDs
+por coleção, bytes JSON por envelope, totalDocuments, contagens dos tipos
+especiais e paths de documentReferences (sem resolver sua existência).
+Contagens de marcadores incluem metadata e settings.
+
+`expectedMetadata` aceita somente checksumSha256 (64 hex minúsculos),
+compressedSizeBytes, originalSizeBytes, snapshotVersion (número) e storeId.
+Cada valor fornecido é comparado estritamente; ausentes não são presumidos.
+Metadata de Storage com números em strings exige adaptação explícita futura.
+SHA-256 é calculado sobre os bytes gzip originais, não sobre o JSON.
+
+Raiz, metadata interna, counts, settings, collections e envelopes têm shape
+exato do produtor atual. IDs são preservados e únicos dentro de cada coleção.
+As cinco coleções lógicas são products, customers, categories, sales e
+cashFlow; nenhuma responsabilidade de mapeamento físico está nesta fase.
+Os sete settings são name, phone, logoUrl, lowStockThreshold, pixQrCodePath,
+pixQrCodeUrl e pixQrCodeUpdatedAt. As cinco configurações textuais aceitam
+string ou null; lowStockThreshold aceita número finito ou null.
+`pixQrCodeUpdatedAt` permanece compatível com `value || null` do produtor:
+aceita valores JSON codificados válidos, sem inventar exclusividade Timestamp.
+Metadata exige storeId válido, createdAt Timestamp v1, createdBy,
+createdByRole e type strings não vazias, reason string ou null e counts
+inteiros seguros não negativos que correspondam aos comprimentos reais.
+
+## Limites do parser (guardrails do restore)
+
+| Limite | Default |
+| --- | --- |
+| MAX_COMPRESSED_BYTES | 32 * 1024 * 1024 |
+| MAX_ORIGINAL_BYTES | 128 * 1024 * 1024 |
+| MAX_EXPANSION_RATIO | 50 |
+| MAX_DOCUMENTS_TOTAL | 100000 |
+| MAX_DOCUMENTS_PER_COLLECTION | 100000 |
+| MAX_DOCUMENT_JSON_BYTES | 1 * 1024 * 1024 |
+| MAX_DEPTH | 20 |
+
+Limites centralizados e injetáveis: inteiros seguros positivos; a razão de
+expansão aceita número finito positivo, inclusive fracionário. Chaves de
+configuração desconhecidas são rejeitadas. Estes NÃO são novos limites do
+produtor de backup. O gzip usa `gunzipSync` com `maxOutputLength`, impondo
+limite durante a expansão; após descompactar, confere novamente bytes e
+originalBytes / compressedBytes. Entrada comprimida vazia é rejeitada.
+
+Profundidade conta somente containers: raiz objeto = 1; objeto/array filho
+acrescenta 1; primitivos não acrescentam. Assim, collections = 2, array de
+coleção = 3, envelope = 4 e data = 5. Limite exato passa; limite + 1 falha.
+Scanner e cópia segura usam pilhas explícitas, sem depender da pilha recursiva.
+O guardrail por documento usa bytes UTF-8 de `JSON.stringify({id, data})`
+do envelope validado. NÃO reproduz a contabilidade interna de bytes Firestore.
+
+## Política v1 e segurança estrutural
+
+Após gunzip: UTF-8 estrito, scanner JSON com gramática/strings escapadas,
+rejeição de chaves duplicadas (inclusive equivalentes por escape Unicode),
+JSON.parse e validação de estrutura/tipos. Não há dependência externa nem
+regex ingênua para detectar duplicação. Número não finito, inclusive o
+resultado de `1e400`, é rejeitado. __proto__, prototype e constructor são
+bloqueados em mapas, inclusive dentro de arrays. Chaves nunca se tornam
+código, comandos, FieldValue ou caminhos operacionais.
+
+Se houver __storeConnectType, só timestamp, geoPoint, bytes e
+documentReference são reconhecidos. Shape deve ser EXATO: desconhecido,
+campo ausente ou campo extra rejeita o snapshot. Timestamp exige seconds
+inteiro seguro em [-62135596800, 253402300799] e nanoseconds inteiro em
+[0, 999999999]. GeoPoint exige latitude/longitude finitas em [-90, 90] e
+[-180, 180]. Bytes exige Base64 estrito com round-trip canônico; vazio passa.
+DocumentReference valida somente path não vazio, sem NUL/segmentos vazios,
+sem . ou .., com número par de segmentos; não cria db.doc(), não resolve
+projeto/database e não decide transformação A -> B.
+
+Limitação conhecida: um mapa comum perfeitamente igual a um marcador v1 é
+indistinguível do marcador real. É tratado como marcador, sem heurísticas
+ou reinterpretação silenciosa. V1 não recupera NaN/Infinity já convertidos
+em null por JSON.stringify, arredondamentos numéricos anteriores, ausência
+original dos settings, identidade projeto/database de referências, mídia
+física, subcoleções ou domínios fora das cinco coleções. Validação técnica
+não garante consistência transacional, integridade de negócio ou recuperação
+completa da loja. Não há migração automática de versão.
+
+Códigos públicos incluem INVALID_INPUT, COMPRESSED_SIZE_LIMIT,
+CHECKSUM_MISMATCH, COMPRESSED_SIZE_MISMATCH, ORIGINAL_SIZE_MISMATCH,
+SNAPSHOT_VERSION_MISMATCH, STORE_ID_MISMATCH, GZIP_INVALID,
+ORIGINAL_SIZE_LIMIT, EXPANSION_RATIO_LIMIT, UTF8_INVALID, JSON_INVALID,
+JSON_DUPLICATE_KEY, UNSUPPORTED_VERSION, INVALID_ROOT, INVALID_METADATA,
+INVALID_SETTINGS, INVALID_COLLECTIONS, INVALID_DOCUMENT,
+DUPLICATE_DOCUMENT_ID, DOCUMENTS_TOTAL_LIMIT,
+DOCUMENTS_PER_COLLECTION_LIMIT, DOCUMENT_SIZE_LIMIT, DEPTH_LIMIT,
+INVALID_NUMBER, INVALID_TYPE_MARKER, UNKNOWN_TYPE_MARKER,
+INVALID_TIMESTAMP, INVALID_GEOPOINT, INVALID_BYTES,
+INVALID_DOCUMENT_REFERENCE, COUNTS_MISMATCH e DANGEROUS_KEY.
+
+## Validação local e etapa posterior
+
+Runner isolado: `node functions/tests/restore/runRestoreTests.js`.
+Não foi conectado aos runners de catálogo/retenção ou package.json.
+Resultado: **130 testes, 130 passed, 0 failed**. Checks `node --check` dos
+quatro arquivos JS aprovados. Cobertura inclui snapshots vazio/completo,
+quatro tipos e seus limites, null/mapas/arrays, profundidade 20/21, limites
+injetados, checksum/tamanhos, gzip limitado durante expansão, UTF-8,
+duplicação/escapes JSON, counts, IDs, prototype pollution e números extremos.
+Teste explícito de imports bloqueia dependências fora da allow-list pura,
+timers, escrita de arquivo, conexão/listen e fetch; confere env e handles.
+Nenhum Emulator, Firebase CLI, rede, deploy ou teste de produção foi usado.
+
+BKP-R1B — Planner puro de dry run e transformação permanece posterior.
+Não foi implementado nem executado nesta etapa.
+
+=====================================================================
+
+# APÊNDICE BKP-R1B — planner puro de dry run e transformação A→B
+
+Implementado localmente em 01/10/2026. Não é restore operacional e não
+executa nenhuma escrita. BKP-R1A permanece intacto. Nenhum Firebase, SDK,
+Firestore, Storage, rede, filesystem, timer, callable ou Scheduler é usado
+pelos módulos; somente contratos locais e crypto puro do Node.
+
+API CommonJS síncrona:
+`buildStoreRestorePlan({snapshot, sourceStoreId, targetStoreId, targetState, mode, policy})`.
+`snapshot` é `parseStoreSnapshotV1(...).snapshot`, já validado no R1A;
+`targetState` é injetado, com storeSettings e exatamente as cinco coleções
+lógicas em envelopes `{id,data}`. Settings do destino aceitam apenas o
+subset autorizado, podendo estar ausentes. IDs são únicos por coleção.
+Invariantes mínimas e valores JSON/marcadores do destino são conferidos.
+Erros estruturais são StoreRestoreValidationError com code/message
+sanitizados. Não há leitura de banco, autorização ou executor.
+
+MODE é obrigatório, sem default. MERGE_A1 cria ausentes, sobrescreve
+integralmente documentos diferentes de mesmo ID, marca iguais unchanged e
+preserva extras do destino. REPLACE tem as mesmas três primeiras ações,
+mas planeja delete para extras. DELETE é somente uma intenção no plano.
+MERGE_A2 não foi implementado. REPLACE abrange somente cinco coleções,
+nunca substitui o documento raiz stores/{target}.
+
+`transformStoreSnapshot({snapshot, sourceStoreId, targetStoreId, policy})`
+produz desiredState, warnings e blockers sem mutar snapshot ou metadata.
+Política fechada: ausência equivale a `{version:1}`; qualquer outra chave,
+versão ou exceção é rejeitada. Não há aprovação operacional nesta política.
+A identidade metadata.storeId deve corresponder ao sourceStoreId e permanece
+na origem. Same-store preserva referências válidas e sales.storeId.
+Cross-store transforma somente sales.storeId igual à origem; valor já igual
+ao destino é registrado; terceiro valor ou tipo incorreto gera blocker;
+campo ausente não é inventado.
+
+DocumentReference v1 é percorrida recursivamente. Somente segmentos
+stores/{source}/products, customers, categories, sales e cash_flow são
+remapeados para target. Referência ao root stores/{source} é blocker;
+namespace não autorizado (inclusive catalogs, catalogRequests e auditLogs)
+é blocker; users, outras stores e qualquer referência externa também.
+Strings comuns nunca sofrem substituição textual. Arrays de negócio,
+IDs relativos, lotes e parcelas permanecem ordenados e inalterados.
+Timestamp, GeoPoint e Bytes mantêm a representação intermediária v1.
+
+Cross-store: logoUrl, pixQrCodePath, pixQrCodeUrl e imageUrl de products e
+categories, quando strings não vazias, geram blockers conservadores.
+Não se presume segurança por formato da URL. sales.fiscal presente gera
+FISCAL_HISTORY_REQUIRES_POLICY, inclusive null. Mídia, QR e fiscal não são
+reescritos, neutralizados, copiados, apagados ou reemitidos. Campos exatos
+createdBy, updatedBy, archivedBy e syncedBy encontrados estruturalmente
+nos dados geram UID_HISTORY_PRESENT como warning, sem remapear UID.
+
+Issues têm somente code, collection/documentId opcionais e path estrutural
+JSON Pointer; não contêm valores de cliente nem o path da referência como
+valor. Códigos incluem CROSS_STORE_REFERENCE_REMAPPED,
+SOURCE_STORE_ROOT_REFERENCE, UNSUPPORTED_SOURCE_NAMESPACE,
+EXTERNAL_DOCUMENT_REFERENCE, SALES_STORE_ID_CONFLICT,
+SALES_STORE_ID_REMAPPED, SALES_STORE_ID_ALREADY_TARGET,
+SOURCE_SCOPED_MEDIA_REFERENCE, PIX_REFERENCE_REQUIRES_POLICY,
+FISCAL_HISTORY_REQUIRES_POLICY, UID_HISTORY_PRESENT e V1_NORMALIZED_NULL.
+Blockers impediriam execução futura sem nova política/aprovação, mas não
+impedem retornar o plano informativo estruturalmente válido.
+
+Settings: somente name, phone, logoUrl, lowStockThreshold, pixQrCodePath,
+pixQrCodeUrl e pixQrCodeUpdatedAt. O plano contém set/unchanged e
+v1NormalizedNulls:true: null é valor desejado e v1 não distingue ausência
+original de null. Estratégia ROOT_FIELD_UPDATES para futuro executor;
+ownerId, subscription, Asaas, perfilFiscal, createdAt, permissions e demais
+campos raiz não entram no plano. Dados fora desse contrato são rejeitados.
+
+Plano v1 e transformação v1: source/target, crossStore, snapshotVersion,
+mode, policy, collections, settings, plannedCounts, warnings, blockers,
+baselineHash, desiredStateHash, planHash e desiredState. Arrays de ações
+contêm somente IDs; payload necessário fica em desiredState. Counts por
+coleção/totais correspondem às ações; settings têm counts separados.
+
+Hashes SHA-256 hex minúsculos usam JSON canônico local: chaves ordenadas,
+documentos por ID, arrays internos preservados. baselineHash cobre o estado
+autorizado do destino; desiredStateHash cobre o snapshot transformado no
+escopo (extras preservados são ações, não incorporados ao snapshot desejado).
+planHash cobre o plano inteiro, exceto seu próprio campo, incluindo modo,
+identidades, política normalizada e hashes. Ordem de entrada e ordem de
+chaves não alteram resultado. Política default e v1 explícita são equivalentes.
+Não há hash baseado em relógio, ambiente ou origem de rede.
+
+Validação: checks Node dos cinco JS; runner isolado R1A + planner + transform;
+git diff --check. Fixtures sintéticas, testes de determinismo, diff, conflitos,
+marcadores, dependências e pureza de import/invocação. Nenhuma conexão aos
+runners catálogo/retenção, alteração de packages ou execução Emulator.
+
+Próximo passo somente: BKP-R1C — Desserialização SDK e materialização
+SOMENTE Emulator. R1C não foi implementado ou executado nesta etapa.
+
+Resultado local BKP-R1B: 196 testes passaram, zero falhas (130 R1A,
+36 planner, 30 transform). Conteúdo fiscal permanece integral, inclusive
+DocumentReferences internas: o blocker fiscal prevalece sobre o remapeamento.
