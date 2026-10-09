@@ -9,6 +9,7 @@ const admin =
 
 const axios =
   require("axios");
+const {asaasApiKey, getAsaasApiKey} = require("./asaasSecrets");
 
 
 if (!admin.apps.length) {
@@ -102,16 +103,7 @@ function getTodaySaoPaulo() {
 function getAsaasHeaders() {
 
   const apiKey =
-    process.env
-      .ASAAS_API_KEY;
-
-
-  if (!apiKey) {
-
-    throw new Error(
-      "ASAAS_API_KEY ausente."
-    );
-  }
+    getAsaasApiKey();
 
 
   return {
@@ -1052,6 +1044,7 @@ exports.runAsaasBillingReconciliation =
 exports.reconcileAsaasBilling =
   onSchedule(
     {
+      secrets: [asaasApiKey],
       schedule:
         "30 1 * * *",
 

@@ -2,6 +2,7 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const axios = require("axios");
+const {asaasApiKey, getAsaasApiKey} = require("./asaasSecrets");
 
 const ASAAS_ENV = process.env.ASAAS_ENV || "sandbox";
 const ASAAS_URL = ASAAS_ENV === "production"
@@ -13,7 +14,7 @@ const ASAAS_URL = ASAAS_ENV === "production"
    * --- PORTAL DO CLIENTE (ASAAS) ---
    * --- FUNÇÃO PARA PEGAR O LINK DO PORTAL DO CLIENTE (ASAAS) ---
    */
-  exports.getAsaasPortalUrl = onCall(async (request) => {
+  exports.getAsaasPortalUrl = onCall({secrets: [asaasApiKey]}, async (request) => {
     if (!request.auth) {
       throw new HttpsError(
         "unauthenticated",
@@ -35,7 +36,7 @@ const ASAAS_URL = ASAAS_ENV === "production"
     }
 
     const ASAAS_API_KEY =
-      process.env.ASAAS_API_KEY;
+      getAsaasApiKey();
 
     const db =
       admin.firestore();
@@ -252,11 +253,12 @@ const ASAAS_URL = ASAAS_ENV === "production"
    * --- LISTAR FATURAS DO ASAAS ---
    * Busca o histórico de cobranças de uma loja para exibir no app.
    */
-  exports.listAsaasInvoices = onCall(async (request) => {
+  exports.listAsaasInvoices = onCall({secrets: [asaasApiKey]}, async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "O usuário deve estar logado.");
     }
 
+    const ASAAS_API_KEY = getAsaasApiKey();
     const userId = request.auth.uid;
 
     const storeId = request.data.storeId;
@@ -363,8 +365,6 @@ const ASAAS_URL = ASAAS_ENV === "production"
           "Loja sem assinatura financeira oficial."
         );
       }
-
-      const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
 
       // Busca somente cobranças da assinatura oficial da loja.
       //

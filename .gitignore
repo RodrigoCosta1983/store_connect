@@ -47,6 +47,7 @@ app.*.map.json
 
 # Firebase CLI local cache
 /.firebase/
+/deploy-*-debug.txt
 
 # Dependencies and generated output at any depth
 node_modules/

@@ -14,6 +14,10 @@ const axios = require("axios");
 const functions = require("firebase-functions");
 
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const {
+  asaasApiKey,
+  getAsaasApiKey,
+} = require("./financeiro/asaasSecrets");
 
 
 
@@ -27,6 +31,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 exports.syncAsaasSubscriptionPrices =
   onSchedule(
     {
+      secrets: [asaasApiKey],
       schedule:
         "0 3 * * *",
 
@@ -95,7 +100,7 @@ const {
  */
 
  exports.createAsaasSubscription = onCall(
-   { timeoutSeconds: 120 },
+   { timeoutSeconds: 120, secrets: [asaasApiKey] },
    async (request) => {
      console.log(
        "\n\n╔════════════════════════════════════════════════════════════╗"
@@ -107,8 +112,6 @@ const {
        "╚════════════════════════════════════════════════════════════╝"
      );
 
-     const ASAAS_API_KEY = process.env.ASAAS_API_KEY;
-
      if (!request.auth) {
        throw new HttpsError(
          "unauthenticated",
@@ -116,6 +119,7 @@ const {
        );
      }
 
+     const ASAAS_API_KEY = getAsaasApiKey();
      const userId = request.auth.uid;
 
      const headers = {
@@ -2427,7 +2431,7 @@ exports.scheduledBackupRetention =
  * Atualiza a assinatura existente no Asaas.
  */
 exports.changeAsaasPlan = onCall(
-  { timeoutSeconds: 60 },
+  { timeoutSeconds: 60, secrets: [asaasApiKey] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError(
@@ -2436,6 +2440,7 @@ exports.changeAsaasPlan = onCall(
       );
     }
 
+    const ASAAS_API_KEY = getAsaasApiKey();
     const db = admin.firestore();
 
     const storeId = request.data.storeId;
@@ -2647,9 +2652,6 @@ exports.changeAsaasPlan = onCall(
 
     const selectedPlan =
       SUBSCRIPTION_PLANS[newPlan];
-
-    const ASAAS_API_KEY =
-      process.env.ASAAS_API_KEY;
 
     const headers = {
       access_token: ASAAS_API_KEY,

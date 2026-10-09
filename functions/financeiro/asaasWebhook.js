@@ -57,6 +57,7 @@
 const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const axios = require("axios");
+const {asaasApiKey, getAsaasApiKey} = require("./asaasSecrets");
 
 const {
   SUBSCRIPTION_PLANS,
@@ -274,6 +275,7 @@ async function getSubscriptionBillingState(
 // =============================================================================
 
 exports.asaasWebhook = onRequest(
+  {secrets: [asaasApiKey]},
   async (req, res) => {
 
     console.log(
@@ -296,6 +298,7 @@ exports.asaasWebhook = onRequest(
 
     try {
 
+      const ASAAS_API_KEY = getAsaasApiKey();
       const body =
         typeof req.body === "string"
           ? JSON.parse(req.body)
@@ -548,9 +551,6 @@ exports.asaasWebhook = onRequest(
         });
       }
 
-
-      const ASAAS_API_KEY =
-        process.env.ASAAS_API_KEY;
 
       const headers = {
         access_token:

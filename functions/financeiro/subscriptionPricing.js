@@ -76,6 +76,7 @@
 
 const admin = require("firebase-admin");
 const axios = require("axios");
+const {getAsaasApiKey} = require("./asaasSecrets");
 
 // =============================================================================
 // AMBIENTE ASAAS
@@ -150,13 +151,7 @@ function normalizeMoney(value) {
 
 function getAsaasHeaders() {
   const apiKey =
-      process.env.ASAAS_API_KEY;
-
-  if (!apiKey) {
-    throw new Error(
-        "ASAAS_API_KEY não configurada."
-    );
-  }
+      getAsaasApiKey();
 
   return {
     access_token: apiKey,
@@ -662,6 +657,7 @@ updatePendingPayments =
 SUBSCRIPTION_PRICE_POLICY
     .updatePendingPayments,
 } = {}) {
+getAsaasApiKey();
 const db =
 admin.firestore();
 
