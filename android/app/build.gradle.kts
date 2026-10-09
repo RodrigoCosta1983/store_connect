@@ -1,7 +1,6 @@
 // android/app/build.gradle.kts
 
 import java.util.Properties
-import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
@@ -10,11 +9,19 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val keyPropertiesFile = rootProject.file("android/key.properties")
+val keyPropertiesFile = rootProject.file("key.properties")
 val keyProperties = Properties()
-if (keyPropertiesFile.exists()) {
-    keyProperties.load(FileInputStream(keyPropertiesFile))
+if (!keyPropertiesFile.isFile) {
+    throw GradleException("Release signing configuration is missing.")
 }
+try {
+    keyPropertiesFile.inputStream().use { keyProperties.load(it) }
+} catch (_: Exception) {
+    throw GradleException("Release signing configuration could not be loaded.")
+}
+fun requiredSigningProperty(name: String): String =
+    keyProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: throw GradleException("Required release signing property is missing: $name")
 
 android {
     namespace = "com.storeeconnect.app"
@@ -32,10 +39,10 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = "storeeconnectkey"
-            keyPassword = "Sophie#3891"
-            storeFile = file("storeeconnect-release-key.jks")
-            storePassword = "Sophie#3891"
+            keyAlias = requiredSigningProperty("keyAlias")
+            keyPassword = requiredSigningProperty("keyPassword")
+            storeFile = file(requiredSigningProperty("storeFile"))
+            storePassword = requiredSigningProperty("storePassword")
         }
     }
 
