@@ -1,0 +1,354 @@
+A persistência já existe: cada envio válido cria uma solicitação em **`stores/{storeId}/catalogRequests/{requestId}`**, com snapshot dos itens e status inicial **`pending`**. O recebimento interno ainda não está implementado.
+
+Este relatório reapresenta os resultados da auditoria concluída sobre o HEAD `f0aec5d`. Não houve nova auditoria ou execução de testes. Os documentos reais do Firestore e a publicação em produção não foram consultados.
+
+**A. Estado Git confirmado**
+
+Na auditoria inicial e na conferência final:
+
+- Branch: `feat/f7-intelligent-catalog`.
+- HEAD: `f0aec5d`.
+- Working tree limpa.
+- Diff final vazio.
+
+O estado correspondia exatamente ao esperado.
+
+**B. Arquivos relevantes encontrados**
+
+| Arquivo | Responsabilidade |
+|---|---|
+| [functions/catalog/createCatalog.js](C:/Users/rodri/StudioProjects/store_connect/functions/catalog/createCatalog.js:1267) | Implementa `submitPublicCatalogSelection`, suas validações e a persistência. Também contém `listCatalogs`. |
+| [functions/index.js](C:/Users/rodri/StudioProjects/store_connect/functions/index.js:2113) | Exporta `submitPublicCatalogSelection`. |
+| [lib/screens/public/public_catalog_screen.dart](C:/Users/rodri/StudioProjects/store_connect/lib/screens/public/public_catalog_screen.dart:548) | Envia a seleção pública e trata confirmação e erros. |
+| [functions/tests/catalog/submitPublicCatalogSelection.emulator.test.js](C:/Users/rodri/StudioProjects/store_connect/functions/tests/catalog/submitPublicCatalogSelection.emulator.test.js:665) | Testa validações, schema, snapshot, atomicidade e limites. |
+| [test/public_catalog_submission_test.dart](C:/Users/rodri/StudioProjects/store_connect/test/public_catalog_submission_test.dart:103) | Testa a integração Flutter com chamadas Firebase simuladas. |
+| [lib/screens/management/catalogs_screen.dart](C:/Users/rodri/StudioProjects/store_connect/lib/screens/management/catalogs_screen.dart:24) | Tela interna que lista catálogos, sem leitura de solicitações. |
+| [lib/screens/sales/new_sale_screen.dart](C:/Users/rodri/StudioProjects/store_connect/lib/screens/sales/new_sale_screen.dart:710) | Contém o acesso à tela interna de catálogos. |
+| [functions/tests/catalog/runCatalogTests.js](C:/Users/rodri/StudioProjects/store_connect/functions/tests/catalog/runCatalogTests.js) | Descobre e executa os arquivos oficiais de teste do catálogo. |
+| [firebase.json](C:/Users/rodri/StudioProjects/store_connect/firebase.json) | Configura o Emulator, mas não aponta arquivo de regras Firestore. |
+
+Também foram lidos `AGENTS.md`, `docs/codex/CURRENT_WORK.md` e a documentação relevante em `docs/catalog/F7_CATALOGO_INTELIGENTE.md`.
+
+**Divergência documental encontrada:** os documentos ainda contêm registros anteriores à conclusão/publicação da F7.7, incluindo a afirmação de que o submit permanece fora de `functions/index.js`. O código atual já exporta a function. A divergência foi somente documentada.
+
+**C. Fluxo atual**
+
+```text
+Cliente público
+  ↓
+Envia:
+  publicSlug
+  publicToken
+  items[{productId, quantity}]
+  ↓
+submitPublicCatalogSelection
+  ↓
+Validação da entrada
+  ↓
+SHA-256 do publicToken
+  ↓
+Consulta catalogPublicTokens/{publicTokenHash}
+  ↓
+Resolve storeId e catalogId no servidor
+  ↓
+Valida loja, catálogo e pertencimento dos produtos
+  ↓
+Reconsulta os produtos atuais
+  ↓
+Valida disponibilidade e calcula snapshot/totais
+  ↓
+Batch atômico: solicitação + todos os itens
+  ↓
+Retorna confirmação e requestId
+```
+
+As verificações incluem:
+
+- Seleção entre 1 e 200 produtos.
+- `productId` não vazio, sem `/` e sem duplicatas.
+- Quantidade inteira segura e positiva.
+- Formato válido de slug e token.
+- Existência do índice público, da loja e do catálogo.
+- Correspondência do slug com a loja e do hash com o catálogo.
+- Assinatura da loja em `active`, `trial` ou `overdue`.
+- Catálogo com status `active`, expiração válida e ainda não atingida.
+- Produto pertencente ao catálogo.
+- Produto atual existente e não arquivado.
+- Estoque atual suficiente.
+- Nome não vazio.
+- Preço numérico, finito e não negativo.
+- Quantidades e cálculos monetários dentro dos limites de inteiros seguros.
+
+Os auxiliares diretamente utilizados são `normalizeString` e `hashPublicToken`, no mesmo arquivo. O submit não precisa descriptografar o token.
+
+Campos adicionais enviados pelo cliente não são incorporados ao snapshot. O navegador não determina loja, catálogo, nome, preço ou totais.
+
+Após o batch, a resposta contém exatamente:
+
+```text
+success
+requestId
+validatedItemCount
+totalUnits
+totalAmount
+```
+
+O Flutter exige `success: true` e `requestId` não vazio para considerar o envio confirmado. Depois disso, limpa a seleção e apresenta a mensagem de sucesso.
+
+**D. Estrutura exata persistida no Firestore**
+
+A [gravação atual](C:/Users/rodri/StudioProjects/store_connect/functions/catalog/createCatalog.js:1708) cria:
+
+```text
+stores                              collection
+└── {storeId}                       documento existente da loja
+    └── catalogRequests             collection de solicitações
+        └── {requestId}              documento novo, ID automático
+            ├── catalogId
+            ├── status: "pending"
+            ├── itemCount
+            ├── totalUnits
+            ├── totalAmount
+            ├── createdAt
+            ├── updatedAt
+            ├── source: "public_catalog"
+            └── items               subcollection
+                └── {itemId}        documento novo, ID automático
+                    ├── productId
+                    ├── name
+                    ├── quantity
+                    ├── price
+                    └── subtotal
+```
+
+Características dos IDs e vínculos:
+
+- `requestId`: gerado por `storeRef.collection("catalogRequests").doc()`.
+- `itemId`: gerado por `requestRef.collection("items").doc()`.
+- `itemId` não é o `productId`.
+- `storeId`: resolvido pelo índice do token; integra o caminho, mas não é repetido no documento.
+- `catalogId`: resolvido pelo índice do token e persistido como string no pai.
+- `productId`: validado no backend e persistido como string em cada item.
+- `requestId` e `itemId` não são repetidos como campos dos documentos.
+- Não há campos `DocumentReference`.
+
+A solicitação fica sob a loja, em coleção irmã de `catalogs` e `products`. Não fica dentro de `catalogs/{catalogId}`.
+
+O submit lê estas estruturas já existentes:
+
+```text
+catalogPublicTokens/{publicTokenHash}
+stores/{storeId}
+stores/{storeId}/catalogs/{catalogId}
+stores/{storeId}/catalogs/{catalogId}/items/{catalogItemId}
+stores/{storeId}/products/{productId}
+```
+
+Não cria documento em `sales`, vínculo com `customers`, vínculo reverso no catálogo ou outra subcoleção além de `items` da solicitação.
+
+**E. Campos persistidos e finalidade**
+
+Documento pai:
+
+| Campo | Conteúdo e finalidade |
+|---|---|
+| `catalogId` | ID do catálogo de origem, resolvido no servidor. |
+| `status` | String fixa inicial: **`pending`**. |
+| `itemCount` | Quantidade de produtos distintos da solicitação. |
+| `totalUnits` | Soma das quantidades solicitadas. |
+| `totalAmount` | Soma dos subtotais calculados pelo backend. |
+| `createdAt` | Timestamp do servidor na criação. |
+| `updatedAt` | Mesmo timestamp inicial de `createdAt`. |
+| `source` | Origem fixa: **`public_catalog`**. |
+
+O campo de origem se chama **`source`**. Não existe campo `origin`.
+
+Documentos de `items`:
+
+| Campo | Conteúdo e finalidade |
+|---|---|
+| `productId` | ID do produto validado naquela loja e naquele catálogo. |
+| `name` | Snapshot do nome atual do produto, normalizado com `trim`. |
+| `quantity` | Quantidade solicitada pelo cliente e validada pelo servidor. |
+| `price` | Snapshot do preço unitário atual, arredondado para centavos. |
+| `subtotal` | Preço unitário arredondado × quantidade. |
+
+Cálculos monetários:
+
+```text
+unitCents = Math.round(rawPrice * 100)
+subtotalCents = unitCents * quantity
+totalCents = soma dos subtotalCents
+
+price = unitCents / 100
+subtotal = subtotalCents / 100
+totalAmount = totalCents / 100
+```
+
+Preço explicitamente zero é aceito. Preço ausente, inválido, negativo ou não finito é rejeitado.
+
+Sobre timestamps:
+
+- `createdAt` e `updatedAt` usam `FieldValue.serverTimestamp()`.
+- Ambos recebem o mesmo timestamp inicial.
+- Não há timestamp individual nos itens.
+- Não há outros timestamps criados na solicitação.
+- Não foi encontrado fluxo posterior para atualizar `updatedAt` ou alterar o status.
+
+Sobre snapshots e referências:
+
+- Nome, preço, quantidade, subtotal e total ficam registrados no envio.
+- Mudanças posteriores no produto não recalculam esses valores pelo fluxo auditado.
+- Estoque e estado do produto são reconsultados para validar o envio, mas não são persistidos no snapshot.
+- Imagem, categoria e título do catálogo exigiriam consulta adicional se fossem apresentados futuramente.
+
+Não são persistidos:
+
+```text
+publicSlug
+publicToken
+publicTokenHash
+storeId como campo
+customerId
+UID do cliente
+nome/telefone/e-mail do cliente
+título do catálogo
+imagem do produto
+categoria
+estoque disponível
+estado de arquivamento
+posição do item
+timestamp individual do item
+```
+
+A solicitação é anônima e não possui identificação ou contato do cliente.
+
+**F. O que já está pronto para a F7.8**
+
+Já existem:
+
+- Coleção própria para solicitações.
+- Separação dos dados por loja.
+- ID individual de solicitação.
+- Referência ao catálogo de origem.
+- Snapshot de produtos, quantidades e valores.
+- Contagens, total, datas e status inicial.
+- Persistência atômica do pai e dos itens.
+- Envio integrado à tela pública Flutter.
+- Testes específicos da persistência.
+
+Para localizar solicitações posteriormente, a loja dispõe desta estrutura:
+
+```text
+stores/{storeId}/catalogRequests
+```
+
+Para abrir uma solicitação e seus itens:
+
+```text
+stores/{storeId}/catalogRequests/{requestId}
+stores/{storeId}/catalogRequests/{requestId}/items
+```
+
+O schema também oferece:
+
+- `catalogId` para identificar solicitações de um catálogo.
+- `status` para distinguir o estado da solicitação.
+- `createdAt` para ordenação temporal.
+
+Essas são possibilidades da estrutura existente; as consultas internas ainda não foram implementadas.
+
+**G. O que falta para o recebimento interno**
+
+Não foi encontrado:
+
+- Backend/function para listar solicitações.
+- Backend/function para detalhar solicitações.
+- Tela interna para exibi-las.
+- Service específico para leitura.
+- Provider específico.
+- Model específico.
+- Contador ou notificação de novas solicitações.
+- Operação de mudança de status.
+
+A tela `CatalogsScreen` chama `listCatalogs`, que consulta apenas a coleção `catalogs`.
+
+`listCatalogs` já possui um padrão de autorização interna: exige autenticação, consulta `users/{uid}`, verifica acesso revogado e papel válido e resolve a loja por `userData.storeId`. Isso serve como referência existente, mas não implementa acesso a `catalogRequests`.
+
+O campo `_isCatalogRequestInFlight` da tela pública controla carregamento do catálogo; não representa uma solicitação persistida.
+
+Quanto à segurança:
+
+- O submit é público e não exige `request.auth`.
+- O acesso ocorre mediante validação do link, da loja, do catálogo e dos produtos.
+- A persistência utiliza Admin SDK.
+- O repositório não contém regras Firestore versionadas nem configuração delas em `firebase.json`.
+- Portanto, não foi possível confirmar quem pode ler ou escrever diretamente em `catalogRequests`.
+- Os testes com Admin SDK não comprovam autorização de clientes diretos.
+
+**H. Pontos que exigem decisão antes da implementação**
+
+| Ponto | Decisão pendente |
+|---|---|
+| Acesso interno | Definir mecanismo de leitura e papéis autorizados; localizar a fonte oficial das regras Firestore. |
+| Interface | Definir onde entram lista e detalhes das solicitações. |
+| Consultas | Definir filtros, ordenação, limites e paginação. |
+| Status | Definir se a próxima etapa será somente leitura ou incluirá transições além de `pending`. |
+| Identificação do cliente | Definir como tratar operacionalmente solicitações anônimas, sem presumir alteração do schema. |
+| Histórico | Definir apresentação quando produto ou catálogo de origem tiver sido removido ou alterado. |
+| Reenvios | Considerar que não existe idempotência e reenvios podem gerar solicitações distintas. |
+| Ordem dos itens | Não há `position`; a ordem original da seleção não é registrada. |
+
+Riscos e limitações encontrados:
+
+- **Colisão de IDs:** são usados IDs automáticos e `batch.create`, que impede sobrescrita de documento existente. Não há retry específico para colisão.
+- **Duplicidade operacional:** a interface bloqueia chamadas simultâneas, mas uma resposta perdida seguida de nova tentativa pode gerar outra solicitação.
+- **Atomicidade:** pai e itens são gravados juntos; falha no batch impede persistência parcial.
+- **Concorrência:** leituras e escrita não formam uma transação conjunta. O estado pode mudar após a validação.
+- **Estoque:** o envio não vende, não reserva e não decrementa estoque; não garante disponibilidade futura.
+- **Referências órfãs:** não foi encontrada manutenção referencial específica das solicitações. Remover produto ou catálogo pode deixar IDs sem documento correspondente, embora o snapshot permaneça.
+- **Retenção:** não há rotina específica de limpeza das solicitações; eventual exclusão precisa considerar também os itens.
+- **Índices:** não há configuração de índices Firestore no repositório para comprovar suporte às futuras combinações de consultas.
+
+Nenhum desses pontos foi convertido em decisão arquitetural.
+
+A cobertura dos testes existentes foi inspecionada e inclui:
+
+- Schema exato do documento pai e snapshot dos itens.
+- Status `pending`, origem e timestamps iniciais iguais.
+- Dados atuais do servidor prevalecendo sobre campos forjados.
+- Cálculos monetários, preço zero, arredondamento e limites numéricos.
+- Rejeição de seleção, produtos e catálogos inválidos.
+- Ausência de solicitação parcial após falhas.
+- Rollback completo por falha de precondição do batch.
+- Reenvios com IDs distintos.
+- Persistência de 200 itens.
+- Estoque preservado e ausência de vendas.
+
+Os testes Flutter cobrem payload, clique duplo, confirmação, retry, reconciliação e desmontagem durante envio.
+
+A suíte não foi executada na auditoria. Foram encontrados sete arquivos oficiais de teste; o resultado anterior **7/7** é o informado por você, não uma nova execução. A cobertura analisada não comprova regras de acesso direto, leitura interna ou comportamento em produção.
+
+**I. Arquivos provavelmente envolvidos na próxima etapa**
+
+Conforme o contrato que vier a ser aprovado:
+
+| Arquivo/local | Possível envolvimento |
+|---|---|
+| `functions/catalog/createCatalog.js` | Acesso interno aos dados existentes. |
+| `functions/index.js` | Exportação, caso seja definida nova function. |
+| `lib/screens/management/catalogs_screen.dart` | Integração da interface interna. |
+| `lib/screens/sales/new_sale_screen.dart` | Navegação, se necessária. |
+| `functions/tests/catalog/` | Testes de leitura e autorização. |
+| `test/` | Testes da interface interna. |
+| `docs/catalog/F7_CATALOGO_INTELIGENTE.md` | Registro do contrato aprovado. |
+| `docs/codex/CURRENT_WORK.md` | Atualização do estado do trabalho. |
+
+Não foi definida necessidade de nova coleção, migration, novo schema ou nova function. Nenhum desses arquivos foi alterado.
+
+**J. Estado final**
+
+- Nenhum arquivo alterado.
+- Nenhum commit.
+- Nenhum push.
+- Nenhum deploy.

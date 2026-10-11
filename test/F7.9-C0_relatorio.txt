@@ -1,0 +1,381 @@
+F7.9-C0 — AUDITORIA FINAL ESTÁTICA DE FIRESTORE RULES / catalogRequests
+Data: 18/09/2026
+Escopo: somente leitura e este relatório. Nenhum patch ou teste implementado.
+
+1. GIT INICIAL / FINAL E FONTES
+
+Branch inicial/final: feat/f7-intelligent-catalog.
+HEAD inicial/final: 47c2ec39841cabd4911f5a57275424030520260a (47c2ec3).
+Stage inicial/final: vazio.
+Tracked modificados preexistentes e preservados:
+  android/app/build.gradle.kts
+  lib/screens/subscription_screen.dart
+  lib/widgets/warning_banner.dart
+  pubspec.yaml
+Já existiam 28 relatórios test/*.txt untracked. Não foram alterados.
+Único arquivo acrescentado nesta etapa: test/F7.9-C0_relatorio.txt, untracked.
+Comparação final do diff tracked e status com o inicial: idênticos após
+desconsiderar a inclusão deste relatório. git diff --check aprovado (exit 0);
+somente avisos LF/CRLF dos dois Dart paralelos, sem modificação por esta etapa.
+Nenhum git add, commit, push, deploy ou comando remoto.
+
+Fontes: AGENTS.md; docs/codex/CURRENT_WORK.md; seções pertinentes de
+docs/catalog/F7_CATALOGO_INTELIGENTE.md, especialmente F7.7-D e F7.8-C1/C2;
+firestore.rules integral; firebase.json integral; manifests da raiz/functions;
+os dois arquivos existentes em functions/tests/security/ integralmente;
+runner do catálogo, teste getCatalogRequest e trechos atuais do backend;
+buscas de coleções no código e relatórios anteriores F7.9-A0/B0 e Rules-A2.
+Os registros históricos de CURRENT_WORK e do documento F7 ainda mencionam
+ausência de Rules locais. Isso está desatualizado: firebase.json hoje aponta
+firestore.rules. O contrato explícito de C0 e o Git conferido regem esta etapa.
+Não houve consulta a produção nem comparação com Rules publicadas.
+
+2. TODOS OS MATCHES APLICÁVEIS E INVENTÁRIO COMPLETO
+
+firestore.rules usa rules_version = '2' (linha 1).
+O contêiner /databases/{database}/documents (linha 3) não possui allows próprios.
+Existe exatamente UM match com allows aplicável aos documentos no alvo:
+
+  /stores/{storeId}/{subcollection}/{document=**} (linhas 379–430)
+
+Para o alvo, subcollection = 'catalogRequests' em qualquer profundidade.
+Não muda para 'items', 'products' ou outro nome ao entrar em descendentes.
+
+Definições para reproduzir as condições sem omitir nenhum predicado:
+  A = request.auth != null
+  E = exists(/databases/$(database)/documents/users/$(request.auth.uid))
+  S = get(/databases/$(database)/documents/users/$(request.auth.uid))
+      .data.storeId == storeId
+  X = subcollection != 'sales' && subcollection != 'auditLogs'
+      && subcollection != 'products' && subcollection != 'customers'
+      && subcollection != 'categories' && subcollection != 'cash_flow'
+  R = get(/databases/$(database)/documents/users/$(request.auth.uid))
+      .data.role == 'admin'
+      || get(/databases/$(database)/documents/users/$(request.auth.uid))
+         .data.role == 'gerente'
+
+Operação       Linhas    Condição exata lógica   Exclui catalogRequests?
+read           381–393   A && X && E && S        NÃO
+create,update  395–407   A && X && E && S        NÃO
+delete         409–429   A && X && E && S && R   NÃO
+
+read abrange get e list/query. write não aparece nesse match: há allows
+separados para read, create/update e delete. Todos precisam da exclusão.
+Hoje as condições autorizam pai e TODOS os descendentes da mesma forma.
+Não há validação de schema, status, preço, estoque ou campos no alvo.
+Não há checagem de accessStatus ou existência do documento da loja.
+O vínculo usado é users/{uid}.storeId, não uma claim storeId.
+
+Inventário de todos os demais matches e por que NÃO alcançam o alvo:
+  L7   /users/{userId}: raiz diferente, documento exato.
+  L52  /cpfs_cadastrados/{cpf}: raiz diferente, documento exato.
+  L57  /stores/{storeId}: somente documento da loja; não herda para filhos.
+  L118 /stores/{storeId}/sales/{saleId}: coleção literal diferente, exato.
+  L167 /stores/{storeId}/auditLogs/{document=**}: literal auditLogs diferente.
+  L186 /stores/{storeId}/products/{productId}: literal diferente, exato.
+  L242 /stores/{storeId}/customers/{customerId}: literal diferente, exato.
+  L291 /stores/{storeId}/categories/{categoryId}: literal diferente, exato.
+  L319 /stores/{storeId}/cash_flow/{entryId}: literal diferente, exato.
+O arquivo termina após o genérico e os fechamentos de documents/service.
+Não existem outros matches, funções de autorização, catch-all global ou
+ramo explícito catalogRequests neste arquivo.
+
+3. BRECHA ATUAL — CONFIRMADA POR LEITURA ESTÁTICA
+
+Perfis abaixo com users/{uid}.storeId igual à loja alvo:
+Perfil                      get/list    create/update    delete
+admin                       permite     permite          permite
+gerente                     permite     permite          permite
+operador                    permite     permite          nega
+caixa                       permite     permite          nega
+vendedor                    permite     permite          nega
+revoked + admin/gerente      permite     permite          permite
+revoked + operador/etc.      permite     permite          nega
+role ausente/desconhecida    permite     permite          nega
+perfil users/{uid} ausente   nega        nega             nega
+usuário de outra loja       nega        nega             nega
+anônimo (request.auth null)  nega        nega             nega
+
+revoked é accessStatus, não um papel. Um perfil revogado com token ainda
+aceito e storeId preservado continua satisfazendo os allows acima.
+Auth anônima com UID também será negada sem perfil; testar adicionalmente
+essa variante não substitui o contexto sem autenticação.
+O resultado aplica-se ao pai, items e qualquer descendente, mesmo órfão.
+As permissões são conclusões estáticas locais, não testes executados nem
+afirmações sobre a configuração publicada em produção.
+
+4. SEMÂNTICA: allow false NÃO SOBRESCREVE allow true
+
+Firestore combina com OR os allows aplicáveis à operação e ao documento.
+Um allow read, write: if false específico não é um deny prioritário.
+Se o genérico continuar true, a operação permanece permitida. Ordem textual
+ou maior especificidade do match não revoga a autorização sobreposta.
+Logo, o patch deve retirar a autorização genérica em TODOS os três allows.
+O ramo explícito false documenta a fronteira; sozinho não fecha a brecha.
+
+5. PATCH MÍNIMO FUTURO PROPOSTO — NÃO APLICADO
+
+Em firestore.rules, acrescentar exatamente uma condição em cada um dos
+três allows do match genérico, junto às exclusões existentes:
+
+  && subcollection != 'catalogRequests'
+
+Adicionar, como irmão dos demais matches sob /databases/{database}/documents:
+
+  match /stores/{storeId}/catalogRequests/{document=**} {
+    allow read, write: if false;
+  }
+
+read cobre get/list; write cobre create/update/delete.
+Não mudar roles, accessStatus, listas de campos ou exclusões preexistentes.
+Não substituir o genérico por uma whitelist nem refatorar as condições.
+Prova de suficiência no arquivo atual: só o genérico autoriza o alvo; após
+a exclusão, seus três allows são false para subcollection=catalogRequests;
+o novo ramo também é false e nenhum outro ramo alcança esse caminho.
+Nenhum match adicional precisa ser corrigido para cumprir este contrato.
+As três exclusões bastam ao bloqueio implícito; o ramo explícito é mantido
+no plano solicitado para tornar o contrato visível e cobrir recursivamente.
+
+6. DESCENDENTES COBERTOS
+
+Na versão 2, {document=**} corresponde a zero ou mais segmentos. Para os
+documentos válidos deste ramo, inclui um requestId e qualquer sequência
+adicional de coleção/documento:
+  stores/a/catalogRequests/r1
+  stores/a/catalogRequests/r1/items/i1
+  stores/a/catalogRequests/r1/futureChildren/d1
+  stores/a/catalogRequests/r1/items/i1/events/e1
+Também vale quando o pai não existe. O bloqueio não depende de ler o pai.
+Não confundir wildcard simples {requestId}, que não cobre descendentes,
+com o recursivo usado na proposta.
+
+7. SOBREPOSIÇÕES, COLLECTION GROUP E CAMINHOS ALTERNATIVOS
+
+Não há match /{path=**}/catalogRequests/{id}, /{path=**}/items/{id} ou
+equivalente que autorize collectionGroup em qualquer raiz.
+Uma consulta collectionGroup não ignora Rules; elas avaliam o conjunto
+potencial de resultados, não filtram apenas documentos autorizados.
+A consulta global sem restrição de caminho não encontra autorização geral
+neste arquivo. Após o patch, qualquer consulta que possa incluir os caminhos
+protegidos deve ser negada. Não tratar resultado vazio como prova de bloqueio.
+Incluir tentativas reais de collectionGroup na suíte C1, mesmo sem uso atual
+encontrado no código de aplicação, como proteção contra sobreposição futura.
+Não adicionar allow de collectionGroup para viabilizar esses testes.
+
+Um filho chamado products ou auditLogs dentro de catalogRequests continua
+sob subcollection=catalogRequests. Matches literais irmãos não o alcançam.
+Um caminho diferente, como stores/a/catalogs/c1/catalogRequests/r2, NÃO é
+o caminho contratado: continua abrangido pelo genérico com catalogs.
+Isso não é um alias nem acesso indireto ao documento stores/a/catalogRequests/r2.
+Não ampliar o patch para proibir toda ocorrência do nome catalogRequests
+em qualquer árvore: seria mudança fora do contrato.
+Uma futura permissão recursiva global poderia reabrir a brecha por OR;
+manter os testes de pai, profundidade e collectionGroup como regressão.
+
+8. COLEÇÕES DEPENDENTES DO GENÉRICO / REGRESSÕES
+
+Conjunto exato hoje coberto pelo genérico: qualquer primeira subcoleção
+de stores/{storeId} EXCETO sales, auditLogs, products, customers, categories
+e cash_flow, incluindo todos os descendentes das coleções não excluídas.
+O único membro retirado desse conjunto no patch será catalogRequests.
+
+No código de produção pesquisado, catalogs é outra subcoleção concreta
+dependente desse match, incluindo catalogs/{id}/items/{id}; referências em
+functions/catalog/createCatalog.js:631–636,799 e itens de catálogo.
+Não pressupor que só existam coleções citadas no código: a regra é aberta.
+Testar também uma subcoleção sintética não listada, com filho profundo,
+para garantir que o comportamento das demais não foi restringido.
+
+Nomes encontrados que NÃO são subcoleções diretas de stores:
+  catalogPublicTokens e storePublicSlugs são raízes;
+  storeBackups é raiz, com snapshots/dailyRuns/retentionDeletes/
+  retentionScheduleRuns abaixo dela (ex.: scheduledStoreBackups.js:113–134);
+  _clientRequestIds é raiz usada para gerar auto-ID local sem gravação
+  (manage_products_screen.dart:915–919);
+  users, cpfs_cadastrados e ncm também não dependem do genérico da loja.
+Não confundir essas árvores com stores/{storeId}/... nem alterá-las em C1.
+
+Regressões necessárias com SDK cliente e fixtures válidas:
+  products: get/list, create operacional e update operacional permitidos
+  na própria loja; taxonomia e campos de arquivamento protegidos; delete
+  negado inclusive admin/gerente. Reexecutar suíte de taxonomia existente.
+  customers: get/list/create/update comuns permitidos; campos isArchived,
+  archivedAt, archivedBy, archiveReason protegidos; delete negado.
+  sales: get/list permitidos; create exige storeId do payload igual ao
+  caminho; update não muda storeId/createdAt/localSaleId/syncOrigin;
+  update operacional permitido; delete negado para todos.
+  cash_flow: get/list permitidos; create só com description string, amount
+  numérico > 0, type Entrada/Saída, createdAt timestamp e exatamente essas
+  quatro chaves; update/delete negados, inclusive admin/gerente.
+  categories: get/list/create/update permitidos; delete negado para todos.
+  auditLogs: get/list na própria loja permitidos, inclusive descendentes;
+  create/update/delete sempre negados, inclusive admin/gerente.
+  catalogs, seus items e coleção sintética: get/list/create/update continuam
+  permitidos na própria loja; delete apenas admin/gerente; testar descida
+  adicional para comprovar preservação do wildcard do genérico.
+  sales/products/customers/categories/cash_flow: descendentes continuam
+  negados, pois seus matches são exatos e o genérico exclui toda a árvore.
+  users e documento stores: smoke de leitura legítima para detectar erro
+  de escopo/chaves no patch; nenhuma mudança de suas políticas.
+Para cada coleção operacional, manter negativas de outra loja, perfil
+ausente e anônimo nas cinco operações, além de positivas com perfil válido.
+Não transformar essa etapa em endurecimento de accessStatus nas demais
+coleções: a política atual não o verifica. Registrar/preservar essa condição.
+
+9. MATRIZ COMPLETA DE TESTES C1 — RESULTADO ESPERADO
+
+Usar firebase/firestore real conectado ao Emulator, com Rules do arquivo
+local carregadas por initializeTestEnvironment. Nunca mock de permissão.
+
+Perfis                         get  list/query  create  update  delete
+admin da loja A                NEGA NEGA        NEGA    NEGA    NEGA
+gerente da loja A              NEGA NEGA        NEGA    NEGA    NEGA
+operador da loja A             NEGA NEGA        NEGA    NEGA    NEGA
+caixa da loja A                NEGA NEGA        NEGA    NEGA    NEGA
+vendedor da loja A             NEGA NEGA        NEGA    NEGA    NEGA
+revoked da loja A              NEGA NEGA        NEGA    NEGA    NEGA
+autenticado sem users/{uid}    NEGA NEGA        NEGA    NEGA    NEGA
+admin da loja B                NEGA NEGA        NEGA    NEGA    NEGA
+sem autenticação              NEGA NEGA        NEGA    NEGA    NEGA
+
+Aplicar o produto cartesiano INTEGRAL dos nove perfis x cinco operações a:
+  P1 stores/a/catalogRequests/r1
+  P2 stores/a/catalogRequests/r1/items/i1
+  P3 stores/a/catalogRequests/r1/futureChildren/d1
+  P4 stores/a/catalogRequests/r1/items/i1/events/e1
+São pelo menos 180 combinações, antes dos casos adicionais abaixo.
+Em list/query, consultar a coleção que contém cada documento, usando
+getDocs(collection(...)) e getDocs(query(..., limit(1))); no pai também
+orderBy(createdAt, desc), limit(50), como a listagem operacional.
+Usar getDocFromServer/getDocsFromServer quando útil para afastar cache.
+Para create, usar ID novo; para update/delete, fixture existente e válida.
+Um update em documento ausente ou erro de índice não prova permission-denied.
+
+Casos adicionais obrigatórios/recomendados para fechar lacunas:
+  - revoked com role operador E admin/gerente; não simular só role=revoked.
+  - perfil existente com storeId válido e role ausente/desconhecida.
+  - claim storeId/role forjada sem perfil ou divergente do perfil.
+  - get de ID ausente e descendentes com pai ausente: continuar negados.
+  - subcoleção arbitrária chamada products/auditLogs dentro da solicitação.
+  - setDoc substitutivo, setDoc merge e batch com pai + item: negar sem
+    persistência parcial. Conferir depois por Admin SDK.
+  - collectionGroup('catalogRequests'), collectionGroup('items'),
+    collectionGroup('futureChildren') e collectionGroup('events'):
+    negar leitura para todos os nove perfis. Sem filtros e com filtro
+    plausível storeId=='a' nas fixtures; filtro não concede autorização.
+    Seed incluir duas lojas, itens protegidos e items de catalogs para
+    detectar concessão global indevida. Não aceitar erro de índice como
+    aprovação: exigir permission-denied e escolher query suportada.
+  - controle positivo cliente em coleção permitida antes das negativas,
+    para não confundir Emulator desconectado ou fixture malformada com deny.
+  - usar assertFails e conferir código permission-denied; falhas de rede,
+    projeto incorreto, not-found ou índice devem falhar a suíte.
+  - afirmar por Admin SDK que o conteúdo permaneceu inalterado após negações.
+
+Controle Admin SDK: app nomeado com projectId fictício idêntico ao ambiente
+de Rules e FIRESTORE_EMULATOR_HOST local obrigatório; criar e ler fixture
+do pai, item e descendente com Rules restritivas carregadas. Pode também
+validar update/delete de fixtures. Excluir app e limpar só o banco demo.
+Isso confirma o canal administrativo, NÃO o bloqueio de clientes.
+withSecurityRulesDisabled é bypass do rules-unit-testing, não Admin SDK;
+não rotular a fixture atual da taxonomia como uso de firebase-admin.
+
+Controle backend/callables: a gravação batch em createCatalog.js:1929–1949
+usa Admin SDK; list/get em 895–939 e 987–1035 usam admin.firestore e
+autorização própria (perfil, role, revoked e loja). Firestore Rules não
+passam a governar esse canal ao negar SDK cliente. As callables continuam
+responsáveis por autorização e validação de negócio.
+Reexecutar testes de submitPublicCatalogSelection, listCatalogRequests e
+getCatalogRequest, preferencialmente a suíte oficial completa de catálogo.
+Invocar handler .run no teste existente não comprova transporte HTTPS real;
+é regressão do backend local. Não requer deploy ou Functions Emulator aqui.
+
+10. INFRAESTRUTURA REUTILIZÁVEL / COMANDOS FUTUROS
+
+Melhor referência: functions/tests/security/firestoreTaxonomyRules.test.mjs.
+Usa node:test, assertFails/assertSucceeds, SDK firebase/firestore, leitura
+das Rules locais, initializeTestEnvironment, authenticatedContext,
+unauthenticatedContext, clearFirestore, withSecurityRulesDisabled e cleanup.
+Tem guarda que exige localhost/127.0.0.1 em FIRESTORE_EMULATOR_HOST e projeto
+fixo fictício demo-taxonomy-rules. Cobre admin/gerente/operador, outra loja,
+anônimo e get/create/update/delete de produtos/categorias.
+Não cobre getDocs/list, revoked ou catalogRequests: acrescentar no novo teste.
+
+storageRules.test.mjs é referência secundária de accessStatus active/revoked;
+testa Storage, não Firestore Rules, e inicializa Firestore/Storage em portas
+8080/9199. Não é o runner adequado para C1 e não deve entrar por wildcard
+em uma execução --only firestore.
+
+Fixtures Admin: referência complementar em
+functions/tests/catalog/getCatalogRequest.emulator.test.js:8–32,85–90,
+com guarda de Emulator, firebase-admin, pai e items; adaptar para projeto
+demo e app nomeado, não reutilizar automaticamente store-connect-app.
+
+Um novo arquivo functions/tests/security/firestoreCatalogRequestsRules.test.mjs
+é suficiente para a suíte nova (matriz, controles e regressões adicionais).
+Não precisa alterar functions/package.json nem package.json da raiz:
+@firebase/rules-unit-testing ^5.0.2, firebase ^12.18.0 e firebase-admin
+^13.7.0 já estão declarados em functions. Sem nova dependência/lockfile.
+Não precisa alterar firebase.json: já aponta firestore.rules e porta 8080.
+initializeTestEnvironment conecta/carrega regras; quem inicia o processo
+do Emulator é firebase emulators:exec. Auth Emulator não é necessário para
+os contextos autenticados de rules-unit-testing.
+Não há script test:security atualmente. Execução direta resolve sem criá-lo.
+test:catalog descobre somente tests/catalog/*.test.js; NÃO inclui o novo .mjs.
+
+Comando exato provável, a partir da RAIZ, somente na futura C1:
+  firebase emulators:exec --config firebase.json --project demo-taxonomy-rules --only firestore 'node --test --test-concurrency=1 functions/tests/security/firestoreTaxonomyRules.test.mjs functions/tests/security/firestoreCatalogRequestsRules.test.mjs'
+
+Planejar o novo arquivo com projectId demo-taxonomy-rules para este comando.
+Execução sequencial evita clearFirestore concorrente entre os dois arquivos.
+Não usar tests/security/*.mjs, pois incluiria o teste de Storage.
+Alternativa isolada, também na raiz:
+  firebase emulators:exec --config firebase.json --project demo-taxonomy-rules --only firestore 'node --test functions/tests/security/firestoreCatalogRequestsRules.test.mjs'
+
+Preparação de Java somente no ambiente do processo/sessão:
+  $env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-21.0.6.7-hotspot'
+  $env:Path = "$env:JAVA_HOME\bin;$env:Path"
+Preservar/restaurar os valores anteriores ao encerrar; não mudar Java global.
+
+Regressão oficial do backend, em functions, na futura C1:
+  npm run test:catalog
+O script existente usa emulators:exec --only firestore e projeto
+store-connect-app; é o identificador configurado nos testes locais, não
+autorização para Firestore real. Manter as guardas de endpoint local.
+O runner gera chave aleatória de 32 bytes no ambiente dos subprocessos,
+sem imprimi-la nem alterar permanentemente o ambiente do pai.
+Nenhum desses comandos de teste/Emulator foi executado em C0.
+
+11. ARQUIVOS PROVÁVEIS DE C1
+
+Alterar: firestore.rules (três condições e ramo explícito).
+Criar: functions/tests/security/firestoreCatalogRequestsRules.test.mjs.
+Nenhuma alteração necessária em manifests, locks, firebase.json, backend,
+Flutter ou teste existente de taxonomia. Documentação/checkpoint somente
+se o contrato da próxima etapa autorizar; não estão implícitos neste C0.
+Os quatro arquivos paralelos continuam protegidos.
+
+12. RISCOS E LIMITES
+
+Esquecer uma exclusão mantém a brecha daquela operação; false específico
+não compensa. Trocar ** por wildcard simples perde a cobertura recursiva.
+Alterar chaves/escopo ou lista genérica inteira pode afetar outras coleções.
+Tests negativos com Admin SDK não medem Rules; fixture bypass não deve ser
+usada como contexto da tentativa cliente. Cache, erro de rede e documento
+ausente não são provas de negação. Exigir permission-denied do servidor.
+As políticas amplas de catalogs e outras coleções permanecem fora de C1;
+não endurecê-las incidentalmente. Nenhuma enumeração estática do código
+prova quais coleções/dados existem em produção.
+Auditoria demonstra suficiência lógica no arquivo local atual; compilação
+e comportamento no Emulator ficam para C1. Rules publicadas não auditadas.
+Não há necessidade de secret real, migração, exclusão de dados ou deploy.
+
+13. ESTADO FINAL
+
+C0 concluída como auditoria estática e relatório; brecha local confirmada.
+Patch mínimo identificado e matriz C1 definida; implementação NÃO iniciada.
+Rules, código, configuração e testes intactos. Sem testes executados,
+sem Emulator, sem firebase use/deploy, sem remoto/produção, sem stage,
+sem commit e sem push. HEAD permanece 47c2ec3; stage vazio e os mesmos
+quatro tracked modificados preexistentes. Única escrita: este relatório,
+mantido untracked. Próxima etapa proposta: C1, sob instrução própria.

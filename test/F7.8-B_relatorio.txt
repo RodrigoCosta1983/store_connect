@@ -1,0 +1,346 @@
+Proponho duas operações callable autenticadas, somente de leitura, usando a coleção existente e o mesmo padrão de autorização de `listCatalogs`. A listagem retornaria até 50 solicitações recentes; o detalhe retornaria o pai e seus itens persistidos.
+
+**Estado confirmado:** branch `feat/f7-intelligent-catalog`, HEAD `f0aec5d`, working tree limpa. Foram relidos os documentos obrigatórios e o código pertinente. A divergência documental identificada na F7.8-A permanece; nenhum arquivo foi corrigido.
+
+O conteúdo abaixo é **contrato proposto**, ainda não implementado.
+
+**A. Autorização comum às duas operações**
+
+O [padrão atual de listCatalogs](C:/Users/rodri/StudioProjects/store_connect/functions/catalog/createCatalog.js:711) executa:
+
+1. Exige `request.auth`.
+2. Obtém o UID de `request.auth.uid`.
+3. Consulta `users/{uid}`.
+4. Rejeita perfil inexistente.
+5. Normaliza `accessStatus` e rejeita `revoked`.
+6. Normaliza e valida `role`.
+7. Obtém `storeId` exclusivamente do perfil.
+8. Confirma a existência de `stores/{storeId}`.
+
+Papéis aceitos atualmente:
+
+| Valor do perfil, após normalização | Papel reconhecido |
+|---|---|
+| `admin` | `admin` |
+| `gerente` | `gerente` |
+| `operador` | `operador` |
+| `caixa` | `operador` |
+| `vendedor` | `operador` |
+
+Valores desconhecidos ou ausentes são rejeitados.
+
+Duas características importantes do padrão atual:
+
+- Ele bloqueia especificamente `accessStatus == "revoked"`; não exige que o valor seja `"active"`.
+- `listCatalogs` não exige propriedade da loja nem verifica `subscriptionStatus`.
+
+**Proposta:** preservar essas mesmas regras nas duas operações. Uma restrição adicional por papel, assinatura ou estado de acesso seria outra decisão, não uma reprodução do padrão existente.
+
+Para impedir acesso entre lojas:
+
+- O payload não define `storeId`.
+- Todas as consultas ficam sob a loja resolvida por `users/{uid}.storeId`.
+- Não há pesquisa global de `requestId`.
+- Não há `collectionGroup`.
+- O detalhe nunca procura o documento em outra loja quando não o encontra na loja autenticada.
+
+O Admin SDK exige que essa autorização seja aplicada em ambas as operações. A ausência das regras Firestore no repositório continua sendo uma lacuna independente para auditar acesso direto de clientes.
+
+**B. Contrato de `listCatalogRequests`**
+
+Assinatura lógica:
+
+```text
+listCatalogRequests() → ListCatalogRequestsResponse
+```
+
+Entrada:
+
+```json
+{}
+```
+
+Proposta de validação: aceitar ausência de payload, `null` ou objeto vazio como chamada sem parâmetros. Rejeitar payload de outro tipo ou campos adicionais com `invalid-argument`.
+
+Não há parâmetros de loja, catálogo, status, ordenação, limite ou cursor nesta versão.
+
+Formato exato da resposta, usando tipos para representar os valores:
+
+```text
+{
+  success: true,
+  requests: [
+    {
+      requestId: string,
+      catalogId: string,
+      status: string,
+      itemCount: integer,
+      totalUnits: integer,
+      totalAmount: number,
+      createdAt: string ISO 8601 UTC | null,
+      updatedAt: string ISO 8601 UTC | null,
+      source: string
+    }
+  ]
+}
+```
+
+Regras:
+
+- `requestId` vem do ID do documento.
+- Os oito campos restantes vêm do pai persistido.
+- `status` é o valor salvo; atualmente, o submit grava `pending`.
+- `source` é o valor salvo; atualmente, `public_catalog`.
+- Contagens e total não são recalculados.
+- Não inclui itens completos.
+- Não retorna `storeId`, `publicSlug`, tokens ou URLs públicas.
+- `catalogId` é somente referência; não provoca consulta ao catálogo.
+- Não há enriquecimento com título, produto ou cliente.
+
+Consulta proposta:
+
+```text
+Coleção: stores/{storeId}/catalogRequests
+Ordenação: createdAt DESC
+Limite: 50 documentos
+Filtros: nenhum
+```
+
+A ordem usa a data de criação, da mais recente para a mais antiga. Empates seguem a ordenação implícita do Firestore por nome do documento.
+
+Sem solicitações:
+
+```json
+{
+  "success": true,
+  "requests": []
+}
+```
+
+**Paginação:** proponho deixá-la fora desta primeira versão, seguindo o limite já usado por `listCatalogs`.
+
+A consequência precisa ficar explícita: **esta operação mostra as 50 solicitações mais recentes, não o histórico completo**. Não haverá `hasMore`, cursor ou total global. Receber exatamente 50 registros não permite concluir se existem outros.
+
+Se o requisito inicial for acessar todo o histórico pela listagem, paginação será necessária antes da implementação.
+
+**C. Contrato de `getCatalogRequest`**
+
+Assinatura lógica:
+
+```text
+getCatalogRequest({ requestId }) → GetCatalogRequestResponse
+```
+
+Entrada exata:
+
+```text
+{
+  requestId: string
+}
+```
+
+Validação proposta:
+
+- Payload deve ser objeto.
+- `requestId` deve ser string não vazia após `trim`.
+- Deve representar um único ID válido de documento, sem `/`.
+- Não aceitar caminho completo.
+- Rejeitar campos adicionais.
+- Não exigir formato de auto-ID de 20 caracteres: o requisito é um ID válido, não um formato específico do gerador.
+
+Formato exato da resposta:
+
+```text
+{
+  success: true,
+  request: {
+    requestId: string,
+    catalogId: string,
+    status: string,
+    itemCount: integer,
+    totalUnits: integer,
+    totalAmount: number,
+    createdAt: string ISO 8601 UTC | null,
+    updatedAt: string ISO 8601 UTC | null,
+    source: string,
+    items: [
+      {
+        itemId: string,
+        productId: string,
+        name: string,
+        quantity: integer,
+        price: number,
+        subtotal: number
+      }
+    ]
+  }
+}
+```
+
+Leituras necessárias, após autorização:
+
+```text
+1. stores/{storeId}/catalogRequests/{requestId}
+
+2. stores/{storeId}/catalogRequests/{requestId}/items
+   somente se o pai existir
+```
+
+Regras do detalhe:
+
+- `itemId` vem do ID do documento da subcoleção.
+- Os cinco campos do item vêm exclusivamente do snapshot persistido.
+- Retornar todos os itens da solicitação; o submit atual admite até 200.
+- Ordenar os itens por ID de documento crescente para apresentação estável.
+- Essa ordem não representa a ordem original da seleção, pois não existe `position`.
+- Não paginar os itens nesta versão.
+- Não consultar produtos, catálogo ou índice público de tokens.
+- Não recalcular preços, subtotais ou total.
+- Não exigir que o catálogo continue ativo ou existente.
+- Produto alterado, arquivado ou removido não impede leitura do snapshot.
+
+Se o pai não existir na loja autenticada:
+
+```text
+not-found
+"Solicitação não encontrada."
+```
+
+O mesmo resultado vale quando o ID existe somente em outra loja. Não revelar sua existência.
+
+Se duas lojas tiverem documentos com o mesmo `requestId`, cada usuário acessará exclusivamente o documento da própria loja.
+
+**Serialização comum**
+
+- Timestamps válidos: `toDate().toISOString()`, seguindo o padrão de `listCatalogs`.
+- Timestamps ausentes ou inválidos: `null`; nunca inventar a data atual.
+- Valores monetários: números na unidade monetária já persistida; formatação visual fica para o Flutter.
+- Campos retornados por lista explícita, sem espalhar todo o documento.
+- Não preencher preço ou total ausente com zero.
+
+Para dados estruturais inválidos, proponho erro `internal` com mensagem genérica, sem devolver sucesso com valores inventados. No detalhe, itens ausentes ou quantidade de documentos diferente de `itemCount` devem ser tratados como inconsistência, sem devolver um detalhe aparentemente completo. Nenhuma correção automática será feita.
+
+**D. Decisões que ficam fora deste contrato**
+
+Não se define comportamento para:
+
+- Mudança de status.
+- Aprovação ou rejeição.
+- Criação de venda.
+- Reserva ou decremento de estoque.
+- Identificação do cliente.
+- Notificações.
+- Exclusão.
+- Retenção.
+- Filtros avançados.
+- Dashboard ou contador.
+
+As duas operações não escrevem documentos, nem mesmo `updatedAt`, “visualizado” ou “lido”.
+
+**E. Índices e limites da consulta**
+
+A consulta proposta usa apenas:
+
+```text
+stores/{storeId}/catalogRequests
+  → orderBy createdAt DESC
+  → limit 50
+```
+
+**Não exige índice composto sob a configuração padrão de indexação do Firestore.** O índice de campo único descendente de `createdAt` atende à consulta. Não há combinação de filtros nem consulta de grupo de coleções. [Documentação oficial de índices](https://firebase.google.com/docs/firestore/query-data/index-overview).
+
+A leitura direta do pai e a consulta dos itens por ID também não introduzem necessidade de índice composto.
+
+Limites dessa conclusão:
+
+- Não foram verificadas exceções de indexação configuradas em produção.
+- Se `createdAt` tiver sido excluído da indexação, a consulta exigirá ajuste desse índice.
+- `orderBy("createdAt")` não retorna documentos sem esse campo. O submit atual sempre o grava; documentos anômalos sem ele ficariam fora da lista. [Documentação de ordenação](https://firebase.google.com/docs/firestore/query-data/order-limit-data).
+
+Não há evidência para criar coleção, migration ou índice composto nesta etapa.
+
+**F. Erros esperados**
+
+| Código | Situação |
+|---|---|
+| `unauthenticated` | Chamada sem autenticação. |
+| `permission-denied` | Perfil inexistente, acesso revogado ou papel inválido. |
+| `failed-precondition` | Perfil sem loja vinculada válida. |
+| `not-found` | Loja inexistente; no detalhe, solicitação não encontrada na loja autenticada. |
+| `invalid-argument` | Payload fora do contrato ou `requestId` inválido. |
+| `internal` | Dados persistidos inconsistentes ou falha inesperada. |
+
+Autenticação e autorização devem anteceder consultas às solicitações.
+
+Erros devem usar o mecanismo de `HttpsError`, sem resposta alternativa `{success: false}`. Mensagens ao cliente não devem expor caminhos internos, dados de outra loja ou detalhes técnicos da infraestrutura. Falhas transitórias não devem ser convertidas em lista vazia.
+
+**G. Arquivos provavelmente envolvidos na F7.8-C**
+
+| Arquivo | Alteração provável, se autorizada |
+|---|---|
+| `functions/catalog/createCatalog.js` | Implementar as duas operações e suas exportações no módulo. |
+| `functions/index.js` | Exportar as duas callables, conforme escopo aprovado. |
+| `functions/tests/catalog/listCatalogRequests.emulator.test.js` | Novo teste de autorização, isolamento e listagem. |
+| `functions/tests/catalog/getCatalogRequest.emulator.test.js` | Novo teste de detalhe e snapshot. |
+| `docs/catalog/F7_CATALOGO_INTELIGENTE.md` | Registrar o contrato aprovado e sua implementação. |
+| `docs/codex/CURRENT_WORK.md` | Registrar o checkpoint correspondente. |
+
+O runner existente já descobre arquivos `*.test.js`; não há necessidade prevista de alterá-lo.
+
+A implementação apenas do backend não exige alteração Flutter. Tela, service, provider ou model dependerão do escopo futuro da integração.
+
+**H. Testes mínimos para a implementação**
+
+Para ambas as operações:
+
+- Bloquear usuário não autenticado.
+- Bloquear perfil inexistente, revogado e papel inválido.
+- Aceitar os cinco valores de papel reconhecidos, incluindo normalização.
+- Verificar perfil sem loja e loja inexistente.
+- Preservar a semântica atual de `accessStatus` e ausência de bloqueio por assinatura.
+- Impedir seleção de loja por payload.
+- Garantir ausência de escritas.
+
+Para `listCatalogRequests`:
+
+- Loja sem solicitações retorna `requests: []`.
+- Isolamento entre duas lojas.
+- Ordenação descendente e limite de 50 com mais de 50 registros.
+- Resposta com exatamente os campos contratados, sem itens ou dados extras.
+- Serialização de timestamps.
+- Não depender da existência atual do catálogo ou produto.
+- Documentar em teste o efeito de `createdAt` ausente.
+
+Para `getCatalogRequest`:
+
+- Validar `requestId` ausente, vazio, de tipo errado e contendo caminho.
+- Ler pai e todos os itens da própria loja.
+- ID inexistente e ID presente somente em outra loja retornam `not-found`.
+- Mesmo ID em duas lojas não provoca acesso cruzado.
+- Snapshot permanece igual após alteração ou remoção do produto.
+- Catálogo removido ou expirado não impede leitura.
+- Ordenação estável dos itens e leitura de uma solicitação com 200 itens.
+- Inconsistências não geram dados monetários fictícios ou resposta parcial.
+
+Na implementação, executar a suíte oficial no Emulator, incluindo a regressão do submit. **Nenhum teste foi executado nesta etapa.**
+
+**I. Pontos pendentes de decisão humana**
+
+Antes da F7.8-C, precisam ser aceitos como contrato:
+
+1. **Papéis:** manter exatamente o acesso atual de `listCatalogs`, incluindo operador, caixa e vendedor.
+2. **Alcance da lista:** aceitar somente as 50 mais recentes, sem paginação, nesta primeira versão.
+3. **Apresentação mínima:** retornar `catalogId` sem título/enriquecimento e usar exclusivamente o snapshot no detalhe.
+4. **Contrato defensivo:** rejeitar campos de entrada adicionais e retornar erro para dados estruturais inconsistentes, conforme proposto.
+
+A fonte oficial das regras Firestore permanece pendente de localização para auditar acesso direto. Isso não justifica abrir permissões nem alterar regras silenciosamente.
+
+Não foi tomada decisão sobre os temas excluídos na seção D.
+
+**J. Encerramento**
+
+- Nenhum arquivo alterado.
+- Nenhum commit.
+- Nenhum push.
+- Nenhum deploy.
+- **F7.8-C não iniciada.**

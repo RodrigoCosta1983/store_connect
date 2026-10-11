@@ -1,0 +1,164 @@
+============================================================
+F7.9-B1 — CONTRATO PURO IMPLEMENTADO E VALIDADO
+============================================================
+
+BRANCH:
+feat/f7-intelligent-catalog
+
+HEAD:
+cf44bbe
+
+STAGE:
+VAZIO
+
+============================================================
+ARQUIVOS B1
+============================================================
+
+functions/catalog/catalogRequestContract.js
+
+SHA256:
+8893B5D96FEC77018E6A8E665BA3F5AA8F3E8AEB4C4B81D958D3A9FD49994899
+
+functions/tests/catalog/catalogRequestContract.test.js
+
+SHA256:
+B48C0737F8CBBAAF1A36F66016A0A5AF209725D32D94F98462E2BA0BE5441487
+
+============================================================
+VALIDACAO
+============================================================
+
+node --check contrato:
+PASSOU
+
+node --check teste:
+PASSOU
+
+teste puro:
+PASSOU
+
+F7.9-B1: 393 casos puros passaram.
+Casos por grupo: {"A":17,"B":12,"C":17,"D":15,"E":22,"F":14,"G":15,"H":68,"I":8,"JKL":101,"M":98,"N":6}
+Sem Firebase, Emulator, rede ou escrita de dados.
+
+git diff --no-index --check:
+PASSOU
+
+============================================================
+ESCOPO
+============================================================
+
+Contrato puro:
+SIM
+
+Status:
+pending
+in_progress
+completed
+cancelled
+
+Actions:
+start
+complete
+cancel
+
+Inclui:
+- roles e aliases
+- customerName
+- customerPhone
+- note
+- requestVersion V1/V2
+- payload estrito
+- actor name snapshot
+- maquina de estados
+- permissoes
+- replay
+- lifecycle
+- projecoes de legado/list/detail
+
+Firebase:
+NAO
+
+Firestore:
+NAO
+
+Emulator:
+NAO
+
+Flutter:
+NAO
+
+Rules:
+NAO
+
+createCatalog.js:
+NAO ALTERADO
+
+functions/index.js:
+NAO ALTERADO
+
+============================================================
+STATUS ANTES DA CRIACAO DO RELATORIO
+============================================================
+
+ M android/app/build.gradle.kts
+ M lib/screens/subscription_screen.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? functions/catalog/catalogRequestContract.js
+?? functions/tests/catalog/catalogRequestContract.test.js
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+
+============================================================
+ESTADO FINAL
+============================================================
+
+CODIGO ALTERADO:
+SIM — SOMENTE OS 2 NOVOS ARQUIVOS B1
+
+RELATORIO TXT CRIADO:
+SIM
+
+RELATORIO:
+test/F7.9-B1_relatorio.txt
+
+GIT ADD:
+NAO
+
+COMMIT:
+NAO
+
+PUSH:
+NAO
+
+DEPLOY:
+NAO
+
+============================================================

@@ -1,0 +1,1019 @@
+============================================================
+F7.9-B0  CONTRATO FORMALIZADO
+============================================================
+
+GIT
+
+FATO OBSERVADO
+- Root: C:\Users\rodri\StudioProjects\store_connect.
+- Branch: feat/f7-intelligent-catalog.
+- HEAD: cf44bbe.
+- Stage inicial: vazio.
+- Tracked modificados, exatamente:
+  android/app/build.gradle.kts
+  lib/screens/subscription_screen.dart
+  lib/widgets/warning_banner.dart
+  pubspec.yaml
+- Os quatro trabalhos paralelos são protegidos; nenhuma escrita foi executada neles.
+- Untracked preexistentes: 25 relatórios .txt em test/, incluindo F7.9-A0_relatorio.txt; permitidos e preservados.
+- Destino desta tarefa: somente test/F7.9-B0_relatorio.txt, não tracked e não ignorado na verificação prévia.
+- Auditoria estática. Nenhum teste, Emulator, chamada remota, alteração de ambiente ou escrita em Firestore.
+- Linhas indicadas são aproximadas no HEAD conferido.
+- AGENTS.md e documentação do contexto foram considerados; as decisões de A1 fornecidas nesta tarefa prevalecem sobre referências históricas de F7.9 como expiração/retenção em docs/codex/CURRENT_WORK.md:77 e docs/catalog/F7_CATALOGO_INTELIGENTE.md:84.
+- Publicação efetiva, dados reais e Rules atualmente em produção: NÃO CONFIRMADO. Não foram acessados.
+
+CONTRATO APROVADO
+
+- Gestão operacional das solicitações, sem venda, reserva, baixa de estoque ou pagamento.
+- Estados canônicos: pending, in_progress, completed, cancelled.
+- Legado sem requestVersion permanece aceito; não há migração.
+- V2 acrescenta identificação autodeclarada: customerName, customerPhone, note e requestVersion:2.
+- Sem customerPhoneNormalized, customerId, vínculo ou criação automática em customers.
+- Atores e horários são derivados pelo servidor; nome é snapshot do perfil.
+- transitionCatalogRequest recebe exclusivamente requestId/action; transações efetivas são auditadas atomicamente.
+- Replay definido por estado atual e UID do ator correspondente, sem nova escrita/auditLog.
+- Leitura e escrita operacional de catalogRequests e descendentes somente via backend.
+- Listagem sem items/note, sem N+1 de produtos; detalhe preserva histórico.
+- Interface pública usa resumo existente; caixa interna expansível; terminais não reabrem.
+
+DISTINÇÃO DE AUTORIDADE
+- CONTRATO APROVADO: decisões expressas de Rodrigo.
+- RECOMENDAÇÃO: especificação técnica proposta neste B0 para pontos que A1 deixou à avaliação; não apresentada como aprovação anterior.
+- FATO OBSERVADO: comportamento atual do código.
+- NÃO CONFIRMADO: informação não comprovada nesta leitura.
+- O contrato funcional está formalizado abaixo. Recomendações e decisões residuais ficam explícitas; nada foi implementado.
+
+STATUS
+
+CONTRATO APROVADO
+Persistência          Label
+pending              Nova
+in_progress          Em atendimento
+completed            Finalizada
+cancelled            Cancelada
+
+- Não existe estado persistido new.
+- pending histórico continua sendo pending.
+- completed/cancelled são terminais.
+
+FATO OBSERVADO
+- Submit fixa "pending": functions/catalog/createCatalog.js:1934-1943.
+- List/get aceitam qualquer status string não vazia: mesmo arquivo:944-946,1047-1049.
+- Telas de solicitações não exibem status: lib/screens/management/catalog_requests_screen.dart:222-350 e catalog_request_detail_screen.dart:229-344.
+
+RECOMENDAÇÃO
+- Status persistido deve corresponder exatamente ao enum; não converter silenciosamente "NEW", "Pending", whitespace, null ou valores desconhecidos em pending.
+- Normalizador puro de status deve validar tipo/enum e retornar canônico ou erro; normalização de roles permanece separada.
+- List/get rejeitam a resposta inteira com internal genérico se houver status inválido, preservando o padrão fail-closed.
+- Transition rejeita documento com status inválido como internal/catalog-request-invalid-data; não tenta reparar.
+- UI não deve inventar label para estado desconhecido nem habilitar ação com base nele.
+
+LEGADO
+
+CONTRATO APROVADO
+- Payload sem requestVersion, com publicSlug/publicToken/items, continua aceito temporariamente.
+- Persistência V1 conserva os oito campos atuais, sem requestVersion/customerName/customerPhone/note.
+- Documento histórico pending aparece como Nova; listagem e detalhe continuam funcionando.
+- Fallback: "Cliente não identificado".
+- Pode iniciar, finalizar após iniciar ou cancelar nas origens permitidas.
+- Iniciar legado adiciona attendedByUid/attendedByName/attendedAt, muda status e updatedAt. Não preenche identificação, não atribui versão 2 e não altera items.
+- Concluir/cancelar legado acrescenta somente os campos próprios da ação, status e updatedAt; preserva atendimento anterior.
+
+FATO OBSERVADO
+- Schema V1: functions/catalog/createCatalog.js:1913-1946.
+- Detalhe é independente de produtos/catálogo atuais: 1034-1101.
+- Listagem por createdAt DESC, limit 50: 939-940.
+
+RECOMENDAÇÃO
+- Ausência de requestVersion classifica documento como legado; retorno do detalhe usa requestVersion:null.
+- Não transformar ausência em requestVersion:1 persistido.
+- Compatibilidade V1 é de formato, não autenticação de origem: qualquer chamador público pode escolher enviar V1 durante a janela de compatibilidade. Não é possível provar que se trata de uma aba antiga apenas pela ausência da versão.
+- Não criar prazo automático para encerrar V1 nesta etapa; retirada futura exige decisão explícita.
+
+CLIENTE
+
+CONTRATO APROVADO
+- customerName: string, trim, obrigatório, 1 a 120 caracteres após trim.
+- customerPhone: string de entrada, trim e normalização brasileira abaixo.
+- note: opcional; string quando presente; trim; máximo 500 caracteres após trim.
+- Snapshot histórico autodeclarado, sem vínculo ao cadastro de clientes.
+
+RECOMENDAÇÃO — REPRESENTAÇÃO EXATA DE NOTE
+- V2: note ausente, "" ou somente whitespace => persistir note:null.
+- V2: note string não vazia após trim => persistir texto aparado.
+- Entrada explícita note:null => invalid-argument/invalid-note, pois o contrato diz string quando presente. Null pertence à persistência/retorno; o frontend deve omitir note quando vazio, ou enviar "".
+- note número, boolean, array ou objeto => invalid-argument/invalid-note.
+- Não serializar undefined.
+- Ausência de note em documento legado => null no detalhe, sem escrever no banco.
+- Isso segue a preferência arquitetural note:null. Alternativa B, omitir campo V2, economiza a chave, mas perde a forma estável e não distingue V2 vazio de campo ausente por escrita incompleta. Ambas são tecnicamente possíveis; a recomendação é A, explicitamente.
+- Contagem proposta para limites: unidades UTF-16 após trim, compatíveis com String.length em JavaScript e Dart. Emoji pode ocupar duas unidades. Se o requisito significar caracteres percebidos pelo usuário, essa unidade precisa ser revista antes dos testes de fronteira; não presumir equivalência.
+
+FATO OBSERVADO
+- Firestore já recebe null em snapshots/auditoria: functions/customers/archiveCustomer.js:72-81,212 e usuarios/revogarAcessoFuncionario.js:407-429.
+- Flutter usa Map<String,dynamic> nas telas: catalog_requests_screen.dart:18-19,68-74 e catalog_request_detail_screen.dart:21,72-106; campos nullable são tecnicamente compatíveis, mas ainda não são exibidos.
+- customers.phone é opcional e salvo com trim: manage_customers_screen.dart:278-302,364-383; Customer.phone é String?: lib/models/customer_model.dart:31.
+- Não alterar esses arquivos de cadastro para implementar customerPhone da solicitação.
+
+TELEFONE
+
+CONTRATO APROVADO — ALGORITMO
+1. Exigir string; aplicar trim.
+2. Remover caracteres não numéricos; usar dígitos ASCII 0-9 como representação canônica.
+3. Se resultado tiver 10 ou 11 dígitos, prefixar "55".
+4. Se resultado tiver 12 ou 13 dígitos, exigir prefixo "55" e manter.
+5. Qualquer outro comprimento/prefixo => invalid-argument.
+6. Persistir somente a string canônica em customerPhone.
+
+Entrada                   Saída
+(21) 98505-0120            5521985050120
+21 98505-0120              5521985050120
++55 (21) 98505-0120        5521985050120
+21 3505-0120               552135050120
+5521985050120              5521985050120
+
+RECOMENDAÇÃO
+- reason único para tipo/comprimento/prefixo inválido: invalid-customer-phone; não ecoar telefone no erro/log.
+- Aplicar primeiro regra de comprimento: número nacional de 10/11 dígitos começando por 55 ainda recebe DDI 55; não remover esse DDD.
+- "0055..." não ganha regra especial; se exceder 13 dígitos, rejeitar.
+- Limpeza de não dígitos também remove letras. Não acrescentar rejeição por letras, DDD inexistente, dígitos repetidos ou nono dígito se não foi aprovada.
+- Aceitação estrutural não comprova linha existente nem WhatsApp.
+- UI pode apresentar formatação; WhatsApp deve usar valor canônico retornado, nunca concatenar entrada arbitrária.
+- Normalização deve ser idempotente para saída canônica.
+
+FATO OBSERVADO
+- _limparNumeroTelefone remove prefixo 55 ao importar agenda: lib/screens/management/manage_customers_screen.dart:201-208. Não reutilizar diretamente: direção oposta ao novo contrato.
+- Cadastro existente continua intocado; não há migração de customers.phone.
+
+PAYLOAD V1
+
+CONTRATO APROVADO
+{
+  publicSlug: string,
+  publicToken: string,
+  items: [{productId: string, quantity: inteiro positivo}]
+}
+- Ausência real da propriedade requestVersion é o seletor V1.
+- Mesmas regras atuais de token, slug, pertencimento, preço, estoque e quantidade.
+
+RECOMENDAÇÃO — CONTRATO ESTRITO
+- Objeto simples; chaves exatas publicSlug/publicToken/items.
+- Cada item: objeto simples com somente productId/quantity.
+- customerName/customerPhone/note sem requestVersion => invalid-argument/customer-fields-require-version.
+- requestVersion presente com 1, 3, "2", null, boolean, array, objeto ou número não inteiro => invalid-argument/unsupported-request-version; nunca fallback V1.
+- Outras propriedades extras, inclusive storeId/catalogId/status/totais/atores/timestamps/customerId => invalid-argument/unexpected-fields.
+- Extra no item, como price/name/subtotal => invalid-argument/unexpected-item-fields.
+- Falta de campo obrigatório/forma inválida => invalid-argument/invalid-payload.
+- Não persistir identificadores ou totais informados por cliente.
+
+FATO OBSERVADO / IMPACTO
+- Frontend publicado no código envia exatamente V1: lib/screens/public/public_catalog_screen.dart:553-563; sua compatibilidade é preservada pela proposta estrita.
+- Backend hoje ignora extras, não os rejeita: functions/catalog/createCatalog.js:1500-1577.
+- Teste atual envia extras e espera sucesso com valores do servidor: functions/tests/catalog/submitPublicCatalogSelection.emulator.test.js:693-724.
+- A proposta estrita muda essa tolerância do endpoint/teste, embora preserve o payload real do frontend. Ver CONTRADIÇÃO C1; não declarar os asserts antigos integralmente compatíveis.
+
+PAYLOAD V2
+
+CONTRATO APROVADO
+{
+  publicSlug: string,
+  publicToken: string,
+  requestVersion: 2,
+  customerName: string,
+  customerPhone: string,
+  note?: string,
+  items: [{productId: string, quantity: inteiro positivo}]
+}
+
+RECOMENDAÇÃO — CONTRATO EXATO
+- Objeto simples; obrigatórias todas as chaves acima exceto note; nenhuma outra.
+- requestVersion: typeof number, Number.isInteger e igualdade a 2; em JSON 2.0 é o mesmo número 2, não um tipo distinto.
+- Não aceitar coerção de "2"; propriedade presente inválida não é legado.
+- Items mantêm 1-200, productId string trim não vazia sem "/", único após trim; quantity inteiro seguro >0. Não ampliar validações de productId silenciosamente nesta etapa.
+- Nome inválido => invalid-argument/invalid-customer-name.
+- Telefone inválido => invalid-argument/invalid-customer-phone.
+- Note inválida => invalid-argument/invalid-note.
+- Erros novos retornam details:{reason}; sem cópia do valor pessoal inválido.
+- Extras => unexpected-fields/unexpected-item-fields como V1.
+- Ordem proposta: objeto -> versão -> campos de cliente sem versão -> whitelist/obrigatórios -> dados cliente -> items -> validação operacional atual.
+- Erros operacionais de produto/catálogo mantêm códigos/reasons existentes.
+- Retorno público permanece {success,requestId,validatedItemCount,totalUnits,totalAmount}; não incluir identificação ou lifecycle.
+
+FATO OBSERVADO
+- Revalidação/centavos/snapshot/batch/retorno: functions/catalog/createCatalog.js:1583-1957.
+- RequestVersion e identificação ainda não são lidos nem persistidos.
+
+PERSISTÊNCIA V2
+
+CONTRATO APROVADO
+stores/{storeId}/catalogRequests/{requestId}
+{
+  catalogId: string,
+  requestVersion: 2,
+  customerName: string aparada,
+  customerPhone: string canônica com DDI 55,
+  note: string aparada ou null,
+  status: "pending",
+  itemCount: inteiro seguro 1..200,
+  totalUnits: inteiro seguro,
+  totalAmount: número monetário calculado pelo servidor,
+  createdAt: Timestamp servidor,
+  updatedAt: Timestamp servidor,
+  source: "public_catalog"
+}
+
+items/{itemId}
+{
+  productId,
+  name,
+  quantity,
+  price,
+  subtotal
+}
+
+- requestId/itemId são IDs documentais, não campos adicionais persistidos.
+- Criação não preenche lifecycle com dados fictícios; campos da ação são acrescentados quando ela ocorrer.
+- Produtos continuam snapshots do envio, não enriquecimento posterior.
+- Nenhuma gravação em customers, sales, products, lotes ou pagamentos.
+- Cliente público não determina storeId/catalogId/status/atores/timestamps/totais.
+
+RECOMENDAÇÃO
+- Mesma escrita atômica de pai/itens do fluxo atual.
+- V2 sempre grava note, inclusive null; V1 não grava campos V2.
+- requestVersion persistido representa origem do envio, não a versão atual da máquina de atendimento.
+- Transição de legado não o converte para V2.
+
+TRANSITIONCATALOGREQUEST
+
+CONTRATO APROVADO
+- Callable autenticada, nome transitionCatalogRequest.
+- Payload exclusivo: {requestId, action}.
+- action: start, complete, cancel.
+- UID exclusivamente request.auth.uid.
+- users/{uid} deve existir; accessStatus normalizado não pode ser revoked.
+- role válida, storeId do perfil, loja existente, isolamento por loja.
+- Sem storeId/status/role/ator/timestamp enviado pelo Flutter.
+
+RECOMENDAÇÃO — ENTRADA E EXECUÇÃO
+- onCall v2, mesma base de timeout 30s/256MiB das leituras; sem novo secret.
+- Objeto simples, exatamente duas chaves.
+- requestId: mesmas regras de getCatalogRequest: string trim, não vazio, sem "/", ".", "..", __...__, máximo 1500 bytes UTF-8; não exigir 20 caracteres (createCatalog.js:1020-1032).
+- action deve ser string canônica exata; rejeitar "START", " start ", null e números, sem coerção.
+- Não acrescentar gate de assinatura: não está aprovado e leituras atuais não o exigem (createCatalog.js:889-926,983-1018).
+- Normalizar role/accessStatus como código atual; accessStatus ausente/vazio/outro diferente de revoked não é novo bloqueio.
+- Ler perfil, loja e pai dentro da transação; validar antes de qualquer escrita.
+- Não consultar items/produtos/catálogo para uma mudança de atendimento.
+- Aplicar update mínimo no pai e criar evento na mesma transação.
+- Não apagar attendedBy* ao concluir/cancelar.
+- Mesmo auth/perfil/role/store devem ser revalidados no replay; replay não contorna revogação.
+
+RECOMENDAÇÃO — ERROS EXATOS
+Situação                           code                 details.reason
+Sem auth                           unauthenticated      authentication-required
+Perfil ausente                     permission-denied    profile-not-found
+AccessStatus revoked               permission-denied    access-revoked
+Role não reconhecida               permission-denied    invalid-role
+StoreId perfil ausente/inválido     failed-precondition  store-not-linked
+Loja ausente                       not-found            store-not-found
+Payload/extra/tipo inválido         invalid-argument     invalid-payload
+RequestId inválido                 invalid-argument     invalid-request-id
+Action inválida                    invalid-argument     invalid-action
+Pai ausente na própria loja        not-found            catalog-request-not-found
+Pai/status/lifecycle corrompido     internal             catalog-request-invalid-data
+Start já assumido por outro         aborted              catalog-request-already-attended
+Complete enquanto pending          failed-precondition  catalog-request-not-in-progress
+Operador não responsável            permission-denied    catalog-request-not-assignee
+Terminal sem replay aplicável       failed-precondition  catalog-request-terminal
+Contenção transacional esgotada     aborted              catalog-request-concurrent-update
+
+- ID existente somente em outra loja tem exatamente o mesmo not-found do ausente; não consultar outra loja.
+- Não usar aborted para toda permissão negada; distinguir disputa, origem impossível e falta de permissão.
+- Transportes unavailable/deadline-exceeded permanecem transitórios; falhas inesperadas geram internal genérico sem dados sensíveis.
+- Ordem: auth -> formato -> perfil/store -> existência/integridade -> replay -> terminal -> origem -> permissão da ação -> escrita.
+- Não prometer mensagem localizada como chave de máquina; UI usa code/reason.
+- Reasons acima são proposta técnica B0, não comportamento implementado.
+
+RECOMENDAÇÃO — RETORNO MÍNIMO
+{
+  success: true,
+  changed: true | false,
+  requestId: string,
+  status: "pending" | "in_progress" | "completed" | "cancelled"
+}
+
+- Não retornar cliente, items, nomes ou timestamps nessa resposta mínima.
+- Após sucesso/replay/conflito, UI recarrega list/get para obter estado e horários confirmados; não deduz autoria só pelo status retornado.
+- updatedAt apareceu como exemplo conceitual, não campo obrigatório aprovado. Recomenda-se omiti-lo na resposta da transição e mantê-lo nas leituras.
+- Motivo: FieldValue.serverTimestamp é sentinel, não instante serializável antes do commit; ler depois pode observar outra transição já concluída. Não devolver sentinel, hora do Flutter ou valor estimado como commit.
+- Se updatedAt for exigido no retorno da transição, será necessário fechar semântica de leitura pós-commit e possível avanço concorrente; decisão residual R2.
+- Replay retorna status observado pela transação, sem refazer snapshot do nome.
+
+PERMISSÕES
+
+CONTRATO APROVADO
+- Normalização: trim/lowercase; caixa/vendedor equivalem a operador.
+- Start em pending: admin, gerente, operador e aliases.
+- Cancel em pending: mesmos perfis.
+- Complete/cancel em in_progress: attendedByUid == auth.uid OU role admin/gerente.
+- Operador diferente do responsável é bloqueado.
+- Override não transfere atendimento: attendedBy* original permanece; completedBy*/cancelledBy* identifica quem encerrou.
+- Nenhum override reabre terminal nem toma um in_progress via start.
+- Nome do ator: primeiro name string não vazia após trim; senão username; senão fullName; senão null. UID não depende de nome.
+
+FATO OBSERVADO
+- Roles do catálogo: functions/catalog/createCatalog.js:344-362.
+- Funcionário grava name/storeId/role/accessStatus/createdAt/createdBy: functions/usuarios/convidarFuncionario.js:271-304.
+- Tela usa name/username: lib/screens/employees/employees_screen.dart:780-795.
+- Revogação preserva perfil e grava revoked/updatedAt: functions/usuarios/revogarAcessoFuncionario.js:357-377.
+
+RECOMENDAÇÃO
+- Campos não string/vazios são ignorados na resolução do nome, sem coerção para "[object Object]".
+- Null para ByName é válido, não impede atendimento. UI usa "Funcionário não identificado", sem mostrar "null".
+- Nome é congelado na ação; renomear perfil depois não atualiza histórico.
+- Não impor limite novo ao nome de funcionário sem contrato; limite 120 pertence a customerName.
+
+MÁQUINA DE ESTADOS
+
+CONTRATO APROVADO
+pending --start--> in_progress
+pending --cancel--> cancelled
+in_progress --complete--> completed
+in_progress --cancel--> cancelled
+
+- completed e cancelled não possuem saída.
+- Replays não são transições.
+- Não reabrir, não voltar, não transferir, não reassumir automaticamente.
+
+Writes efetivos:
+start:
+  status=in_progress;
+  attendedByUid=auth.uid; attendedByName=snapshot|null;
+  attendedAt=serverTimestamp; updatedAt=serverTimestamp.
+
+complete:
+  status=completed;
+  completedByUid=auth.uid; completedByName=snapshot|null;
+  completedAt=serverTimestamp; updatedAt=serverTimestamp.
+
+cancel:
+  status=cancelled;
+  cancelledByUid=auth.uid; cancelledByName=snapshot|null;
+  cancelledAt=serverTimestamp; updatedAt=serverTimestamp.
+
+RECOMENDAÇÃO
+- Um mesmo instante de servidor para timestamp da ação, updatedAt e createdAt do auditLog daquela transação.
+- Não usar set substitutivo do documento completo.
+- createdAt, cliente, versão, catálogo, source, contadores, valores e items são imutáveis para a transição.
+
+MATRIZ DE TRANSIÇÕES
+
+CONTRATO APROVADO quanto a estados/permissões/replay.
+RECOMENDAÇÃO quanto a code/reason.
+
+Legenda:
+A = admin; G = gerente; O = operador, incluindo caixa/vendedor normalizados.
+TODOS = A/G/O; autenticados, não revogados e da mesma loja.
+R = auth.uid == attendedByUid.
+C = auth.uid == completedByUid.
+X = auth.uid == cancelledByUid.
+"-" em changed indica erro sem payload de sucesso; não significa changed:false.
+Em qualquer erro: nenhuma escrita e nenhum auditLog.
+
+Estado       | Action   | Role     | Responsável/ator | Resultado | Novo estado  | changed | code / reason
+pending      | start    | admin    | irrelevante      | sucesso   | in_progress  | true    | -
+pending      | start    | gerente  | irrelevante      | sucesso   | in_progress  | true    | -
+pending      | start    | operador | irrelevante      | sucesso   | in_progress  | true    | -
+pending      | start    | caixa    | irrelevante      | sucesso   | in_progress  | true    | -
+pending      | start    | vendedor | irrelevante      | sucesso   | in_progress  | true    | -
+pending      | complete | TODOS    | irrelevante      | rejeita   | pending      | -       | failed-precondition / catalog-request-not-in-progress
+pending      | cancel   | TODOS    | irrelevante      | sucesso   | cancelled    | true    | -
+in_progress  | start    | TODOS    | R=sim            | replay    | in_progress  | false   | -
+in_progress  | start    | TODOS    | R=não            | conflito  | in_progress  | -       | aborted / catalog-request-already-attended
+in_progress  | complete | O        | R=sim            | sucesso   | completed    | true    | -
+in_progress  | complete | O        | R=não            | nega      | in_progress  | -       | permission-denied / catalog-request-not-assignee
+in_progress  | complete | gerente  | sim ou não       | sucesso   | completed    | true    | -
+in_progress  | complete | admin    | sim ou não       | sucesso   | completed    | true    | -
+in_progress  | cancel   | O        | R=sim            | sucesso   | cancelled    | true    | -
+in_progress  | cancel   | O        | R=não            | nega      | in_progress  | -       | permission-denied / catalog-request-not-assignee
+in_progress  | cancel   | gerente  | sim ou não       | sucesso   | cancelled    | true    | -
+in_progress  | cancel   | admin    | sim ou não       | sucesso   | cancelled    | true    | -
+completed    | start    | TODOS    | qualquer         | terminal  | completed    | -       | failed-precondition / catalog-request-terminal
+completed    | complete | TODOS    | C=sim            | replay    | completed    | false   | -
+completed    | complete | TODOS    | C=não            | terminal  | completed    | -       | failed-precondition / catalog-request-terminal
+completed    | cancel   | TODOS    | qualquer         | terminal  | completed    | -       | failed-precondition / catalog-request-terminal
+cancelled    | start    | TODOS    | qualquer         | terminal  | cancelled    | -       | failed-precondition / catalog-request-terminal
+cancelled    | complete | TODOS    | qualquer         | terminal  | cancelled    | -       | failed-precondition / catalog-request-terminal
+cancelled    | cancel   | TODOS    | X=sim            | replay    | cancelled    | false   | -
+cancelled    | cancel   | TODOS    | X=não            | terminal  | cancelled    | -       | failed-precondition / catalog-request-terminal
+
+- Todas as linhas O devem ser testadas também com os dois aliases.
+- Role inválida/revogado/outra loja falham antes desta matriz, inclusive nos replays.
+- Admin/gerente com C ou X diferente também recebe terminal; override não altera a identidade de ação passada.
+- Estado desconhecido/corrompido falha por integridade, não é estado adicional desta tabela.
+
+IDEMPOTÊNCIA
+
+CONTRATO APROVADO
+- start: in_progress + mesmo attendedByUid => success/changed:false.
+- complete: completed + mesmo completedByUid => success/changed:false.
+- cancel: cancelled + mesmo cancelledByUid => success/changed:false.
+- Replay não altera updatedAt, timestamps, nome congelado, contadores ou logs.
+- Replay exige autorização atual.
+- Start repetido depois que a solicitação já foi concluída NÃO é replay: é terminal.
+
+RECOMENDAÇÃO
+- Não introduzir requestId de operação, recibo, lease, versão ou nova coleção: máquina monotônica e ator satisfazem os replays aprovados.
+- A idempotência é das transições; não do envio público. Submit continua podendo criar outra solicitação após resposta perdida.
+- Testar data e updateTime antes/depois para provar zero writes, além da contagem de logs.
+
+FATO OBSERVADO
+- archiveCustomer retorna alreadyArchived sem write: functions/customers/archiveCustomer.js:171-187.
+- restoreCustomer retorna alreadyActive: functions/customers/restoreCustomer.js:211-233.
+- Submit cria auto-ID novo e teste comprova duplicação por reenvio: createCatalog.js:1925-1949; submitPublicCatalogSelection.emulator.test.js:723-724.
+
+CONCORRÊNCIA
+
+CONTRATO APROVADO
+- Firestore transaction, leitura atual e decisão dentro do callback.
+- Dois starts de UIDs diferentes: um único changed:true; segundo não substitui attendedByUid.
+
+RECOMENDAÇÃO — MATRIZ DE CORRIDAS
+1. start(A) || start(B), ambos autorizados:
+   um in_progress com ator vencedor; outro aborted/already-attended; um log.
+2. start(A) || start(A):
+   um changed:true, outro changed:false; um log; mesmos timestamps.
+3. complete(A) || complete(A):
+   um changed:true, outro replay; um log de conclusão.
+4. cancel(A) || cancel(A):
+   um changed:true, outro replay; um log de cancelamento.
+5. complete(A) || complete(B), ambos elegíveis:
+   um completed; outro terminal; um log de conclusão.
+6. complete || cancel em in_progress, ambos elegíveis:
+   apenas um estado terminal e um log de encerramento; perdedor terminal.
+7. cancel(A) || cancel(B), ambos elegíveis:
+   um cancelled; outro terminal; um log.
+8. start(A) || cancel(B) em pending:
+   se cancel vencer, start encontra terminal;
+   se start vencer e B for outro operador, cancel é permission-denied;
+   se start vencer e B for responsável ou admin/gerente, cancel pode ocorrer em seguida.
+   Nesse último caso, dois commits/logs são CORRETOS: pending->in_progress->cancelled.
+9. Revogação/alteração do perfil durante disputa:
+   leitura transacional do perfil força reavaliação no retry; não usar permissão capturada fora.
+10. Contenção esgotada:
+   aborted/concurrent-update; recarregar; não afirmar quem venceu sem nova leitura.
+
+- AuditRef pode ser preparado uma vez por invocação, mas write somente no ramo changed:true; callback pode repetir, sem efeitos externos.
+- Não enviar notificações, abrir URLs ou executar operações externas dentro do callback.
+- Transação não deve “retryar” uma ação de negócio em estado já inválido.
+- Padrão CAS real: functions/products/setProductCategories.js:329-395,540-558,577-627.
+- Claim transacional existente: functions/backups/scheduledStoreBackups.js:148-263; não importar lease ou reassunção dos backups.
+- Atomicidade com auditoria: functions/customers/archiveCustomer.js:192-222; restoreCustomer.js:249-289.
+
+AUDITLOGS
+
+CONTRATO APROVADO
+- stores/{storeId}/auditLogs/{logId}, mesma transação do pai.
+- start -> catalog_request_started
+- complete -> catalog_request_completed
+- cancel -> catalog_request_cancelled
+- entityType: "catalogRequest"; entityId: requestId.
+- performedBy:{uid,role}, com role normalizada.
+- Nenhum log em changed:false.
+- Não copiar customerName/customerPhone/note.
+
+RECOMENDAÇÃO — SCHEMA MÍNIMO
+{
+  action: um dos três nomes aprovados,
+  entityType: "catalogRequest",
+  entityId: requestId,
+  storeId: loja derivada,
+  performedBy: {uid: auth.uid, role: role normalizada},
+  before: {status: estado anterior},
+  after: {status: estado novo},
+  createdAt: serverTimestamp
+}
+
+- UID/role do evento, sua ação e horário já identificam quem realizou a transição.
+- Não duplicar nomes de funcionários, produtos, totais, cliente, note ou documento inteiro.
+- Não adicionar reason livre: payload aprovado não possui motivo de cancelamento.
+- Schema existente permite este formato; não foi encontrado contrato global obrigatório que exija cópia integral do pai.
+- Em falha no log, nenhum estado é confirmado; em falha no pai, nenhum log órfão.
+- before/after mínimos são proposta B0; alternativas com mais lifecycle não são necessárias para reconstruir as quatro transições aprovadas.
+- FATO: padrão action/entityType/entityId/storeId/performedBy/before/after/createdAt em setProductCategories.js:599-627; auditLogs bloqueia escrita direta em firestore.rules:167-177.
+
+LISTCATALOGREQUESTS
+
+CONTRATO APROVADO — RESPOSTA
+{
+  success: true,
+  requests: [{
+    requestId, catalogId, status,
+    itemCount, totalUnits, totalAmount,
+    createdAt, updatedAt, source,
+    customerName: string|null,
+    customerPhone: string|null,
+    attendedByName: string|null,
+    attendedAt: ISO-UTC|null
+  }]
+}
+
+- Não acrescentar note, items, requestVersion ou attendedByUid à listagem sem decisão adicional.
+- Campos novos ausentes em legado retornam null.
+- Legado já atendido retorna snapshot de atendimento existente; não zerar por ser V1.
+- Sem N+1 para produto, cliente ou funcionário; nomes vêm do pai.
+- Mesmo auth/store/payload vazio, orderBy createdAt DESC, limit 50, sem paginação/filtros.
+- Não marcar lida, alterar updatedAt nem corrigir documentos.
+
+RECOMENDAÇÃO — VALIDAÇÃO
+- Enum exato para status; inválido => internal genérico e rejeição de toda a lista.
+- Preservar validações numéricas atuais e ISO/null para createdAt/updatedAt.
+- Documento V2 exige nome/telefone válidos já canônicos; não normalizar telefone malformado ao ler.
+- Campo novo estruturalmente inválido não deve virar texto inventado ou fallback de legado.
+- Ausência/null de campo opcional pode virar null; attendedByName:null é válido mesmo em atendimento.
+- Aplicar validador comum de lifecycle descrito no detalhe ao pai já lido, sem novas consultas.
+- FATO: whitelist atual do retorno e validações em createCatalog.js:939-974; asserts exatos em listCatalogRequests.emulator.test.js:129-139 serão ampliados.
+
+GETCATALOGREQUEST
+
+CONTRATO APROVADO — RESPOSTA
+{
+  success: true,
+  request: {
+    requestId, catalogId, status,
+    itemCount, totalUnits, totalAmount,
+    createdAt, updatedAt, source,
+    requestVersion: 2|null,
+    customerName: string|null,
+    customerPhone: string|null,
+    note: string|null,
+    attendedByUid: string|null,
+    attendedByName: string|null,
+    attendedAt: ISO-UTC|null,
+    completedByUid: string|null,
+    completedByName: string|null,
+    completedAt: ISO-UTC|null,
+    cancelledByUid: string|null,
+    cancelledByName: string|null,
+    cancelledAt: ISO-UTC|null,
+    items: [{itemId,productId,name,quantity,price,subtotal}]
+  }
+}
+
+- Ausência de campos novos no legado => null apropriado, sem persistir nulls.
+- Todos os status canônicos aceitos; desconhecido rejeita o detalhe inteiro.
+- Mantém validação de requestId, isolamento, todos os items ordenados por documentId ASC, itemCount coerente e snapshot histórico.
+- Não consulta produto/catálogo atual; nenhuma alteração no snapshot.
+
+RECOMENDAÇÃO — INTEGRIDADE DOS CAMPOS NOVOS
+- Version ausente => legado; presente deve ser 2. Null/1/"2" persistidos não são novas versões válidas; internal para versão inválida.
+- Legado sem identificação é válido; se houver campos opcionais presentes, validar tipos/valores, não inferir origem V2.
+- V2: nome válido, telefone canônico; note null ou string aparada <=500. Ausência de note pode retornar null para tolerância de leitura; novos writes V2 sempre a incluem.
+- Tripla de ator completa: ByUid string não vazia, ByName string aparada não vazia OU null, At Timestamp.
+- pending: nenhum atendimento/conclusão/cancelamento ativo.
+- in_progress: atendimento completo; sem conclusão/cancelamento.
+- completed: atendimento e conclusão completos; sem cancelamento.
+- cancelled: cancelamento completo; atendimento ausente (cancelado de pending) ou completo (de in_progress); sem conclusão.
+- Chaves de evento não ocorrido podem estar ausentes/null; grupo parcialmente preenchido é inválido. ByName ausente pode ser projetado null, sem invalidar um UID/At válidos.
+- Timestamp de lifecycle presente com tipo inválido => internal; grupo ausente em pending legado => null. Não confundir com tolerância já existente para createdAt/updatedAt.
+- Não impor nova verificação aritmética de somas dos items; preservar contrato histórico atual.
+- Não consultar users para validar que ator ainda existe; UID/nome são históricos.
+- Transição usa integridade de pai/lifecycle, sem carregar items para toda ação.
+- Estes detalhes defensivos são RECOMENDAÇÃO B0, explicitados para testes; não migram nem corrigem dado.
+
+FATO OBSERVADO
+- Pai/items explícitos, falha integral e Timestamp->ISO/null: functions/catalog/createCatalog.js:1034-1101.
+- Histórico e 200 items testados em getCatalogRequest.emulator.test.js:151-173.
+- A ausência de campos novos e de retorno próprio do lifecycle é a implementação atual, não uma incompatibilidade com adicioná-los.
+
+FIRESTORE RULES
+
+CONTRATO APROVADO
+- Negar leitura e escrita de cliente em catalogRequests, items e quaisquer descendentes.
+- Operação via Admin SDK/callables, com autenticação/autorização no backend.
+- Nenhuma exceção de acesso direto para admin/gerente/operador.
+- Usuário revoked não lê/escreve nem via callable autorizada; Rules bloqueiam acesso direto de todos.
+
+FATO OBSERVADO
+- Match genérico em firestore.rules:379:
+  /stores/{storeId}/{subcollection}/{document=**}
+- Três permissões atuais: read em 381-393; create/update em 395-407; delete em 409-430.
+- catalogRequests não está entre as exclusões. Same-store pode ler/criar/editar; admin/gerente pode excluir.
+- D1/D2 usam somente callables: catalog_requests_screen.dart:35-44 e catalog_request_detail_screen.dart:37-48. Não dependem de acesso direto aos pais/items.
+- firestore.rules usa version 2 (linha 1); o wildcard recursivo abrange descendentes.
+
+RECOMENDAÇÃO — PLANO EXATO PARA C
+1. Em CADA um dos três allows do match genérico, acrescentar:
+   && subcollection != 'catalogRequests'
+2. Declarar intenção explícita para o ramo:
+   match /stores/{storeId}/catalogRequests/{document=**} {
+     allow read, write: if false;
+   }
+3. Não remover o match genérico inteiro, nem alterar exclusões/regras das demais coleções.
+4. Reauditar todos os matches após o patch; um allow sobreposto reabre acesso.
+5. Testar get/list/create/update/delete tanto do pai quanto de items e descendente arbitrário.
+6. Testar mesma loja, aliases, revoked, outra loja e anônimo; todos negados diretamente.
+7. Regressão das coleções não relacionadas permanece conforme regras atuais.
+8. Deploy das Rules somente com autorização específica de Rodrigo na etapa de publicação.
+
+- Negar só write é insuficiente: o contrato aprovado também exige impedir read direto.
+- allow false adicional sozinho é insuficiente se os três allows genéricos continuarem válidos.
+- CollectionGroup de items/catalogRequests também deve ser testado para não expor esse ramo.
+- Admin SDK não passa pelas Rules; testes diretos via SDK cliente e testes das callables são coberturas distintas.
+- Auditoria/local não comprova Rules publicadas: NÃO CONFIRMADO.
+
+FLUTTER PÚBLICO
+
+CONTRATO APROVADO
+- Formulário no resumo existente, sem rota nova:
+  Nome *
+  WhatsApp *
+  Observação
+- Novo envio sempre requestVersion:2.
+- Validação local antes da callable; servidor continua autoridade.
+- Evitar duplicidade de clique e preservar dados em erro transitório.
+
+RECOMENDAÇÃO — CICLO DO FORMULÁRIO
+- Três TextEditingControllers e GlobalKey<FormState>, com ownership estável no State da tela; não criá-los em build/StatefulBuilder.
+- Inicializar uma vez e dispose na desmontagem; manter valores durante fechamento/reabertura do resumo e reconciliação de produto.
+- Campos/Voltar/Enviar bloqueados durante chamada; guardar snapshot dos dados enviados, como já ocorre com submittedQuantities.
+- Validar nome/telefone/note; note vazio é omitido do payload ou enviado "", nunca null de entrada.
+- Enviar somente V2 estrito, sem storeId/status/atores/preços.
+- Erro transitório/retorno incompleto: manter formulário, resumo e seleção; permitir retry.
+- invalid-customer-name/phone/note: manter resumo aberto, apresentar erro e permitir correção; não disparar refresh de catálogo por esses reasons.
+- Erro operacional de produto/catálogo: conservar reconciliação atual, preservando draft do formulário para revisão.
+- Sucesso confirmado: limpar seleção e controllers, sair de seleção e mostrar confirmação.
+- Não usar storage persistente do navegador para dados pessoais neste incremento.
+- _isSubmittingSelection continua trava visual; não é idempotência de submit.
+- FATO: public_catalog_screen.dart:321-333,525-647 contém modal/trava/payload V1 e hoje fecha resumo para todo invalid-argument. Essa classificação precisa distinguir os novos reasons.
+- Rota permanece lib/main.dart:97-108,147-187. Sem necessidade sustentada de alterar main.dart.
+
+CAIXA DE ENTRADA
+
+CONTRATO APROVADO
+- Fechado: customerName ou "Cliente não identificado", badge, data, produtos, unidades, total.
+- Expandido: customerPhone, responsável quando houver, attendedAt, WhatsApp, ação compatível com status e Ver detalhes.
+- Não carregar items completos na lista, não ampliar API para items.
+
+RECOMENDAÇÃO
+- Usar mapa de labels canônicos; expansão local por requestId estável.
+- Exibir nome de ator nulo com fallback quando attendedAt indicar atendimento; não ocultar evento porque nome não existe.
+- WhatsApp apenas com telefone canônico válido; legado sem telefone não apresenta ação habilitada. Construir URI HTTPS com número de dígitos, sem dado pessoal desnecessário na mensagem.
+- Dependência url_launcher já consta em pubspec.yaml:46; não é necessário alterar o arquivo protegido só para essa ação.
+- Em pending: Iniciar atendimento e Cancelar para roles aprovadas.
+- Em in_progress: ação "Abrir atendimento" leva ao detalhe, onde existe attendedByUid e são decididas ações de complete/cancel.
+- Em terminal: somente dados e Ver detalhes; sem ação de transição.
+- Proposta acima preserva exatamente o retorno aprovado de listagem, sem N+1 ou items na expansão.
+- Se forem exigidos botões complete/cancel DIRETOS na lista com visibilidade por responsável, falta dado: attendedByName não identifica UID. Ver C2/R1; não comparar nome para autorização nem acrescentar UID silenciosamente.
+- Após ação efetiva/replay/conflito: recarregar listagem. Ao retornar do detalhe, recarregar se houver mudança ou, de forma conservadora, sempre.
+- Bloqueio de botão durante chamada e checagem mounted; backend decide a autorização final.
+- FATO: card atual não expande (catalog_requests_screen.dart:237-350); retorno do detalhe não recarrega lista (194-220); navegação de entrada em catalogs_screen.dart:540-550 não necessita alteração obrigatória.
+
+DETALHE
+
+CONTRATO APROVADO
+- Cliente, telefone/WhatsApp, note, status, responsável, atores de conclusão/cancelamento e timestamps.
+- Produtos mantêm snapshot histórico.
+- Start/complete/cancel somente nas condições aprovadas.
+- Legado abre normalmente com fallback, sem identificação inventada.
+
+RECOMENDAÇÃO
+- Nome nulo de ator => "Funcionário não identificado"; timestamps ausentes => apresentação neutra, sem DateTime.now.
+- Perfil/UID local apenas orienta botões; servidor é autoridade.
+- Chamadas enviam somente {requestId,action}; uma ação em voo bloqueia outra.
+- Após success changed:true/false, recarregar get; não atualizar nomes ou horários por conta própria.
+- Em aborted/terminal/not-assignee, mensagem controlada e recarga; não repetir a mesma ação automaticamente.
+- Se transição confirma sucesso e refresh falha, informar sucesso da ação e falha de atualização separadamente; não tratá-la como ação desfeita.
+- Quando atendimento passou a outro estado entre render e toque, tratar resposta servidor; não depender de card desatualizado.
+- FATO: resumo/items/refresh em catalog_request_detail_screen.dart:229-344,346-406,441-529; não há controles de transição atualmente.
+
+MATRIZ DE TESTES
+
+PLANO FUTURO — NENHUM TESTE EXECUTADO NESTA TAREFA.
+Os resultados abaixo são esperados, não resultados de execução.
+Cada rejeição deve verificar ausência de escrita/log, além de code/reason.
+Casos de recomendações ficam condicionados à consolidação dessas especificações.
+
+A. CONTRATO PURO
+
+A01 Enum: quatro estados exatos aceitos; new/NEW/unknown/vazio/null/número rejeitados; sem default pending.
+A02 Actions: start/complete/cancel aceitos; strings com casing/whitespace diferentes e outros tipos rejeitados.
+A03 Roles: admin/gerente/operador, caixa/vendedor, trim/casing; role inválida falha.
+A04 Todas as linhas da matriz de transições; testar função de decisão sem Firestore.
+A05 Telefone nacional 10/11, internacional 12/13 prefixado 55, formatado, DDD 55; saída canônica exata/idempotente.
+A06 Telefone tipo errado, vazio, curto/longo e 12/13 sem 55 => invalid-customer-phone.
+A07 Nome: trim, 1/120 aceitos; vazio/whitespace/121/tipo inválido rejeitados; teste de emoji para unidade de comprimento.
+A08 Note: ausente/""/whitespace => null persistível; 500 aceito, 501 rejeitado, null explícito de entrada rejeitado; tipo inválido.
+A09 Versão ausente V1; 2 e 2.0 V2; 1/3/"2"/null/2.5/boolean rejeitados.
+A10 Payload simples/chaves exatas V1/V2/transition; extras do pai e item; sem coerção/prototype inesperado.
+A11 Campo cliente sem versão => customer-fields-require-version.
+A12 Resolução nome: name > username > fullName > null; whitespace/não-string pulados; null válido.
+A13 Lifecycle completo por estado, grupos parciais/timestamps inválidos e ausência legítima do legado.
+A14 Projeções list/get exatas; sem vazamento de note/items na lista ou PII em resposta de transição/audit.
+A15 Matriz de prioridade dos erros e replay autorizado antes de regra terminal.
+A16 Decisão pura não modifica objeto de entrada, snapshot nem gera timestamp por conta própria.
+
+B. SUBMIT PÚBLICO
+
+B01 V1 real do frontend permanece aceito; pai tem exatamente schema V1, sem campos V2.
+B02 V2 válido persiste versão, nome aparado, telefone canônico, note e pending; retorno público antigo preservado.
+B03 Nome "", whitespace, ausente, null, número, array/objeto e >120 => rejeição; 120 válido.
+B04 Telefone 10 dígitos => 55+10; 11 => 55+11.
+B05 +55, espaços/parênteses/hífens e saída já canônica => mesma persistência.
+B06 12/13 sem 55, curto/longo, vazio, null e tipo numérico => rejeição.
+B07 Note ausente/vazia/whitespace => note:null no pai V2; 500 válido; >500 inválido; null de entrada inválido.
+B08 Version ausente com payload V1 válido; ausente com customer fields rejeitado.
+B09 Version 2 aceita; 1 explícito, 3, "2", null e fracionária rejeitados.
+B10 Extras no pai/item rejeitados na proposta estrita; nenhuma solicitação parcial.
+B11 Forjar storeId/catalogId/totais/status/customerId/atores/timestamps => rejeição; nenhuma escrita em loja forjada.
+B12 Forjar price/name/subtotal/estoque no item => rejeição; payload válido posterior usa preço/nome atuais do servidor.
+B13 Mesmo preço em centavos, arredondamento, totalUnits, itemCount, estoque e limite 200 do contrato atual.
+B14 Falha em segundo item ou commit => zero pai/itens parciais.
+B15 V1/V2 não alteram products/lotes/sales/customers nem criam auditLog de transição.
+B16 Mudança posterior de produto/cliente informado não muda snapshot persistido.
+B17 Resposta pública e erros não incluem customerName/customerPhone/note nem token completo.
+B18 Dois reenvios de submit ainda podem produzir IDs distintos; não declarar idempotência nova.
+B19 Token/slug/catálogo/assinatura/produto inválido conserva rejeições operacionais atuais.
+B20 Atualizar testes de extras conscientemente, sem eliminar verificação da autoridade do servidor.
+
+C. TRANSITIONCATALOGREQUEST
+
+C01 Rodar todas as 25 linhas da matriz; expandir TODOS/O em perfis/aliases reais e responsável/não responsável.
+C02 Sem auth => authentication-required; nenhum acesso de negócio.
+C03 Perfil ausente/revoked/role inválida => code/reason previstos; nenhum replay autorizado.
+C04 StoreId ausente/inválido e loja ausente => erros previstos.
+C05 Payload ausente/null/array/string/extra; requestId vazio/path/reservado/>1500 bytes; action inválida.
+C06 Request inexistente e somente em outra loja => mesmo not-found; mesmo ID em duas lojas não cruza acesso.
+C07 start grava somente status/attendedBy*/attendedAt/updatedAt; createdAt/cliente/versão/totais/items inalterados.
+C08 complete/cancel em in_progress preservam attendedBy*; override registra outro ator final corretamente.
+C09 cancel pending não inventa attendedBy*.
+C10 Nome por prioridade, trim, fallback null; UID vem de auth; payload forjado é rejeitado.
+C11 Horários Timestamp do servidor; ação/updatedAt/audit createdAt consistentes; nunca horário do payload.
+C12 Replay mesmo ator => changed:false, updateTime e snapshots iguais, zero log adicional.
+C13 Perfil renomeado entre ação/replay => nome histórico intacto; ator posteriormente revogado não faz replay.
+C14 Terminal com outro ator rejeita até admin/gerente; start após completed não é replay.
+C15 Legado start->complete e legado cancel pelos dois caminhos; sem criação de dados cliente/requestVersion.
+C16 Status desconhecido/lifecycle parcial/corrompido => fail-closed sem reparo.
+C17 Concorrência REAL no Emulator: dois UIDs start, um vencedor e um log; não apenas mock sequencial.
+C18 Concorrência mesmo UID start/complete/cancel => um write/log e um replay.
+C19 Corridas complete/cancel e terminais com atores diferentes; exatamente um encerramento.
+C20 Corrida start/cancel: testar resultados condicionais da matriz, inclusive dois eventos legítimos sequenciais.
+C21 Revogação durante retry transacional exige revalidar perfil; não autorizar por snapshot fora da transação.
+C22 Falha ao gravar auditLog => rollback pai; falha pai => sem log; retry não duplica evento.
+C23 Guardas de transporte: nenhuma leitura de products/items/customers/catalogs e nenhuma escrita fora de pai/log.
+C24 Resposta mínima possui chaves exatas; não retorna PII, sentinel ou timestamp estimado.
+C25 unavailable/deadline/aborted pós-disputa: retry do mesmo ator segue regras; não simular sucesso por erro.
+C26 ByName null não é motivo para negar ação; UID/At são obrigatórios quando evento existe.
+
+D. LISTCATALOGREQUESTS
+
+D01 Mistura de V1 e V2; quatro status; legado sem cliente retorna quatro novos campos null.
+D02 Legado atendido retorna attendedByName/At; V2 retorna cliente canônico.
+D03 Nome de ator null com attendedAt válido; nunca string "null".
+D04 Status inválido em um documento rejeita lista inteira com internal; não omitir silenciosamente.
+D05 Nome/telefone/lifecycle inválidos conforme validador proposto => internal; sem repair write.
+D06 Note/items/UIDs extras/requestVersion não aparecem no retorno aprovado da lista.
+D07 Guardas: sem consulta de items/produtos/users de responsáveis; somente perfil próprio/loja/query de pais.
+D08 Mantém 50 de 55 ordenados createdAt DESC; sem createdAt não aparece; sem paginação.
+D09 Auth/roles/revoked/payload/isolation e ausência de gate de assinatura preservados.
+D10 Nenhuma escrita; status/updatedAt/updateTime invariantes.
+D11 Snapshots renomeados no perfil/produto não alteram a projeção do pai.
+D12 Teste de chaves exatas atualizado para os quatro acréscimos, não para o documento inteiro.
+
+E. GETCATALOGREQUEST
+
+E01 Legado pending: novos campos null, requestVersion null, histórico completo.
+E02 V2: cliente, note null/string, versão 2 e chaves exatas.
+E03 Lifecycle em in_progress/completed/cancelled de pending e de in_progress.
+E04 Nome de ator null, perfil excluído/renomeado e ausência legítima do legado.
+E05 Status inválido, versão persistida inválida, campos parciais e tipos inválidos => fail-closed.
+E06 Produto atual alterado/arquivado/excluído, catálogo expirado/removido => mesma resposta histórica.
+E07 Todos os items por ID; 200 items; itemCount divergente/duplicados/dados monetários inválidos rejeitados.
+E08 Isolamento por loja e requestId inválido mantidos.
+E09 Guardas de transporte sem products/catalogs/estoque/users de atores; zero writes.
+E10 createdAt/updatedAt conservam política ISO/null existente; lifecycle inválido segue política nova explicitada.
+E11 Não recalcular valores históricos ou buscar customerId.
+E12 Não vazar campos privados adicionais presentes no pai/item.
+
+F. FIRESTORE RULES
+
+F01 Executar SDK cliente autenticado para admin, gerente, operador, caixa e vendedor da mesma loja: todos get/list de pais negados.
+F02 Para cada perfil F01: create pai, update status, update customerName/customerPhone/note/total/atores/timestamps e delete pai negados.
+F03 Para cada perfil: get/list/create/update/delete de items negados.
+F04 Descendente arbitrário sob uma solicitação também negado, não só collection items.
+F05 Repetir get/list/create/update/delete com usuário revoked da mesma loja, perfil ausente, outra loja e anônimo.
+F06 CollectionGroup não pode ler ramo catalogRequests/items.
+F07 Provar exclusão nos três allows genéricos; regressão que falhe se um deles permitir catalogRequests novamente.
+F08 Produtos/clientes/categorias/sales/cash_flow/auditLogs/users mantêm suas permissões anteriores; não impor negação global involuntária.
+F09 Subcoleção não relacionada coberta pelo genérico preserva política atual.
+F10 Admin SDK consegue fixtures e callable autorizada continua lendo/escrevendo; isso NÃO é prova de permissões do cliente.
+F11 Callables bloqueiam revoked apesar de Admin SDK bypassar Rules.
+F12 D1/D2 funcionam com SDK direto negado porque usam callables; smoke somente na etapa autorizada.
+
+G. FLUTTER PÚBLICO
+
+G01 Exibe Nome/WhatsApp obrigatórios e Observação no resumo, sem rota nova.
+G02 Inválido local => nenhuma chamada; limites e telefone formatado aceitos conforme contrato.
+G03 Payload exato V2; note ausente/"" consistente; nenhum preço/store/status/ator.
+G04 Loading e clique duplo => uma chamada; campos/Voltar/Enviar bloqueados.
+G05 Erro transitório/resposta não confirmada preserva controllers, seleção e resumo.
+G06 Reasons de validação de cliente mantêm formulário aberto e não disparam refresh de catálogo.
+G07 Erro produto mantém reconciliação existente e draft para revisão.
+G08 Sucesso confirmado limpa controllers/seleção e mostra confirmação.
+G09 Fechar/reabrir resumo mantém draft conforme proposta; dispose não tenta setState nem vaza controller.
+G10 Lifecycle/refresh não altera snapshot por trás do modal.
+G11 Mobile/desktop, teclado e campos longos sem overflow.
+G12 Frontend antigo V1 continua aceito pelo backend novo; frontend V2 só entra após backend V2 disponível.
+
+H. FLUTTER CAIXA DE ENTRADA
+
+H01 Quatro labels/badges exatos; status inválido não vira Nova silenciosamente.
+H02 Nome legado usa "Cliente não identificado"; null actor usa fallback.
+H03 Fechado mostra contagens/data/total; expansão preserva identidade do card por requestId.
+H04 Expandir NÃO chama get nem carrega items; mostra só metadados listados.
+H05 WhatsApp habilitado somente com canônico; URI contém telefone correto; tratar falha de abertura.
+H06 pending oferece start/cancel; in_progress abre atendimento no detalhe na proposta R1; terminal sem transição.
+H07 Se R1 optar por outra solução, testes precisam demonstrar permissão por UID, nunca por nome.
+H08 Após sucesso/replay/conflito e volta de detalhe, lista é recarregada; não inventar responsável.
+H09 Erro/retry/vazio/loading e refresh atuais continuam; ação em voo não duplica chamada.
+H10 Reordenação após refresh não vincula expansão a outro request.
+H11 Transição bem-sucedida com falha de refresh não é apresentada como rollback.
+
+I. FLUTTER DETALHE
+
+I01 Cliente/telefone/note opcional, quatro status e três grupos de lifecycle.
+I02 ByName null e timestamps ausentes com fallback; nomes históricos não vêm do perfil atual.
+I03 Start e cancel pending para roles válidas; complete não aparece pending.
+I04 Complete/cancel in_progress somente responsável ou admin/gerente; aliases tratados.
+I05 Payload exato requestId/action; sem UID/role/timestamp.
+I06 Replay, conflito, terminal, permission-denied e sucesso recarregam estado apropriadamente.
+I07 Loading evita dupla ação; dispose seguro.
+I08 Terminal não apresenta reabrir/transferir/voltar.
+I09 Itens/preços/subtotais históricos preservados.
+I10 Sucesso + falha na recarga comunica os dois fatos separadamente.
+I11 Retorno à lista sinaliza mudança ou provoca refresh conservador.
+
+J. REGRESSÃO
+
+J01 Preservar os nove arquivos atuais:
+  createCatalog.emulator.test.js
+  createCatalogAuthorization.emulator.test.js
+  createCatalogPublicSlugMigration.emulator.test.js
+  createCatalogValidation.emulator.test.js
+  getCatalogRequest.emulator.test.js
+  getPublicCatalog.emulator.test.js
+  listCatalogRequests.emulator.test.js
+  listCatalogsStatus.emulator.test.js
+  submitPublicCatalogSelection.emulator.test.js
+  Todos em functions/tests/catalog/.
+J02 Manter isolamento, snapshots, estoque não alterado, zero venda/reserva, 200 items, centavos, overflow e batch atômico.
+J03 Manter runner automático *.test.js e secret aleatório efêmero sem exposição: runCatalogTests.js:8-17,27-58.
+J04 Os nove arquivos continuam na suíte; não prometer nove testes totais após acrescentar novos arquivos.
+J05 Adaptar apenas asserts afetados pelo novo contrato; testes V1 de schema permanecem V1.
+J06 Adaptar lista/get para novos campos e enum; preservar guardas de leitura.
+J07 Se whitelist estrita for consolidada, converter teste de extras aceitos em rejeição e manter cenário separado de preços atuais; não perder autoridade do servidor.
+J08 Preservar testes públicos em test/public_catalog_submission_test.dart, ajustando payload/formulário, sem remover clique duplo, retry, lifecycle e reconciliação.
+J09 Rules precisam de suíte SDK cliente própria; Admin SDK não substitui esse teste.
+J10 Testes Node/Flutter/Rules e smoke somente em etapas futuras autorizadas; nenhuma execução B0.
+
+IMPACTOS POR ETAPA
+
+RECOMENDAÇÃO — ARQUIVOS SUSTENTADOS PELA AUDITORIA, NÃO LISTA DE ALTERAÇÕES JÁ FEITAS
+
+F7.9-B1 — contrato puro
+- Novo módulo puro sob functions/catalog/ para enum, dados V1/V2, telefone, ator, decisão de transição e projeções; nome físico a definir na implementação, sem presumir arquivo existente.
+- Novo *.test.js sob functions/tests/catalog/ para contrato puro, descoberto pelo runner atual.
+- Nenhuma necessidade de editar functions/index.js, Flutter, Rules, customers ou perfis para exercitar somente o contrato puro.
+- Preferir não extrair/refatorar amplamente createCatalog.js em B1; integrar helpers nas etapas funcionais.
+
+F7.9-C — Rules
+- firestore.rules: restringir os três allows genéricos e negar ramo específico.
+- Novo teste de catalogRequests em functions/tests/security/, usando infraestrutura SDK cliente existente como referência; nome exato ainda não aprovado.
+- functions/tests/security/firestoreTaxonomyRules.test.mjs é referência/regressão, não alteração obrigatória.
+- Não alterar firebase.json/package.json sem necessidade demonstrada em etapa própria; não publicar nesta tarefa.
+
+F7.9-D — backend transition e leitura lifecycle
+- functions/catalog/createCatalog.js ou novo módulo callable focado sob functions/catalog/, conforme organização mínima decidida: implementação futura da transição.
+- functions/index.js: export transitionCatalogRequest obrigatório para disponibilização.
+- functions/catalog/createCatalog.js: atualizar list/get para estados e lifecycle; APIs precisam ler novos estados antes da primeira transição real.
+- Novo teste transitionCatalogRequest em functions/tests/catalog/; adaptar listCatalogRequests.emulator.test.js e getCatalogRequest.emulator.test.js.
+- Integração dos helpers B1; não modificar exemplos de archive/restore/backup/taxonomia.
+- Local físico da callable é escolha residual organizacional, não mudança de arquitetura.
+
+F7.9-E — submit cliente V2 e formulário público
+- functions/catalog/createCatalog.js: validar V1/V2 e persistir identificação.
+- lib/screens/public/public_catalog_screen.dart: formulário, payload e erros.
+- functions/tests/catalog/submitPublicCatalogSelection.emulator.test.js e test/public_catalog_submission_test.dart.
+- Completar testes/projeções V2 de list/get se ainda não integrados em D.
+- Backend que aceita V2 deve preceder frontend V2; sem deploy automático.
+- lib/main.dart e cadastro de clientes não precisam mudar pelo contrato aprovado.
+
+F7.9-F — caixa de entrada
+- lib/screens/management/catalog_requests_screen.dart: badge, cliente, expansão, WhatsApp, ações/refresh conforme R1.
+- Novo teste widget dedicado sob test/; helper visual compartilhado só se necessidade concreta surgir.
+- catalogs_screen.dart já possui acesso à caixa; sem necessidade obrigatória de mudança.
+- pubspec.yaml já tem url_launcher; permanece protegido.
+
+F7.9-G — detalhe
+- lib/screens/management/catalog_request_detail_screen.dart: cliente/lifecycle/permissões/ações/refresh.
+- Novo teste widget dedicado sob test/.
+- Pode exigir ajuste mínimo da navegação/refresh em catalog_requests_screen.dart, se não concluído em F.
+- Nenhuma edição em employees_screen.dart, convidarFuncionario.js ou revogarAcessoFuncionario.js para ler snapshots.
+
+F7.9-H — testes/smoke
+- Executar suítes anteriores e novos testes nas etapas autorizadas, ajustar somente falhas de implementação do contrato.
+- Runner runCatalogTests.js já descobre automaticamente novos arquivos: alteração não é necessária por princípio.
+- Smoke real exige autorização própria e ambiente definido; não deriva autorização de produção desta formalização.
+- Relatórios/documentação futura só nos caminhos autorizados para a respectiva etapa.
+
+RISCOS / CONTRADIÇÕES
+
+CONTRADIÇÃO ENCONTRADA — C1: estrito versus tolerância V1 atual
+- Decisão: preferir contrato estrito, sem quebrar payload V1 publicado.
+- Código: extras são ignorados em createCatalog.js:1500-1577; teste submit:693-724 exige sucesso com extras forjados.
+- Impacto: whitelist estrita preserva a chamada real da tela (:553-563), mas muda comportamento aceito pelo endpoint e aquele teste.
+- Alternativa A, RECOMENDADA: V1 e V2 estritos; adaptar assert de extras e preservar teste da autoridade do servidor com payload válido.
+- Alternativa B: V1 continua ignorando extras, rejeitando customer fields sem versão, enquanto V2 é estrito; preserva mais tolerância, mas mantém contratos distintos.
+- Nenhum teste foi alterado. Não prometer preservação literal do assert antigo com alternativa A.
+
+CONTRADIÇÃO ENCONTRADA — C2: lista sem UID versus ações por responsável
+- Decisões: lista adiciona somente customerName/customerPhone/attendedByName/attendedAt; complete/cancel in_progress dependem de attendedByUid ou override.
+- Código/UI: lista usa apenas resposta de listCatalogRequests; mapas não fornecem UID de ator (createCatalog.js:960-972; catalog_requests_screen.dart:27-74).
+- Impacto: não há como deduzir responsabilidade por nome com segurança; nomes podem ser iguais/null.
+- Alternativa A, RECOMENDADA sem mudar API: start/cancel pending na lista; "Abrir atendimento" in_progress leva ao detalhe para finalizar/cancelar.
+- Alternativa B: ampliar lista com attendedByUid ou capacidades derivadas pelo servidor; exige ajuste explícito do contrato aprovado de resposta.
+- Alternativa C: buscar detalhe sob demanda antes de apresentar ações; transfere items e contraria a intenção de não carregá-los na listagem, portanto não recomendada.
+- Se “ação de atendimento” permitir navegação ao detalhe, A resolve; se exigir complete/cancel diretos, decisão R1 é obrigatória.
+
+CONTRADIÇÃO ENCONTRADA — C3: Rules atuais versus autoridade exclusiva aprovada
+- Decisão: leitura/escrita somente backend.
+- Código: generic match firestore.rules:379-430 concede acesso direto ao ramo.
+- Impacto: novos campos/estado poderiam ser adulterados fora da callable; snapshot não seria protegido.
+- Alternativa correta dentro do aprovado: exclusão do ramo nos três allows + negação explícita. Não há necessidade de mudar arquitetura.
+- Alternativa “apenas allow false adicional” é tecnicamente insuficiente.
+- Esta é incompatibilidade da configuração atual com o alvo, já reconhecida em A1; planejada para C, não corrigida em B0.
+
+OUTROS CUIDADOS, SEM CONTRADIÇÃO ARQUITETURAL
+- updatedAt no retorno da transição é exemplo, não exigência final; serverTimestamp precisa de commit para virar horário. Proposta mínima omite e recarrega. Se exigido, R2.
+- Campo note:null persistido é compatível com Firestore/mapas; entrada null difere de “string quando presente”. UI deve omitir vazio ou enviar ""; não relaxar tipo silenciosamente.
+- Algoritmo aprovado admite qualquer conteúdo que, após limpeza, produza comprimento/prefixo válidos; não é validação real de WhatsApp/DDD.
+- Cadastro remove DDI em importação; novo snapshot mantém DDI. Não reutilizar helper antigo sem considerar isso.
+- V1 temporário permite envios sem identificação deliberadamente; não garante identificação universal durante rollout.
+- V2 publicado antes do backend pode ser aceito pelo backend antigo como V1 com extras ignorados, perdendo identificação silenciosamente. Backend primeiro é necessário.
+- Regra de replay depende do ator da ação terminal, não necessariamente do atendente; overrides tornam essa distinção essencial.
+- Dois commits em start/cancel podem ser válidos sequencialmente; não escrever teste que exija sempre só um sucesso nessa corrida.
+- List/get existentes aceitam status desconhecido e toleram timestamps base inválidos; novos validadores não devem redefinir campos históricos sem explicitação.
+- Novo lifecycle legado não deve depender da versão do envio; clientes antigos continuam válidos após atendimento.
+- Autorização do usuário precisa ser relida transacionalmente; modelo de archiveCustomer com perfil fora do callback não deve ser copiado integralmente para concorrência com revogação.
+- Retenção/expiração e gestão de solicitações são escopos diferentes apesar do nome histórico F7.9 na documentação; não ampliar este incremento.
+- Presença de dados reais com status/lifecycle fora do padrão: NÃO CONFIRMADO. Não foi feito diagnóstico remoto nem migração.
+
+DECISÕES RESIDUAIS
+
+R1 — Caixa de entrada:
+- Confirmar se "Abrir atendimento" em in_progress cumpre a ação aprovada; recomendado para manter listagem exata.
+- Complete/cancel diretos por responsável exigem ajuste explícito de dados da lista; não implementar suposição.
+
+R2 — Retorno da transição:
+- Consolidar retorno mínimo {success,changed,requestId,status}, com refresh obrigatório, recomendado.
+- Se updatedAt continuar desejado, especificar semântica pós-commit; não usar sentinel como dado de resposta.
+
+R3 — Estriteza V1:
+- Consolidar alternativa A de C1 ou preservar tolerância V1 (B).
+- A preserva payload do frontend observado, mas muda assert antigo; não confundir “9 arquivos preservados” com “todos os asserts imutáveis”.
+
+R4 — Especificações técnicas propostas:
+- Confirmar conjunto de reasons/precedência, contagem UTF-16, note:null persistido mas null de entrada inválido, e política fail-closed de lifecycle.
+- São pontos explicitamente formalizados como RECOMENDAÇÃO neste B0, não decisões de arquitetura substituídas.
+- Não existe incompatibilidade de persistir ByName:null; nenhuma decisão adicional de banco é necessária.
+
+R5 — Organização física:
+- Nome do módulo puro/callable e arquivos novos de teste a definir de forma mínima na respectiva etapa.
+- Não é necessário modificar clientes/perfis/arquivos protegidos para essa organização.
+
+RECOMENDAÇÃO PARA F7.9-B1
+
+RECOMENDAÇÃO
+1. Usar as decisões A1 como invariantes; consolidar as especificações propostas, principalmente R3/R4, antes de codificar comportamentos dependentes.
+2. Implementar apenas contrato puro e testes de decisão/normalização, sem Firestore, exports de callable, UI ou Rules.
+3. Separar validação de entrada pública, validação de documento persistido, decisão de transição e projeção de retorno; não tratar null de retorno como payload automaticamente válido.
+4. Preservar funções operacionais atuais até integração dedicada; nenhuma refatoração ampla de createCatalog.js.
+5. Depois seguir C/D/E/F/G/H com backend de leitura pronto para lifecycle antes da primeira transição, e backend V2 pronto antes do frontend V2.
+6. Não executar B1 nesta tarefa. B0 encerra com este documento e verificações de leitura do Git.
+
+============================================================
+ESTADO FINAL
+============================================================
+
+CÓDIGO ALTERADO: NÃO
+CONFIGURAÇÃO ALTERADA: NÃO
+TESTES ALTERADOS: NÃO
+RULES ALTERADAS: NÃO
+
+RELATÓRIO TXT CRIADO: SIM
+RELATÓRIO: test/F7.9-B0_relatorio.txt
+
+GIT ADD: NÃO
+COMMIT: NÃO
+PUSH: NÃO
+DEPLOY: NÃO
+
+============================================================

@@ -1,0 +1,32 @@
+F7.9-D1-R1 — COBERTURA INTEGRADA DE TRANSIÇÃO
+
+Somente `functions/tests/catalog/transitionCatalogRequest.emulator.test.js`
+foi ampliado. Backend, exports, list/get, Rules, Flutter e configuração não
+foram alterados nesta revisão.
+
+Cobertura adicionada:
+- pending + cancel: status cancelled, actor UID/nome nulo, Timestamp,
+  updatedAt alterado, auditoria `catalog_request_cancel` e ausência de
+  attendedBy*;
+- replay cancel pelo mesmo UID: changed false, timestamps e auditLogs intactos;
+- in_progress + cancel pelo responsável: attendedBy* preservado;
+- cancel por operador diferente: permission-denied,
+  `catalog-request-not-assignee`, sem escrita/log;
+- cancel por gerente diferente: override aprovado;
+- complete por gerente diferente: override aprovado;
+- cancel terminal por outro ator: failed-precondition,
+  `catalog-request-terminal`, sem escrita/log;
+- aliases caixa e vendedor cobertos como operador.
+
+Validação:
+- node --check do teste: aprovado;
+- git diff --check: aprovado;
+- `npm run test:catalog`: 11/11 testes aprovados;
+- Emulator local com JDK 21, sem produção.
+
+Git final:
+- branch: feat/f7-intelligent-catalog;
+- HEAD: c713c959cf2abdab1abe6d7487999089d7519e07d (c713c95);
+- stage: vazio;
+- quatro arquivos paralelos preservados;
+- sem commit, push ou deploy.

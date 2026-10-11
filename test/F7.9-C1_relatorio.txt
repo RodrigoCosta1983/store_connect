@@ -1,0 +1,52 @@
+F7.9-C1 — PATCH DE RULES E TESTE DE SEGURANÇA
+
+Git inicial/final:
+- branch: feat/f7-intelligent-catalog
+- HEAD: 47c2ec39841cabd4911f5a57275424030520260a (47c2ec3)
+- stage: vazio
+- tracked modificados inicialmente: os quatro protegidos exigidos
+
+Patch aplicado em firestore.rules:
+- adicionado `subcollection != 'catalogRequests'` nos três allows do match
+  genérico: read; create/update; delete.
+- adicionado match recursivo explícito
+  `/stores/{storeId}/catalogRequests/{document=**}` com `allow read, write: if false`.
+- nenhuma outra Rule/configuração foi alterada.
+
+Teste criado:
+`functions/tests/security/firestoreCatalogRequestsRules.test.mjs`
+
+Cobertura do teste:
+- 4 subtestes; a matriz principal executa 220 operações (11 perfis × 4 paths ×
+  5 operações), todas com `permission-denied`, além dos casos adicionais;
+  a execução combinada teve 30/30 subtestes aprovados.
+- Perfis em loop: admin, gerente, operador, caixa, vendedor, revoked operador,
+  revoked admin, role desconhecida, perfil ausente, admin de outra loja e anônimo.
+- Operações em loop: get, list/query, create, update e delete.
+- Paths: pai, `items/item-1`, descendente `futureChildren/child-1` e
+  descendente profundo `items/item-1/events/event-1`, com fixtures nas lojas A/B.
+- `setDoc` substitutivo, `setDoc` merge e batch pai+item; ausência de escrita
+  parcial confirmada com Rules desabilitadas.
+- `collectionGroup` para catalogRequests, items, futureChildren e events.
+- Controle positivo em `stores/store-a/rulesProbe`, incluindo descendente profundo;
+  acesso genérico legítimo preservado para a própria loja.
+
+Resultado do Emulator:
+- comando sequencial solicitado, com JDK 21 na sessão e projeto demo local;
+  execução final aprovada, 30/30 subtestes, 0 falhas.
+- Taxonomia existente: 26/26 subtestes aprovados; arquivo não alterado.
+- Nenhuma execução contra produção.
+
+Validações:
+- `node --check functions/tests/security/firestoreCatalogRequestsRules.test.mjs`: aprovado.
+- `git diff --check -- firestore.rules`: aprovado.
+- `git diff --no-index --check` para o teste untracked: aprovado; código 1
+  esperado do diff entre NUL e arquivo, sem erro de whitespace.
+
+Estado final:
+- tracked modificados: os quatro protegidos e firestore.rules.
+- novos untracked: o teste dedicado e este relatório; relatórios untracked
+  anteriores preservados.
+- HEAD e stage inalterados; sem git add, commit, push, deploy, firebase use,
+  alteração de backend, Flutter, firebase.json, package.json ou locks.
+- Os quatro protegidos foram confirmados intactos nesta etapa.

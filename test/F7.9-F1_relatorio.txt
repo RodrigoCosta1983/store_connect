@@ -1,0 +1,110 @@
+F7.9-F1 — Nova interface de Solicitações recebidas
+
+Git
+Branch inicial/final: feat/f7-intelligent-catalog
+HEAD inicial/final: ff4b7ada2fd3e6595c321af2b029f637feb73d29
+Stage inicial/final: VAZIO.
+Precondições confirmadas antes de editar: somente os quatro tracked protegidos modificados; demais untracked eram relatórios test/*.txt.
+Sem git add, commit, push ou deploy.
+
+Escopo
+Alterado: lib/screens/management/catalog_requests_screen.dart
+Criado: test/catalog_requests_screen_test.dart (untracked).
+Criado: este relatório (untracked).
+Backend, Rules, Firestore, Cloud Functions e detalhe não alterados.
+Os quatro arquivos protegidos permaneceram byte a byte iguais à auditoria inicial (SHA256 conferidos).
+
+Auditoria inicial
+Lidos AGENTS.md, docs/codex/CURRENT_WORK.md, documentação do catálogo e tela atual integralmente; contrato de listCatalogRequests e navegação conferidos no código.
+CURRENT_WORK contém checkpoints históricos; a etapa desta execução segue a autorização F7.9-F1 do usuário e o HEAD confirmado pelo Git.
+Lista atual: listCatalogRequests, chamada sem novos parâmetros, timeout de 30 segundos, validação de success/requests preservada.
+Campos retornados hoje: requestId, catalogId, status, itemCount, totalUnits, totalAmount, createdAt, updatedAt, source.
+Sem customerName ou lifecycle no contrato atual. Não foram presumidos nem adicionados ao backend.
+Datas: helper existente preservado (ISO, DateTime.tryParse, toLocal, dd/MM/yyyy às HH:mm; fallback Data não disponível).
+Moeda: helper brasileiro existente preservado, duas casas e vírgula decimal; fallback para valor inválido.
+Retorno do detalhe: sem recarga automática, como antes.
+
+Interface
+Cabeçalho Solicitações recebidas, subtítulo Pedidos de produtos do catálogo e atualização manual.
+Filtros responsivos com Wrap/ChoiceChip: Todas, Novas, Em atendimento, Finalizadas, Canceladas.
+Filtro inicial Todas; contadores calculados somente da lista carregada (até 50 registros conforme backend atual).
+Filtragem local, sem chamadas extras ou persistência. Ordem recebida do backend preservada.
+Helper visual local _RequestStatus e widget _StatusBadge; builders locais de cards, filtros, resumo e lifecycle; _InfoChip reutilizado.
+Paletas Material suaves: rosa, azul, verde e cinza, com foreground/background adequados ao tema claro/escuro.
+Status: pending -> Nova; in_progress -> Em atendimento; completed -> Finalizada; cancelled -> Cancelada.
+Status desconhecido -> Status indisponível, neutro, contado apenas em Todas, sem ações específicas.
+Cliente: somente string não vazia; trim; ausente/null/vazio -> Cliente não identificado.
+Lifecycle opcional por status: attendedByName e attendedAt; completedAt; cancelledAt. Datas ausentes/inválidas não geram linhas.
+Singular/plural de produto e unidade preservados.
+
+Expansão
+Escolha: vários cards podem ficar expandidos simultaneamente.
+Estado no Set<String> por requestId, nunca por índice. Cards com ValueKey(requestId).
+Filtros e reordenação da resposta não transferem expansão a outro pedido.
+Refresh mantém filtro e expansões dos IDs presentes; remove somente IDs que desapareceram após resposta bem-sucedida.
+Card expandido mostra Cliente, Resumo do pedido e Ver detalhes.
+Sem botões fictícios, WhatsApp, telefone ou transições de status.
+Ver detalhes mantém Navigator/MaterialPageRoute para CatalogRequestDetailScreen e o mesmo requestId.
+Loading, erro amigável/retry, refresh manual e RefreshIndicator preservados; proteção local impede cargas simultâneas.
+Vazio global: Nenhuma solicitação recebida.
+Vazio filtrado: Nenhuma solicitação neste status.
+
+Validação
+Dart format executado SOMENTE nos dois arquivos Dart F1: aprovado.
+flutter analyze --no-pub lib/screens/management/catalog_requests_screen.dart test/catalog_requests_screen_test.dart
+Resultado final: No issues found.
+flutter test --no-pub test/catalog_requests_screen_test.dart
+Resultado final: 6/6 testes passaram.
+Testes simulam o canal Firebase usando o padrão já existente no projeto, sem injeções ou refatorações de arquitetura e sem acesso a produção.
+Cobertura: quatro labels e status desconhecido, cliente legado e nome fornecido, pluralização, moeda, contadores/filtro local sem nova chamada, expansão por ID, refresh/reordenação/remoção, filtro preservado, vazio global/filtrado, loading, erro/retry, detalhe/retorno sem recarga, mobile 320px, nome longo, lifecycle opcional e data inválida.
+Ocorrências corrigidas: literal R$ do teste precisava ser raw string; seletor byTooltip retornava Tooltip e foi substituído por seletor de IconButton na asserção. Não houve mudança de comportamento para acomodar testes.
+Inicialização do Dart no sandbox ficou bloqueada; comando interrompido e validações executadas com permissão para acesso ao SDK/cache externo.
+Não houve validação manual em dispositivo real ou comparação pixel a pixel com imagem de referência (referência recebida em texto).
+git diff --check: aprovado (apenas avisos de normalização futura de CRLF em arquivos protegidos já existentes; nenhum deles foi escrito).
+Diff revisado: única alteração tracked F1 é a tela autorizada.
+Não executados Emulator, testes Node, deploy, push ou commit.
+
+SHA256 protegidos (iguais antes/depois)
+android/app/build.gradle.kts: F1F1177AA182FE49667CDF1FD193D7D1E6DD8C71A6255A01C06FE65C82A8759B
+lib/screens/subscription_screen.dart: AB15A4E94AC5FBD3E13036AF31A2EFD52792BD2813A53DC8B8083EC6C65DB594
+lib/widgets/warning_banner.dart: BFA479F243DED27C184503ADB5A13FF72DAFF16DB040C0958889488BCAD0422D
+pubspec.yaml: 60BF48C598E2394AA9F7C6942D5884AA393B1604AD001092A70C40707BD9A502
+
+Estado final: implementação F1 local concluída, sem stage/commit/push/deploy.
+Próxima etapa: revisão visual por Rodrigo; nenhuma etapa adicional iniciada.
+
+Git status final:
+ M android/app/build.gradle.kts
+ M lib/screens/management/catalog_requests_screen.dart
+ M lib/screens/subscription_screen.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+?? test/F7.9-F1_relatorio.txt
+?? test/catalog_requests_screen_test.dart

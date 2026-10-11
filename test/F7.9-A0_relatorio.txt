@@ -1,0 +1,360 @@
+============================================================
+F7.9-A0  AUDITORIA CONCLUÍDA
+============================================================
+
+GIT
+
+- Branch: feat/f7-intelligent-catalog.
+- HEAD: cf44bbec7a7e5dc65648d68974d1dd6503370b17 (cf44bbe).
+- Stage: vazio na conferência inicial.
+- Tracked modificados: android/app/build.gradle.kts; lib/screens/subscription_screen.dart; lib/widgets/warning_banner.dart; pubspec.yaml.
+- Paralelos protegidos: os quatro arquivos acima; nenhuma escrita neles foi executada.
+- Relatórios untracked existentes: 24 arquivos .txt em test/, permitidos pelo escopo e preservados:
+  F7-CAT-RULES-B1-A0_relatorio.txt
+  F7-CAT-RULES-B1-B_relatorio.txt
+  F7-CAT-TAXONOMIA-A_relatorio.txt
+  F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+  F7-CAT-TAXONOMIA-BR_relatorio.txt
+  F7-CAT-TAXONOMIA-B_relatorio.txt
+  F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+  F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+  F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+  F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+  F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+  F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+  F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+  F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+  F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+  F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+  F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+  F7.8-A_relatorio.txt
+  F7.8-B_relatorio.txt
+  F7.8-D1-A0_relatorio.txt
+  F7.8-D1-B1_relatorio.txt
+  F7.8-D2-B1_relatorio.txt
+  F7.8-E0_relatorio.txt
+  F7.8-E1-SECRET-B1_relatorio.txt
+- Diretório conferido: C:\Users\rodri\StudioProjects\store_connect.
+- Método: leitura estática do repositório. Nenhum teste, Emulator, chamada remota ou consulta ao Firebase foi executado. Linhas abaixo são aproximadas.
+- Convenção: “Fato” descreve código observado; “Recomendação” e “Alternativa” não constituem contrato aprovado. Estado publicado e dados reais: NÃO CONFIRMADO nesta auditoria.
+- Documentação lida: AGENTS.md; docs/codex/CURRENT_WORK.md; docs/catalog/F7_CATALOGO_INTELIGENTE.md. CURRENT_WORK.md:8-22 ainda registra F7.8-C2 e ausência de Flutter; o código já contém as telas. A documentação principal:84,2747-2833 chama F7.9 de expiração/retenção; esta tarefa explicitamente define F7.9 como gestão de solicitações. Registros históricos não foram alterados.
+
+============================================================
+BACKEND
+============================================================
+
+submitPublicCatalogSelection
+
+- Arquivo: functions/catalog/createCatalog.js.
+- Linhas: 1488-1959; onCall de firebase-functions/v2/https, 30 segundos, 256MiB. Exportada em functions/index.js:2793-2807.
+- Payload: obrigatórios publicSlug, publicToken e items[{productId, quantity}]. Não existem campos opcionais de identificação. Campos extras no pai e nos itens não são rejeitados por whitelist: são ignorados; preço, loja e totais enviados não são autoridade (1500-1577,1884-1946).
+- Autenticação: pública, sem exigência de request.auth. Posse do slug/token e validações de disponibilidade controlam o envio (1493-1733).
+- Identificação de loja: SHA-256 do token consulta catalogPublicTokens/{hash}; storeId vem desse índice, nunca do payload (1583-1624).
+- Identificação de catálogo: catalogId vem do mesmo índice; lê stores/{storeId} e catalogs/{catalogId}; confere publicSlug da loja e publicTokenHash do catálogo (1601-1674).
+- Validações: slug trim/lowercase, máximo 128, letras minúsculas/dígitos com hífens internos; token trim, 32-256 caracteres alfanuméricos, "_" ou "-"; seleção de 1 a 200 produtos; item objeto não-array; productId string não vazia após trim, sem "/"; quantity inteiro seguro positivo; produto duplicado rejeitado (1500-1577; MAX_PRODUCTS em 44).
+- Validações de disponibilidade: loja/catálogo existentes; assinatura active/trial/overdue; catálogo active; expiresAt com toMillis e ainda futuro; pertencimento ao catálogo; produto atual existente e isArchived diferente de true (1638-1848). Não há consulta ao perfil do cliente público.
+- Persistência: batch.create de pai e todos os itens, atômico, após as leituras; IDs independentes gerados com doc(). Leituras e batch não formam transação conjunta (1922-1949).
+- Status: literal "pending", fixado pelo servidor (1936).
+- Items: validatedItems contém exclusivamente productId, name, quantity, price e subtotal. name vem do produto atual, com trim, e deve ser não vazio (1884-1919).
+- Totais: rawPrice deve ser number finito >= 0; zero explícito aceito. unitCents = Math.round(rawPrice * 100); subtotalCents = unitCents * quantity; totalUnits soma quantidades; totalCents soma subtotais; preço/subtotal/totalAmount persistidos em unidade monetária, divididos por 100. Centavos, produtos e somas devem caber em inteiros seguros (1884-1931).
+- Estoque: lê products/{productId}.quantidade, converte com Number, trata não finito como zero, aplica floor e mínimo zero; rejeita quantidade superior à disponível. Não escreve products, lotes ou sales; não reserva nem decrementa estoque (1780-1882,1929-1949).
+- Retorno: {success:true, requestId, validatedItemCount, totalUnits, totalAmount}; sem catálogo, loja, token, itens ou dados pessoais (1951-1957).
+- Dados de cliente existentes: nenhum customerName/customerPhone/customerId/whatsapp/note. O campo name do item é o nome do produto, não do cliente (1913-1943).
+- Erros: invalid-argument para entrada; not-found genérico para índice/loja/catálogo/slug/hash incompatíveis; failed-precondition para assinatura, expiração e produto. Detalhes de produto usam reason, productId e, quando aplicável, availableQuantity: product-not-in-catalog, product-unavailable, product-archived, insufficient-stock, invalid-product-data. Sem catch local para falhas inesperadas de Firestore/batch; não confundir erro bruto de teste .run com resposta HTTP publicada (1525-1907,1949).
+- Histórico: após persistir, alteração posterior de preço/nome/estoque/catálogo não atualiza automaticamente o snapshot. O detalhe não consulta produtos atuais (1034-1101). Isso não equivale a imutabilidade garantida pelas Rules atuais.
+
+listCatalogRequests
+
+- Arquivo: functions/catalog/createCatalog.js.
+- Linhas: 885-976; onCall v2, 30 segundos, 256MiB; export em functions/index.js:2804.
+- Autenticação: request.auth obrigatório; consulta users/{uid} (889-902).
+- Autorização: perfil existente; bloqueia apenas accessStatus normalizado igual a "revoked"; aceita admin, gerente, operador e aliases caixa/vendedor -> operador, com trim/lowercase. Ausente, vazio ou outro accessStatus não é bloqueado. Exige loja existente; não bloqueia por assinatura (344-362,904-926).
+- StoreId: exclusivamente userData.storeId com trim; não aceita storeId do cliente. O campo de perfil é verificado como não vazio, sem a validação completa de document ID aplicada ao requestId (916-926).
+- Payload: ausente, null ou objeto simples vazio; arrays, outros tipos e quaisquer propriedades rejeitados (928-937).
+- Query: stores/{storeId}/catalogRequests, somente documentos pais; sem leitura de items, produtos, clientes ou catálogo (939-974).
+- Ordenação: createdAt DESC. Documento sem createdAt não participa do orderBy (940; teste listCatalogRequests.emulator.test.js:118-145).
+- Limite: 50.
+- Paginação: inexistente; sem cursor, filtros ou parâmetros.
+- Campos retornados: {success:true, requests:[{requestId,catalogId,status,itemCount,totalUnits,totalAmount,createdAt,updatedAt,source}]}. Lista vazia válida. Campos extras persistidos não são repassados (960-974).
+- Status: exige apenas string não vazia após trim; retorna valor original, sem enum, tradução ou whitelist de estados. source tem a mesma validação estrutural (943-972).
+- Validação: catalogId string não vazia/sem "/"; itemCount inteiro seguro 1-200; totalUnits inteiro seguro >= itemCount; totalAmount number finito >=0 com Math.round(valor*100) inteiro seguro. Não recalcula totais (944-953).
+- Timestamps: somente instância Timestamp vira ISO UTC; demais valores/ausências viram null (967-970).
+- Dados de cliente: nenhum. Também não retorna responsável nem timestamps de atendimento.
+- Erros: unauthenticated, permission-denied, failed-precondition, not-found e invalid-argument conforme etapas anteriores; pai estruturalmente inválido rejeita a lista inteira com internal genérico. Não escreve status/updatedAt nem marca leitura (889-974).
+
+getCatalogRequest
+
+- Arquivo: functions/catalog/createCatalog.js.
+- Linhas: 979-1103; onCall v2, 30 segundos, 256MiB; export em functions/index.js:2805.
+- Autenticação: obrigatória; users/{request.auth.uid}.
+- Autorização: mesma política da listagem, incluindo aliases, bloqueio apenas de revoked, loja do perfil e ausência de gate de assinatura; executada antes de ler solicitação (983-1018).
+- Payload: objeto simples contendo exclusivamente requestId string. Aplica trim; rejeita vazio, "/", ".", "..", padrão reservado __...__ e mais de 1500 bytes UTF-8. Não exige auto-ID de 20 caracteres e não aceita storeId (1020-1032).
+- Validações: pai usa os limites estruturais da listagem; status/source apenas strings não vazias. itemCount deve coincidir com todos os itens lidos. productId não vazio/sem "/", sem duplicação; name não vazio; quantity inteiro seguro positivo; price/subtotal number finito >=0 e centavos arredondados seguros (1043-1075).
+- Limite da validação: não exige subtotal == price*quantity, totalUnits == soma das quantidades nem totalAmount == soma dos subtotais; não recalcula valores. A validação monetária também não exige que o valor original tenha no máximo duas casas decimais (1043-1083).
+- Leitura: pai na loja autenticada e, somente se existir e passar validação, subcoleção items completa, sem limit/paginação (1034-1063).
+- Snapshot histórico: não lê catálogo atual, token, estoque ou produto atual. Alteração, arquivamento ou exclusão posterior do produto e expiração/exclusão do catálogo não impedem a leitura (1034-1101; teste getCatalogRequest.emulator.test.js:151-160).
+- Items: retorno explícito itemId, productId, name, quantity, price, subtotal; itemId vem do documento (1076-1083).
+- Ordenação: documentId ASC, não a ordem original da seleção (1058-1060).
+- Campos retornados: {success:true, request:{requestId,catalogId,status,itemCount,totalUnits,totalAmount,createdAt,updatedAt,source,items}}. Timestamps Timestamp -> ISO UTC; ausentes/inválidos -> null (1085-1101).
+- Dados de cliente: nenhum; status é retornado; responsável e attendedAt/completedAt/cancelledAt não existem no retorno.
+- Erros/fail-closed: pai ausente na loja, inclusive ID existente somente em outra, retorna not-found "Solicitação não encontrada."; inconsistência do pai ou de qualquer item rejeita todo o detalhe com internal genérico. Não omite item inválido, não corrige documento nem atualiza timestamps (1034-1084). Falhas inesperadas do SDK não têm catch específico.
+
+============================================================
+MODELO catalogRequests ATUAL
+============================================================
+
+Documento pai:
+
+stores/{storeId}/catalogRequests/{requestId}
+
+{
+  catalogId: string,
+  status: "pending",
+  itemCount: inteiro entre 1 e 200,
+  totalUnits: inteiro positivo,
+  totalAmount: número em unidade monetária,
+  createdAt: Timestamp do servidor,
+  updatedAt: Timestamp do servidor,
+  source: "public_catalog"
+}
+
+Item:
+
+stores/{storeId}/catalogRequests/{requestId}/items/{itemId}
+
+{
+  productId: string,
+  name: string,
+  quantity: inteiro positivo,
+  price: número em unidade monetária,
+  subtotal: número em unidade monetária
+}
+
+- Fato: schema escrito em functions/catalog/createCatalog.js:1913-1946. requestId/itemId são IDs dos documentos, não campos persistidos nesses objetos; storeId está no caminho.
+- Status atual: "pending".
+- Responsável: nenhum.
+- Dados de cliente: nenhum.
+- Timestamps: createdAt e updatedAt recebem serverTimestamp na criação; itens não possuem timestamps; não há atualização posterior implementada.
+
+CAMPOS AINDA NÃO EXISTENTES
+
+- customerName, customerPhone, note, customerId.
+- attendedByUid, attendedAt, completedAt, cancelledAt.
+- Identificação de quem finalizou/cancelou, como completedByUid/cancelledByUid.
+- Todos são candidatos futuros, não schema atual. status já existe; NEW/IN_PROGRESS/COMPLETED/CANCELLED não são estados implementados pelo fluxo (functions/catalog/createCatalog.js:1934-1943).
+
+============================================================
+FLUTTER INTERNO
+============================================================
+
+Caixa de entrada
+
+- Arquivo: lib/screens/management/catalog_requests_screen.dart:6-488. CatalogRequestsScreen é StatefulWidget; estado em _CatalogRequestsScreenState.
+- Entrada: lib/screens/management/catalogs_screen.dart:540-550 usa IconButton Icons.inbox_outlined, tooltip "Solicitações recebidas", Navigator.of(context).push e MaterialPageRoute<void>. Import da tela em linha 6; navegação não leva storeId.
+- Chamada: _loadRequests no initState; FirebaseFunctions.instance.httpsCallable('listCatalogRequests'), timeout 30s, callable.call() sem payload (27-74).
+- Modelo: List<Map<String,dynamic>>, sem classe dedicada. Exige Map, success true e requests List; whereType<Map> descarta elementos não-Map, sem validação individual equivalente à do backend (46-74).
+- Campos: preserva o mapa recebido; card lê itemCount, totalUnits, totalAmount e createdAt; requestId usado na navegação. catalogId/status/updatedAt/source podem estar no mapa, mas não são exibidos nem usados na lógica atual (177-350).
+- Card: Card/Padding/Column; ícone de sacola, título fixo "Solicitação recebida", data local, chips de produtos/unidades, total em reais e botão "Ver detalhes" (222-350).
+- Status: não há badge, tradução ou filtro.
+- Expansão: não é expansível; card inteiro não possui onTap/InkWell. Somente o botão abre o detalhe (237-350).
+- Ações: _openRequestDetail valida requestId não vazio e navega para CatalogRequestDetailScreen(requestId); não recarrega automaticamente ao voltar (194-220).
+- Estados: loading com spinner; mensagens por código de Function; erro com "Tentar novamente"; vazio "Nenhuma solicitação recebida"; refresh por AppBar e RefreshIndicator inclusive no vazio. Helpers convertem números de forma permissiva e exibem fallback para dinheiro/data inválidos (83-191,353-485).
+- Pontos de extensão — recomendação: cabeçalho do card (246-292) comporta nome e badge; abaixo dele cabem telefone e ação WhatsApp. ExpansionTile ou expansão equivalente pode substituir a composição interna de _buildRequestCard mantendo carregamento/navegação. Se a expansão incluir produtos, a listagem não os fornece: decidir chamada de detalhe sob demanda ou ampliação do contrato, evitando presumir que já estão disponíveis.
+
+Detalhe
+
+- Arquivo: lib/screens/management/catalog_request_detail_screen.dart:4-531; StatefulWidget, requestId obrigatório, estado _request Map nullable.
+- Chamada: _loadRequest no initState; getCatalogRequest, timeout 30s, payload {'requestId':widget.requestId} (29-48).
+- Parse/validações: Map, success true, request Map, requestId retornado igual ao recebido, items List e todos os elementos Map; sem validação local completa de números/status (50-106).
+- Campos: mantém o mapa retornado; resumo exibe createdAt, itemCount, totalUnits, totalAmount. status/source/updatedAt não são exibidos nem orientam ações (229-344).
+- Items: cards mostram name, quantity, price e subtotal históricos. Fallback "Produto" para nome vazio e formatos permissivos; não consulta ProductModel nem Firestore (346-406).
+- Totais: exibe totalAmount persistido; não recalcula (329-332).
+- Estados: spinner, erro por código, retry, refresh na AppBar e gesto; request nulo mostra "Solicitação não disponível." (115-227,408-529).
+- Pontos de extensão — recomendação: _buildSummaryCard (229-344) para nome, WhatsApp, observação, badge, responsável e datas; _buildRequestBody (441-485), entre resumo e produtos, para ações "Iniciar atendimento", "Finalizar atendimento" e "Cancelar". Visibilidade/permissões dependem de contrato e confirmação do servidor.
+
+============================================================
+FLUXO PÚBLICO
+============================================================
+
+- Arquivos: lib/main.dart:66-188; lib/screens/public/public_catalog_screen.dart; functions/catalog/createCatalog.js:1105-1479,1488-1959. Chamadas ficam diretamente na tela, sem service/repository público separado encontrado.
+- Link: lib/screens/management/manage_products_screen.dart:1889-1894,2293-2309 monta URL usando slug/token; widgets/catalog_created_dialog.dart:5-50 copia/compartilha; catalogs_screen.dart:104-120 faz o mesmo para links existentes. Backend listCatalogs monta URL em createCatalog.js:823-824.
+- Rota: /{publicSlug}/catalogo/{publicToken}; _PublicCatalogRoute.fromCurrentUrl usa Uri.base e três segmentos no Web. MaterialApp público abre PublicCatalogScreen antes de AuthGate e dos providers privados (lib/main.dart:97-130,147-187).
+- Carregamento: _loadCatalog chama getPublicCatalog com slug/token, timeout 30s; valida store/catalog/products; guarda mapas e reconcilia seleção (public_catalog_screen.dart:851-955). Backend retorna store{name,logoUrl,phone}, catalog{title,expiresAt,productCount}, products sanitizados; phone é da LOJA (createCatalog.js:1438-1476).
+- Seleção: PublicCatalogScreen StatefulWidget com WidgetsBindingObserver; _selectedQuantities é Map<productId,int>; produtos ficam em _products; flags de seleção, carregamento, resumo e envio (19-44). Exibição usa _buildProductsSliver/_buildProductCard (1425-1999).
+- Quantidade: incremento limitado à disponibilidade atual; decremento remove ao chegar a zero; reconciliação após refresh limita/remove seleções inválidas (710-849). Controles mobile/desktop ficam no card de produto.
+- Estado: refresh manual/lifecycle e entrada em seleção; _loadCatalog evita concorrência e não atualiza com resumo aberto. Snapshot submittedQuantities mantém resumo e envio consistentes (54-79,283-318,851-860).
+- Total visual: soma double de price*quantidade, informativa; não enviada como autoridade (243-280). Resumo acessível por ações mobile/desktop em 1180 e 1390.
+- Payload atual: {publicSlug,publicToken,items:[{productId,quantity}]}, montado em public_catalog_screen.dart:553-563 a partir de submittedQuantities.
+- Ponto de envio: FilledButton "Enviar" dentro de _openSelectionSummary; callable definido em 546-552, execução em 553-564; trava _isSubmittingSelection evita clique duplo.
+- Confirmação: exige success true e requestId string não vazio, fecha modal, limpa seleção e mostra SnackBar de sucesso (565-576,634-643). Não há tela de acompanhamento público.
+- Erros: transitórios/resposta não confirmada mantêm modal/seleção para retry; failed-precondition/not-found/invalid-argument fecham resumo e provocam reconciliação/refresh; PopScope bloqueia saída durante envio (326-327,577-660).
+- Ponto mínimo para Nome/WhatsApp/Observação — recomendação: conteúdo do AlertDialog existente (321-524), com validação antes de 541 e campos no payload em 554. Não existe Form, TextEditingController ou validator de cliente na tela atual.
+- Alternativas: campos no resumo aproveitam a etapa já existente; formulário inline permite preencher antes, mas introduz estado e layout na página principal; modal separado acrescenta navegação. Não foi escolhida arquitetura. A política de preservar campos após erro/reabertura precisa ser definida; o tratamento atual de invalid-argument fecha o resumo.
+
+============================================================
+CLIENTES EXISTENTES
+============================================================
+
+- Coleções: cadastro próprio em stores/{storeId}/customers/{customerId}; storeId é escopo do caminho (manage_customers_screen.dart:271-274).
+- Schema: criação escreve name, name_lowercase, phone e createdAt. Arquivamento acrescenta isArchived, archivedAt, archivedBy; ausência de isArchived é tratada como ativo. Não foram encontrados CPF/CNPJ/document, WhatsApp separado, status textual ou updatedAt no schema desse cadastro (manage_customers_screen.dart:278-302; customer_model.dart:28-58; archiveCustomer.js:192-198).
+- Backend: functions/customers/archiveCustomer.js:84-235 e restoreCustomer.js:211-303 tratam arquivamento/restauração com transação e auditoria. Criação/edição do cadastro é direta no Flutter; não foi encontrado CustomerService/CustomerRepository ou callable createCustomer/updateCustomer para esse fluxo.
+- Flutter: manage_customers_screen.dart:262-302 cria com add/edita com update; nome obrigatório e telefone opcional (347-383). Listagem por name_lowercase, filtragem local por nome e exclusão visual de arquivados (657-710). archived_customers_screen.dart:251,513 lista/restaura; customer_receivables_screen.dart:317-318 e reports/customer_debt_detail_screen.dart:186 consultam dívidas por customerId.
+- customerId: ID Firestore do documento (customer_model.dart:48-58). Vendas já carregam customerId/customerName: sale_order_model.dart:12-13,87-88; payment_options_sheet.dart:432-433; syncOfflineSale.js:1092-1098. Não reutilizar sales para solicitações.
+- Nome: name; name_lowercase usado para busca.
+- Telefone: phone opcional, salvo com trim; pode conter formatação manual, vazio ou estar ausente. createdAt usa Timestamp.now() do cliente; edição não grava updatedAt (manage_customers_screen.dart:278-302).
+- WhatsApp: campo dedicado, verificação de conta WhatsApp e ação wa.me no fluxo de clientes/catalogRequests não encontrados.
+- Normalização: _limparNumeroTelefone remove não dígitos e remove prefixo 55 quando comprimento >=12; aplicada à importação da agenda, não uniformemente à gravação manual (manage_customers_screen.dart:201-208,238-242,284).
+- Outro padrão: normalizePhone/onlyDigits em functions/auth/bootstrapStore.js:78-85 apenas remove não dígitos; utilizado para telefone da loja (125-150), não normaliza país/DDD nem valida WhatsApp. Não existe padrão canônico compartilhado de telefone encontrado para todos esses fluxos.
+- Possibilidade de associação futura — alternativa: customerId opcional apontando somente para cliente da mesma loja, com associação validada no servidor. Correspondência por telefone exige lidar com formatos divergentes, duplicados e arquivados; telefone informado não comprova identidade. Não há unicidade por telefone observada nem associação atual.
+- Distinção: customers do Asaas em functions/index.js:1043-1268 representa cliente de cobrança da loja; não é o cadastro de consumidores stores/.../customers. CPF/CNPJ de bootstrapStore.js:271-274 pertence à loja.
+- Nenhuma criação automática de cliente é proposta.
+
+============================================================
+FUNCIONÁRIOS
+============================================================
+
+- users/{uid}: UID é o ID do documento e vem da autenticação; perfil do funcionário criado em functions/usuarios/convidarFuncionario.js:271-304.
+- Campos: name, email, storeId, role, accessStatus:"active", createdAt serverTimestamp, createdBy requesterUid. displayName é gravado no Firebase Auth em 254-259, não nesse objeto Firestore.
+- Nome disponível: tela de funcionários usa data['name'] ?? data['username'] (lib/screens/employees/employees_screen.dart:780-788). Bootstrap pode criar username para proprietário (functions/auth/bootstrapStore.js:303-323); perfil também usa fullName/lastUpdated (lib/screens/profile/profile_screen.dart:152,225-229). Não existe nome único universal confirmado.
+- role: admin/gerente/operador e aliases conforme normalizeRole do catálogo (createCatalog.js:344-362); UserRoleProvider acompanha perfil em tempo real (lib/providers/user_role_provider.dart:247-306).
+- storeId: campo do perfil; fonte de escopo das operações internas do catálogo.
+- accessStatus: revogação preserva perfil e grava revokedBy, updatedAt e dados de revogação (functions/usuarios/revogarAcessoFuncionario.js:348-448). Não assumir updatedAt obrigatório em todos os perfis.
+- Padrões de responsibleUid/createdByUid: catálogo usa createdByUid (createCatalog.js:656); funcionário usa createdBy (convidarFuncionario.js:302); cliente usa archivedBy (archiveCustomer.js:197); nenhum attendedBy/completedBy para catalogRequests encontrado.
+- Padrões de auditoria: performedBy:{uid,role}, timestamps e before/after (archiveCustomer.js:201-220; setProductCategories.js:599-625).
+- Recomendação: attendedByUid pode resolver name/username via perfil, sem duplicar nome. Alternativa: snapshot de nome preserva exibição histórica após renomeação/remoção. Necessidade de enriquecimento do retorno, fallback e isolamento por loja devem ser decididos; as APIs atuais não leem perfil de responsável.
+
+============================================================
+STATUS
+============================================================
+
+- Status atual: "pending", minúsculo.
+- Onde é criado: functions/catalog/createCatalog.js:1936, literal fixo.
+- Onde é validado: listagem 944-946 e detalhe 1047-1049 exigem string não vazia; não há enum/constante central de estados da solicitação nem máquina de transições encontrada.
+- Onde é exibido: não é exibido nas telas internas atuais; texto fixo "Solicitação recebida" (catalog_requests_screen.dart:273-274; catalog_request_detail_screen.dart:272-273).
+- Alteração existente: nenhuma função de negócio para mudar status de catalogRequests encontrada. List/get não escrevem. Não confundir status de catalogs com status de catalogRequests.
+- Rules: não mencionam catalogRequests explicitamente; regra genérica permite escrita direta a usuários da loja (firestore.rules:379-430).
+- Autoridade de escrita: fluxo de aplicação observado cria somente pelo Admin SDK, mas Rules não impõem exclusividade do backend. Nenhuma escrita direta Flutter em catalogRequests foi encontrada.
+- Pontos impactados pelo F7.9: criação do pai, validação/serialização em list/get, compatibilidade de documentos antigos, novo contrato de transições, Rules, mapas/UI das duas telas, atualização ao retornar do detalhe e testes de chaves/status. NEW/IN_PROGRESS/COMPLETED/CANCELLED são apenas objetivos conceituais.
+
+============================================================
+CONCORRÊNCIA
+============================================================
+
+- Padrões encontrados: transação com leitura do estado atual, retorno sem alteração em replay e gravação conjunta de auditoria.
+- Transações: archiveCustomer em functions/customers/archiveCustomer.js:171-227 relê cliente, retorna alreadyArchived se já arquivado, senão altera e audita atomicamente; restoreCustomer.js:211-289 faz equivalente com alreadyActive.
+- Compare-and-set: functions/products/setProductCategories.js:329-425,529-558 lê perfil/produto na transação e compara currentState com expectedTaxonomy; divergência gera HttpsError("aborted",...,{reason:"taxonomy-conflict"}). É padrão real de conflito controlado.
+- Claim: claimDailyBackupRun em functions/backups/scheduledStoreBackups.js:109-270 usa transação; completed ou running com lease válida retorna claimed:false; reserva execução com status running. É exemplo de exclusão de concorrentes, mas lease/reassunção são regras de backup, não contrato de atendimento.
+- Idempotência: functions/products/createProduct.js:121-150,180-235,397-430 usa recibo em auditLogs derivado de loja/UID/requestId e requestHash; replay válido retorna produto existente, payload diferente conflita. syncOfflineSale.js:696-699,714-795 usa localSaleId e lê venda antes de repetir efeitos. Reutilizável como padrão, sem usar sales no catálogo.
+- Situação atual: submit gera novo requestId por envio; não há chave de idempotência. Trava Flutter cobre somente envio simultâneo na mesma tela, não resposta perdida/reenvio (createCatalog.js:1925-1949; public_catalog_screen.dart:537-544).
+- Padrão potencialmente reutilizável — avaliação conceitual: transação pode ler solicitação da loja, exigir estado inicial contratado e gravar IN_PROGRESS, UID autenticado e serverTimestamp; concorrente deve reler e receber conflito controlado se o estado mudou. Perfil/autorização dentro da transação tem precedente em setProductCategories.js:329-395. Código de erro, replay do mesmo funcionário, reassunção e auditoria ainda são decisões; não foi definida API final.
+
+============================================================
+FIRESTORE RULES
+============================================================
+
+- catalogRequests: nenhuma regra específica encontrada. firebase.json:38 aponta firestore.rules.
+- items: items das solicitações também entram no match recursivo /stores/{storeId}/{subcollection}/{document=**}; subcollection = catalogRequests, não "items" (firestore.rules:379).
+- leitura: exige autenticação, perfil existente e storeId correspondente. Sem acesso anônimo concedido nesses caminhos (381-393).
+- escrita: create/update permitidos à mesma loja; sem whitelist de campos, role, accessStatus ou transição. Delete exige role literal admin/gerente (395-430).
+- risco de escrita direta: cliente autenticado da mesma loja pode alterar status, snapshot, valores, itens e futuros dados pessoais sem passar pelas callables. Perfil revoked com storeId preservado não é barrado por esse match. Não foi executada exploração nem teste.
+- autoridade backend: Admin SDK ignora Rules, conforme uso/import e comentário em functions/catalog/createCatalog.js:17,28. Autorizações das callables são independentes das permissões de cliente direto.
+- Outra fonte: docs/security/FIRESTORE_RULES_PRODUCAO_2026-09-16.rules:387-438 contém o mesmo padrão amplo para solicitações. O nome do arquivo não comprova o conteúdo atualmente publicado: NÃO CONFIRMADO.
+- Recomendação: decidir proteção explícita de pai/itens e interação com a regra genérica antes do ciclo de atendimento. Uma regra restritiva adicional não neutraliza um allow genérico que continue correspondendo. Nenhuma Rule foi alterada.
+
+============================================================
+AUDITORIA / HISTÓRICO
+============================================================
+
+- auditLogs: stores/{storeId}/auditLogs/{logId}, existente em clientes, produtos, funcionários e outras operações.
+- schema: exemplo de archiveCustomer.js:201-220: action, entityType, entityId, storeId, performedBy:{uid,role}, reason|null, before, after, createdAt serverTimestamp.
+- padrões existentes: customerAuditSnapshot local em archiveCustomer.js:72-81 e restoreCustomer.js:70-80; status/arquivamento e evento gravados na mesma transação. setProductCategories.js:577-625 repete before/after e performedBy.
+- Utilitário universal: NÃO CONFIRMADO; os exemplos lidos constroem snapshots/eventos nas próprias funções. Não pressupor schema rigorosamente idêntico em todos os módulos.
+- Rules de auditLogs: leitura por usuários da loja e escrita direta negada (firestore.rules:167-177).
+- Solicitações atuais: submit não grava auditLogs e não cria history/events (createCatalog.js:1929-1949).
+- Potencial reutilização — recomendação: transição e evento na mesma transação, com ator e instante do servidor; decidir nomes de ações e conteúdo mínimo. Copiar nome/telefone/note integralmente em before/after ampliaria exposição a quem lê auditLogs.
+
+============================================================
+TESTES EXISTENTES
+============================================================
+
+- Arquivos: functions/tests/catalog/submitPublicCatalogSelection.emulator.test.js; listCatalogRequests.emulator.test.js; getCatalogRequest.emulator.test.js; runCatalogTests.js. Os três primeiros são os testes diretamente relacionados às solicitações.
+- Runner: runCatalogTests.js:8-17,27-58 descobre todos os *.test.js, ordena, executa sequencialmente e para na primeira falha; gera chave temporária de 32 bytes para ambiente dos subprocessos. Hoje há nove arquivos de teste nesse diretório. functions/package.json:11 define npm run test:catalog. Apenas leitura; nenhum teste executado e nenhum resultado de aprovação novo declarado.
+- Cobertura atual do submit: envio sem auth e contrato de retorno (234-268); seleção vazia/>200, quantidades zero/negativa/decimal, duplicados (273-365); token malformado/inexistente e slug incompatível (367-435); produto fora do catálogo, arquivado/removido, estoque zero/insuficiente (437-555); catálogo expirado/inativo e assinatura inválida (557-648).
+- Autorização: listCatalogRequests:77-107 e getCatalogRequest:95-140 cobrem sem auth, perfil ausente, revoked com normalização, roles inválidas, cinco roles/aliases válidos, ausência/outros accessStatus, storeId ausente, loja ausente e assinatura cancelada sem bloquear leitura. Submit é público e não possui matriz de roles.
+- Isolamento: listagem:109-153 cobre outra loja e rejeita storeId/limit/extras no payload; detalhe:132-149 cobre ID só em outra loja, mesmo ID em lojas distintas, paths/IDs reservados/tamanho excessivo e payload extra.
+- Snapshot: submit:665-724 verifica campos exatos, nome/preço atuais prevalecendo sobre forjados, snapshot anterior preservado; detalhe:151-160 verifica produto alterado/arquivado/excluído, catálogo expirado/excluído e ausência de mutação. Listagem:122-148 independe de produtos/catálogos.
+- Estoque: submit:260-268,650-667,831-838 verifica estoque preservado e ausência de vendas; rejeições revalidam disponibilidade. Guardas de transporte em listagem:36-75 e detalhe:44-79 impedem escrita/leituras fora dos caminhos esperados durante chamadas.
+- Totais: submit:670-719,735-788 cobre itemCount, unidades, subtotal/total em centavos, zero, arredondamento, preços ausentes/inválidos e overflow monetário. Quantity insegura é testada em 754-757; overflow específico da soma de totalUnits: NÃO CONFIRMADO como caso dedicado.
+- Validação/fail-closed: listagem:172-185 cobre campos estruturais; detalhe:175-225 cobre timestamps inválidos, itemCount divergente, campos do pai/item inválidos, productId duplicado, item ausente e rejeição integral.
+- Limites/ordenação: listagem com 55 documentos devolve 50 por createdAt DESC, sem documentos sem createdAt (109-145); submit:813-838 grava 200 itens; detalhe:162-173 lê 200 por ID crescente.
+- Status: testes fixam "pending", source e chaves exatas; não cobrem ciclo de atendimento. Timestamps de criação/atualização preservados são verificados (submit:675-681; listagem:129-148; detalhe:115-160).
+- Concorrência: submit:790-811 cobre rollback real do batch; 723-724 comprova reenvio com ID diferente, não idempotência. Não foi encontrado teste de dois funcionários assumindo, nem teste dedicado de corrida entre revalidação de estoque e batch.
+- Flutter público: test/public_catalog_submission_test.dart:103-237 cobre payload, clique duplo, sucesso mobile/desktop, lifecycle, retry, confirmação incompleta, reconciliação com refresh falhando, produto inelegível, catálogo indisponível e dispose durante envio. Não foram encontrados testes dedicados das duas telas internas.
+- Rules: testes de catálogo usam Admin SDK, portanto não comprovam bloqueio de cliente direto. functions/tests/security/firestoreTaxonomyRules.test.mjs existe, mas não contém cobertura de catalogRequests encontrada.
+- Lacunas F7.9 — recomendação: obrigatoriedade/limites/normalização de nome/telefone/note; compatibilidade de documentos antigos; todos os estados/transições; permissões por ação e loja; UID/horários não forjáveis; claim simultâneo com um vencedor; replay/resposta perdida; finalizar/cancelar/reassumir conforme contrato; evento atômico; Rules de pai e itens; não exposição pública; associação customerId se aprovada; badge/expansão/WhatsApp e atualização da lista.
+- Adaptações prováveis: asserts de chaves/status e payload nos três testes backend e no teste público, somente após contrato aprovado. Preservar snapshot, isolamento, centavos/limites, falha integral, não escrita nas leituras e ausência de venda/reserva/decremento.
+
+============================================================
+RISCOS / CUIDADOS
+============================================================
+
+- Fato: Rules locais permitem escrita direta na solicitação e itens pela mesma loja; é a principal lacuna para confiar em transições e snapshots (firestore.rules:379-430). Produção: NÃO CONFIRMADO.
+- Fato: list/get bloqueiam revoked, mas as Rules genéricas não o fazem. Futuro dado pessoal pode ser lido diretamente por perfil da loja sem a mesma política das callables (createCatalog.js:905,997; firestore.rules:381-407).
+- Fato: retorno público atual é explícito e não lê catalogRequests; submit retorna só confirmação e totais. Adicionar PII ao pai não a expõe automaticamente nessa resposta, mas copiar documento integral futuramente criaria risco (createCatalog.js:1438-1476,1951-1957). Também evitar PII em logs de erro e auditoria ampla.
+- Fato: telefone do cadastro não tem unicidade/normalização uniforme; vínculo por número pode ser ambíguo. Nome/telefone públicos são autodeclarados, não identidade autenticada (manage_customers_screen.dart:278-302; submit:1493-1577).
+- Fato: get valida estrutura, não igualdade aritmética entre totais e itens; Rules amplas podem permitir snapshots adulterados que ainda passem nessa validação (createCatalog.js:1043-1083).
+- Fato: batch é atômico, mas a disponibilidade pode mudar entre leitura e escrita; solicitação não é reserva/venda. Concluir atendimento não pode ganhar esses efeitos implicitamente (createCatalog.js:1780-1949).
+- Fato: falha de resposta após commit pode gerar duplicata no retry; trava visual não resolve isso (createCatalog.js:1925-1949; public_catalog_screen.dart:577-601).
+- Fato: limite de 50 sem paginação pode ocultar solicitações antigas ainda abertas; ordem por criação não prioriza atendimento (createCatalog.js:939-940).
+- Fato: nome de funcionário tem variantes e pode mudar; attendedAt não identifica quem finalizou. Preservação histórica e campos de ator final precisam de decisão (convidarFuncionario.js:275-303; employees_screen.dart:780-788).
+- Fato: documentação tem marcos históricos defasados e escopo anterior de F7.9. Esta auditoria segue a instrução atual de Rodrigo, sem reescrever documentação (CURRENT_WORK.md:8-22,77; F7_CATALOGO_INTELIGENTE.md:84,2747-2833).
+- Limite: existência de dados reais, estado de deploy, Rules publicadas e resultado de smoke test não foram verificados; o smoke test foi informado por Rodrigo.
+
+============================================================
+DECISÕES PARA F7.9-A1
+============================================================
+
+- Estados e legado: manter "pending" como estado inicial, mapear legado para "new"/"NEW" na leitura, ou migrar persistência. Manter evita migração; mapear exige semântica explícita; migração altera dados e requer autorização própria. Definir casing dos quatro estados.
+- Identificação: nome/WhatsApp obrigatórios somente em novas solicitações ou também em chamadas antigas; campos planos ou agrupados; máximos, trim, tipos, vazio/null/ausente e limite de note. Obrigatoriedade imediata pode quebrar páginas públicas antigas abertas.
+- Telefone: formato nacional com DDD ou formato internacional canônico; país padrão ou múltiplos países; tratamento de +55, pontuação e números inválidos. Define busca e construção segura do link WhatsApp.
+- Associação: não incluir customerId no MVP ou permitir vínculo opcional validado no servidor; decidir tratamento de duplicados/arquivados e se associação é manual ou sugerida. Nenhuma criação automática.
+- Transições: quais origens permitem iniciar/finalizar/cancelar; estados terminais ou reabertura; permitir troca/reassunção ou não. Cada alternativa muda concorrência e histórico.
+- Permissões: quem inicia, quem finaliza e quem cancela; somente responsável ou gerente/admin também; política de revoked/assinatura. Não copiar autorização de leitura automaticamente para escrita.
+- Responsável/histórico: apenas UID com nome atual ou UID + snapshot de nome; fallback para perfil ausente e variantes name/username/fullName; quais atores registrar na finalização/cancelamento além dos timestamps.
+- Concorrência/replay: precondição de status suficiente ou versão adicional; conflito versus sucesso idempotente para mesma ação/ator; código de erro e recarga da UI. Reassunção exige proteger contra estado observado antigo.
+- Atomicidade/auditoria: usar auditLogs existente ou histórico específico; quais eventos, before/after e dados mínimos; transição e log na mesma transação; política de não duplicar eventos em replay.
+- Fronteira de acesso: restringir escrita direta de pai/itens ao backend; definir leitura direta permitida ou somente callables e política de perfis revogados. Ajustar regra genérica faz parte dessa decisão, não apenas adicionar match específico.
+- Contrato de leitura: campos mínimos para listagem versus detalhe; nome do responsável enriquecido ou snapshot; dados pessoais visíveis a quais perfis; manter 50/sem filtros ou definir evolução separada.
+- Expansão: somente metadados já listados ou produtos com detalhe sob demanda; ampliar listagem transfere mais dados, lazy load exige estado/cache/erro por card. Formulário público no resumo ou separado; preservar dados no retry/reabertura.
+- Finalização: explicitar se significa apenas encerrar atendimento. Venda, reserva e estoque permanecem fora do fluxo atual; qualquer integração exige contrato separado.
+- Limite do incremento: tratar idempotência do envio público agora ou manter limitação documentada; decidir se retenção/expiração do antigo escopo F7.9 fica em etapa distinta.
+
+============================================================
+RECOMENDAÇÃO PARA F7.9-A1
+============================================================
+
+Recomendação, sem implementação:
+
+1. Delimitar gestão de solicitações e compatibilidade com legado/páginas públicas antigas.
+2. Definir fronteira de acesso e Rules para proteger snapshot e futuros dados pessoais.
+3. Fechar estados, transições, permissões e identificação dos atores.
+4. Fechar schema de cliente, telefone, observação e eventual customerId.
+5. Definir transação, conflito, replay e auditoria atômica.
+6. Fixar respostas de list/get e comportamento de atualização/expansão/formulário.
+7. Aprovar matriz de testes e invariantes antes de dividir a implementação em etapas.
+
+============================================================
+ESTADO FINAL
+============================================================
+
+CÓDIGO ALTERADO: NÃO
+CONFIGURAÇÃO ALTERADA: NÃO
+ARQUIVOS DE PROJETO ALTERADOS: NÃO
+RELATÓRIO TXT CRIADO: SIM
+RELATÓRIO: test/F7.9-A0_relatorio.txt
+GIT ADD: NÃO
+COMMIT: NÃO
+PUSH: NÃO
+DEPLOY: NÃO
+
+============================================================

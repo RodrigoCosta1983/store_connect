@@ -1,0 +1,37 @@
+F7.9-D0 — AUDITORIA FOCADA DO BACKEND
+
+Escopo auditado: functions/catalog/createCatalog.js, catalogRequestContract.js,
+functions/index.js, testes de catálogo e padrões de transaction/audit existentes.
+
+Achados:
+- catalogRequestContract.js já define os estados pending, in_progress,
+  completed e cancelled; ações start, complete e cancel; aliases de role;
+  decideCatalogRequestTransition, validateCatalogRequestLifecycle e projeções
+  de list/detail. O teste puro valida 393 casos.
+- createCatalog.js gravava novas solicitações somente como pending, sem campos
+  de lifecycle, callable de transição ou auditoria de mudança.
+- listCatalogRequests e getCatalogRequest liam apenas o schema base e não
+  projetavam dados de cliente/responsável/lifecycle nem validavam a máquina.
+- functions/index.js já centraliza exports do módulo de catálogo; o novo
+  callable deve ser exportado no mesmo bloco.
+- O padrão existente para mutações sensíveis é db.runTransaction, revalidação
+  de users/stores/documento e auditLogs na mesma transação, com before/after,
+  performedBy, entityType/entityId, createdAt server timestamp.
+
+Integração D1 definida:
+- transitionCatalogRequest recebe somente {requestId, action}; storeId vem do
+  perfil autenticado e não do cliente.
+- Revalida auth, perfil, accessStatus, role, store e documento dentro da
+  transação. Rules não participam do canal Admin SDK.
+- O contrato puro decide a transição e o replay do mesmo ator. A atualização
+  grava status, updatedAt e o grupo do ator (ByUid, ByName, At) com timestamp
+  de servidor; a auditoria é gravada atomicamente.
+- list/get validam lifecycle com predicado Timestamp e usam as projeções do
+  contrato; documentos legados pending sem lifecycle continuam válidos.
+- Erros do contrato são traduzidos para HttpsError sem ecoar valores de entrada.
+- A persistência pública V1 permanece compatível nesta etapa; a integração
+  de payload público V2/customer é uma decisão separada e não foi presumida.
+
+Riscos controlados: replay não gera nova auditoria; terminal é imutável;
+operador só conclui/cancela solicitação que ele iniciou; managers podem
+assumir in_progress; concorrência é serializada pela transaction.
