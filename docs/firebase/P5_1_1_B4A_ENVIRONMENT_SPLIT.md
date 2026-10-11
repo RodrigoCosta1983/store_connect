@@ -107,3 +107,26 @@ Referências oficiais:
 - Dois hashes Dart conhecidos preservados; stage vazio; branch e HEAD iguais.
 - Auditoria de escopo e padrões de credencial aprovada.
 - Sem build, Emulator, mutação Firebase remota, commit, push ou deploy.
+
+## FlutterFire CLI / firebase.json
+
+P5.1.1-B4B: removido somente o bloco FlutterFire `flutter` obsoleto de
+`firebase.json`. O App ID Android historico `82c38b9...` constava em
+`android.default` e no mapa Dart de `lib/firebase_options.dart`, associado ao
+projeto PROD e ao JSON Android raiz. Esse metadata nao participava do runtime
+B4A. As demais secoes operacionais e `.firebaserc` foram preservados.
+
+Nao executar `flutterfire configure` genericamente, nem `flutterfire reconfigure`
+com metadados antigos. A remocao nao impede defaults numa nova execucao generica.
+Android possui flavors `prod`/`hml`, ambos com package `com.storeeconnect.app`.
+Execucoes futuras exigem procedimento flavor-aware aprovado, com projeto,
+App IDs e saidas separados por ambiente. Preservar os configs
+`android/app/src/prod/google-services.json` e
+`android/app/src/hml/google-services.json`, os dois arquivos Dart de opcoes e
+os entrypoints/guards. Nao restaurar `android/app/google-services.json` nem
+sobrescrever o bloqueio de `lib/firebase_options.dart`.
+
+A CLI documenta `--android-out`, `--android-package-name`, `--out` e
+`--web-app-id` para configuracoes separadas. Nenhum schema manual de metadata
+multiflavor foi inventado e nenhum configure foi executado nesta etapa.
+Referencia: https://github.com/invertase/flutterfire_cli#multi-build-configuration-setup
