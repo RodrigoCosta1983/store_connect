@@ -1,0 +1,784 @@
+T6-A3-A0 — AUDITORIA READ-ONLY DA ÁRVORE DE CATEGORIAS EM PRODUTOS
+Data: 21/09/2026
+Resultado: auditoria concluída. T6-A3 NÃO implementado.
+
+1. ESCOPO, BASE E MÉTODO
+
+Única escrita autorizada/realizada:
+test/T6-A3-A0_product_category_tree_audit.txt
+
+Branch inicial: feat/f7-intelligent-catalog
+HEAD inicial: 0e5aee6853253b3374fcfc487cb9547a04771a68
+Stage inicial: vazio.
+O workspace já contém os incrementos locais anteriores, inclusive T6-A1 e
+T6-A2-A1. Nenhum deles foi descartado ou reescrito.
+
+Estado Git dos alvos:
+- functions/products/createProduct.js: rastreado, sem alteração local;
+- functions/products/setProductCategories.js: rastreado, sem alteração local;
+- functions/products/productCategoryContract.js: rastreado, sem alteração local;
+- functions/categories/categoryHierarchyContract.js: arquivo não rastreado
+  preexistente, preservado;
+- functions/categories/upsertCategory.js: arquivo não rastreado preexistente,
+  preservado.
+Os testes de produto examinados não estavam modificados no início.
+
+SHA256 inicial das duas Functions:
+createProduct.js:
+F6EAAA306D8C1D7AE381F1E502BCEF9C3283F625ECB72AED215A682A4980B755
+setProductCategories.js:
+0D9BB3B7493A14423AB35FBB5B19A63D4441E6E83625B88CEAD067D0A8169CB7
+
+Foram lidos AGENTS.md, contexto ativo, documentação F7/taxonomia, código dos
+cinco arquivos principais, resolução/idempotência/auditoria, testes de produto
+e testes relacionados de hierarquia/deleção.
+Buscas com rg por parentCategoryId, writers, transações, árvore, arquivamento
+e nomes de casos; comparação SHA256 antes/depois.
+Consultadas apenas páginas públicas de documentação oficial para limites.
+Nenhuma conexão a dados Firebase, nenhum Emulator/CLI Firebase iniciado.
+Nenhum teste executado; testes existentes abaixo foram inspecionados, não
+revalidados nesta etapa. Não foram criados fixtures, logs ou arquivos auxiliares.
+
+Contrato fechado respeitado:
+dois níveis; raiz null ou legado sem campo; filho aponta para raiz existente
+da MESMA loja; sem auto-parent/terceiro nível. categoryIds são associações
+explícitas independentes, sem expansão, sem exigir pai no array e sem exigir
+que todas as categorias pertençam à mesma raiz.
+
+2. CONCLUSÃO
+
+GAP CONFIRMADO POR LEITURA:
+createProduct e setProductCategories só verificam existência das categorias
+explicitamente pedidas e nome canônico não vazio. Não leem nem validam
+parentCategoryId. Uma categoria com nome válido, mas pai inválido/inexistente,
+auto-parent ou terceiro nível, passa pela resolução atual.
+
+Menor fechamento:
+validar o campo de pai de cada categoria selecionada e, quando filho, ler seu
+pai na própria loja dentro da MESMA transação, exigindo que ele seja raiz.
+Reutilizar snapshots e deduplicar pais. Não consultar árvore inteira,
+não expandir categoryIds e não alterar a projeção dos campos legados.
+
+O gate deve ficar:
+- createProduct: no caminho de criação NOVA, após o caminho já existente de
+  replay por recibo e antes de product/receipt serem escritos;
+- setProductCategories: após a leitura das categorias desejadas e antes da
+  projeção/retorno idempotente/UPDATE e auditoria.
+
+As regras atuais de idempotência não são iguais entre as duas Functions.
+Um replay histórico de createProduct não cria nova associação e deve manter
+seu retorno já garantido, mesmo se a categoria mudou após a criação.
+Já setProductCategories resolve categorias a cada chamada; uma árvore inválida
+deve impedir inclusive um no-op que mantenha a categoria corrompida.
+
+3. ESTADO ATUAL — CREATEPRODUCT
+
+Arquivo: functions/products/createProduct.js
+Contrato de entrada em createProductContract.js:422-477 chama
+validateCategoryIds de productCategoryContract.js.
+
+Hoje garante:
+- auth/perfil, role reconhecida e não revogado; loja obtida do perfil;
+- IDs explícitos em array de 0..10, sem duplicados, string não vazia,
+  sem whitespace externo e sem slash;
+- idempotência por requestId + hash do conteúdo normalizado;
+- validação operacional e gate fiscal existentes;
+- leitura transacional de categoria em stores/{storeId}/categories/{id};
+- categoria selecionada existe na loja autenticada;
+- TODAS as categorias selecionadas têm name string não em branco;
+- preserva a ordem e os IDs exatos;
+- grava produto e audit/receipt atomicamente.
+
+Sequência relevante:
+:309 — inicia transação;
+:316 — perfil;
+:377 — loja;
+:410 — receipt;
+:414-431 — receipt existente: valida e retorna replayed:true ANTES das categorias;
+:488 — leitura defensiva do ID candidato do produto;
+:509-555 — lê cada categoria explicitamente selecionada;
+:549-554 — guarda somente {name: categoryData.name} no Map;
+:561-577 — projectLegacyCategories;
+:667 em diante — grava produto e receipt/auditoria depois de todas as leituras.
+
+Nenhuma leitura do pai. parentCategoryId é descartado antes da projeção.
+A mesma categoria pode ter qualquer valor de parentCategoryId e ainda passar,
+desde que exista na loja e possua name aceitável.
+
+Erros atuais a preservar:
+- categoria selecionada ausente: failed-precondition / category-unavailable;
+- nome canônico inválido: failed-precondition / invalid-category-data;
+- requestId repetido com conteúdo diferente: conflito de recibo, não nova criação;
+- replay válido continua revalidando autorização e loja, mas não categorias/plano.
+
+4. ESTADO ATUAL — SETPRODUCTCATEGORIES
+
+Arquivo: functions/products/setProductCategories.js
+:329 — transação;
+:332/:393/:410 — perfil, loja e produto;
+:423-428 — validateCurrentTaxonomy;
+:432-481 — lê as categorias DESEJADAS, somente na própria loja;
+:474-479 — guarda somente o nome, descartando estrutura hierárquica;
+:484-500 — projeção e erro invalid-category-data;
+:511-526 — desiredState igual ao estado atual: changed:false, sem write/audit;
+:540-561 — comparação com expectedTaxonomy; divergência => taxonomy-conflict;
+:587-628 — UPDATE dos três campos taxonômicos e audit, atomicamente.
+
+Hoje garante:
+- mesmo gate de perfil/loja dos produtos;
+- produto existe na própria loja;
+- current categoryIds, quando presente, tem formato válido;
+- categoryId/categoryName atuais, quando presentes e não-null, são strings;
+- distingue ausência, null e [] para concorrência;
+- resolução de existência/nome das categorias desejadas antes do no-op;
+- só altera categoryIds/categoryId/categoryName e audit;
+- não altera estoque, lotes, nome, fiscal, preço, imagem ou arquivamento;
+- produto ARQUIVADO pode receber manutenção de taxonomia (contrato D7 explícito).
+
+validateCurrentTaxonomy (:148-194) valida o formato salvo no PRODUTO,
+não a árvore dos documentos de categoria referenciados.
+Taxonomia atual com shape inválido já é rejeitada como invalid-current-taxonomy;
+isso não deve ser confundido com categoria referenciada com árvore inválida.
+
+Importante para legado:
+a Function não precisa validar categorias antigas REMOVIDAS da seleção desejada.
+Se o array atual tem shape válido mas referencia categoria corrompida/ausente,
+o cliente pode explicitamente substituí-la por categorias válidas ou [].
+Manter esse caminho não é migração automática. Validar todos os IDs antigos
+além dos desejados bloquearia uma remoção explícita legítima.
+
+5. CONTRATOS E UPSERTCATEGORY
+
+productCategoryContract.js:
+- validateCategoryIds: shape, cardinalidade 0..10, unicidade, IDs sem normalização;
+- captureTaxonomyState: preserva presença/valor exatos, sem corrigir;
+- projectLegacyCategories: valida todos os nomes do Map e projeta:
+  [] => categoryIds:[], categoryId:null, categoryName:null;
+  [A,B] => IDs na mesma ordem, categoryId:A e categoryName:name de A.
+- nome canônico é preservado literalmente, inclusive espaços externos se não
+  estiver inteiramente em branco. Não mudar essa semântica como efeito colateral.
+- Não valida árvore e não pode inferir que IDs são pai/filho.
+- O helper aceita Map com dados resolvidos, não acessa Firestore.
+
+categoryHierarchyContract.js:
+:60-101 — validateCategoryId rejeita tipo não-string, vazio/em branco,
+whitespace externo e slash, sem normalizar IDs;
+:124-222 — validateCategoryMutationInput exige parentCategoryId explícito
+na operação de criar/editar categoria; null é raiz;
+:239-385 — validateCategoryHierarchyDecision exige pai correspondente/existente
+e raiz, bloqueia auto-parent, terceiro nível e rebaixamento de categoria com filhos.
+É contrato de MUTAÇÃO de categoria, não de associação de produto.
+Não usar validateCategoryMutationInput diretamente em documentos legados:
+o payload exige campo explícito, mas armazenamento antigo pode omiti-lo.
+Não inventar childCount=0 para fingir que houve consulta de filhos.
+
+upsertCategory.js:
+:79-109 — normalizeStoredParentCategoryId:
+ausência de campo próprio ou null => raiz; outro valor passa pelo validateCategoryId;
+erro => failed-precondition / invalid-category-hierarchy.
+:377-394 — em update consulta filhos por parentCategoryId == ID, limit(1);
+:409-443 — lê pai na MESMA coleção da loja e normaliza seu parentCategoryId;
+:449-461 — aplica decisão hierárquica;
+:554-584 — cria/atualiza name, imageUrl, parentCategoryId; criação tem createdAt;
+:477-521 — no-op/materalização de legado tratados no writer de categorias.
+
+Essa proteção evita novas árvores inválidas pelo writer correto, mas não
+certifica documentos previamente corrompidos ou escritos por Admin SDK.
+O fechamento de Rules em T6-A1 também não corrige dados históricos.
+
+6. MATRIZ CASO A CASO
+
+Premissa da coluna ATUAL: categoria selecionada existe na loja e tem nome
+canônico válido; demais condições de entrada/autorização satisfeitas.
+Casos inválidos abaixo são aceitos HOJE por ambas as Functions no caminho
+normal, pois elas não examinam parentCategoryId.
+
+A01 — parentCategoryId:null
+Atual: aceita.
+Desejado: aceitar como raiz; não ler pai.
+Novo documento deve seguir null, mas produto NÃO escreve categoria.
+
+A02 — parentCategoryId AUSENTE (legado)
+Atual: aceita; é a fixture padrão atual.
+Desejado: aceitar como raiz só na interpretação; não materializar null no banco.
+
+A03 — filho com parentCategoryId = ID válido de raiz com null na mesma loja
+Atual: aceita sem conferir pai.
+Desejado: aceitar após leitura transacional do pai e confirmação de raiz.
+
+A04 — filho cujo pai é raiz LEGADA sem parentCategoryId
+Atual: aceita sem conferir pai.
+Desejado: aceitar; pai legado não precisa de correção/migração.
+
+A05 — filho com pai inexistente
+Atual: aceita indevidamente se o filho tem nome.
+Desejado: rejeitar; ausência do pai não promove filho a raiz.
+
+A06 — filho cujo pai na mesma loja também tem parentCategoryId não-null
+Atual: aceita indevidamente.
+Desejado: rejeitar terceiro nível. Não buscar avô para tentar "achar uma raiz".
+Mesmo se o avô existir e for raiz, o terceiro nível continua inválido.
+
+A07 — auto-parent (parentCategoryId == próprio ID)
+Atual: aceita indevidamente.
+Desejado: rejeitar antes de ler pai adicional.
+
+A08 — parentCategoryId não-string e não-null
+Ex.: número, boolean, array, map.
+Atual: aceita indevidamente.
+Desejado: rejeitar, sem conversão para string, sem tratar como raiz.
+Undefined explícito em helper puro também não deve virar ausência;
+em documentos Firestore a distinção relevante é campo ausente vs valor gravado.
+
+A09 — parentCategoryId:string vazia
+Atual: aceita indevidamente.
+Desejado: rejeitar; não usar "" como raiz.
+
+A10 — parentCategoryId só whitespace ou com whitespace externo
+Ex.: " ", " root", "root ", tabulação/quebra nas bordas.
+Atual: aceita indevidamente.
+Desejado: rejeitar, sem trim silencioso do ID.
+IDs são identidades exatas; não "consertar" referência durante associação.
+
+A11 — parentCategoryId com slash/caminho
+Atual: ignora o campo, portanto aceita.
+Desejado: rejeitar antes de construir referência.
+Não permitir apontar diretamente para documento de outra coleção/loja.
+
+A12 — pai existente SOMENTE em outra loja
+Atual: aceita o filho local, sem consultar pai.
+Desejado: rejeitar; resolver apenas stores/{loja autenticada}/categories/{parentId}.
+Se o MESMO ID existe em ambas as lojas, só a versão local importa:
+local raiz válida => pode aceitar; local inválida => rejeita, sem fallback externo.
+Um eventual campo storeId dentro do documento não substitui a autoridade do caminho.
+
+A13 — próprio pai com parentCategoryId malformado (tipo/vazio/whitespace)
+Atual: não lê pai e aceita.
+Desejado: rejeitar como estrutura inválida; não normalizar malformado para null.
+
+A14 — ciclos de dois ou mais nós
+Atual: aceita IDs selecionados com nomes válidos.
+Desejado: rejeitar: o pai de um filho não é raiz. Um passo adicional basta
+para detectar que a ligação selecionada não atende aos dois níveis;
+não é necessário percorrer ciclo inteiro/recursão.
+
+A15 — vários IDs válidos de raízes DIFERENTES
+Atual: aceita.
+Desejado: continuar aceitando. Validar cada ancestralidade independentemente.
+Ex.: [rootA,rootB], [childA,childB], [rootA,childB] com árvores válidas.
+
+A16 — [childId] sem pai em categoryIds
+Atual: aceita.
+Desejado: aceitar se pai for raiz válida da mesma loja.
+Ler pai é dependência de validação, NÃO associação.
+Persistir somente [childId]; legado categoryId/categoryName continua sendo do filho.
+
+A17 — [rootId,childId]
+Atual: aceita.
+Desejado: aceitar se cada categoria for válida; persistir exatamente essa ordem.
+Se rootId é o pai do filho, reutilizar o snapshot e não duplicar leitura.
+Se rootId é OUTRA raiz válida, também pode aceitar, sem exigir vínculo entre os IDs.
+[childId,rootId] também é permitido e deve preservar filho em primeiro lugar.
+
+A18 — []
+Atual: aceita e gera projeção canônica vazia.
+Desejado: manter, sem leitura de categoria/pai.
+
+A19 — categoria explicitamente selecionada ausente/sem nome válido
+Atual: já rejeita.
+Desejado: preservar os erros existentes, inclusive quando a categoria é raiz.
+Nome de pai APENAS implícito: o menor gate hierárquico exige existência + raiz;
+não introduzir nova exigência de nome/imageUrl/schema do pai não selecionado.
+Isso segue a decisão de upsertCategory, que só usa ID/parentCategoryId do pai.
+Se o pai também estiver no array explícito, a validação atual de nome se aplica.
+
+A20 — categoria com campos extras de inatividade/arquivamento
+Não foi encontrado conceito implementado de categoria arquivada/inativa,
+archiveCategory ou restoreCategory nos writers/contratos/UI auditados.
+Não confundir isArchived de PRODUTO com status da categoria.
+Atual: campos extras dessa natureza não são usados na resolução.
+Desejado mínimo: validar a árvore, sem inventar veto por isArchived/active/status.
+Se houver campos ad hoc em documentos antigos, eles não estabelecem contrato.
+Decisão futura de lifecycle de categoria deve ser separada.
+
+A21 — produto legado sem categoryIds, com campos de categoria ausentes/null
+Atual: setProductCategories trata presença/ausência e permite formar projeção
+desde que current/expected cumpram os contratos já existentes.
+Desejado: preservar. Validar apenas árvore das categorias desejadas.
+Shape atual de produto inválido continua rejeitado; não reparar automaticamente.
+
+A22 — raiz/filho válido com descendente corrompido NÃO selecionado
+A proposta mínima valida o nó selecionado e seu caminho para o pai, não a coleção
+inteira ou todos os descendentes. Uma raiz null continua raiz válida.
+Não prometer que isso certifica toda a árvore armazenada em torno do nó.
+Detectar terceiro nível em ramo não selecionado exigiria outro escopo de auditoria.
+Nenhuma consulta de filhos deve ser adicionada por imitação do contrato de
+reparenting: produtos não estão movendo categorias.
+
+7. MENOR PROPOSTA PARA T6-A3 — NÃO IMPLEMENTADA
+
+Mudança localizada no trecho "resolver categorias" das duas Functions.
+Manter APIs públicas, categoryIds, projection, expectedTaxonomy, recibo,
+autorização, auditoria e escrituras existentes.
+
+Algoritmo proposto:
+1) Ler TODAS as categorias explícitas na transação e guardar snapshots/dados
+   completos em Map indexado pelo ID da própria loja, preservando a ordem
+   original em categoryIds.
+2) Interpretar pai armazenado estritamente:
+   campo ausente/null => raiz;
+   demais valores => validar string/ID com a semântica de validateCategoryId.
+   Não usar "valor || null" ou "String(valor).trim()" para corrigir dados.
+3) Para cada filho, rejeitar auto-parent e coletar parentId.
+4) Ler pais distintos que não estejam já no Map de documentos lidos,
+   sempre por transaction.get na coleção da própria loja.
+   Cache/Map deve nascer DENTRO do callback da transação, renovado a cada retry.
+5) Exigir existência do pai e parentCategoryId ausente/null no pai.
+   Qualquer pai não-raiz/malformado rejeita; não buscar avós ou expandir arrays.
+6) Aplicar a projeção atual usando apenas categoryIds explícitos.
+   Não gravar pais implícitos, não mudar ordem e não mudar campos de categorias.
+7) Só então seguir para idempotência/concorrência/write existentes conforme
+   o posicionamento específico abaixo.
+
+Extração mínima sugerida:
+compartilhar um pequeno normalizador PURO de parentCategoryId armazenado no
+contrato já compartilhado de produtos, usando a validação de ID já existente
+em categoryHierarchyContract. Ausência/null deve ser tratada explicitamente.
+As duas Functions mantêm seus loops/Map transacionais, sem grande camada nova
+de repositório, sem importar upsertCategory como handler e sem refatorá-lo.
+A validação do pai raiz é pequena e não exige migrar todo o contrato de mutação.
+Essa é proposta de implementação futura, não autorização de editar arquivos agora.
+
+Erros:
+preservar category-unavailable para categoria EXPLÍCITA ausente;
+preservar invalid-category-data para nome inválido;
+sugerir failed-precondition com reason invalid-category-hierarchy para árvore
+armazenada inválida (incluindo pai ausente, pois a categoria selecionada existe).
+Esse reason já é utilizado por upsertCategory para estrutura armazenada inválida.
+Não classificar automaticamente corrupção armazenada como invalid-argument
+do usuário. Não vazar documento/caminho/loja de terceiros no erro.
+Se futuramente for desejado distinguir pai ausente, isso deve ser contrato
+explícito; não é necessário para o menor fechamento.
+
+Posicionamento e idempotência:
+- createProduct: preservar :414-431. Recibo histórico válido retorna antes
+  da nova resolução da árvore, sem criar novo produto/audit.
+  Nova requestId tenta nova criação e deve ser rejeitada se a árvore corrompeu.
+  Mesmo requestId com hash diferente continua seguindo o conflito existente.
+- setProductCategories: nova validação antes de :515-526.
+  Mesmo desiredState precisa apontar para árvore válida; caso contrário,
+  failed-precondition sem write/audit. Não retornar sucesso só por arrays iguais.
+  Para árvore válida, changed:false continua sem auditoria e conserva a
+  precedência atual sobre expectedTaxonomy divergente.
+- Remover referências inválidas é permitido quando elas não estão na seleção
+  desejada e o shape do produto/expected é válido. [] continua sendo válido.
+
+Não alterar:
+Rules, Flutter/importação, upsertCategory/deleteCategory, lifecycle, estoque,
+preço, lotes, fiscal, regras de acesso/plano, projeção, migração ou dados.
+Nenhuma expansão implícita e nenhuma exigência de raiz comum.
+
+8. LEITURAS ADICIONAIS, LIMITES E CONCORRÊNCIA
+
+Derivação pelo código local:
+N = quantidade explícita, 0 <= N <= 10.
+P = pais distintos não presentes entre documentos explícitos já lidos.
+0 <= P <= N <= 10.
+
+Por TENTATIVA de transação:
+createProduct NOVO hoje: 4 + N leituras
+(perfil, loja, recibo, produto candidato, categorias).
+Proposta: 4 + N + P, máximo 24 leituras.
+createProduct REPLAY: mantém 3 leituras (perfil, loja, recibo); sem pais.
+
+setProductCategories hoje: 3 + N leituras
+(perfil, loja, produto, categorias).
+Proposta: 3 + N + P, máximo 23 leituras.
+Pais já selecionados ou compartilhados por vários filhos não são relidos.
+N=0 => P=0. Dez raízes => nenhuma leitura adicional.
+Dez filhos de mesma raiz não selecionada => uma leitura adicional.
+Dez filhos de dez raízes não selecionadas => dez leituras adicionais.
+
+Escritas permanecem duas em criação ou alteração efetiva:
+produto + audit/receipt, ou UPDATE produto + audit.
+No-op/replay: nenhuma escrita nova.
+Sem query de filhos, sem collectionGroup, sem varredura de árvore inteira.
+
+A distinção importante de limites:
+essas Functions usam admin.firestore()/SDK servidor.
+O limite de 10/20 document access calls é da avaliação das Security Rules
+de clientes, que o SDK servidor não usa. Portanto 23/24 leituras transacionais
+aqui NÃO constituem, por si, estouro daquele limite. [Fonte oficial]
+https://firebase.google.com/docs/firestore/security/rules-conditions
+
+Transações ainda precisam terminar suas leituras antes dos writes e estão
+sujeitas a contenção, retries e limites gerais de tempo/tamanho.
+Documentação atual registra request máximo 10 MiB e duração máxima de
+270 s, com expiração por ociosidade de 60 s. [Fontes oficiais]
+https://firebase.google.com/docs/firestore/quotas
+https://firebase.google.com/docs/firestore/manage-data/transactions
+
+Avaliação: o acréscimo é pequeno e limitado a dez pais; não foi identificado
+risco relevante do limite de access calls. Há custo/latência/contensão adicionais,
+que devem ser medidos no Emulator no caso máximo, sem promessa de benchmark
+de produção nesta auditoria. Retries podem multiplicar leituras efetivas.
+
+Consistência:
+ler pais dentro da mesma transação faz suas versões participarem da decisão.
+Não consultar pai fora da transação nem reaproveitar cache entre retries.
+Mudança concorrente do pai deve resultar em retry/serialização, com revalidação
+do estado relido antes de persistir.
+A garantia é da associação no commit, não imunidade contra corrupção por
+Admin SDK depois do commit; não é migração nem reparação contínua.
+
+9. TESTES ATUAIS — COBERTURA REAL
+
+Busca rg por parentCategoryId em functions/tests/products: NENHUMA ocorrência.
+Logo, nenhum teste desse diretório persiste explicitamente raiz null,
+filho, terceiro nível ou árvore corrompida.
+
+Armadilha das fixtures:
+createProduct.emulator.test.js:152-229 e
+setProductCategories.emulator.test.js:138-253 aceitam descriptors categories,
+mas o seed grava somente name/imageUrl (e createdAt no set).
+Adicionar parentCategoryId ao descriptor sem mudar o seed NÃO cria a hierarquia.
+As fixtures padrão são raízes LEGADAS, não árvores de dois níveis.
+
+createProduct.emulator.test.js:
+25 chamadas sintáticas runTest, uma delas em loop de cinco roles =>
+29 cenários declarados. Não executados nesta auditoria.
+Cobertura relevante existente:
+- :795 categoria ausente rejeitada atomicamente;
+- :840 categoria explícita só em outra loja rejeitada;
+- :889 nome canônico inválido;
+- :926 array vazio com projeção explícita;
+- :1025 ordem controla projeção legada;
+- :1211 replay mesmo requestId/conteúdo;
+- :1342 requestId com conteúdo diferente rejeitado;
+- :1403 replay não recria produto removido;
+- :1461 replay antes de mudanças de categoria/plano (o teste EXCLUI catA);
+- :1521 autorização revalidada no replay;
+- :1571 concorrência de requests idênticas.
+Também há auth/perfil/roles/loja, fiscal/assinatura, lotes/Timestamp e hash.
+
+setProductCategories.emulator.test.js:
+20 chamadas sintáticas runTest, uma delas em loop de cinco roles =>
+24 cenários declarados. Não executados nesta auditoria.
+Cobertura relevante existente:
+- :360 valida array antes de persistência;
+- :589 categoria ausente;
+- :609 categoria explícita só em outra loja;
+- :645 nome canônico inválido;
+- :675 [] limpa projeção;
+- :739 primeiro ID controla campos legados;
+- :782 idempotência sem audit;
+- :827 expectedTaxonomy stale gera conflito;
+- :884 diferença entre null e ausência;
+- :911 produto arquivado mantém manutenção de taxonomia;
+- :986 write mínimo e audit preservam ausência legada;
+- :1074 concorrência entre editores;
+- :1203 shape atual categoryIds inválido não é reparado automaticamente.
+Também auth/perfil/roles/revogação/produto ausente.
+
+productCategoryContract.test.js:
+cobre 0/1/10, rejeita 11, tipos/duplicados/whitespace/slash;
+preserva ordem/caixa/IDs e não inventa padrão/limite de tamanho;
+captura ausência/null/valores inválidos sem mutação;
+projeção, primeiro ID, nomes, Map e ausência de fallback legado.
+NÃO cobre árvore. "invalid product root" significa objeto raiz do payload,
+não categoria raiz.
+
+createProductContract.test.js:
+valida shape de entrada, produto, fiscal, números/lotes/requestId e categoryIds.
+Não resolve documentos nem parentCategoryId; não substitui teste de hierarquia.
+
+categoryHierarchyContract.test.js:
+cobre validação de ID/payload, pai explícito, raiz/filho, auto-parent,
+terceiro nível, pai ausente ou ID divergente, reparenting, promoção,
+categoria com filhos e imutabilidade do resultado.
+Essa validação é da mutação de CATEGORIA; não é chamada pelos produtos.
+
+upsertCategory.emulator.test.js:
+22 cenários nomeados; destacam-se:
+08 cria raiz, 10 filho sob raiz legada, 11 bloqueia terceiro nível,
+12 pai existente obrigatório, 14 materializa legado em UPDATE de categoria,
+15 muda entre raízes, 16 promove, 17 bloqueia categoria com filhos,
+18 raiz com filhos permanece raiz, 19 auto-parent, 22 no-op.
+Não certificam createProduct/setProductCategories.
+
+deleteCategory.emulator.test.js:
+:1097/:1158 bloqueia raiz com filho (incluindo legado);
+:1409 corrida com upsertCategory;
+:1539 corrida com setProductCategories;
+:1654 corrida com createProduct.
+As últimas corridas cobrem deleção vs associação; não validam a árvore
+dos pais na resolução de produto nem substituem os cenários faltantes.
+
+Suítes de Rules T6-A1/T6-A2-A1 protegem cliente direto; não testam essa resolução
+privilegiada de categorias no Admin SDK.
+npm run test:catalog não descobre automaticamente tests/products ou categories.
+
+10. TESTES EXATAMENTE FALTANTES PARA O FECHAMENTO PROPOSTO
+
+Aplicar a MESMA matriz de árvore tanto a createProduct (nova requestId) quanto a
+setProductCategories (mudança efetiva), com categorias realmente seedadas.
+Preservar teste legado sem campo; não trocar todos os seeds para null.
+
+P01 aceitar raiz explícita null.
+P02 preservar aceitação de raiz ausente, com asserção de que categoria não mudou.
+P03 aceitar filho sob raiz null, selecionando SOMENTE [childId].
+P04 aceitar filho sob raiz legada, SOMENTE [childId].
+P05 aceitar [rootId,childId]; exatamente dois IDs, mesma ordem.
+P06 aceitar [childId,rootId]; legado vem do filho.
+P07 aceitar duas raízes independentes.
+P08 aceitar filhos de raízes diferentes, sem adicionar nenhum pai.
+P09 aceitar [rootA,childB] sem exigir que rootA seja pai de childB.
+P10 [] continua válido, sem leituras de pais.
+P11 dez filhos válidos de dez raízes distintas, array final de dez IDs;
+    instrumentar leituras na transação para conferir no máximo dez extras.
+P12 múltiplos filhos compartilhando pai, e pai já no array:
+    conferir deduplicação, sem releitura/expansão.
+
+N01 filho com pai ausente.
+N02 pai existente apenas em outra loja.
+N03 mesmo parentId nas duas lojas: versão local é autoridade; raiz externa
+    válida não salva pai local inválido/ausente.
+N04 terceiro nível: categoria selecionada -> pai filho -> avô raiz.
+N05 auto-parent.
+N06 ciclo de dois nós, sem recursão/loop.
+N07 parentCategoryId número/boolean/array/map.
+N08 parentCategoryId "" e somente whitespace.
+N09 whitespace externo em ID de pai, incluindo tab/CR/LF; sem trim/reparo.
+N10 slash/caminho no ID de pai; erro controlado antes de doc().
+N11 pai com parentCategoryId inválido por tipo/vazio/whitespace.
+N12 seleção mista com categorias válidas e UMA inválida em posição posterior:
+    operação inteira rejeitada; não projetar só primeiro ID nem ignorar erro.
+
+Para TODOS os negativos:
+- create: nenhum produto nem receipt/audit da tentativa;
+- set: produto anterior e campos operacionais/protegidos intactos, sem audit;
+- todos os documentos de categoria/pai permanecem byte-logicamente iguais;
+- falha controlada de precondição/reason, não internal acidental.
+
+Idempotência, legado e concorrência:
+I01 create: primeiro commit válido; corromper pai após criação; replay mesma
+    requestId mantém produto original, sem novo write; nova requestId rejeita.
+I02 create: preservar replay existente após remoção de categoria e mudanças
+    de plano; não deslocar gate de árvore para antes do receipt.
+I03 set: desiredState já igual, mas árvore corrompida => rejeita antes de
+    changed:false, sem audit; árvore válida => no-op continua sem audit.
+I04 set: current IDs com shape válido referenciam categoria corrompida/ausente;
+    removê-la explicitamente ou usar [] deve funcionar, sem validar removidos.
+I05 set: shape atual inválido continua invalid-current-taxonomy sem reparo.
+I06 produto arquivado pode receber categorias estruturalmente válidas,
+    sem restaurar produto; árvore inválida deve rejeitar igualmente.
+I07 fixture com flags extras na categoria não cria gate de lifecycle novo.
+I08 concorrência controlada: filho/pai alterado ou removido durante resolução,
+    em ambas as Functions; verificar revalidação/serialização e ausência de
+    novo vínculo criado com árvore inválida no ponto de commit.
+    Isolar fixtures; usar alteração privilegiada SOMENTE no Emulator para
+    simular corrupção que o upsert correto normalmente impede.
+I09 pai legado é só interpretado, nunca recebe materialização null por produto.
+I10 preservar nomes canônicos e projeção literal: nome de categoria selecionada
+    com espaços externos segue contrato atual; pai apenas implícito não ganha
+    requisito novo de nome/imageUrl.
+I11 preservar autorização, expectedTaxonomy, isolamento, hashes/receipt,
+    auditoria e todos os casos anteriores dos dois arquivos.
+
+Se for extraído normalizador puro:
+testar ausência vs null vs tipo inválido, vazio/whitespace/slash, sem mutação,
+retorno de ID exatamente igual e nenhum coercion/trim.
+Não basta testar helper: as duas Functions precisam provar que o usam dentro
+da transação e antes de qualquer write/no-op aplicável.
+
+11. RISCOS DE REGRESSÃO E FRONTEIRAS
+
+R1 Dados corrompidos já utilizados:
+novas criações/associações passarão a falhar. É o bloqueio desejado, mas pode
+aparecer em UI/importação; não corrigir documentos nem trocar IDs automaticamente.
+
+R2 Raiz legada:
+exigir parentCategoryId obrigatório na leitura quebraria fixtures e documentos
+válidos. Somente criação via upsert exige campo explícito; resolver preserva ausente.
+
+R3 Associação explícita:
+incluir pai implicitamente, exigir par no array ou uma raiz comum seria mudança
+indevida de contrato. Asserções do array/projeção/audit devem detectar isso.
+
+R4 No-op vs replay:
+revalidar árvore em replay create quebraria contrato histórico já testado;
+deixar set retornar sem validar árvore permitiria contornar o novo gate.
+
+R5 Referências antigas removidas:
+validar indiscriminadamente toda a taxonomia antiga impediria retirada explícita
+de referências ruins. Validar seleção desejada, preservando checks de shape atuais.
+
+R6 ChildCount/mutação:
+copiar integralmente o helper de reparenting forçaria query de filhos sem relação
+com criação de vínculo. Não há alteração de posição de categoria nessa operação.
+
+R7 Categoria ativa/arquivada:
+não há contrato identificado; não reutilizar regra isArchived de produto para
+inventar rejeição de categoria. Tampouco impedir manutenção de produto arquivado.
+
+R8 Custo/concorrência:
+pais comuns adicionam dependências de leitura e possível contenção; limite
+de dez pais e cache por tentativa mantêm o crescimento controlado.
+Não usar cache global nem ler depois de transaction.set/update.
+
+R9 Garantia local:
+o gate não certifica descendentes não selecionados nem impede Admin SDK de
+corromper dados posteriormente. Não prometer saneamento total de coleção.
+
+R10 Tratamento de erro:
+TypeError ao interpretar parent deve virar precondição controlada, não 500;
+não alterar mensagens/reasons de erros antigos desnecessariamente.
+Sem novo schema, migração, correção automática ou ampla refatoração.
+
+12. VALIDAÇÃO E ENCERRAMENTO
+
+git diff --check executado: aprovado; apenas avisos LF/CRLF preexistentes.
+Não foi rodado teste/Emulator, pois a entrega é auditoria read-only.
+Nenhuma Function foi importada/executada para alcançar dados Firebase.
+A avaliação de aceitação atual é estática; os casos faltantes são proposta de
+validação futura, não testes que já passaram.
+
+CONFIRMAÇÕES:
+- Nenhum código/Rules/teste/configuração alterado.
+- Nenhum arquivo fora deste .txt alterado por esta etapa.
+- Nenhuma operação Firebase/Firestore/produção.
+- Nenhum commit, push, deploy, stash, restore, checkout, reset ou clean.
+- Nenhuma migração ou correção automática de categoria/produto.
+- T6-A3 NÃO implementado; nenhuma próxima etapa iniciada.
+
+git status --short INICIAL:
+ M android/app/build.gradle.kts
+ M firestore.rules
+ M functions/categories/deleteCategory.js
+ M functions/index.js
+ M functions/tests/categories/deleteCategory.emulator.test.js
+ M functions/tests/security/firestoreTaxonomyRules.test.mjs
+ M lib/models/product_import_item.dart
+ M lib/screens/management/category_management_screen.dart
+ M lib/screens/management/manage_products_screen.dart
+ M lib/screens/management/product_import_confirmation_screen.dart
+ M lib/screens/management/product_import_mapping_screen.dart
+ M lib/screens/management/product_import_validation_screen.dart
+ M lib/screens/sales/new_sale_screen.dart
+ M lib/screens/subscription_screen.dart
+ M lib/services/product_import_service.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? docs/Integracao/
+?? functions/categories/categoryHierarchyContract.js
+?? functions/categories/upsertCategory.js
+?? functions/tests/categories/categoryHierarchyContract.test.js
+?? functions/tests/categories/upsertCategory.emulator.test.js
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+?? test/F7.9-C0_relatorio.txt
+?? test/F7.9-C1_relatorio.txt
+?? test/F7.9-D0_relatorio.txt
+?? test/F7.9-D1_relatorio.txt
+?? test/F7.9-F1_relatorio.txt
+?? test/T6-A0_rules_hierarchy_audit.txt
+?? test/T6-A1_rules_boundary_relatorio.txt
+?? test/T6-A2-A0_product_update_authorization_audit.txt
+?? test/T6-A2-A1_product_update_authorization_relatorio.txt
+
+Conferência FINAL após gravação:
+Branch: feat/f7-intelligent-catalog
+HEAD: 0e5aee6853253b3374fcfc487cb9547a04771a68
+Stage: vazio.
+Comparação SHA256 de 374 arquivos preexistentes: nenhum alterado/removido.
+Único arquivo novo: test/T6-A3-A0_product_category_tree_audit.txt.
+Logs *debug* preexistentes também mantêm hashes idênticos.
+As duas Functions e todos os contratos/testes permanecem com os hashes iniciais.
+Nenhum arquivo fora do .txt alterado; nenhum commit/push/deploy.
+T6-A3 não implementado.
+
+git status --short FINAL:
+ M android/app/build.gradle.kts
+ M firestore.rules
+ M functions/categories/deleteCategory.js
+ M functions/index.js
+ M functions/tests/categories/deleteCategory.emulator.test.js
+ M functions/tests/security/firestoreTaxonomyRules.test.mjs
+ M lib/models/product_import_item.dart
+ M lib/screens/management/category_management_screen.dart
+ M lib/screens/management/manage_products_screen.dart
+ M lib/screens/management/product_import_confirmation_screen.dart
+ M lib/screens/management/product_import_mapping_screen.dart
+ M lib/screens/management/product_import_validation_screen.dart
+ M lib/screens/sales/new_sale_screen.dart
+ M lib/screens/subscription_screen.dart
+ M lib/services/product_import_service.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? docs/Integracao/
+?? functions/categories/categoryHierarchyContract.js
+?? functions/categories/upsertCategory.js
+?? functions/tests/categories/categoryHierarchyContract.test.js
+?? functions/tests/categories/upsertCategory.emulator.test.js
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+?? test/F7.9-C0_relatorio.txt
+?? test/F7.9-C1_relatorio.txt
+?? test/F7.9-D0_relatorio.txt
+?? test/F7.9-D1_relatorio.txt
+?? test/F7.9-F1_relatorio.txt
+?? test/T6-A0_rules_hierarchy_audit.txt
+?? test/T6-A1_rules_boundary_relatorio.txt
+?? test/T6-A2-A0_product_update_authorization_audit.txt
+?? test/T6-A2-A1_product_update_authorization_relatorio.txt
+?? test/T6-A3-A0_product_category_tree_audit.txt

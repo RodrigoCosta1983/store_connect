@@ -1,0 +1,287 @@
+T6-A3-A1 — normalização pura de parentCategoryId armazenado
+
+PRECHECK
+Branch inicial/final: feat/f7-intelligent-catalog
+HEAD inicial/final: 0e5aee6853253b3374fcfc487cb9547a04771a68
+Stage inicial/final: vazio.
+Condições solicitadas confirmadas antes de qualquer escrita.
+Hashes das duas Functions de produtos conferem exatamente com os valores autorizados.
+Os dois arquivos-alvo já existiam como untracked. Demais alterações preexistentes preservadas.
+Inventário SHA256 de 375 arquivos tracked/untracked não ignorados, excluindo node_modules, capturado antes das alterações.
+Leitura de AGENTS.md, CURRENT_WORK.md, documentação do catálogo/taxonomia e código atual.
+CURRENT_WORK contém checkpoints históricos; o HEAD efetivo e a instrução desta etapa governaram o trabalho.
+
+SHA256 INICIAL / FINAL
+functions/categories/categoryHierarchyContract.js
+Inicial: 819E5D4A6C1B754099306CDE2D1DD3DC85D42A72E8599DED797F520F94B84CC4
+Final:   DB22354A38C7797F6B899B402C20D1C430436706761A29A51542F36828552A87
+
+functions/tests/categories/categoryHierarchyContract.test.js
+Inicial: 639BB339900659D54F614D64F2F2991776186F0565933559396203E98C76FF32
+Final:   47964474C203CFAD8FE47F99B58E3621BA03367D50240FE971BE8BD7099A0236
+
+functions/products/createProduct.js
+Inicial: F6EAAA306D8C1D7AE381F1E502BCEF9C3283F625ECB72AED215A682A4980B755
+Final:   F6EAAA306D8C1D7AE381F1E502BCEF9C3283F625ECB72AED215A682A4980B755
+
+functions/products/setProductCategories.js
+Inicial: 0D9BB3B7493A14423AB35FBB5B19A63D4441E6E83625B88CEAD067D0A8169CB7
+Final:   0D9BB3B7493A14423AB35FBB5B19A63D4441E6E83625B88CEAD067D0A8169CB7
+
+HELPER ADICIONADO
+normalizeStoredParentCategoryId(categoryData), exportado em categoryHierarchyContract.js.
+Nome não existia nesse módulo/export. A função privada homônima em upsertCategory.js não foi alterada ou conectada ao novo helper.
+Usa hasOwn para distinguir ausência de propriedade própria e validateCategoryId para validar o valor presente não-null.
+Entrada esperada: objeto de dados do documento. Não impõe schema aos demais campos.
+APIs existentes preservadas; apenas uma nova exportação.
+Sem dependências Firebase, I/O, mutação do objeto, consulta ao pai ou validação da árvore.
+Sem trim corretivo, String(...) ou conversão permissiva de inválidos em null.
+Não valida auto-parent, terceiro nível, childCount ou existência do pai.
+Nenhum consumidor foi alterado; comportamento das Functions permanece intacto.
+
+CONTRATO CASO A CASO
+Propriedade ausente: null (raiz legada), sem materializar campo.
+Propriedade presente null: null (raiz).
+String válida: retorna exatamente a string recebida, inclusive caixa e espaço interno permitido por validateCategoryId.
+Vazio: TypeError.
+Somente whitespace, incluindo espaço, tab, CR e LF: TypeError.
+Whitespace externo antes/depois do ID: TypeError.
+Slash: TypeError.
+Número, boolean, array, objeto/map, String encapsulada, symbol e bigint: TypeError.
+Undefined explicitamente presente: TypeError; não equivale a ausência.
+Erros reutilizam a semântica/mensagens de validateCategoryId com fieldName parentCategoryId.
+
+TESTES
+38 casos anteriores preservados integralmente; 23 novos casos (5 positivos e 18 negativos).
+Casos positivos conferem igualdade estrita, caixa, espaço interno e ausência/null distintos.
+Todos os novos casos congelam o objeto de entrada e comparam seu conteúdo antes/depois.
+Negativos conferem TypeError com parentCategoryId e preservação da propriedade própria, incluindo undefined explícito.
+Nenhum teste de Emulator adicionado ou executado.
+
+COMANDO E RESULTADO COMPLETO DA SUÍTE
+Executado uma vez na raiz do repositório:
+node functions/tests/categories/categoryHierarchyContract.test.js
+Exit code: 0
+✅ 01 category ID valido e preservado
+✅ 02 rejeita ID nao string
+✅ 03 rejeita ID vazio
+✅ 04 rejeita ID blank
+✅ 05 rejeita whitespace externo
+✅ 06 rejeita slash
+✅ 07 cria categoria raiz
+✅ 07b categoryId null tambem representa criacao
+✅ 08 cria subcategoria
+✅ 09 edita ou move categoria existente
+✅ 10 parentCategoryId deve ser explicito
+✅ 11 name obrigatorio
+✅ 12 imageUrl obrigatorio
+✅ 13 rejeita name nao string
+✅ 14 rejeita name vazio
+✅ 15 rejeita name blank
+✅ 16 rejeita whitespace externo no name
+✅ 17 imageUrl deve ser string
+✅ 18 rejeita campo desconhecido
+✅ 19 categoria nao pode ser o proprio pai
+✅ 20 input raiz deve ser objeto simples
+✅ 21 cria categoria raiz
+✅ 22 cria subcategoria abaixo de raiz
+✅ 23 move subcategoria entre duas categorias raiz
+✅ 24 promove subcategoria para raiz
+✅ 25 categoria raiz com filhos pode permanecer raiz
+✅ 26 bloqueia terceiro nivel
+✅ 27 bloqueia auto-parent
+✅ 28 categoria com filhos nao pode virar subcategoria
+✅ 29 pai solicitado precisa existir
+✅ 30 targetParent precisa corresponder ao ID solicitado
+✅ 31 childCount negativo
+✅ 32 childCount decimal
+✅ 33 childCount string
+✅ 34 raiz exige targetParent null
+✅ 35 targetParent rejeita campos desconhecidos
+✅ 36 decisao rejeita campos desconhecidos
+✅ 37 resultado nao compartilha targetParent de entrada
+✅ stored parent: ausente representa raiz legada
+✅ stored parent: null representa raiz
+✅ stored parent: ID simples
+✅ stored parent: preserva caixa exata
+✅ stored parent: preserva espaco interno permitido
+✅ stored parent rejeita: whitespace inicial
+✅ stored parent rejeita: whitespace final
+✅ stored parent rejeita: vazio
+✅ stored parent rejeita: somente espaco
+✅ stored parent rejeita: tabulacao
+✅ stored parent rejeita: CR
+✅ stored parent rejeita: LF
+✅ stored parent rejeita: tabulacao externa
+✅ stored parent rejeita: CR/LF externos
+✅ stored parent rejeita: slash
+✅ stored parent rejeita: numero
+✅ stored parent rejeita: boolean
+✅ stored parent rejeita: array
+✅ stored parent rejeita: objeto/map
+✅ stored parent rejeita: undefined explicito
+✅ stored parent rejeita: String encapsulada
+✅ stored parent rejeita: symbol
+✅ stored parent rejeita: bigint
+
+============================================================
+✅ T2-A: 61 casos puros passaram.
+Sem Firebase, Emulator, rede ou escrita de dados.
+============================================================
+O rótulo histórico T2-A do runner foi preservado.
+Após a saída bem-sucedida do processo, houve um erro no invólucro de apresentação de tools (acesso a valueOf no retorno vazio de text). Isso ocorreu fora da suíte, após exit 0; não houve falha de teste, correção ou reexecução.
+O primeiro inventário read-only incluiu caminhos problemáticos de dependências e seu JSON não pôde ser lido; foi repetido antes da escrita excluindo node_modules, sem alteração de arquivos.
+
+NODE --CHECK
+node --check functions/categories/categoryHierarchyContract.js
+Exit 0, saída vazia.
+node --check functions/tests/categories/categoryHierarchyContract.test.js
+Exit 0, saída vazia.
+
+GIT DIFF --CHECK
+git diff --check
+Exit 0.
+warning: in the working copy of 'firestore.rules', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'functions/categories/deleteCategory.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'functions/index.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'functions/tests/categories/deleteCategory.emulator.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'functions/tests/security/firestoreTaxonomyRules.test.mjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/screens/management/category_management_screen.dart', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/screens/management/manage_products_screen.dart', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/screens/subscription_screen.dart', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/widgets/warning_banner.dart', LF will be replaced by CRLF the next time Git touches it
+
+Somente avisos preexistentes de LF/CRLF, sem erros.
+Os arquivos-alvo são untracked; git diff não mostra o conteúdo deles. Revisão direta do patch e leitura do helper realizadas, sem adicionar arquivos ao stage.
+
+ESCOPO
+Comparação dos hashes antes/depois: somente categoryHierarchyContract.js e seu teste alterados.
+createProduct.js e setProductCategories.js permaneceram byte-identicamente inalterados, hashes acima.
+Também preservados productCategoryContract.js, upsertCategory.js, firestore.rules, Flutter, Storage, firebase.json e demais arquivos preexistentes inventariados.
+Único arquivo novo desta etapa: este relatório.
+Nenhum Firebase/Firestore/produção ou Emulator acessado; nenhum artefato de teste criado.
+Nenhum commit, push, deploy, stash, checkout, reset, restore, clean ou migração.
+T6-A3-A2 não iniciado.
+
+GIT STATUS --SHORT INICIAL
+ M android/app/build.gradle.kts
+ M firestore.rules
+ M functions/categories/deleteCategory.js
+ M functions/index.js
+ M functions/tests/categories/deleteCategory.emulator.test.js
+ M functions/tests/security/firestoreTaxonomyRules.test.mjs
+ M lib/models/product_import_item.dart
+ M lib/screens/management/category_management_screen.dart
+ M lib/screens/management/manage_products_screen.dart
+ M lib/screens/management/product_import_confirmation_screen.dart
+ M lib/screens/management/product_import_mapping_screen.dart
+ M lib/screens/management/product_import_validation_screen.dart
+ M lib/screens/sales/new_sale_screen.dart
+ M lib/screens/subscription_screen.dart
+ M lib/services/product_import_service.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? docs/Integracao/
+?? functions/categories/categoryHierarchyContract.js
+?? functions/categories/upsertCategory.js
+?? functions/tests/categories/categoryHierarchyContract.test.js
+?? functions/tests/categories/upsertCategory.emulator.test.js
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+?? test/F7.9-C0_relatorio.txt
+?? test/F7.9-C1_relatorio.txt
+?? test/F7.9-D0_relatorio.txt
+?? test/F7.9-D1_relatorio.txt
+?? test/F7.9-F1_relatorio.txt
+?? test/T6-A0_rules_hierarchy_audit.txt
+?? test/T6-A1_rules_boundary_relatorio.txt
+?? test/T6-A2-A0_product_update_authorization_audit.txt
+?? test/T6-A2-A1_product_update_authorization_relatorio.txt
+?? test/T6-A3-A0_product_category_tree_audit.txt
+
+GIT STATUS --SHORT FINAL (incluindo este relatório)
+ M android/app/build.gradle.kts
+ M firestore.rules
+ M functions/categories/deleteCategory.js
+ M functions/index.js
+ M functions/tests/categories/deleteCategory.emulator.test.js
+ M functions/tests/security/firestoreTaxonomyRules.test.mjs
+ M lib/models/product_import_item.dart
+ M lib/screens/management/category_management_screen.dart
+ M lib/screens/management/manage_products_screen.dart
+ M lib/screens/management/product_import_confirmation_screen.dart
+ M lib/screens/management/product_import_mapping_screen.dart
+ M lib/screens/management/product_import_validation_screen.dart
+ M lib/screens/sales/new_sale_screen.dart
+ M lib/screens/subscription_screen.dart
+ M lib/services/product_import_service.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? docs/Integracao/
+?? functions/categories/categoryHierarchyContract.js
+?? functions/categories/upsertCategory.js
+?? functions/tests/categories/categoryHierarchyContract.test.js
+?? functions/tests/categories/upsertCategory.emulator.test.js
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+?? test/F7.9-C0_relatorio.txt
+?? test/F7.9-C1_relatorio.txt
+?? test/F7.9-D0_relatorio.txt
+?? test/F7.9-D1_relatorio.txt
+?? test/F7.9-F1_relatorio.txt
+?? test/T6-A0_rules_hierarchy_audit.txt
+?? test/T6-A1_rules_boundary_relatorio.txt
+?? test/T6-A2-A0_product_update_authorization_audit.txt
+?? test/T6-A2-A1_product_update_authorization_relatorio.txt
+?? test/T6-A3-A0_product_category_tree_audit.txt
+?? test/T6-A3-A1_stored_parent_contract_relatorio.txt

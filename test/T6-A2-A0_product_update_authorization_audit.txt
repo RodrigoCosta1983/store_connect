@@ -1,0 +1,705 @@
+T6-A2-A0 — AUDITORIA READ-ONLY DA AUTORIZAÇÃO DE UPDATE DIRETO DE PRODUTOS
+Data: 21/09/2026
+Alvo: stores/{storeId}/products/{productId}
+Resultado: auditoria concluída; T6-A2 NÃO implementado.
+
+1. ESCOPO, MÉTODO E PRECHECK
+
+Única escrita autorizada nesta etapa:
+test/T6-A2-A0_product_update_authorization_audit.txt
+
+Branch inicial: feat/f7-intelligent-catalog
+HEAD inicial: 0e5aee6853253b3374fcfc487cb9547a04771a68
+Stage inicial: vazio.
+T6-A1 está presente no workspace, ainda sem commit.
+firestore.rules e firestoreTaxonomyRules.test.mjs já estavam modificados na entrada.
+Outras modificações e arquivos não rastreados, inclusive docs/Integracao/, também
+já existiam na entrada desta auditoria. Foram preservados.
+
+SHA256 inicial de firestore.rules:
+ACBA806CDEFD8EA0A1EE0256016997E62B0351ED492658DA953D648B86F91356
+SHA256 inicial de functions/tests/security/firestoreTaxonomyRules.test.mjs:
+6AE1E11670966DCEB1C49F165D57D1AE22E58C649522604AFFA478C7C7C1E5F7
+
+Foram consultados AGENTS.md, CURRENT_WORK.md, documentação de catálogo/taxonomia,
+o contexto T6-A0/T6-A1, Rules atuais, writers Flutter, navegação, UserRoleProvider,
+AuthGate, Functions de produto, revogação/convite/bootstrap, syncOfflineSale,
+script histórico de regularização de proprietários e testes existentes.
+Documentação histórica não substitui o código local nem o escopo deste pedido.
+
+Método: leitura de arquivos, rg por referências de products e operações
+update/set/add/delete, transaction/batch, callers dos widgets, role/accessStatus,
+e comparação de hashes SHA256 antes/depois.
+Cobertura de busca: código cliente lib/ (todos os .dart) e web/ (.js/.html/.ts).
+Nenhum writer Firestore de produto adicional foi encontrado no cliente web.
+Ocorrências em Functions/Admin SDK foram separadas dos writers cliente.
+Algumas buscas exploratórias usaram caminhos inexistentes/globs literais do
+PowerShell; foram substituídas por buscas em diretórios existentes e arquivos
+resolvidos por rg. Não houve escrita decorrente dessas buscas.
+
+Não foram executados Emulator, Firebase CLI, Functions, Flutter, migração,
+instalação de dependências ou testes que criem fixtures/logs. A matriz abaixo é
+uma conclusão estática do código, não um novo resultado experimental.
+Os 78 testes do T6-A1 são resultado da etapa anterior, não foram reexecutados aqui.
+Nenhuma consulta a contas, dados ou Rules publicadas de produção.
+
+2. CONCLUSÃO PRINCIPAL
+
+É possível manter os writers atuais de edição e venda e restringir somente a
+autorização de UPDATE direto, acrescentando verificação do perfil servidor:
+- role reconhecida, incluindo admin, gerente, operador e aliases caixa/vendedor;
+- accessStatus não revogado, com a mesma normalização das Functions de produto;
+- documento stores/{storeId} existente;
+- preservar autenticação, existência de users/{uid} e igualdade exata do storeId;
+- preservar integralmente o bloqueio por affectedKeys de taxonomia/arquivamento.
+
+NÃO limitar a admin/gerente: operador também alcança a edição de produtos e as
+vendas pela UI atual, e as Functions de criação/taxonomia aceitam operador.
+NÃO exigir accessStatus == active: Functions toleram status ausente/nulo e não
+fazem whitelist de todos os estados; exigir active causaria quebra adicional.
+NÃO usar fallback de role desconhecida para operador nas Rules: isso perpetuaria
+a lacuna que as Functions de produto já fecham.
+
+Não há writer identificado que precise de role arbitrária, acesso revogado ou
+loja inexistente como parte de seu algoritmo legítimo. Porém existe dependência
+de compatibilidade potencial: a UI trata role ausente/desconhecida como operador,
+e o repositório documenta proprietários legados sem role. Essas contas conseguem
+usar UPDATE direto hoje. Sua rejeição futura será uma mudança observável.
+Esta auditoria não prova que todos os perfis reais já foram regularizados.
+Não se deve prometer regressão zero de dados legados nem adicionar exceção por
+ownerId ou executar migração automaticamente.
+
+3. INVENTÁRIO COMPLETO DOS WRITERS DIRETOS ENCONTRADOS
+
+Foram encontrados QUATRO pontos de chamada de UPDATE, em TRÊS fluxos/arquivos.
+
+W1 — Edição comercial/fiscal, estoque manual e manutenção de lotes
+Arquivo: lib/screens/management/manage_products_screen.dart
+Entrada: _saveProduct, aproximadamente :627.
+Payload: :802-852. Escrita: :866-871.
+Operação:
+  stores / widget.storeId / products / widget.product!.id
+  .update(productData), exclusivamente quando _isEditing.
+
+Campos de primeiro nível enviados SEMPRE pelo writer:
+  name
+  name_lowercase
+  price
+  lotes
+  quantidade
+  minimumStock
+  imageUrl
+
+Transformações:
+- name = texto aparado; name_lowercase = name em minúsculas;
+- price = valor numérico do formulário;
+- minimumStock = inteiro do formulário, com fallback 0;
+- lotes = lista completa de mapas com quantidade > 0;
+- quantidade = valor manual quando _lotes está vazio, senão soma dos lotes;
+- imageUrl = URL existente ou resultado do upload.
+Lotes existentes são copiados como mapas (:464-469), preservando demais chaves;
+lotes adicionados pela UI têm quantidade e validade (Timestamp), :1450-1455.
+Adicionar/remover lote só muda estado local até salvar; não é writer separado.
+A atualização escreve a lista inteira, não um patch por índice.
+
+Campo adicional quando widget.isBusiness == true:
+  fiscal (mapa inteiro), com:
+    ncm
+    origem
+    cfop
+    unidade
+    cest (null se vazio)
+    icmsSituacaoTributaria
+    pisSituacaoTributaria
+    cofinsSituacaoTributaria
+    ibsCbsSituacaoTributaria
+    ibsCbsClassificacaoTributaria
+    updatedAt (Timestamp.now do cliente)
+Sem Business, fiscal é omitido do UPDATE e o mapa existente permanece.
+Não há updatedAt de primeiro nível neste writer.
+Não envia categoryIds/categoryId/categoryName nem campos de arquivamento.
+Não envia barcode/costPrice neste UPDATE; ocorrências na criação/importação
+não devem ser confundidas com o payload de edição.
+
+Dependências anteriores ao UPDATE:
+- se a taxonomia mudou, chama setProductCategories antes, :697-710;
+- se houver imagem nova, realiza upload antes do UPDATE.
+As operações não são uma única transação entre callable/Storage/Firestore.
+Se o acesso for revogado entre essas etapas, a edição operacional pode falhar
+depois de taxonomia/upload bem-sucedidos. O código já admite falha parcial e retry.
+T6-A2 não deve migrar o writer nem alterar Storage.
+
+Roles na UI:
+- Gerenciar Produtos é acessível pelo menu de NewSaleScreen :655-668 sem filtro;
+- botões de editar em :3157 e :3561 não são guardados por canArchiveProducts;
+- admin, gerente, operador, caixa e vendedor alcançam o formulário;
+- role desconhecida/ausente pode alcançar o mesmo caminho por fallback da UI.
+O formulário verifica dados/loja não vazia, não revalida role/accessStatus.
+As Rules atuais permitem esse UPDATE a qualquer perfil autenticado com mesma
+loja, mesmo role inválida/revogado, desde que preserve os sete campos protegidos.
+
+W2 — Venda instantânea/online de produto SEM lotes
+Arquivo: lib/widgets/payment_options_sheet.dart
+Método: _handleInstantSale.
+Referência/leitura transacional: :333-339.
+Escrita: :364-366, transaction.update(productRef, ...).
+Único campo alterado:
+  quantidade = FieldValue.increment(-cartItem.quantity)
+
+Antes: lê loja do servidor (:282 em diante), exige que exista, confere assinatura
+permitida, lê produtos na transação e confere estoque suficiente.
+O mesmo commit registra a venda em sales (:424 em diante).
+Autorizar o UPDATE é necessário para o commit completo da venda; uma rejeição
+de produto deve abortar a transação inteira, sem venda parcial.
+
+W3 — Venda instantânea/online de produto COM lotes
+Mesmo arquivo/método de W2. Escrita: :414-417.
+Campos alterados:
+  quantidade = soma das quantidades remanescentes
+  lotes = lista completa após baixa por validade/FIFO
+A lista é copiada dos mapas atuais; consome/remove lotes sem saldo e ajusta
+quantidade nos mapas parcialmente consumidos. validade e atributos restantes
+dos mapas preservados continuam dentro da lista. Não altera taxonomia/fiscal.
+As mesmas condições de UI/transação/assinatura de W2 se aplicam.
+Bloquear UPDATE de lotes ou permitir apenas quantidade quebraria este fluxo.
+
+W4 — Venda a prazo/fiado
+Arquivo: lib/widgets/confirm_fiado_dialog.dart
+Referência: :269-273. Escrita: :275-280.
+Operação: batch.update(productRef, ...).
+Único campo de produto alterado:
+  quantidade = FieldValue.increment(-cartItem.quantity)
+NÃO altera lotes, taxonomia, preço ou fiscal.
+O batch também cria sales com parcelas/customer/dueDate (:228-263).
+A loja é lida do servidor e sua existência/assinatura conferidas (:167-180).
+batch.commit em :290 confirma venda e estoque juntos.
+
+Observação de negócio preexistente:
+fiado decrementa apenas quantidade, mesmo que um produto tenha lotes; não faz
+o FIFO da venda instantânea. Também não há leitura transacional de estoque
+nesse batch. Essa diferença não é uma necessidade de autorização mais ampla.
+Menor encaminhamento: manter comportamento em T6-A2 e registrar eventual
+revisão separada de estoque/fiado, sem corrigir ou inventar regra nesta etapa.
+
+Acesso UI comum a W2/W3/W4:
+HomeScreen :198-207 abre Nova Venda sem filtro de role;
+NewSaleScreen :494 abre CartScreen;
+CartScreen :250-274 abre PaymentOptionsSheet (exige carrinho não vazio);
+PaymentOptionsSheet :765-775 abre ConfirmFiadoDialog após seleção de cliente.
+Não há filtro de admin/gerente nos writers de venda.
+Admin/gerente/operador/aliases legítimos devem continuar autorizados.
+Para fiado há requisitos de cliente/data/parcelamento, não distinção de role.
+
+4. FLUXOS RELACIONADOS QUE NÃO SÃO WRITERS DIRETOS DE PRODUTO
+
+- manage_products_screen.dart:921 — createProduct, já obrigatório após T6-A1.
+- mesmo arquivo:698 — setProductCategories, edição de taxonomia via backend.
+- product_import_service.dart:593 e :719 — upsertCategory/createProduct;
+  não faz UPDATE direto de produto na importação.
+- manage_products_screen.dart:2777 — archiveProduct.
+  UI usa canPerformCriticalActions (somente admin), :2844-2845,
+  tanto para arquivar quanto para acesso à lista de arquivados (:3332/:3387).
+- archived_products_screen.dart:292 — restoreProduct; nenhuma gravação direta.
+  O backend verifica admin; a tela por si não substitui essa verificação.
+- offline_sales_sync_service.dart:150 — syncOfflineSale.
+  :240-245 apenas relê produtos após sincronização.
+- payment_options_sheet.dart modo offline persiste venda em banco LOCAL, não
+  faz UPDATE imediato em products. Estoque Firestore é atualizado pelo backend
+  na sincronização. O módulo offline não usa as Rules de cliente para esse write.
+- sales_provider.dart:448 atualiza snapshot de SALES, não de produto.
+  O transaction.set subsequente é cash_flow.
+- relatórios de estoque baixo/validade, Dashboard, carrinho, seleção de venda
+  e business_insights_service são leitores de products.
+- alterações de listas/maps em CartProvider/repositório local são memória/SQLite,
+  não escrituras de Firestore.
+- tela pública chama Functions do catálogo, não recebe autorização de UPDATE.
+
+5. RULES ATUAIS APLICÁVEIS
+
+firestore.rules:186-219:
+READ: request.auth != null, perfil existente, perfil.storeId == storeId.
+CREATE: false.
+UPDATE (:198-216):
+  request.auth != null
+  && exists(users/{request.auth.uid})
+  && get(users/{request.auth.uid}).data.storeId == storeId
+  && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+       categoryIds, categoryId, categoryName,
+       isArchived, archivedAt, archivedBy, archiveReason
+     ])
+DELETE: false.
+
+Consequências exatas:
+- role e accessStatus não são lidos nem validados;
+- não é exigido stores/{storeId} existente;
+- UPDATE operacional de documento filho existente pode passar sob pai ausente;
+- taxonomia/arquivamento não podem ser adicionados, alterados ou removidos;
+- reenviar esses campos com valor final idêntico não muda affectedKeys;
+- demais campos não têm allowlist/schema/validação de preço, estoque ou fiscal
+  nesse match. UPDATE também não testa se o produto já está arquivado.
+- autorização usa users/{uid}, não role/storeId de custom claims, payload de
+  produto ou argumentos de UI;
+- igualdade de storeId é exata. Não introduzir trim no vínculo das Rules:
+  isso relaxaria a comparação existente em vez de apenas endurecer o UPDATE.
+
+Fallback genérico :357-413 exclui products/categories em read/create/update/delete.
+Não foi encontrado allow sobreposto que libere UPDATE de produto.
+As Rules do pai stores não são usadas como condição implícita do filho.
+Por isso o exists explícito do pai é necessário para fechar esse gap.
+
+users/{uid}, :21-47:
+CREATE cliente só aceita campos básicos e storeId vazio;
+UPDATE só permite dados comuns de perfil.
+role, accessStatus e storeId não podem ser autoatribuídos/alterados pelo cliente.
+Isso permite usar o perfil servidor como autoridade, sem nova modelagem.
+
+O match de sales continua tendo autorização própria ampla de mesma loja.
+Endurecer products protege os commits atômicos dos writers encontrados;
+não constitui revogação universal de todas as coleções.
+Um write isolado de sales sem produto continua sob suas Rules próprias.
+Não ampliar T6-A2 para corrigir todas as coleções.
+
+6. AUTORIZAÇÃO DA UI, FUNCTIONS E ESTADOS LEGADOS
+
+UI — UserRoleProvider:
+:129-137: admin/gerente acessam Settings; só admin faz ações críticas.
+:158-177: normaliza trim/lowercase; caixa e vendedor viram operador;
+role ausente/vazia/desconhecida também vira operador.
+:278-292: accessStatus normalizado == revoked zera storeId do provider.
+Isso é comportamento de interface, não uma condição de Rules.
+
+AuthGate:
+:223-244 lê users/{uid}.storeId diretamente;
+:267-287 lê a loja e encaminha a SubscriptionScreen quando não há dados;
+:370-374 decide entrada com base na assinatura.
+Não verifica role ou accessStatus nesse caminho.
+As telas/writers usam widget.storeId recebido na navegação.
+Assim, zerar o provider não prova bloqueio de uma tela aberta nem do caminho
+que usa o storeId persistido. Para uma sessão que continue autenticada, o
+predicado atual das Rules segue permitindo UPDATE mesmo com perfil revoked.
+Não foi testado o comportamento temporal de tokens/sessões do Firebase Auth.
+
+Revogação backend:
+functions/usuarios/revogarAcessoFuncionario.js:315-343 desabilita Auth;
+:357-376 marca accessStatus=revoked e auditoria.
+Esse UPDATE do perfil preserva role e storeId.
+A desabilitação de Auth é uma defesa adicional; não deve ser usada como prova
+de que request.auth nunca mais chega não nulo às Rules em todos os cenários.
+Menor fechamento no escopo: ler o accessStatus atual do perfil em cada UPDATE.
+
+Functions de produto:
+createProduct.js:25-54 e :320-388;
+setProductCategories.js:26-61 e :336-404:
+- exigem autenticação/perfil;
+- normalizeString aceita string, faz trim; não-string vira "";
+- role passa por lowercase, aliases caixa/vendedor -> operador;
+- somente admin/gerente/operador reconhecidos; desconhecida/ausente é rejeitada;
+- accessStatus trim/lowercase == revoked é rejeitado;
+- accessStatus ausente/null/não-string normaliza para "" e não é rejeitado
+  só por isso. Outros textos diferentes de revoked também não são vetados;
+- loja vem do perfil, ID válido, documento de loja precisa existir;
+- não dependem de claims de role ou role enviada pelo cliente.
+createProduct tem gates fiscais próprios; não transformar esses gates em regra
+genérica de UPDATE operacional neste incremento.
+
+archiveProduct.js:156-194 e restoreProduct.js:222-280:
+exigem perfil/loja existente, mesma loja, não revogado e role admin normalizada.
+Gerente/operador/aliases não podem arquivar/restaurar.
+Essa restrição específica NÃO deve ser copiada para edição operacional.
+
+syncOfflineSale.js:720-752:
+exige loja existente e store.ownerId == uid; mantém autorização de proprietário.
+Não reutiliza o gate de role/accessStatus das Functions de produto.
+Seu Admin SDK não é limitado pelo match de UPDATE de cliente.
+Um endurecimento só nas Rules não muda esse contrato nem habilita funcionário
+a sincronizar offline. Não unificar/migrar o backend durante T6-A2.
+
+Bootstrap/convite:
+bootstrapStore.js:304-307 gera role admin e accessStatus active.
+convidarFuncionario.js:155-158 aceita operador/gerente e :285-295 grava
+role canônica e accessStatus active.
+Aliases são compatibilidade de perfis legados, explicitamente suportada
+pelas Functions e pelo provider; não são uma hipótese inventada nesta auditoria.
+
+Legado sem role:
+functions/scripts/migrateOwnerRoles.js documenta proprietários antigos
+com ownerId/storeId e sem role. O script foi somente LIDO, nunca executado.
+Sua existência não prova execução prévia ou ausência de perfis legados hoje.
+Exigir role reconhecida pode bloquear esses perfis na edição/venda online,
+que hoje funcionam pelas Rules amplas. Uma eventual exceção por ownerId ou
+regularização de dados exige decisão/etapa própria, não fallback automático.
+
+7. MATRIZ DE AUTORIZAÇÃO
+
+Premissas: produto existente, payload operacional sem mudar campos protegidos,
+perfil ligado exatamente ao caminho da própria loja e loja existente,
+exceto quando indicado. "UI sim" considera assinatura/carrinho/formulário aptos.
+A coluna Functions refere-se a createProduct/setProductCategories para comparar
+o gate de identidade; essas Functions não implementam o UPDATE comercial W1.
+
+Identidade/estado                 UI edição/venda        Rules hoje  Functions  Proposta T6-A2
+admin, active                      sim                    permite     permite    permite
+gerente, active                    sim                    permite     permite    permite
+operador, active                   sim                    permite     permite    permite
+caixa, active                      sim, como operador     permite     permite    permite
+vendedor, active                   sim, como operador     permite     permite    permite
+" ADMIN "/"CaIxA", active           sim, normalização      permite     permite    permite*
+role válida, status ausente        sim                    permite     permite    permite*
+role válida, status null           sim                    permite     permite    permite*
+role válida, status ""/outro        sim                    permite     permite    permite*
+role válida, status não-string     provider converte      permite     permite**  permite**
+qualquer role válida, revoked      UI não garante corte   permite     nega       nega
+role válida, " REVOKED "            UI não garante corte   permite     nega       nega*
+role desconhecida                  fallback operador      permite     nega       nega
+role ausente/null/vazia            fallback operador      permite     nega       nega
+role não-string                    fallback operador      permite     nega       nega
+sem users/{uid}                    sem vínculo normal     nega        nega       nega
+usuário anônimo                    AuthGate/login         nega        nega       nega
+perfil da loja B, caminho A         rota forjada/stale      nega        nega***    nega
+loja pai inexistente               entrada/venda barrada  permite**** nega       nega
+
+* Preservar normalização equivalente às Functions, sem exigir valor literal
+  canônico/active. Validar no Emulator os casos representativos antes de aplicar.
+** Compatibilidade exata com normalizeString das Functions: não-string -> "".
+   Endurecer também o tipo ou exigir whitelist de status seria mudança adicional.
+   O contrato atual só identifica revoked; não confundir com subscriptionStatus.
+*** createProduct/setProductCategories resolvem a própria loja pelo perfil;
+    não aceitam storeId externo para escolher outra loja. Archive/restore
+    recebem storeId mas conferem vínculo.
+**** Se o produto filho já existe. CREATE de produto inexistente segue negado.
+     UI de edição já aberta pode conservar widget.storeId; não possui exists
+     obrigatório do pai no próprio UPDATE.
+Para revoked com role inválida, qualquer rejeição proposta é suficiente;
+a ordem de validação não deve virar dependência do cliente.
+
+Matriz específica de arquivamento/restauração (via callable):
+admin não revogado: sim; gerente/operador/caixa/vendedor: não.
+Todos os perfis: mutação direta dos campos de arquivamento continua negada.
+Não há proposta de mudar essa matriz.
+
+8. GAPS E MENORES AJUSTES
+
+G-AUTH-1 — Revogação não participa do UPDATE.
+Efeito: request autenticada com perfil revoked e storeId preservado satisfaz
+o gate de products; provider/Auth desabilitado não são substitutos dessa condição.
+Menor ajuste T6-A2: negar status normalizado revoked no próprio UPDATE.
+Não alterar READ nesta etapa nem declarar que isso revoga acesso global ao app.
+
+G-AUTH-2 — Role arbitrária/ausente aceita pelas Rules.
+Efeito: contraste com createProduct/setProductCategories; UI faz fallback
+e edição sem troca de categoria contorna o gate mais estrito das callables.
+Menor ajuste T6-A2: role string reconhecida, com normalização e aliases;
+não copiar o fallback permissivo do provider.
+Risco explícito: legado sem role/role inválida deixará de funcionar.
+Encaminhamento mínimo: documentar essa quebra intencional de autorização e
+tratar eventual regularização/exceção em etapa separada se necessária.
+
+G-AUTH-3 — Pai stores ausente não impede UPDATE do filho.
+Menor ajuste T6-A2: exists(stores/{storeId}), mantendo vínculo do perfil.
+É compatível com entrada/vendas normais e com Functions de produto.
+Não acrescentar ownerId obrigatório, assinatura ativa ou schema da loja.
+
+G-COMPAT-1 — Uma whitelist só dos três nomes canônicos excluiria aliases.
+Menor ajuste: aceitar caixa/vendedor como operador, além de trim/lowercase
+compatíveis. Não é necessário migrar perfis ou reescrever UI.
+
+G-COMPAT-2 — Teste de accessStatus direto/estrito pode quebrar ausência legada.
+Menor ajuste: leitura defensiva de campo opcional; rejeitar somente revoked
+normalizado conforme o contrato existente das Functions.
+Não exigir active nem inventar "pending/inactive" como revogação.
+
+G-UI-1 — AuthGate e writers não validam revogação/role como Functions.
+Menor ajuste de SEGURANÇA no escopo é o gate servidor das Rules.
+Uma futura mudança isolada da UI pode explicar autorização inválida ao usuário,
+mas não é requisito para fechar o bypass nem autorização para alterar Flutter.
+Evitar helper/refatoração global em todos os providers/telas nesta etapa.
+
+G-TEST-1 — Fixtures positivas sem documento da loja.
+firestoreTaxonomyRules.test.mjs:49-59 cria users e filhos products/categories,
+mas NÃO stores/a; perfis também não têm accessStatus.
+Ao introduzir exists do pai, os positivos atuais precisam de loja fixture real.
+Menor ajuste futuro: seed da loja nos casos positivos e cenário separado
+deliberadamente sem pai; preservar ausência de status como teste de compatibilidade.
+Não "corrigir" esperado positivo para falha só para fazer a suíte passar.
+
+G-TEST-2 — Faltam testes de identidade e formatos reais dos writers.
+Menor ajuste futuro: expandir suíte existente com matriz de autorização,
+payload completo da edição, FieldValue.increment, lotes/FIFO e commits atômicos.
+Sem novo runner, sem mudança de firebase.json, sem testar em produção.
+
+Limites observados, FORA do menor T6-A2:
+- campos operacionais continuam amplos, sem schema/regra de negócio no servidor;
+- produto já arquivado não é barrado por estado no UPDATE operacional;
+- fiado/FIFO e validação de estoque diferem;
+- chamadas de taxonomia, upload e UPDATE não são atômicas entre si;
+- sales e syncOfflineSale têm políticas próprias, não fechadas por esse match.
+Para cada um, menor encaminhamento é registrar contrato/teste específico em
+etapa futura; não introduzir correção no endurecimento de identidade.
+
+9. RISCO DE REGRESSÃO POR FLUXO
+
+Fluxo                         Risco com o menor gate proposto
+W1 edição/estoque/lotes        Baixo para perfil válido; ALTO se limitar a admin,
+                              usar allowlist incompleta ou bloquear fiscal/lotes.
+                              Legado sem role deixa de salvar; revogação entre
+                              callable/upload/update pode deixar efeitos prévios.
+W2 venda sem lotes             Baixo para perfil válido; rejeição deve abortar
+                              transação toda. Manter incremento e operadores.
+W3 venda com lotes             Baixo para perfil válido; preservar quantidade +
+                              lista lotes. Testar carrinho com vários produtos.
+W4 fiado                      Baixo para perfil válido; rejeição do produto deve
+                              impedir também criação da venda no mesmo batch.
+Criação/importação/taxonomia   Sem impacto direto: backend/Admin SDK. Não reabrir
+                              CREATE nem mutação direta de categorias/taxonomia.
+Arquivar/restaurar             Sem impacto direto: callables continuam admin-only;
+                              campos protegidos não podem ser liberados.
+Venda offline/sync             Sem impacto direto no writer backend owner-only;
+                              não prometer autorização de funcionários offline.
+Leitura produtos/categorias    Sem mudança proposta; não acrescentar gate global
+                              compartilhado que altere READ por acidente.
+
+Os riscos "baixos" são avaliação estática, condicionada aos testes futuros.
+Não foi provada ausência de perfis reais malformados/legados.
+As dependências legítimas a preservar são operador/aliases, status opcional e
+todos os campos operacionais atuais — não somente price e quantidade dos testes.
+
+Uma negação permission-denied normal cai no tratamento de erro da venda;
+_isNetworkUnavailable (:517-528) procura unavailable/socket/host, não esse código.
+Validar que a negação não vira sucesso/offline automático nos testes adequados.
+Não implementar UI adicional aqui.
+
+10. MENOR PROPOSTA PARA T6-A2 (NÃO IMPLEMENTADA)
+
+Modificar somente o predicado de autorização de UPDATE no match products,
+e seus testes, quando essa implementação for autorizada.
+
+Contrato sugerido, sem patch:
+1) usuário autenticado;
+2) users/{uid} existe;
+3) users/{uid}.storeId é exatamente o storeId do caminho, como hoje;
+4) stores/{storeId} existe;
+5) role é string reconhecida após normalização compatível:
+   admin / gerente / operador / caixa / vendedor;
+6) accessStatus normalizado não é revoked, com campo opcional compatível;
+7) mesma proteção atual de diff(...).affectedKeys().hasAny dos SETE campos.
+
+Normalização deve falhar fechada para role ausente/inválida. Para status,
+preservar semântica de campo opcional das Functions; não igualar estado ausente
+a revoked nem tomar subscriptionStatus como accessStatus.
+
+Preferir condição/helper pequeno restrito ao UPDATE de products, sem mudar
+helper compartilhado que altere outras coleções ou READ.
+Não incluir ownerId, exigência de admin, status active obrigatório, gate de plano,
+filtro por estado do produto, schema comercial ou migração.
+Preservar CREATE/DELETE false e as proteções do T6-A1.
+Não confiar em role/accessStatus enviados no produto nem em custom claims
+divergentes do perfil servidor.
+
+Não é necessário migrar W1-W4 para Functions para este fechamento específico.
+Não há autorização nesta auditoria para nenhuma dessas alterações.
+
+11. TESTES QUE PRECISARÃO SER ADICIONADOS/AJUSTADOS
+
+Na suíte functions/tests/security/firestoreTaxonomyRules.test.mjs:
+A) Seed stores/a para cenários positivos; não exigir accessStatus em todos.
+   Manter teste explícito sem status para a compatibilidade atual.
+B) Admin/gerente/operador/caixa/vendedor, perfil válido e mesma loja:
+   - payload W1 com os sete campos comerciais;
+   - W1 com mapa fiscal completo e updatedAt;
+   - W2/W4 com increment negativo em quantidade;
+   - W3 com quantidade + lotes contendo Timestamp;
+   - preservar taxonomia ausente/legada/canônica e campos de arquivamento.
+C) Mesmos papéis com revoked: negar UPDATE em todos os formatos representativos.
+   Repetir status com caixa/espaços conforme normalização; verificar
+   permission-denied e ausência de alteração persistida.
+D) Role desconhecida, ausente, vazia, null e não-string: negar.
+   Claims de admin/storeId correto não devem resgatar perfil inválido.
+E) Normalização dos papéis: exemplos " ADMIN ", "Gerente", " CAIXA ",
+   "Vendedor", role inválida após trim. Preservar aliases sem fallback arbitrário.
+F) Status active, ausente, null, vazio e outro valor diferente de revoked:
+   expectativas compatíveis com a proposta; tipo não-string explicitamente
+   documentado para não introduzir sem querer uma regra mais estrita.
+G) Loja pai ausente, mas produto/perfil existentes: negar UPDATE.
+   Perfil inexistente/anônimo/storeId vazio ou tipo inválido: negar.
+H) Isolamento: perfil B com acesso legítimo a B não pode atualizar produto A.
+   Payload/claims forjados não mudam a loja de autoridade.
+I) Revogação/troca de role/vínculo após abrir o contexto:
+   alterar fixture via ambiente de teste, reutilizar cliente e negar próximo UPDATE.
+J) Venda completa:
+   - transação com reads de produtos, updates W2/W3 e CREATE de sales;
+   - batch com increment W4 e CREATE de sales;
+   - sucesso para todos os papéis válidos, incluindo aliases;
+   - revogado/role inválida/loja ausente: nada persistido, inclusive sales;
+   - múltiplos produtos no mesmo carrinho, para exercitar o custo das leituras
+     extras de autorização e o comportamento de commit.
+K) Regressão T6-A1:
+   CREATE produto negado com/sem taxonomia; categories CREATE/UPDATE/DELETE
+   negados; produtos DELETE negado; add/change/remove dos três campos
+   taxonômicos negados para TODOS os papéis aceitos, inclusive aliases;
+   arquivamento direto negado; operações e leituras legítimas preservadas.
+L) Confirmar que as leituras não mudaram, inclusive a política atual para perfis
+   que só terão UPDATE revogado. Não implementar negação de READ por acidente.
+
+Suítes existentes relacionadas:
+- firestoreTaxonomyRules.test.mjs: 78 casos do T6-A1, sem aliases/revogação/role
+  inválida/loja pai para UPDATE; positivos cobrem price/quantidade, não payload W1
+  completo nem transação/batch de venda.
+- firestoreCatalogRequestsRules.test.mjs: tem perfis aliases/revogados/inválidos
+  e lojas seedadas, mas testa catalogRequests/fallback, não UPDATE de products.
+  Compartilha projectId demo-taxonomy-rules; evitar execução concorrente que
+  interfira em clearFirestore se vier a ser usada como regressão.
+- storageRules.test.mjs cobre Storage, não certifica Firestore.
+- createProduct.emulator.test.js e setProductCategories.emulator.test.js
+  cobrem roles/aliases/revogação, mas usam handlers/Admin SDK, não esse allow.
+- npm run test:catalog não descobre security/*.mjs.
+Nenhum teste foi alterado, criado ou executado nesta auditoria.
+
+12. VALIDAÇÃO FINAL E LIMITES
+
+git diff --check executado em leitura: aprovado.
+Avisos LF/CRLF se referem ao estado local existente; não houve formatação.
+Comparação antes de gravar o relatório: 372 hashes de arquivos de fonte,
+documentação e testes (rastreados + não ignorados, dependências node_modules
+excluídas) idênticos; nenhum caminho novo. Logs *debug* também idênticos.
+A confirmação após gravar este relatório é registrada no encerramento abaixo.
+
+CONFIRMAÇÃO DE AÇÕES:
+- Nenhum arquivo de código, Rules, testes ou configuração foi alterado.
+- Nenhum arquivo fora deste .txt foi alterado por esta auditoria.
+- Nenhuma operação em Firestore/Firebase/produção.
+- Nenhum Emulator iniciado, nenhum artefato de teste novo.
+- Nenhum commit, push, deploy, stash, restore, checkout, reset ou clean.
+- Nenhuma migração ou execução do script migrateOwnerRoles.
+- T6-A2 NÃO implementado; entrega limitada a este diagnóstico e proposta.
+
+Branch final esperada e reconferida antes da gravação: feat/f7-intelligent-catalog
+HEAD final reconferido antes da gravação: 0e5aee6853253b3374fcfc487cb9547a04771a68
+Stage reconferido antes da gravação: vazio.
+
+git status --short INICIAL (trabalho preexistente):
+ M android/app/build.gradle.kts
+ M firestore.rules
+ M functions/categories/deleteCategory.js
+ M functions/index.js
+ M functions/tests/categories/deleteCategory.emulator.test.js
+ M functions/tests/security/firestoreTaxonomyRules.test.mjs
+ M lib/models/product_import_item.dart
+ M lib/screens/management/category_management_screen.dart
+ M lib/screens/management/manage_products_screen.dart
+ M lib/screens/management/product_import_confirmation_screen.dart
+ M lib/screens/management/product_import_mapping_screen.dart
+ M lib/screens/management/product_import_validation_screen.dart
+ M lib/screens/sales/new_sale_screen.dart
+ M lib/screens/subscription_screen.dart
+ M lib/services/product_import_service.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? docs/Integracao/
+?? functions/categories/categoryHierarchyContract.js
+?? functions/categories/upsertCategory.js
+?? functions/tests/categories/categoryHierarchyContract.test.js
+?? functions/tests/categories/upsertCategory.emulator.test.js
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+?? test/F7.9-C0_relatorio.txt
+?? test/F7.9-C1_relatorio.txt
+?? test/F7.9-D0_relatorio.txt
+?? test/F7.9-D1_relatorio.txt
+?? test/F7.9-F1_relatorio.txt
+?? test/T6-A0_rules_hierarchy_audit.txt
+?? test/T6-A1_rules_boundary_relatorio.txt
+
+Encerramento — verificação após a gravação:
+Branch final: feat/f7-intelligent-catalog
+HEAD final: 0e5aee6853253b3374fcfc487cb9547a04771a68
+Stage final: vazio.
+372 arquivos preexistentes comparados por SHA256: nenhum alterado/removido.
+Logs *debug* preexistentes: hashes idênticos.
+Único arquivo novo: test/T6-A2-A0_product_update_authorization_audit.txt.
+git diff --check final: aprovado (somente avisos preexistentes LF/CRLF).
+Nenhum arquivo fora do .txt alterado; nenhuma ação Firebase; nenhum
+commit/push/deploy. T6-A2 permanece não implementado.
+
+git status --short FINAL:
+ M android/app/build.gradle.kts
+ M firestore.rules
+ M functions/categories/deleteCategory.js
+ M functions/index.js
+ M functions/tests/categories/deleteCategory.emulator.test.js
+ M functions/tests/security/firestoreTaxonomyRules.test.mjs
+ M lib/models/product_import_item.dart
+ M lib/screens/management/category_management_screen.dart
+ M lib/screens/management/manage_products_screen.dart
+ M lib/screens/management/product_import_confirmation_screen.dart
+ M lib/screens/management/product_import_mapping_screen.dart
+ M lib/screens/management/product_import_validation_screen.dart
+ M lib/screens/sales/new_sale_screen.dart
+ M lib/screens/subscription_screen.dart
+ M lib/services/product_import_service.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? docs/Integracao/
+?? functions/categories/categoryHierarchyContract.js
+?? functions/categories/upsertCategory.js
+?? functions/tests/categories/categoryHierarchyContract.test.js
+?? functions/tests/categories/upsertCategory.emulator.test.js
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+?? test/F7.9-C0_relatorio.txt
+?? test/F7.9-C1_relatorio.txt
+?? test/F7.9-D0_relatorio.txt
+?? test/F7.9-D1_relatorio.txt
+?? test/F7.9-F1_relatorio.txt
+?? test/T6-A0_rules_hierarchy_audit.txt
+?? test/T6-A1_rules_boundary_relatorio.txt
+?? test/T6-A2-A0_product_update_authorization_audit.txt

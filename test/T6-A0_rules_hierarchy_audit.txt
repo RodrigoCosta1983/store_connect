@@ -1,0 +1,408 @@
+T6-A0 — AUDITORIA READ-ONLY DE RULES + HIERARQUIA DE CATEGORIAS
+Data: 20/09/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 0e5aee6853253b3374fcfc487cb9547a04771a68
+Objeto: estado LOCAL do workspace, incluindo alterações preexistentes não commitadas.
+Não houve consulta a regras publicadas nem a dados de produção.
+
+1. ESCOPO E MÉTODO
+Foram lidos AGENTS.md, docs/codex/CURRENT_WORK.md, documentação do catálogo,
+docs/catalog/CATALOGO_TAXONOMIA_COLECOES_DINAMICAS.md, Rules, Functions,
+contratos, integração de importação e testes relacionados.
+CURRENT_WORK e a proposta de taxonomia contêm registros históricos anteriores
+à implementação local. Para esta auditoria prevalece o contrato fechado no pedido.
+Nenhuma correção foi implementada. Não foram usados formatadores, Git mutante,
+deploy, Firebase CLI, instalação de dependências ou migração.
+Única escrita autorizada e realizada: este relatório.
+O workspace já estava sujo na entrada; suas alterações não são desta etapa.
+
+2. CONCLUSÃO
+A hierarquia NÃO está protegida de ponta a ponta pelas Rules locais.
+CREATE e UPDATE de categorias são permitidos diretamente a qualquer usuário
+autenticado cujo users/{uid}.storeId corresponda ao caminho da loja.
+Isso contorna upsertCategory, autorização adicional, auditoria e todas as
+validações hierárquicas dessa Function.
+DELETE direto de categorias está negado, inclusive para admin/gerente.
+Produtos têm proteção efetiva contra introdução/alteração/remoção direta de
+categoryIds, categoryId e categoryName, mas CREATE sem esses campos é permitido.
+Assim, createProduct não é uma fronteira obrigatória para toda criação de produto.
+A importação atual respeita as duas callables exigidas; isso não fecha os caminhos
+alternativos que continuam autorizados pelas Rules.
+
+3. RULES — EVIDÊNCIAS E CAMINHOS
+firestore.rules:291-310:
+- Leitura e criação/edição de categorias exigem somente autenticação, perfil
+  existente e storeId do perfil igual ao segmento do caminho.
+- Não inspecionam request.resource.data, parentCategoryId, name ou imageUrl.
+- Não verificam role, accessStatus, existência do documento da loja nem auditoria.
+- Não validam pai existente, pai raiz, auto-parent, profundidade ou filhos.
+- DELETE: false.
+firestore.rules:186-234:
+- CREATE de produtos proíbe a presença dos três campos taxonômicos e dos campos
+  de arquivamento. Até categoryIds: [] é negado.
+- CREATE sem taxonomia é permitido, sem exigir schema canônico.
+- UPDATE usa diff(...).affectedKeys().hasAny(...): bloqueia adicionar, alterar
+  ou remover taxonomia; reenviar os mesmos valores sem mudar o resultado é permitido.
+- UPDATE operacional não revalida taxonomia preexistente, inclusive inválida.
+- DELETE é negado.
+firestore.rules:379-433:
+- O match genérico exclui categories e products em read/create/update/delete.
+  Não foi encontrado allow sobreposto que libere DELETE ou mutação taxonômica.
+- Descendentes dessas coleções não recebem a permissão genérica.
+firestore.rules:21-47:
+- Cliente não pode mudar storeId, role ou accessStatus do próprio perfil via UPDATE.
+  O bypass identificado usa um vínculo de loja já existente; não pressupõe
+  autoatribuição de outra loja pelo cliente.
+firebase.json aponta firestore.rules como fonte local. Isso não prova publicação.
+docs/security/FIRESTORE_RULES_PRODUCAO_2026-09-16.rules é um registro histórico,
+não prova das Rules hoje ativas.
+
+Exemplos deduzidos da leitura, NÃO executados:
+a) Criar stores/A/categories/C com parentCategoryId: C: permitido para membro de A.
+b) Apontar C para ID inexistente, ID existente só em B, número ou array: permitido.
+   Isso não dá acesso à loja B; cria uma referência inválida dentro de A.
+c) Criar neto de subcategoria ou mover raiz com filhos para baixo de outra raiz:
+   permitido pelo UPDATE direto.
+d) Substituir documento de categoria omitindo parentCategoryId: permitido,
+   efetivamente fazendo leitores compatíveis interpretá-lo como raiz.
+e) Revogado ou role desconhecida, mantendo storeId: também satisfaz essas Rules.
+f) Criar produto {name: "X"} sem taxonomia: permitido, contornando createProduct.
+g) Gravar categoryIds duplicado/11 IDs diretamente: negado por bloqueio do campo,
+   não por validação de conteúdo.
+h) Excluir raiz diretamente: negado. Entretanto, ainda é possível corromper ou
+   retirar relações nos filhos por UPDATE direto; deleteCategory avalia o estado
+   corrente. A proteção de DELETE não torna a hierarquia globalmente íntegra.
+
+4. MATRIZ DE GARANTIAS
+Invariante                              Functions                  Rules
+Raiz nova com parentCategoryId null      upsert: sim                não
+Legado sem parentCategoryId é raiz       upsert: normaliza leitura  não interpreta
+Pai existe na mesma loja                upsert: leitura local      não
+Pai precisa ser raiz / máximo 2 níveis   upsert: sim                não
+Categoria não é pai de si mesma          upsert: sim                não
+Raiz com filhos não vira subcategoria    upsert: query transacional não
+Raiz com filhos não pode ser excluída    delete: query transacional DELETE todo negado
+Acesso ao caminho somente própria loja   perfil servidor            sim, perfil
+Role reconhecida e acesso não revogado   sim                        não nesses writes
+categoryIds é array obrigatório          create: sim; set: sim      não exige no CREATE
+Cardinalidade 0..10                      create/set: sim            semântica não validada
+IDs string, não vazios, sem barra/trim    create/set: sim            semântica não validada
+IDs sem duplicação                      create/set: sim            semântica não validada
+IDs existentes na própria loja          create/set: sim            semântica não validada
+Hierarquia válida da categoria usada    create/set: não            não
+Associações explícitas, sem incluir pai  projeção preserva IDs      bloqueia mudança direta
+Impedir mutação direta da taxonomia      N/A                        sim
+Categoria em uso não pode ser excluída   delete: canônico + legado  DELETE todo negado
+
+Para os campos taxonômicos de produto, "não valida semanticamente" NÃO significa
+"aceita escrita inválida": as Rules negam toda introdução/mudança desses campos.
+Elas também não corrigem nem rejeitam updates operacionais sobre dados antigos ruins.
+O mesmo store nas Functions é garantido pelo caminho, não por um campo storeId
+dentro do documento de categoria. O helper puro não conhece Firestore nem lojas.
+
+5. FUNCTIONS E CONTRATOS
+functions/categories/categoryHierarchyContract.js:
+- validateCategoryMutationInput exige name, imageUrl e parentCategoryId explícitos,
+  rejeita campos extras e auto-parent; create usa categoryId ausente/null.
+- validateCategoryHierarchyDecision exige pai correspondente, existente e raiz;
+  childCount > 0 impede rebaixamento. Promoção de filho para raiz é permitida.
+functions/categories/upsertCategory.js:239-629:
+- Perfil, role (admin/gerente/operador, aliases caixa/vendedor), revogação, loja,
+  categoria atual, filhos e pai são verificados na transação.
+- Pai é lido em categories da própria loja (409-438).
+- Campo legado ausente é normalizado para null (79-109).
+- Query de filhos usa parentCategoryId == categoria, limit(1) (377-394).
+- Hierarquia validada em 449; gravação e auditLogs na mesma transação.
+- UPDATE idêntico é idempotente; legado é materializado com null.
+- CREATE não tem requestId/deduplicação por nome: "upsert" não significa
+  unicidade de nome. Retry após resposta perdida pode criar outra categoria.
+functions/categories/deleteCategory.js:
+- Exige admin/gerente, perfil não revogado e loja existente.
+- Query de filhos em 266; bloqueio category-has-children.
+- Consulta categoryIds array-contains (317) e categoryId legado (350).
+- Produto ativo ou arquivado impede exclusão; categoryName não é identidade.
+- Exclusão e auditoria são transacionais (389).
+- Não faz cascade nem conserta relações já corrompidas.
+functions/products/productCategoryContract.js:4-69:
+- Array de 0..10, IDs string não vazios, sem whitespace externo/barra,
+  sem duplicação; preserva ordem e caixa, devolve cópia.
+- Projeção usa os nomes canônicos resolvidos; primeiro ID alimenta compatibilidade
+  categoryId/categoryName. [] produz campos legados null.
+- Não inclui pai nem consulta árvore.
+functions/products/createProductContract.js:422-477:
+- Exige requestId/product/categoryIds; proíbe storeId e campos derivados extras.
+- Valida dados operacionais além da taxonomia.
+functions/products/createProduct.js:509-615:
+- Resolve todos os IDs na própria loja dentro da transação; exige existência e
+  nome canônico não vazio. Guarda categoryIds e projeções.
+- Não lê parentCategoryId nem valida árvore da categoria encontrada.
+- Autorização revalidada e receipt em auditLogs garantem idempotência por intenção;
+  replay retorna resultado anterior, sem nova criação, antes de rever categorias.
+functions/products/setProductCategories.js:432-505,590-628:
+- Mesma resolução de IDs e nomes; controle expectedTaxonomy e escrita mínima.
+- Também não valida parentCategoryId. Pode manter categorias de produto arquivado.
+functions/index.js:2332-2368:
+- Exporta setProductCategories, createProduct, upsertCategory e deleteCategory.
+- Exportação local não comprova que uma versão foi publicada.
+
+Não há requisito de que todos os IDs de um produto formem um único par pai/filho.
+[rootId], [childId] e [rootId, childId] são associações explícitas independentes.
+Não se deve exigir pai no array nem adicioná-lo automaticamente.
+Do mesmo modo, não se deve inventar proibição de categorias de raízes diferentes.
+O gap é aceitar categoria com árvore inválida, não aceitar múltiplas associações.
+
+6. INTEGRAÇÃO DA IMPORTAÇÃO E TELAS
+lib/services/product_import_service.dart:
+- analyze lê categorias/produtos; reconhece raiz null/ausente e organiza filhos por
+  pai, rejeitando pai inexistente e terceiro nível (aprox. 244-322).
+- Criação de categorias só chama upsertCategory (593-629): raízes null primeiro
+  (647), subcategorias com ID da raiz depois (694).
+- Criação de produtos só chama createProduct (719-808).
+- Monta [] / [raiz] / [raiz, subcategoria] conforme colunas explicitamente informadas.
+- categoriesRef.doc(...) em 711 é referência, não escrita.
+- _clientRequestIds.doc().id em 800 gera ID local, sem persistir documento.
+- Não encontrado set/add/update/delete/batch de Firestore na importação.
+- product_import_confirmation_screen.dart:220 delega a importProducts.
+- Tela inicial de importação apenas lê arquivo; etapas intermediárias preparam dados.
+category_management_screen.dart:343,983 usa upsertCategory e deleteCategory.
+manage_products_screen.dart:698,921 usa setProductCategories e createProduct.
+Edição operacional permanece direta em manage_products_screen.dart:866-871:
+não recomendar negar todo UPDATE de produtos, pois quebraria fluxo vigente.
+
+Limitações de integração observadas:
+- Resolução de categorias na importação é snapshot cliente; reparenting entre análise
+  e criação do produto não é revalidado como par pela Function. A associação explícita
+  continua válida pelo contrato geral, mas a relação visual da planilha pode envelhecer.
+- Retry de criação de categoria não tem recibo como createProduct. É risco de
+  duplicação/ambiguidade por nome, não bypass de segurança nem regra nova de unicidade.
+- analyze faz trim no parentCategoryId armazenado; Function rejeita whitespace
+  externo. Com dados corrompidos via Rules, os leitores podem discordar.
+Estas observações não autorizam alteração de contrato nem migração.
+
+7. GAPS E MENORES AJUSTES SUGERIDOS (NÃO IMPLEMENTADOS)
+G1 — ALTO: CREATE/UPDATE direto de categoria contorna a hierarquia e auditLogs.
+Menor ajuste: negar create/update de categories nas Rules, preservando read e
+DELETE negado e as exclusões do match genérico. Os fluxos auditados já usam callable.
+Não tentar reproduzir queries de filhos ou toda a árvore em Rules.
+
+G2 — ALTO: revogado/role inválida ainda cria/edita categorias e produtos diretamente.
+Menor ajuste: G1 resolve os writes de categorias; negar CREATE de produtos resolve
+o caminho de criação. Nos UPDATEs operacionais ainda necessários, acrescentar checks
+de acesso não revogado, role autorizada e loja existente, alinhados às Functions.
+Avaliar também leitura de revogados em etapa própria; não ampliar esta correção.
+
+G3 — MÉDIO: CREATE de produto sem categoryIds continua permitido.
+Menor ajuste: negar CREATE direto de products e manter UPDATE operacional com bloqueio
+taxonômico atual. Cadastro manual e importação auditados já usam createProduct.
+Isso também fecha bypass do contrato de payload, recibo e gate fiscal na criação.
+UPDATE de fiscal/preço/estoque continua amplo; validar somente campos/regras que já
+tenham contrato aprovado, sem migrar toda edição de produto nesta etapa.
+
+G4 — MÉDIO: createProduct/setProductCategories aceitam categoria existente com
+hierarquia corrompida, desde que o nome seja válido.
+Menor ajuste preventivo imediato: G1 impede novas corrupções pelo cliente.
+Se exigida rejeição defensiva de dados antigos, validar parentCategoryId e o pai raiz
+da mesma loja na resolução transacional existente de ambas as Functions.
+Não impor associação automática ao pai nem exigir par no array.
+Nenhuma limpeza de dados antigos deve ser automática.
+
+G5 — COBERTURA: testes de Rules ainda ratificam a permissão antiga.
+Menor ajuste: alterar expectativas específicas para CREATE/UPDATE de categoria
+e CREATE de produto quando G1/G3 forem aprovados; adicionar matriz de casos abaixo.
+Não basta atualizar as Functions ou passar apenas seus testes com Admin SDK.
+
+G6 — INTEGRAÇÃO/ROBUSTEZ: não há teste automatizado dedicado da importação hierárquica.
+Menor ajuste: testes do service com callables simuladas, verificando payload, ordem
+raiz/filho, associações explícitas e ausência de write direto.
+Retry de categoria: primeiro teste que documente duplicação; eventual idempotência
+de criação requer contrato próprio. Não adicionar unicidade por nome por suposição.
+
+8. COBERTURA EXISTENTE
+Testes puros executados nesta auditoria (Node; sem arquivos/rede/Firebase):
+- functions/tests/categories/categoryHierarchyContract.test.js: 38 passaram.
+- functions/tests/categories/deleteCategoryContract.test.js: 28 passaram.
+- functions/tests/products/productCategoryContract.test.js: 50 passaram.
+- functions/tests/products/createProductContract.test.js: 81 passaram.
+TOTAL: 197 passaram, 0 falhas.
+
+Testes Emulator inspecionados, NÃO executados nesta etapa:
+- categories/upsertCategory.emulator.test.js: 22 cenários nomeados; auth, payload,
+  perfil/role/revogação/loja, raiz, legado, filho, terceiro nível, pai ausente,
+  edição, promoção/movimentação, raiz com filhos, auto-parent e idempotência.
+  Falta cenário explícito de pai existente somente em outra loja e concorrência
+  entre rebaixar raiz e criar/mover filho (há outra corrida na suíte delete).
+- categories/deleteCategory.emulator.test.js: permissões, canônico/legado,
+  arquivados, auditoria; bloqueia raiz com filhos e raiz legada; exclui filho livre;
+  corridas com upsertCategory (1409), setProductCategories (1539),
+  createProduct (1654) e delete duplicado (1769).
+- products/createProduct.emulator.test.js: autorização, mesma loja, categoria
+  ausente/inválida, [], ordem, fiscal, lotes, idempotência, replay e concorrência.
+- products/setProductCategories.emulator.test.js: autorização, mesma loja, IDs,
+  nomes, projeção, estado esperado, arquivado, auditoria e conflito concorrente.
+- Os testes de produtos não contêm parentCategoryId: não provam rejeição de árvore
+  corrompida nem cenários explícitos [raiz]/[filho]/[raiz,filho] com árvore real.
+- Essas suítes usam Admin SDK e handlers: não exercitam autorização de cliente Rules.
+
+Rules:
+- functions/tests/security/firestoreTaxonomyRules.test.mjs carrega firestore.rules
+  e usa @firebase/rules-unit-testing com emulator localhost, projeto demo.
+- Cobre add/change/remove dos três campos, CREATE com vazio/null, CREATE sem
+  taxonomia, isolamento de loja, DELETE categoria por três roles, leitura/rename,
+  preservação operacional, set substitutivo, arquivamento e anônimo.
+- Teste 12 (linha 89) espera CREATE de produto sem taxonomia permitido.
+- Testes 19/20 (120/123) esperam CREATE/UPDATE direto de categoria permitido.
+- Não cobre parentCategoryId, hierarquia, revogado/role inválida nesses caminhos,
+  batch/transformações de taxonomia ou múltiplas variantes de IDs inválidos.
+- assertFails verifica rejeição; reforçar código permission-denied nos novos casos.
+- firestoreCatalogRequestsRules.test.mjs cobre somente o bloqueio de catalogRequests
+  e fallback genérico; não substitui teste hierárquico. Usa o mesmo projectId demo
+  da suíte taxonômica e clearFirestore: executar essas duas suítes sequencialmente
+  ou isolar projectId para evitar interferência.
+- storageRules.test.mjs cobre Storage, não valida a hierarquia Firestore.
+
+Catálogo/Flutter:
+- getPublicCatalog.emulator.test.js usa categoryName como fixture de apresentação.
+- Não foram encontrados testes dedicados da importação/hierarquia Flutter nos .dart
+  de test/. Os testes de catálogo/solicitação não fecham essa lacuna.
+- functions/package.json: test:catalog só descobre tests/catalog/*.test.js;
+  NÃO executa categories/, products/ nem security/*.mjs. Passar test:catalog não
+  certifica esta frente. Menor ajuste futuro: runner/script dedicado à taxonomia.
+
+Matriz mínima futura de regressão:
+1) Anônimo, outra loja, operador/admin/gerente, aliases, revogado e role desconhecida.
+2) CREATE/UPDATE/set replacement/merge/batch de categoria, incluindo null, ausente,
+   pai inválido/inexistente/de outra loja, auto-parent e terceiro nível.
+3) Raiz com filhos: rebaixamento e DELETE, inclusive raiz legada.
+4) Produto: CREATE sem/com categoryIds; alteração/remoção/arrayUnion/arrayRemove;
+   0,1,10,11 IDs, duplicados, tipos inválidos e IDs de outra loja.
+5) Preservar edição operacional legítima e negar adulteração taxonômica.
+6) Functions: árvore válida/corrompida e associações explícitas sem expandir pai.
+7) Corridas de reparenting/criação de filho; importação sem writes diretos.
+
+9. VALIDAÇÃO, LIMITES E ENCERRAMENTO
+git diff --check passou; avisos de conversão LF/CRLF referem-se a arquivos que já
+estavam modificados e não foram regravados nesta etapa.
+Não foi iniciado Emulator: suas suítes carregam Rules/criam fixtures e a CLI pode
+gerar logs. Foram mantidas as restrições de nenhuma alteração Firebase/arquivos,
+exceto este .txt. Não há alegação de teste de Rules executado nem de segurança
+validada em produção. Exemplos de bypass são conclusões estáticas do código local.
+Inventário de hashes amplo gerou saída truncada; não é tratado como comprovação
+criptográfica completa do workspace. A conferência Git compara o status inicial
+e final, além da restrição aplicada a todas as ações executadas.
+Nenhum arquivo fora deste .txt foi alterado por esta auditoria.
+Não houve commit, push, deploy ou correção.
+Próxima etapa sugerida: revisão dos gaps G1/G3 e teste de Rules correspondente,
+somente em tarefa de implementação separadamente autorizada.
+
+10. GIT STATUS --SHORT NA ENTRADA
+ M android/app/build.gradle.kts
+ M functions/categories/deleteCategory.js
+ M functions/index.js
+ M functions/tests/categories/deleteCategory.emulator.test.js
+ M lib/models/product_import_item.dart
+ M lib/screens/management/category_management_screen.dart
+ M lib/screens/management/manage_products_screen.dart
+ M lib/screens/management/product_import_confirmation_screen.dart
+ M lib/screens/management/product_import_mapping_screen.dart
+ M lib/screens/management/product_import_validation_screen.dart
+ M lib/screens/sales/new_sale_screen.dart
+ M lib/screens/subscription_screen.dart
+ M lib/services/product_import_service.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? functions/categories/categoryHierarchyContract.js
+?? functions/categories/upsertCategory.js
+?? functions/tests/categories/categoryHierarchyContract.test.js
+?? functions/tests/categories/upsertCategory.emulator.test.js
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+?? test/F7.9-C0_relatorio.txt
+?? test/F7.9-C1_relatorio.txt
+?? test/F7.9-D0_relatorio.txt
+?? test/F7.9-D1_relatorio.txt
+?? test/F7.9-F1_relatorio.txt
+
+11. CONFERÊNCIA FINAL
+Branch: feat/f7-intelligent-catalog
+HEAD: 0e5aee6853253b3374fcfc487cb9547a04771a68
+Comparação automatizada de status: igual ao inicial, acrescido somente deste .txt.
+git diff --check: exit code 0.
+Resumo curto exibido no terminal. Nenhum arquivo externo ao relatório alterado.
+git status --short final:
+ M android/app/build.gradle.kts
+ M functions/categories/deleteCategory.js
+ M functions/index.js
+ M functions/tests/categories/deleteCategory.emulator.test.js
+ M lib/models/product_import_item.dart
+ M lib/screens/management/category_management_screen.dart
+ M lib/screens/management/manage_products_screen.dart
+ M lib/screens/management/product_import_confirmation_screen.dart
+ M lib/screens/management/product_import_mapping_screen.dart
+ M lib/screens/management/product_import_validation_screen.dart
+ M lib/screens/sales/new_sale_screen.dart
+ M lib/screens/subscription_screen.dart
+ M lib/services/product_import_service.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? functions/categories/categoryHierarchyContract.js
+?? functions/categories/upsertCategory.js
+?? functions/tests/categories/categoryHierarchyContract.test.js
+?? functions/tests/categories/upsertCategory.emulator.test.js
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+?? test/F7.9-C0_relatorio.txt
+?? test/F7.9-C1_relatorio.txt
+?? test/F7.9-D0_relatorio.txt
+?? test/F7.9-D1_relatorio.txt
+?? test/F7.9-F1_relatorio.txt
+?? test/T6-A0_rules_hierarchy_audit.txt

@@ -1,0 +1,388 @@
+T6-A4-A0 — auditoria read-only da regressão da importação hierárquica
+
+PRECHECK / MÉTODO
+Branch inicial/final: feat/f7-intelligent-catalog
+HEAD inicial/final: 0e5aee6853253b3374fcfc487cb9547a04771a68
+Stage inicial/final: vazio.
+Workspace contém alterações anteriores, preservadas; não é um checkout limpo.
+Inventário SHA de 379 arquivos tracked/untracked não ignorados, excluindo node_modules.
+Somente leitura de código, contratos, testes e relatórios anteriores. Nenhum teste executado nesta auditoria, nenhum Flutter/Node runner/Emulator iniciado.
+Não houve consulta a Firebase ou produção.
+Resultados de testes anteriores citados abaixo são históricos, não novas execuções.
+Documentação histórica não substitui implementação atual.
+
+MAPA DO FLUXO / EVIDÊNCIAS
+1. product_import_item.dart:34–50
+Transporta category e subcategory (default vazio), sourceRow e dados do produto. Não sobrescreve igualdade/hashCode: chaves ProductImportItem usam identidade da instância.
+2. mapping_screen.dart:210–243,393–481
+Campos Categoria/Subcategoria distintos, aliases portugueses. Cabeçalhos normalizados com tratamento de acentos/separadores/whitespace; busca exata seguida de parcial e usedColumns.
+Categoria ignora cabeçalho identificado como Subcategoria na busca parcial: evita capturar "subcategoria" por substring "categoria".
+Essa normalização de CABEÇALHO não é a normalização de NOMES de categorias.
+3. validation_screen.dart:157–178,503–516,613–674
+Lê ambas colunas; trim ao converter modelo. Subcategoria sem Categoria é erro.
+Categoria vazia em coluna mapeada é aviso; sem ambas permanece válido.
+_continueImport bloqueia navegação se _errorCount > 0. Transporta ambos nomes até confirmação.
+4. confirmation_screen.dart:50,80,220,317–360
+Instância única do service por State. analyze para preview; confirmação explícita antes de importProducts.
+Resumo usa categoryResolutions, deduplica rótulos por raiz/nome e filho/raiz/nome.
+A importação refaz analyze, não confia no preview antigo.
+5. service.dart:183–491
+Lê produtos e categorias da loja. Deduplica produtos por nome normalizado ou barcode, também dentro da planilha.
+Normalização de nome = trim().toLowerCase(); não remove acentos nem colapsa espaços internos.
+Constrói índices de raízes por nome e filhos por ID do pai + nome.
+Resolve só newProducts, mas verifica estrutura das categorias com nome não vazio da loja inteira antes da classificação.
+6. service.dart:500–710
+Refaz análise; Maps locais por processamento:
+rootNamesByNormalized; resolvedRootIdsByName; resolvedChildIdsByParent.
+Valida inconsistência de IDs de uma mesma chave.
+Cria TODAS as raízes ausentes sequencialmente, depois TODOS os filhos ausentes, depois produtos.
+7. service.dart:593–629
+upsertCategory payload: name, imageUrl:'' e parentCategoryId:null ou ID retornado da raiz.
+Sem categoryId => modo create no contrato backend.
+Exige success:true, mode:create, categoryId string não vazia, parentCategoryId igual ao solicitado e changed:true.
+Guarda ID retornado (trim), incrementa contador apenas após resposta validada.
+8. service.dart:719–837
+createProduct payload contém requestId, product e categoryIds, sem storeId.
+Sem nomes => []; só Categoria => [rootId]; ambos => [rootId,childId].
+Raiz é inserida antes do filho; ordem determinística; importador gera no máximo 2 IDs por produto.
+Construir DocumentReference ou _clientRequestIds.doc().id não grava dados.
+Busca por .set/.update/.delete no service não encontrou writes Firestore; .add encontrado pertence a coleções Dart.
+9. backend
+upsertCategory valida payload puro/hierarquia, loja/perfil e pai em transação, raiz null/legada; ID gerado uma vez por invocação.
+createProduct valida contrato, perfil/loja e receipt antes da árvore. Na criação nova reconsulta categorias e pais dentro da transação.
+Roles reconhecidas nas duas Functions: admin/gerente/operador e aliases caixa/vendedor, com bloqueio revoked. StoreId vem do perfil, não do payload do importador.
+StoreId passado ao service direciona leituras locais; não é autoridade sobre a loja de escrita das Functions. Eventual troca de perfil/loja entre etapas exige teste, não fallback por owner.
+
+INVARIANTES / CENÁRIOS POR LEITURA DO CÓDIGO
+A. Sem Categoria/Subcategoria: [], nenhum upsert por essa linha; createProduct.
+B. Categoria existente null/legada: [rootId], sem upsert.
+C. Categoria+Subcategoria existentes: [rootId,childId], sem upsert.
+D. Categoria nova: upsert root(null), ID retornado usado no produto.
+E. Raiz existente+filho novo: upsert filho(parent=rootId).
+F. Raiz nova+filho novo: raiz primeiro, filho usa retorno da raiz; produto depois.
+G. Subcategoria sem Categoria: bloqueada na validação UI e novamente no service para newProducts.
+H. Mesmo nome de filho em raízes diferentes: índice por parentId impede reutilização de filho de outra raiz no snapshot analisado; cria filho correto se só existe em outra raiz.
+I. Repetição em várias linhas: root normalizado criado uma vez; child uma vez por rootId/nome; IDs reutilizados. Produtos duplicados por nome/barcode são excluídos antes de planejar categorias.
+J. Várias raízes/subcategorias: Maps independentes; filhos não compartilham cache apenas pelo nome.
+K. Não há inclusão backend automática de pai; raiz+filho são duas associações explicitamente resolvidas pelo importador.
+L. Ordem da planilha orienta iteração; casing do primeiro nome por chave é preservado para criação via putIfAbsent.
+Todos esses comportamentos do service são inferidos do código, não comprovados por testes específicos existentes.
+
+AMBIGUIDADE / LEGADO / CORRUPÇÃO
+- Raiz sem parentCategoryId ou null: reconhecida.
+- Dois nomes de raiz iguais após trim/lowercase: StateError se raiz for solicitada.
+- Dois nomes de filho iguais sob a mesma raiz: StateError se aquele par for solicitado.
+- Mesmo nome em raízes distintas: permitido para filhos.
+- Mesma grafia com acentos ou espaços internos diferentes não é igual sob _normalize; possível criação de nomes visualmente semelhantes, comportamento atual.
+- Auto-parent/ciclo/terceiro nível: análise detecta pai que também tem pai; pai ausente/outra loja não aparece no índice local e falha.
+- Número/boolean/array/map em parentCategoryId: StateError, desde que documento tenha nome não vazio.
+- Vazio/whitespace: rejeitado.
+- WHITESPACE EXTERNO em parentCategoryId não vazio: Flutter faz trim corretivo e pode aceitar; T6-A3 usa helper estrito e rejeita. Ex.: filho.parentCategoryId=" root " e root existente.
+- Slash não tem check dedicado no Dart; normalmente vira referência inexistente no Map (IDs Firestore não contêm /).
+- Documento com nome vazio é ignorado antes da validação de parent; se for pai de categoria com nome, pode ser acusado como ausente. name não-string é convertido por toString e pode entrar na resolução; backend exige nome canônico string não blank para cada ID explícito.
+- Análise verifica todas as categorias nomeadas, inclusive não usadas no lote. Corrupção não relacionada pode impedir até importação sem categoria. T6-A3 no backend valida somente seleção desejada. Isso é comportamento anterior do service, não mudança causada pelo T6-A3.
+- existingCategoryIds/newCategories ainda são calculados sem distinguir raízes/filhos; um nome de filho pode ocultar uma "nova raiz" nesses campos históricos. Busca em lib mostra uso desses campos restrito ao service/modelo; UI e writes atuais usam categoryResolutions. Não trocar lógica nesta auditoria.
+
+IMPACTO ESPECÍFICO T6-A3
+1. Árvores normais null/legadas e novas produzidas por upsertCategory continuam compatíveis; nenhum motivo contratual para mudar [root,child].
+2. Dados externos antes tolerados, especialmente whitespace no parent, podem passar analyze e falhar em createProduct com failed-precondition/invalid-category-hierarchy.
+3. Corrupção/deleção após analyze agora é detectada transacionalmente na criação nova: ausência explícita mantém category-unavailable; pai ausente/malformado/terceiro nível gera invalid-category-hierarchy.
+4. Se uma filha for movida para OUTRA raiz válida após analyze, [rootAntiga,filha] pode continuar estruturalmente válido: associações de raízes distintas são permitidas. T6-A3 não garante que a seleção ainda representa o par de nomes original da planilha; isso é a caveat de snapshot/concorrência, não motivo para impor raiz comum.
+5. Replay histórico do backend continua antes da árvore, mas importProducts refaz analyze e deduplica produtos ANTES de chamar o backend. Importador pode falhar na análise de categoria corrompida ou ignorar produto já criado, sem chegar ao replay. Não afirmar que replay backend garante retry fim a fim da UI.
+6. confirmation_screen:143–149 trata category-unavailable/invalid-category-data, mas não invalid-category-hierarchy; novo reason cai no fallback genérico seguro. Menor melhoria eventual: ramo de mensagem amigável específico, apenas após aprovação e teste. Não é falha de segurança nem exige refatoração.
+7. T6-A3-A4 teve 192 testes puros aprovados e falha ambiental Java, sem execução das quatro suítes Emulator. A auditoria atual não converte essa pendência em validação funcional.
+
+FALHAS PARCIAIS / RETRY / IDEMPOTÊNCIA
+- Cada upsert e cada criação de produto é sua própria transação; importação inteira não é atômica.
+- Falha em raiz posterior: raízes anteriores confirmadas permanecem; nenhum produto ainda criado.
+- Falha ao criar filho: todas as raízes já criadas e filhos anteriores permanecem.
+- Falha createProduct: categorias criadas permanecem, produtos anteriores permanecem, linha atual deve ser atomicamente rejeitada pelo backend.
+- ProductImportException envolve falhas dentro do try com contagens e cause. analyze e verificações preparatórias anteriores ao try podem lançar diretamente sem contagens.
+- Resposta perdida/inválida pode esconder commit já realizado: contadores representam confirmações recebidas, não prova exata de estado servidor.
+- UI mostra resultado parcial se contador>0, mantém opção de nova tentativa e informa nova análise; sem rollback/cleanup automático.
+- Não há loop/retry automático explícito no service. Retry manual refaz leitura e tende a reutilizar categorias visíveis e pular produtos por nome/barcode.
+- upsertCategory create não recebe requestId e não faz unicidade por nome. Auto-ID estável apenas durante retry interno da mesma invocação. Outra invocação pode gerar outra categoria.
+- Map de requestIds de produto vive no service e é chaveado por identidade ProductImportItem; mesma tela/mesmo item reutiliza requestId. Outra instância/modelo/service não preserva essa identidade.
+- Se associações mudarem entre tentativas usando o mesmo requestId, backend mantém request-id-reused, não adapta receipt/hash.
+- Duas importações concorrentes podem analisar ausência simultânea e criar raízes/filhos duplicados. Nova análise posterior detecta ambiguidade. Idempotência de produto não deduplica categoria nem produtos com requestIds distintos.
+Não propomos nova arquitetura, unicidade global ou correção automática para essa caveat conhecida.
+
+INVENTÁRIO REAL DOS TESTES / EVIDÊNCIA
+Dart test/ contém:
+catalog_requests_screen_test.dart;
+catalog_request_detail_screen_test.dart;
+public_catalog_submission_test.dart;
+widget_test.dart.
+Busca ProductImport/product_import em *.dart de test não retornou ocorrências.
+Não há testes específicos do model/mapping/validation/confirmation/service do importador.
+Relatórios F7-CAT-TAXONOMIA-IMPORT-*.txt são evidência histórica de análise/checks, não suítes automatizadas; relatórios C/C2-R1 explicitam ausência de runtime/dispositivo.
+Backend relacionado:
+- categoryHierarchyContract.test.js: raiz/filho, move/promote, auto-parent, terceiro nível e normalização armazenada; 61 casos aprovados na execução anterior T6-A3-A4.
+- productCategoryContract.test.js: 50 casos de IDs 0/1/10/11, ordem, projeção, ausência/null e nomes canônicos; passou no T6-A3-A4.
+- createProductContract.test.js: 81 casos; inclui accepts import fiscal with only ncm, payload mínimo, normalização, quantidade/lotes e IDs; passou no T6-A3-A4.
+- upsertCategory.emulator.test.js: criação raiz/filho sob raiz legada, pai ausente/terceiro nível, edição/movimento/promoção, proteção raiz com filhos, no-op/auditoria/roles. Testa handler isolado, não service.
+- createProduct.emulator.test.js: autorização, fiscal, projeção, receipt/replay/conflito/concorrência, e matriz T6-A3 de árvores e dez filhos/pais. Não testa orquestração Dart nem sequência real de upsert invocado pelo importador.
+- setProductCategories e deleteCategory possuem regressões de taxonomia/corridas relacionadas, mas não são writers do importador.
+- firestoreTaxonomyRules prova fronteira de clientes; não prova orquestração Flutter nem validação Admin SDK.
+As suítes backend de integração estavam pendentes no T6-A3-A4 por Java. Nenhuma executada nesta auditoria.
+
+INFRAESTRUTURA PARA TESTAR O SERVICE
+Construtor ProductImportService já aceita FirebaseFirestore e FirebaseFunctions: ponto de injeção útil, sem necessidade demonstrada de mudar código produtivo.
+Há padrão local de mocks Firebase Core + canal Pigeon de Cloud Functions nos três testes de telas de catálogo. Pode ser reaproveitado para interceptar upsert/create e inspecionar ordem/payload/erros.
+Não há fake Firestore de coleções/queries pronto nesses testes e pubspec não declara fake_cloud_firestore/mockito/mocktail.
+Portanto existe infraestrutura parcial, não um harness pronto de importação completa.
+Menor caminho proposto: doubles locais ao novo teste para as operações Firestore efetivamente usadas (get/doc/id), ou mock do canal Firestore; chamadas Functions via padrão existente. Avaliar viabilidade no incremento autorizado, sem acrescentar pacote/refatoração por antecipação.
+Modelo pode ser testado puramente; métodos privados de mapeamento/validação residem em widgets e podem ser exercitados por widget tests, sem extrair classes só para testar.
+Mocks/fakes comprovam orquestração, não transação, regras reais ou serialização/rollback do servidor.
+Uma composição Node de upsertCategoryHandler + createProduct.run no Emulator comprova integração backend sem Functions Emulator, mas não executa service Dart e deve ser rotulada assim.
+Teste real Dart contra callable completo exigiria harness adicional (Functions Emulator/ponte/autenticação); não está pronto no repositório e não é requisito mínimo para iniciar a regressão com fakes.
+
+MENOR MATRIZ PROPOSTA T6-A4 (NÃO IMPLEMENTADA)
+P1 puro/modelo: subcategory default vazio, transporte exato de ambos nomes, identidade do item preservada entre analyze/import.
+W1 widget: cabeçalhos Categoria e Subcategoria separados (inclusive alias/parcial), coluna subcategoria não capturada como categoria; sem Firebase.
+W2 widget: sem ambas permitido; só subcategoria bloqueia; ambos propagados à confirmação. Sem Firebase.
+S1 service fake parametrizado: sem associação, raiz existente null, raiz legada, raiz+filho existentes; nenhum upsert e payload []/[r]/[r,c] exato.
+S2 service fake parametrizado: raiz nova; raiz existente+filho novo; raiz+filho novos. Ordem de chamadas, parentId exato retornado, produto somente depois; nenhuma escrita Firestore direta.
+S3 service fake lote: raízes diferentes, mesmo nome de filho em duas raízes, repetição por caixa/espaço externo em várias linhas, linhas com/sem filho; IDs reaproveitados, root/child determinísticos.
+S4 service fake parametrizado: raízes ambíguas, filhos ambíguos no mesmo pai, filho só em outra raiz, pai legado; rejeitar ambiguidades/usar pai correto.
+S5 service fake parametrizado: parent inválido, dangling, terceiro nível/ciclo; corrupção em categoria não selecionada e nome vazio; documentar bloqueio global atual. Whitespace externo aceita na análise mas backend simulado rejeita; não aprovar normalização corretiva como regra nova.
+S6 service fake: duplicados por nome/barcode no banco/arquivo não geram upsert/create; reanálise acontece antes de importar.
+S7 service fake falhas parametrizadas: upsert raiz/filho falha, resposta upsert inconsistente, create falha após categorias e após produto anterior; ordem interrompida, contagens/cause exatos, sem rollback ou retry automático.
+S8 service fake retry: mesmo objeto/service preserva requestId quando nova análise ainda retorna item; nova instância não oferece garantia; resposta perdida seguida de categoria/produto visível reutiliza/pula; payload alterado preserva conflito.
+W3 widget fake confirmação: resumo hierárquico, confirmação explícita, parcial e erro genérico invalid-category-hierarchy sem mensagem técnica; eventual mensagem específica só se aprovada.
+E1 Emulator backend parametrizado: upsert raiz -> upsert filho(ID retornado) -> createProduct [r,c]; raiz legada+filho novo; []/[r]; múltiplas raízes/produtos. Verificar nomes canônicos, associações e parent persistido.
+E2 Emulator backend: alterar/remover categoria ou pai entre resolução e create; árvore corrompida falha sem produto/receipt, categorias anteriormente criadas permanecem; whitespace externo estrito.
+E3 regressão existente no Emulator: replay histórico, no-op/correção, máximo 10 IDs, upsert move/promote e delete/associação. Executar as suítes preservadas do T6-A3 quando ambiente permitir; não duplicar toda a matriz em novos testes.
+S1–S8/W1–W3 não precisam Firebase real. E1–E3 precisam somente ambiente local/demo.
+Corrida entre importadores: registrar caveat e, se necessário, teste de caracterização; não adicionar deduplicação distribuída por inferência.
+Agrupos parametrizados reduzem arquivos e repetição; não é promessa de contagem fixa de asserts.
+
+GAPS E MENOR AJUSTE EVENTUAL
+G1 ausência de cobertura service: adicionar um arquivo de teste/harness local; usar injeção existente.
+G2 divergência parent trim: primeiro teste de caracterização; se autorizado alinhar apenas validação desse campo ao contrato estrito, sem migração. Não é necessário modificar backend.
+G3 mensagem hierarchy genérica: possível ramo específico em confirmation_screen, opcional e testável; não implementar nesta auditoria.
+G4 ausência de integração upsert->create: teste Node local dedicado, sem mudar contratos ou writers.
+G5 bloqueio global por corrupção não relacionada e campos de análise históricos: registrar comportamento, não alterar regra de negócio no pacote de regressão.
+G6 contagens após resposta ambígua e concorrência: documentar limites; não inventar rollback ou idempotência de categorias.
+Riscos principais: análise otimista, erros tardios com efeitos parciais, cache apenas local, requestId com vida útil da tela, diferenças Flutter/JS, backend real de integração ainda pendente.
+
+ARQUIVOS EVENTUAIS (PROPOSTA, NENHUMA AUTORIZAÇÃO IMPLÍCITA)
+Testes novos possíveis:
+test/product_import_service_test.dart (harness/fakes + S*);
+test/product_import_flow_test.dart (widgets/modelo);
+functions/tests/products/importHierarchy.emulator.test.js (composição backend).
+Preferir esses testes sem alteração produtiva. Aproveitar suítes existentes via execução.
+Se confirmada necessidade aprovada separadamente: lib/services/product_import_service.dart para estrita validação do parent; confirmation_screen.dart para mensagem. Não é necessário tocar os outros três arquivos Flutter, Rules, contratos, fiscal/estoque ou configuração para a proposta mínima.
+Nenhuma dessas propostas foi implementada.
+
+SHA INICIAL / FINAL DOS ARQUIVOS AUDITADOS
+lib/models/product_import_item.dart
+Inicial: E2BA9302AFAD04200D5959BE670FF18DB993715DA3E0F087820858AC06A07BCB
+Final:   E2BA9302AFAD04200D5959BE670FF18DB993715DA3E0F087820858AC06A07BCB
+
+lib/screens/management/product_import_mapping_screen.dart
+Inicial: 8440C3919D8255AD862A118F37869A8F8FD315DC8AFEC965BF3FA89C9A2AA4B1
+Final:   8440C3919D8255AD862A118F37869A8F8FD315DC8AFEC965BF3FA89C9A2AA4B1
+
+lib/screens/management/product_import_validation_screen.dart
+Inicial: 0645E12D790E494C1EA2B7556A72C83E1116F723B0A6D3B2C8185A9A037BB6A8
+Final:   0645E12D790E494C1EA2B7556A72C83E1116F723B0A6D3B2C8185A9A037BB6A8
+
+lib/services/product_import_service.dart
+Inicial: 43657BD57F9FDF73502207C6288865D03DE184703226F74F9D46F88348B33AEC
+Final:   43657BD57F9FDF73502207C6288865D03DE184703226F74F9D46F88348B33AEC
+
+lib/screens/management/product_import_confirmation_screen.dart
+Inicial: BDD44D07D9CA6DA2EDD215F85944643C16A871C6A5B0C259444C86643E1D234C
+Final:   BDD44D07D9CA6DA2EDD215F85944643C16A871C6A5B0C259444C86643E1D234C
+
+functions/categories/upsertCategory.js
+Inicial: A5F52B56E7E719177CF4B7B5846EE63BAA3A707369836F7117435AA33CCC3D0D
+Final:   A5F52B56E7E719177CF4B7B5846EE63BAA3A707369836F7117435AA33CCC3D0D
+
+functions/categories/categoryHierarchyContract.js
+Inicial: DB22354A38C7797F6B899B402C20D1C430436706761A29A51542F36828552A87
+Final:   DB22354A38C7797F6B899B402C20D1C430436706761A29A51542F36828552A87
+
+functions/products/createProduct.js
+Inicial: 756422F0681F82A851BD18BEAAE6742A2B39C96810DEF143B60D30B719E8C556
+Final:   756422F0681F82A851BD18BEAAE6742A2B39C96810DEF143B60D30B719E8C556
+
+functions/products/createProductContract.js
+Inicial: C0EA253AD4EE6AF47CF7316B356AB1980834AF56D3EE04251646BC6645EEE872
+Final:   C0EA253AD4EE6AF47CF7316B356AB1980834AF56D3EE04251646BC6645EEE872
+
+functions/products/productCategoryContract.js
+Inicial: C5DFEE1E5ACC63D18F28C976E011D3DDD2EF8163E3B1F8BC9B0384E7CB522470
+Final:   C5DFEE1E5ACC63D18F28C976E011D3DDD2EF8163E3B1F8BC9B0384E7CB522470
+
+functions/products/setProductCategories.js
+Inicial: 38D3187D25A6C974C5C7D84AC9E0A046257F0939D82CA4C950480009032482CF
+Final:   38D3187D25A6C974C5C7D84AC9E0A046257F0939D82CA4C950480009032482CF
+
+functions/tests/categories/categoryHierarchyContract.test.js
+Inicial: 47964474C203CFAD8FE47F99B58E3621BA03367D50240FE971BE8BD7099A0236
+Final:   47964474C203CFAD8FE47F99B58E3621BA03367D50240FE971BE8BD7099A0236
+
+functions/tests/categories/upsertCategory.emulator.test.js
+Inicial: FD7B7753028E233C4D08098190EC22BB181EC5D7CA4196125CB37EF9D9BC2753
+Final:   FD7B7753028E233C4D08098190EC22BB181EC5D7CA4196125CB37EF9D9BC2753
+
+functions/tests/products/createProductContract.test.js
+Inicial: D155C70B404675CB152F98934DA4A9EB018E2266D93EB06005FBFE92C28413AA
+Final:   D155C70B404675CB152F98934DA4A9EB018E2266D93EB06005FBFE92C28413AA
+
+functions/tests/products/createProduct.emulator.test.js
+Inicial: 99224B4945956AB87E0A4A7C415FC34DD40049B446CFED426DE0D161807021EA
+Final:   99224B4945956AB87E0A4A7C415FC34DD40049B446CFED426DE0D161807021EA
+
+functions/tests/products/productCategoryContract.test.js
+Inicial: 65BDFEA7B3A4C14AC46CCF7F9EE8796668F8C7A32E08D217B8FC9CC9BD6B6AC4
+Final:   65BDFEA7B3A4C14AC46CCF7F9EE8796668F8C7A32E08D217B8FC9CC9BD6B6AC4
+
+ESTADO / ESCOPO FINAL
+Comparação do inventário: nenhum arquivo preexistente alterado; antes do relatório nenhum arquivo novo.
+Única escrita intencional: test/T6-A4-A0_import_hierarchy_regression_audit.txt.
+Nenhum código, teste, Rules, Flutter ou configuração alterado.
+Nenhum Emulator, produção, migração, cleanup, commit/push/deploy, stash/checkout/reset/restore/clean.
+T6-A4-A1 não implementado; apenas auditoria T6-A4-A0.
+
+GIT STATUS --SHORT INICIAL
+ M android/app/build.gradle.kts
+ M firestore.rules
+ M functions/categories/deleteCategory.js
+ M functions/index.js
+ M functions/products/createProduct.js
+ M functions/products/setProductCategories.js
+ M functions/tests/categories/deleteCategory.emulator.test.js
+ M functions/tests/products/createProduct.emulator.test.js
+ M functions/tests/products/setProductCategories.emulator.test.js
+ M functions/tests/security/firestoreTaxonomyRules.test.mjs
+ M lib/models/product_import_item.dart
+ M lib/screens/management/category_management_screen.dart
+ M lib/screens/management/manage_products_screen.dart
+ M lib/screens/management/product_import_confirmation_screen.dart
+ M lib/screens/management/product_import_mapping_screen.dart
+ M lib/screens/management/product_import_validation_screen.dart
+ M lib/screens/sales/new_sale_screen.dart
+ M lib/screens/subscription_screen.dart
+ M lib/services/product_import_service.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? docs/Integracao/
+?? functions/categories/categoryHierarchyContract.js
+?? functions/categories/upsertCategory.js
+?? functions/tests/categories/categoryHierarchyContract.test.js
+?? functions/tests/categories/upsertCategory.emulator.test.js
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+?? test/F7.9-C0_relatorio.txt
+?? test/F7.9-C1_relatorio.txt
+?? test/F7.9-D0_relatorio.txt
+?? test/F7.9-D1_relatorio.txt
+?? test/F7.9-F1_relatorio.txt
+?? test/T6-A0_rules_hierarchy_audit.txt
+?? test/T6-A1_rules_boundary_relatorio.txt
+?? test/T6-A2-A0_product_update_authorization_audit.txt
+?? test/T6-A2-A1_product_update_authorization_relatorio.txt
+?? test/T6-A3-A0_product_category_tree_audit.txt
+?? test/T6-A3-A1_stored_parent_contract_relatorio.txt
+?? test/T6-A3-A2_createProduct_category_tree_relatorio.txt
+?? test/T6-A3-A3_setProductCategories_category_tree_relatorio.txt
+?? test/T6-A3-A4_hierarchy_combined_regression_relatorio.txt
+
+GIT STATUS --SHORT FINAL
+ M android/app/build.gradle.kts
+ M firestore.rules
+ M functions/categories/deleteCategory.js
+ M functions/index.js
+ M functions/products/createProduct.js
+ M functions/products/setProductCategories.js
+ M functions/tests/categories/deleteCategory.emulator.test.js
+ M functions/tests/products/createProduct.emulator.test.js
+ M functions/tests/products/setProductCategories.emulator.test.js
+ M functions/tests/security/firestoreTaxonomyRules.test.mjs
+ M lib/models/product_import_item.dart
+ M lib/screens/management/category_management_screen.dart
+ M lib/screens/management/manage_products_screen.dart
+ M lib/screens/management/product_import_confirmation_screen.dart
+ M lib/screens/management/product_import_mapping_screen.dart
+ M lib/screens/management/product_import_validation_screen.dart
+ M lib/screens/sales/new_sale_screen.dart
+ M lib/screens/subscription_screen.dart
+ M lib/services/product_import_service.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? docs/Integracao/
+?? functions/categories/categoryHierarchyContract.js
+?? functions/categories/upsertCategory.js
+?? functions/tests/categories/categoryHierarchyContract.test.js
+?? functions/tests/categories/upsertCategory.emulator.test.js
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-RULES-B1-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+?? test/F7.8-D1-A0_relatorio.txt
+?? test/F7.8-D1-B1_relatorio.txt
+?? test/F7.8-D2-B1_relatorio.txt
+?? test/F7.8-E0_relatorio.txt
+?? test/F7.8-E1-SECRET-B1_relatorio.txt
+?? test/F7.9-A0_relatorio.txt
+?? test/F7.9-B0_relatorio.txt
+?? test/F7.9-B1_relatorio.txt
+?? test/F7.9-C0_relatorio.txt
+?? test/F7.9-C1_relatorio.txt
+?? test/F7.9-D0_relatorio.txt
+?? test/F7.9-D1_relatorio.txt
+?? test/F7.9-F1_relatorio.txt
+?? test/T6-A0_rules_hierarchy_audit.txt
+?? test/T6-A1_rules_boundary_relatorio.txt
+?? test/T6-A2-A0_product_update_authorization_audit.txt
+?? test/T6-A2-A1_product_update_authorization_relatorio.txt
+?? test/T6-A3-A0_product_category_tree_audit.txt
+?? test/T6-A3-A1_stored_parent_contract_relatorio.txt
+?? test/T6-A3-A2_createProduct_category_tree_relatorio.txt
+?? test/T6-A3-A3_setProductCategories_category_tree_relatorio.txt
+?? test/T6-A3-A4_hierarchy_combined_regression_relatorio.txt
+?? test/T6-A4-A0_import_hierarchy_regression_audit.txt
+Branch/HEAD preservados; stage vazio.
