@@ -1,0 +1,342 @@
+F7-CAT-TAXONOMIA-GLOBAL-A0 — AUDITORIA E REGRESSÃO GLOBAL
+Data: 2026-09-17
+Modo: somente leitura de código/configuração/histórico; única edição intencional: este relatório UTF-8 sem BOM, UNTRACKED.
+
+1. PRÉ-CONDIÇÕES E ESTADO
+Branch inicial/final: feat/f7-intelligent-catalog
+HEAD inicial/final: ec7e66d1d0ff6c00f7d644c49ab94a6a4351f75b
+Staging: vazio.
+Tracked modificados: somente os quatro arquivos paralelos listados abaixo.
+Taxonomia: nenhuma alteração não commitada.
+Untracked: somente test/*.txt.
+Nenhum código, teste, Rule, Function, formatter, line ending ou relatório anterior alterado.
+
+SHA256 INICIAL = FINAL DOS PROTEGIDOS
+android/app/build.gradle.kts
+F1F1177AA182FE49667CDF1FD193D7D1E6DD8C71A6255A01C06FE65C82A8759B
+lib/screens/subscription_screen.dart
+61FFBB2E547E61E2B50BD458C2AB0EA06D58C8922CC20EB528EF8025CCF3FA62
+lib/widgets/warning_banner.dart
+BFA479F243DED27C184503ADB5A13FF72DAFF16DB040C0958889488BCAD0422D
+pubspec.yaml
+60BF48C598E2394AA9F7C6942D5884AA393B1604AD001092A70C40707BD9A502
+
+2. HISTÓRICO VALIDADO
+Nove commits recentes consecutivos, do HEAD para os ancestrais:
+ec7e66d feat(catalog): tratar falhas parciais na importacao
+de8be52 feat(catalog): preservar contexto de falha na importacao
+0afea45 feat(catalog): migrar importacao de produtos para backend
+d2811ee feat(catalog): migrar exclusao de categorias para backend
+13df159 feat(catalog): exportar exclusao segura de categorias
+a250201 feat(catalog): adicionar exclusao segura de categorias
+9b8ea4a feat(catalog): adicionar contrato de exclusao de categoria
+8bcfe30 feat(catalog): migrar taxonomia da edicao para backend
+beb72b0 feat(catalog): migrar criacao manual para backend
+Histórico apenas consultado; nenhum reset, amend, cherry-pick ou commit.
+
+3. NODE / BACKEND — SUÍTES EXISTENTES
+functions/package.json inspecionado antes dos comandos.
+Scripts npm existentes: serve, shell, start, deploy, logs, test:retention, test:catalog.
+Não existe script npm específico de products/categories; foram usados os runners
+já presentes nos próprios arquivos .test.js. Nenhum teste novo ou alterado.
+Todos os comandos abaixo executados a partir de functions.
+
+Suíte | total | passed | failed | skipped | exit
+productCategoryContract | 50 | 50 | 0 | 0 | 0
+createProductContract | 81 | 81 | 0 | 0 | 0
+deleteCategoryContract | 28 | 28 | 0 | 0 | 0
+setProductCategories.emulator | 24 | 24 | 0 | 0 | 0
+createProduct.emulator | 29 | 29 | 0 | 0 | 0
+deleteCategory.emulator | 26 | 26 | 0 | 0 | 0
+TOTAL CONTRATOS/BACKEND: 238 passed, 0 failed, 0 skipped.
+Os runners customizados informam passed/failed e não têm mecanismo de skip;
+nenhum caso foi omitido. deleteCategoryContract usa node:test e informou skipped 0.
+
+Comandos reais:
+node tests/products/productCategoryContract.test.js
+node tests/products/createProductContract.test.js
+node tests/categories/deleteCategoryContract.test.js
+firebase emulators:exec --config ../firebase.json --project demo-taxonomy-backend --only firestore "node tests/products/setProductCategories.emulator.test.js"
+firebase emulators:exec --config ../firebase.json --project demo-taxonomy-create-backend --only firestore "node tests/products/createProduct.emulator.test.js"
+firebase emulators:exec --config ../firebase.json --project demo-taxonomy-delete-backend --only firestore "node tests/categories/deleteCategory.emulator.test.js"
+
+Emulator: configuração existente ../firebase.json, Firestore porta 8080.
+Projetos demo; os testes recusam FIRESTORE_EMULATOR_HOST remoto/ausente.
+Em cada processo PowerShell de Emulator foi ajustado somente o ambiente da sessão:
+$env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-21.0.6.7-hotspot'
+$env:Path = $env:JAVA_HOME + '\bin;' + $env:Path
+Nenhuma alteração permanente do Java. Emulators encerrados pelos runners.
+Nenhum teste necessitou CATALOG_TOKEN_ENCRYPTION_KEY.
+
+Ocorrência de ambiente, preservada neste registro:
+A primeira tentativa de setProductCategories dentro do sandbox saiu com código 1,
+antes de executar testes (0 executados), com:
+"Unable to fetch the CLI MOTD and remote config"
+"Could not spawn `java -version`. Please make sure Java is installed and on your system PATH."
+"firebase-tools update check failed"
+Foi repetido o MESMO comando fora do sandbox com autorização; passou 24/24.
+As demais execuções de Emulator usaram o ambiente autorizado. Nenhuma suíte ficou
+impedida ou foi substituída por alegação de sucesso.
+Logs descartáveis do Emulator/CLI são gerados automaticamente em arquivos ignorados;
+nenhum tracked novo/modificado por isso nem untracked fora de test/*.txt.
+
+Cobertura observada:
+- categoryIds válido/inválido, limite, duplicatas, ordem, ausência e projeção legada;
+- autorização, isolamento de loja, resolução de categorias e campos fiscais;
+- controle otimista e idempotência de setProductCategories;
+- replay e concorrência de createProduct;
+- exclusão de categoria usada por produto ativo/arquivado, referência canônica/legada,
+  audit e corridas com createProduct/setProductCategories.
+
+4. REGRESSÃO EXTRA EXISTENTE DE RULES
+Executada para sustentar a avaliação de prontidão; nenhum teste inventado.
+Comando (cwd functions, mesmo JDK 21 de sessão):
+firebase emulators:exec --config ../firebase.json --project demo-taxonomy-rules --only firestore "node --test tests/security/firestoreTaxonomyRules.test.mjs"
+Resultado: 26 testes, 26 passed, 0 failed, 0 skipped, 0 cancelled, exit 0.
+Total geral Node executado com sucesso: 264 testes.
+Mensagens PERMISSION_DENIED do SDK são esperadas nos assertFails; não são falhas da suíte.
+Suite carrega firestore.rules atual com @firebase/rules-unit-testing.
+Cobre escrita taxonômica proibida, operacional permitida, delete de categoria
+proibido inclusive admin/gerente, criação/rename permitidos, isolamento e anonimato.
+AuditLogs e o blocker de assinatura abaixo foram avaliados estaticamente; não há
+alegação de teste dinâmico desses dois pontos nesta suíte.
+
+5. FLUTTER ANALYZE — EXECUÇÕES INDIVIDUAIS
+Comandos executados na raiz, SDK fora do sandbox; nenhum arquivo corrigido.
+
+flutter analyze lib/screens/management/manage_products_screen.dart
+Exit 1; 0 errors, 0 warnings, 21 infos do arquivo atual commitado, sem diff.
+Baseline observado, mantido integralmente:
+61:8 unnecessary_import (dart:typed_data)
+560:8 avoid_types_as_parameter_names (sum)
+799:10 avoid_types_as_parameter_names (sum)
+1201:39 deprecated_member_use (withOpacity)
+1396:52 deprecated_member_use (withOpacity)
+1626:25 curly_braces_in_flow_control_structures
+1653:25 curly_braces_in_flow_control_structures
+1680:25 curly_braces_in_flow_control_structures
+1770:43 deprecated_member_use (withOpacity)
+1772:62 deprecated_member_use (withOpacity)
+2051:41 unnecessary_underscores
+2811:28 deprecated_member_use (MaterialStateProperty)
+2847:22 deprecated_member_use (MaterialStateProperty)
+2848:21 deprecated_member_use (MaterialState)
+2851:37 deprecated_member_use (withOpacity)
+3050:36 deprecated_member_use (withOpacity)
+3183:27 deprecated_member_use (withOpacity)
+3227:31 deprecated_member_use (withOpacity)
+3229:26 deprecated_member_use (withOpacity)
+3230:26 deprecated_member_use (withOpacity)
+3237:34 deprecated_member_use (withOpacity)
+São diagnostics observados no HEAD atual, não uma comparação alegada com commits antigos.
+
+flutter analyze lib/screens/management/category_management_screen.dart
+Exit 0; No issues found!; 0 errors, 0 warnings, 0 infos.
+
+flutter analyze lib/services/product_import_service.dart
+Exit 0; No issues found!; 0 errors, 0 warnings, 0 infos.
+
+flutter analyze lib/screens/management/product_import_confirmation_screen.dart
+Exit 1; 0 errors, 0 warnings, exatamente 3 infos; baseline conhecido respeitado:
+746:24 deprecated_member_use / withOpacity
+864:15 deprecated_member_use / withOpacity
+871:17 deprecated_member_use / withOpacity
+Mensagem de cada um: 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss
+0 novos diagnostics em relação ao baseline aprovado C2-R1.
+Não houve formatter, supressão nem alteração de withOpacity.
+
+6. INVENTÁRIO GLOBAL DE WRITERS EM lib/
+Pesquisa com rg em todos os .dart, incluindo variantes multiline, aspas simples/
+duplas, referências e operações .add(, .set(, .update(, .delete(, WriteBatch,
+batch.set, batch.update, batch.delete, collection('products') e collection('categories').
+A varredura ampla adicional examinou 78 arquivos Dart. Matches de List/Set/Map,
+DateTime e dados locais foram separados de writes Firestore.
+
+A. CRIAÇÃO MANUAL — OK
+lib/screens/management/manage_products_screen.dart::_saveProduct (639)
+934-942: callable createProduct com requestId, product e categoryIds.
+productData comercial não é usado para create direto. _clientRequestIds.doc().id
+(916) gera apenas ID local, sem escrita nessa coleção.
+
+B. EDIÇÃO MANUAL — OK
+Mesmo método: 706-716 usa setProductCategories quando intenção taxonômica mudou,
+com expectedTaxonomy capturado preservando presença/ausência das chaves.
+productData (807 em diante) tem name, name_lowercase, price, lotes, quantidade,
+minimumStock, imageUrl e opcional fiscal. Não inclui categoryIds/categoryId/categoryName.
+878-880: update direto deste mapa no produto; é update comercial, não taxonômico.
+Leitura canônica em 407-459: categoryIds presente prevalece; vazio não faz fallback;
+ausência usa legado. Arrays múltiplos ou inválidos travam editor singular.
+
+C. IMPORTAÇÃO — OK
+lib/services/product_import_service.dart::analyze: productsRef.get e categoriesRef.get,
+sem escrita. importProducts (396): único batch.set (483) recebe referência originada
+em stores/{storeId}/categories (414-459). Chunk de 400; commit 534; contagem após commit 535.
+545-655: createProduct sequencial, timeout 30s, requestId estável via putIfAbsent (637),
+product e categoryIds. Não existe add/set/batch.set direto criando produto no importador.
+687: importedProducts só após success/productId válido. Exceção parcial preserva
+contagens, causa Object e stack. UI mantém mesma instância do service, mensagens seguras,
+diálogo parcial, retry e finally; nenhum writer próprio na confirmação.
+
+D. ESTOQUE / VENDA / FIADO — OK PARA TAXONOMIA
+lib/widgets/payment_options_sheet.dart::_handleInstantSale (259):
+productRef é obtido em stores/{storeId}/products e depois por snapshot.reference.
+364: transaction.update apenas quantidade; 414: apenas quantidade e lotes.
+424: transaction.set é sales, não products. 540: leitura para validação offline.
+lib/widgets/confirm_fiado_dialog.dart::_submitFiadoSale (158):
+272-280: batch.update(productRef) apenas quantidade com FieldValue.increment.
+228: batch.set é saleDocRef, não produto.
+lib/providers/sales_provider.dart: add/set/update em sales e cash_flow; snapshot.reference
+em 448 vem de venda, não produto. products nos mapas é snapshot de itens da venda.
+Nenhum desses writers persiste campos taxonômicos de produto.
+
+E. ARCHIVE / RESTORE — OK PARA TAXONOMIA
+manage_products_screen.dart::_archiveProduct (2487, callable em 2539).
+archived_products_screen.dart::_restoreProduct (141, callable em 292).
+Flutter não grava estado de arquivamento/taxonomia diretamente.
+functions/products/archiveProduct.js:226 atualiza isArchived, archivedAt, archivedBy.
+functions/products/restoreProduct.js:343 atualiza somente isArchived false.
+categoryId/categoryName nesses módulos aparecem em snapshots de audit, não em
+update de taxonomia do produto. Ambos usam Admin SDK, não cliente sujeito às Rules.
+
+F. OFFLINE / ADMIN — CLASSIFICAÇÃO SEPARADA
+lib/data/local/offline_sales_repository.dart e app_database.dart/.g.dart usam
+Drift/SQLite: fila/snapshots/reservas locais, não writes Firestore products/categories.
+lib/services/offline_sales_sync_service.dart::_syncOneSale (144-156) chama syncOfflineSale;
+_refreshProductStocksFromServer (230-246) faz get, sem set/update.
+functions/sales/syncOfflineSale.js:1022/1053 usa Admin SDK e altera só quantidade/lotes.
+Admin SDK é executado no backend com autorização própria e não é writer Flutter
+sob Firestore Security Rules. Testes também usam fixtures Admin exclusivamente locais.
+createProduct/setProductCategories/deleteCategory são writers backend autorizados;
+seus writes de audit não indicam bypass pelo Flutter. Snapshots de backup leem
+products/categories no backend e não são writers Flutter dessas coleções.
+
+G. CATEGORIAS — CRIAÇÃO/RENAME/IMAGE INTENCIONAIS
+category_management_screen.dart::_saveCategory (219):
+314 update categoryData = name/imageUrl, referência de categories;
+328 add com name/imageUrl/createdAt para criação direta intencional.
+352 delete é FirebaseStorage.refFromURL(oldImageUrl), não delete de categoria Firestore.
+_deleteCategory (673): 718 callable deleteCategory, valida success/deleted/categoryId.
+Não existe delete direto de documento categories nesta tela migrada.
+Importador continua criando categorias diretamente, conforme contrato deliberado.
+Rename/image não propagam taxonomia para produtos e não foram migrados nesta etapa.
+
+H. LEITORES E FALSOS POSITIVOS
+Leituras de products/categories: dashboard_screen; new_sale_screen; cart_item_widget;
+expiring_products_screen; low_stock_report_screen; business_insights_service;
+streams de manage_products/category_management/archived_products; analyze do importador;
+refresh de offline_sales_sync_service. Sem writes dessas coleções nesses usos.
+public_catalog_screen mantém listas locais e usa callables, sem writer privado de produto.
+product_import_screen/mapping/validation manipulam listas/validação; .add é em memória.
+cart_provider, relatórios, pdf_receipt_service e agregações: Map/List/Set/DateTime, não
+writes products/categories. Models serializam snapshots, não persistem por conta própria.
+settings_screen .delete em 1720/1730 é Storage (QR code); seus .set/.update são stores.
+profile/auth/employees/finance/customer/cash_flow e app_drawer têm outros caminhos;
+não foram classificados erroneamente como writers de produto por conter texto products.
+
+7. CONTRATOS CANÔNICOS — OK
+functions/products/productCategoryContract.js:
+validateCategoryIds (4): exige array, máximo 10, ID string não vazio/sem whitespace
+externo/slash, rejeita duplicata. Retorna slice na ordem original, sem dedupe/sort silencioso.
+projectLegacyCategories (47-67): resolve TODAS as categorias; [] resulta em
+categoryIds: [], categoryId: null, categoryName: null; primeiro ID projeta legado
+com nome canônico, sem normalizar silenciosamente o nome.
+captureTaxonomyState (29): usa hasOwnProperty; ausência, null e [] são distintos.
+createProductContract.js:453/470 exige categoryIds explícito e reutiliza validateCategoryIds.
+createProduct.js:561 projeta com contrato; transação lê categorias da loja do perfil,
+670 persiste produto e 675 audit/receipt. Ordem de array preservada no hash; sort interno
+em canonicalize ordena apenas chaves de objeto, não categoryIds.
+setProductCategories.js:254 valida, 487 projeta, 503/541 captura estados, 515/546 compara
+com isDeepStrictEqual, 587 escreve somente os três campos taxonômicos.
+Nada corrige silenciosamente ausência, arrays inválidos ou concorrência obsoleta.
+A ordenação de newCategories no analyze do importador é de nomes descobertos para
+criação de categorias; não reordena o array canônico de um produto.
+
+8. RULES — TAXONOMIA COMPATÍVEL; PUBLICAÇÃO GLOBAL BLOCKED
+firebase.json continua configurando firestore.rules como fonte local.
+firestore.rules:196-211 nega create com qualquer chave taxonômica, inclusive null/[].
+213-230 nega update que adicione/altere/remova categoryIds/categoryId/categoryName
+via diff.affectedKeys. Update sem alterar taxonomia continua permitido.
+291-309: criação/update de categoria na própria loja permitidos; delete false.
+167-177: auditLogs backend-only para create/update/delete.
+379-431: catch-all exclui explicitamente products/categories/auditLogs, sem autorização
+alternativa que anule essas restrições.
+Nenhuma Rules publicada e nenhum estado remoto consultado.
+
+ANTIGO BLOCKER DO IMPORTADOR: NÃO.
+O importador não precisa mais criar produto/taxonomia diretamente no Firestore.
+Prova: única batch.set aponta para categories; produto segue createProduct (545-655).
+A criação direta de categoria continua permitida nas Rules e passou no teste existente.
+Não foi identificado writer residual Flutter de taxonomia de produto ou delete direto
+de categoria entre os caminhos migrados e referências equivalentes em lib/.
+
+OUTRO BLOCKER CONCRETO DE PUBLICAÇÃO GLOBAL — B1
+lib/screens/subscription_screen.dart::_startSubscriptionProcess (184).
+Quando storeData.document é vazio (206), a tela pede CPF/CNPJ e executa em 222:
+.update({'document': document}) sobre stores/{storeId}, ANTES de createAsaasSubscription.
+firestore.rules:69-78 bloqueia qualquer alteração de document em stores/{storeId}.
+Logo, esse fallback de loja legada não conclui sob as Rules locais atuais.
+Evidência estática, não executada contra dados reais nem coberta pela suíte taxonômica.
+O mesmo trecho existe em git show HEAD:lib/screens/subscription_screen.dart; não é
+introduzido pela alteração paralela nem pela migração de taxonomia.
+Rota efetiva: auth_gate.dart:91 importa screens/subscription_screen.dart e o instancia
+em 287/371; botão da tela usa _startSubscriptionProcess em 375.
+Existe outra classe homônima em screens/subscription/subscription_screen.dart com
+comentário e fluxo sem write de document, mas ela NÃO é o import usado pelo AuthGate.
+Nenhum arquivo foi alterado para resolver B1, especialmente o arquivo paralelo protegido.
+O blocker é externo à taxonomia, mas impede declarar a publicação GLOBAL das Rules
+segura sem resolver essa incompatibilidade. Não propõe enfraquecer a Rule.
+
+9. EXPORTS DAS FUNCTIONS — OK
+functions/index.js:2335 exports.setProductCategories, require ./products/setProductCategories.
+functions/index.js:2346 exports.createProduct, require ./products/createProduct.
+functions/index.js:2357 exports.deleteCategory, require ./categories/deleteCategory.
+Exports existentes e módulos carregados pelas suítes locais. Nenhum deploy realizado.
+
+10. GIT / DIFF E LIMITES DA AUDITORIA
+Comando executado: git diff --check (via git --no-pager diff --check).
+Exit 0. Avisos Git sobre futura conversão LF->CRLF nos arquivos paralelos
+subscription_screen.dart e warning_banner.dart não são erros de whitespace;
+nenhuma conversão foi aplicada e os hashes permanecem idênticos.
+Apenas os quatro paralelos continuam tracked modificados; taxonomia commitada no HEAD.
+Nada staged. Relatórios anteriores preservados. Este relatório permanece untracked.
+Não houve teste manual em dispositivo, validação de Functions publicadas ou produção.
+READY abaixo significa prontidão local do escopo auditado, não autorização de deploy.
+
+11. READINESS / CONCLUSÃO
+BACKEND FUNCTIONS (taxonomia): READY — contratos, transações, exports e 238 testes OK.
+FIRESTORE RULES (publicação global): BLOCKED — B1, fallback ativo de document na assinatura.
+FLUTTER WRITERS (compatibilidade global): BLOCKED — B1; writers de taxonomia em si READY.
+IMPORTADOR: READY — antigo blocker removido, produto backend, categoria direta permitida,
+erro parcial/retry preservados e baseline de analyze respeitado.
+
+Regressão solicitada concluída sem falhas finais de testes. Há blocker estático
+preexistente fora da taxonomia; portanto não se declara prontidão global de publicação.
+Nenhuma correção efetuada. Próxima decisão cabe a uma etapa própria para B1.
+
+STATUS FINAL DO GIT
+ M android/app/build.gradle.kts
+ M lib/screens/subscription_screen.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+
+GIT ADD: NAO
+COMMIT: NAO
+PUSH: NAO
+DEPLOY: NAO

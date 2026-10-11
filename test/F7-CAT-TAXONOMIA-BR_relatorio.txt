@@ -1,0 +1,295 @@
+STORE&CONNECT — F7-CAT-TAXONOMIA-BR
+Auditoria focada de Firestore Rules e autoridade de escrita
+Data: 16/09/2026
+Escopo: leitura estática e desenho; nenhuma implementação.
+
+Conclusão: a fonte oficial das Firestore Rules não foi localizada. O repositório não permite identificar as regras efetivamente publicadas. É viável concentrar a autoridade taxonômica no backend sem transferir todo o CRUD operacional. Essa arquitetura exige bloquear escritas diretas nos três campos taxonômicos e coordenar associação/exclusão por transações. A integridade ainda não pode ser atestada em produção.
+
+A. ESTADO GIT
+
+Validação inicial e nova conferência durante a auditoria:
+- Branch: feat/f7-intelligent-catalog.
+- HEAD: 9b70da5.
+- git status --short: sem saída; working tree limpa.
+- Nenhuma divergência em relação ao estado exigido.
+
+Foram consultados AGENTS.md, CURRENT_WORK.md, a proposta CATALOGO_TAXONOMIA_COLECOES_DINAMICAS.md, o relatório B e os pontos necessários do código. As decisões humanas fornecidas no prompt prevalecem sobre propostas anteriores. Não foi repetida a auditoria geral A/B.
+
+B. FONTE DAS RULES
+
+1. Não foi encontrada fonte versionada das Firestore Rules na árvore atual nem nos caminhos pesquisados do histórico Git local disponível. A busca por arquivos .rules encontrou storage.rules; esse arquivo protege Storage, não Firestore.
+2. Não foi encontrada referência verificável a um arquivo oficial externo ou a outro repositório responsável por essas regras.
+3. firebase.json aponta somente storage.rules. A configuração do Emulator Firestore informa porta, mas não fornece fonte de regras Firestore. Não aponta firestore.rules nem firestore.indexes.json.
+4. functions/package.json tem deploy limitado a functions. Não foi localizado script ou configuração CI/CD para publicar Firestore Rules. O package.json da raiz não fornece esse fluxo.
+5. README.md:61/244 afirma que há regras endurecidas. CURRENT_WORK.md:205 registra que o repositório não fornece regras Firestore. Comentários do Flutter também pressupõem proteção. Essas afirmações não identificam o conteúdo publicado nem provam manutenção exclusivamente no Console.
+6. Não é possível determinar a versão publicada a partir do repositório. .firebaserc identifica store-connect-app, mas não uma versão de Rules.
+
+Não houve acesso ao Console, APIs do projeto ou produção. Histórico remoto não foi buscado. Backups de dados e logs de deploy de funções não constituem fonte oficial das Rules. Ausência local não significa ausência de proteção remota.
+
+C. ESCRITAS DIRETAS ATUAIS
+
+Todos os caminhos abaixo são relativos a stores/{storeId}. “Validar storeId” exige distinguir presença/existência de autorização de vínculo. Usar o storeId recebido pela tela não comprova que o usuário pertence à loja.
+
+PRODUTOS — products/{productId}
+
+1. Criação manual:
+lib/screens/management/manage_products_screen.dart:554–722.
+_saveProduct valida formulário e storeId não vazio; monta o documento e usa collection.add(productData). Não usa callable nem transação. Inclui categoryId/categoryName, preço, estoque, lotes, imagem e, em Business, fiscal. Não há nessa escrita verificação confiável de vínculo UID/loja. Segurança depende das Rules.
+
+2. Edição manual, preço, quantidade, lotes, imagem, fiscal e categoria:
+mesmo arquivo, mapa a partir de :638 e update em :713.
+Usa doc.update(productData), sem transação e sem callable de persistência. O mapa inclui categoryId/categoryName mesmo quando a intenção principal é editar outro campo. A atualização é parcial no documento, mas o mapa fiscal, quando enviado, é substituído como campo. A validação de storeId é de presença, não de pertencimento. Depende das Rules.
+
+3. Imagem de produto:
+o formulário envia arquivo ao Storage e persiste imageUrl no add/update acima. O upload não é uma escrita de produto em Firestore e tem sua própria proteção de Storage. Não há callable intermediando a gravação de imageUrl. Não é transação conjunta entre Storage e Firestore.
+
+4. Importação:
+lib/services/product_import_service.dart:371–640.
+Recebe storeId, relê dados para análise e prepara IDs novos. Usa WriteBatch.set para novas categorias (:481) e novos produtos (:616), em blocos de até 400 operações. Não usa transação nem callable; o batch não transforma a análise anterior em uma validação protegida contra concorrência. Não foi identificada validação de autorização UID/loja no serviço. Depende das Rules. Não sobrescreve produtos existentes por esses set: são referências novas, mas ainda escreve taxonomia singular.
+
+5. Baixa de estoque em venda imediata:
+lib/widgets/payment_options_sheet.dart:260–414.
+Usa runTransaction, lê produtos e transaction.update de quantidade; quando há lotes, atualiza quantidade e lotes. Sem callable para essa baixa. Usa widget.storeId e verifica existência/assinatura da loja; isso não comprova pertencimento. Depende das Rules.
+
+6. Baixa de estoque em fiado:
+lib/widgets/confirm_fiado_dialog.dart:158–275.
+Usa batch.update com incremento negativo de quantidade. É batch, não transação de leitura/validação do produto. Lê loja/assinatura no servidor; não equivale a autorização de loja. Depende das Rules. Não altera taxonomia.
+
+7. Arquivamento/restauração:
+não são CRUD direto do Flutter: chamam archiveProduct/restoreProduct. O backend altera campos parciais e aplica autorização própria, descrita abaixo.
+
+CATEGORIAS — categories/{categoryId}
+
+8. Criação:
+lib/screens/management/category_management_screen.dart:218–327.
+Valida formulário/storeId não vazio; add de name, imageUrl e createdAt. Sem callable/transação. Não valida pertencimento de forma confiável; depende das Rules.
+
+9. Edição/renomeação e imagem:
+mesmo arquivo:293–351.
+update de name/imageUrl, sem callable/transação. Upload da imagem e remoção da imagem antiga são operações Storage separadas. O delete em :351 é da imagem antiga no Storage, não do documento Firestore. Depende das proteções dos respectivos serviços.
+
+10. Exclusão:
+mesmo arquivo:606 e :714–720.
+doc.delete direto, sem callable/transação e sem consulta de produtos associados. O botão é condicionado a admin/gerente na UI. Não há proteção de vínculo ou de categoria em uso comprovada nessa operação; a autorização efetiva depende das Rules.
+
+11. Criação pela importação:
+batch.set do serviço citado no item 4; mesmas limitações.
+
+Os consumidores consultados que apenas leem produtos, incluindo atualização do cache após sincronização offline, não foram classificados como escritores Firestore.
+
+D. AUTORIZAÇÕES BACKEND ATUAIS
+
+archiveProduct — functions/products/archiveProduct.js:99–258
+- Obtém UID de request.auth.uid; exige autenticação.
+- Recebe storeId/productId; lê users/{uid} e stores/{storeId}.
+- Rejeita perfil ausente, loja ausente, accessStatus == revoked, papel diferente de admin e user.storeId diferente da loja solicitada.
+- Não aplica verificação de subscriptionStatus nessa operação.
+- Perfil/loja são lidos antes da transação. Produto e audit log são tratados na transação.
+- Usa transaction.update de isArchived/archivedAt/archivedBy e transaction.set de auditLogs. Produto já arquivado retorna sem repetir a alteração.
+
+restoreProduct — functions/products/restoreProduct.js:146–380
+- Mesmo núcleo: autenticação, perfil, admin, não revogado, igualdade entre loja do perfil e loja solicitada.
+- Sem teste de assinatura.
+- Produto é atualizado parcialmente com isArchived:false; não é recriado.
+- Audit log before/after na mesma transação. Campos anteriores de arquivamento não são removidos por uma substituição integral.
+
+createCatalog/listCatalogs — functions/catalog/createCatalog.js:344, :437 e :711
+- UID autenticado; users/{uid}; bloqueio de revoked.
+- Papéis reconhecidos: admin, gerente e operador; caixa/vendedor normalizados para operador; desconhecido rejeitado.
+- storeId deriva do perfil no servidor, não de uma escolha confiada ao navegador.
+- createCatalog exige loja existente e assinatura active/trial/overdue; valida produtos no caminho dessa loja.
+- A criação de catálogo usa batch para os documentos do catálogo; não escreve os produtos. Há transação específica na lógica auxiliar de slug.
+- listCatalogs usa a loja do perfil e verifica sua existência, sem aplicar a mesma barreira de assinatura da criação.
+- A permissão para criar catálogo não demonstra permissão para gerenciar produtos/categorias.
+
+Bootstrap e perfil:
+functions/auth/bootstrapStore.js:200–358 cria a loja e vincula o usuário em transação, com role admin/accessStatus active e storeId definido pelo servidor.
+lib/providers/user_role_provider.dart acompanha users/{uid}; limpa o contexto quando revoked e normaliza papéis para UI. Seu fallback de papel desconhecido para operador não deve ser copiado como autorização backend.
+A segurança desse modelo depende também de proteger users/{uid}.role/storeId/accessStatus contra elevação pelo próprio cliente. Sem Rules, essa proteção não é comprovável.
+
+Outra escrita relacionada:
+functions/sales/syncOfflineSale.js:714–1053 autoriza pelo ownerId da loja igual ao UID e verifica assinatura dentro da transação. Atualiza somente quantidade/lotes do produto. É uma política diferente da autorização por papel dos catálogos; não deve ser generalizada para taxonomia.
+
+Não há evidência de um único helper universal que defina a política de todos esses fluxos. Recomenda-se reaproveitar o padrão de identidade/perfil/loja, não presumir permissões iguais.
+
+E. RISCO DE WRITERS ANTIGOS
+
+O editor atual preservaria categoryIds por usar update parcial, mas poderia alterar categoryId/categoryName sem atualizar o array. Preservar o campo fisicamente não preserva a coerência.
+
+Combinação necessária na ativação:
+- Backend único para criar/alterar vínculos e derivar os campos legados.
+- Rules impedindo alterações diretas em categoryIds, categoryId e categoryName: inclusão, alteração e remoção.
+- Proteção também contra set substitutivo que omita campos e contra exclusão/recriação de produto para contornar o bloqueio.
+- Na proposta de criação atômica pelo backend, impedir criação direta de produto após a transição.
+- Impedir exclusão direta de categoria e proteger campos de autoridade do perfil.
+- Auditar todos os matches sobrepostos; uma permissão ampla pode invalidar a proteção pretendida.
+
+Rules podem comparar o estado anterior e posterior por diff/affectedKeys. Portanto, um update operacional que não muda os campos protegidos pode continuar autorizado. Não se propõe uma regra textual sem conhecer as Rules reais.
+Referência: https://firebase.google.com/docs/firestore/security/rules-fields
+
+Callable sozinha não bloqueia o acesso direto ao Firestore. Version gate na interface, versão enviada pelo cliente e pedido de atualização não são controles suficientes. Precondição/versionamento pode impedir sobrescrita concorrente na operação autorizada, mas não impede um escritor com permissão direta de ignorar esse mecanismo.
+
+Consequência para versões antigas: salvar uma edição que também mude o legado será rejeitado integralmente pelas Rules; não haverá “sucesso parcial” dessa mesma escrita. Atualizações antigas estritamente operacionais poderão continuar funcionando, conforme a política efetiva. Esse corte de compatibilidade deve fazer parte da publicação coordenada.
+
+F. SEGURANÇA DOS UPDATES PARCIAIS
+
+Classificação refere-se à preservação de categoryIds, não à segurança global do fluxo.
+
+- Estoque de venda imediata: SEGURO PARA CAMPO NOVO. transaction.update somente de quantidade/lotes.
+- Estoque de fiado: SEGURO PARA CAMPO NOVO. batch.update somente de quantidade.
+- Sincronização offline no backend: SEGURO PARA CAMPO NOVO. transaction.update somente de quantidade/lotes.
+- Arquivamento/restauração: SEGURO PARA CAMPO NOVO. update parcial dos campos de estado.
+- Preço/estoque/lotes/imagem/fiscal pelo formulário manual: PRECISA ADAPTAÇÃO. O update preserva o array, mas o mesmo payload também escreve os legados. Separar o payload operacional dos campos taxonômicos.
+- Criação manual/importação: PRECISA ADAPTAÇÃO. Criam documentos com contrato singular e fora do protocolo de associação.
+- Snapshot de audit de archive/restore: PRECISA ADAPTAÇÃO futura de observabilidade para incluir categoryIds. Isso não é necessário para preservar o array no documento, que já não é substituído.
+
+Não foi encontrada substituição integral do produto nos fluxos operacionais examinados. Não se deve concluir que todo futuro set será seguro: set sem merge em documento existente pode remover campos e precisa ser bloqueado quando violar o contrato.
+
+G. EXCLUSÃO SEGURA
+
+Contrato mantido: categoria em uso não pode ser excluída; sem isActive e sem limpeza automática.
+
+Operação proposta, autenticada no backend:
+1. Resolver UID/perfil/loja e validar a autorização.
+2. Em uma transação, ler o documento da categoria no caminho da loja.
+3. Consultar products dessa loja por categoryIds array-contains ID, limit(1).
+4. Consultar products dessa loja por categoryId == ID, limit(1).
+5. Não filtrar isArchived: ativos e arquivados estão na mesma coleção e ambos contam como uso.
+6. Se qualquer consulta retornar produto, rejeitar. Uma referência legada conta mesmo se o array estiver vazio ou divergente; não corrigir automaticamente.
+7. Se não houver uso, excluir a categoria e gravar o audit log na mesma transação.
+
+Concorrência:
+Toda operação que introduz associação precisa ler a categoria, confirmar sua existência e escrever o produto dentro da mesma transação. A exclusão lê e remove esse mesmo documento. Esse documento compartilhado integra o controle de concorrência: exclusão antes da associação faz a validação falhar; associação concluída antes da exclusão faz a consulta encontrar uso.
+
+Uma consulta seguida de delete fora de transação não basta. Tampouco basta tornar somente a exclusão transacional e deixar associações em batch após uma leitura externa. Escritores administrativos, importações e futura migração precisam respeitar o protocolo; Rules devem fechar o caminho direto.
+
+O desenho usa a serialização transacional do Firestore e deve ser validado futuramente com teste concorrente de associação/exclusão. Não depende de presumir o modo de concorrência remoto, que não foi consultado.
+Referência: https://firebase.google.com/docs/firestore/transaction-data-contention
+
+Não há necessidade demonstrada de coleção de relações, contador ou documento de lock adicional nesta primeira versão. Consultas limitadas a um resultado bastam para responder “em uso”, não para listar todos os impactos. Haverá custo de consultas e possibilidade de retry/contenda. A consulta de array depende do índice correspondente; sua disponibilidade efetiva não foi verificada. Erro de índice/consulta deve falhar sem excluir.
+
+H. ROLES
+
+COMPROVADO PELO BACKEND
+- Arquivar/restaurar produto: admin, usuário não revogado, mesma loja.
+- Criar/listar catálogo: papéis reconhecidos admin/gerente/operador e aliases, segundo os controles descritos.
+- Sincronizar venda offline: proprietário da loja, conforme ownerId.
+- Não existe nesses exemplos uma autorização backend atual que possa ser automaticamente atribuída à nova gestão taxonômica.
+
+COMPROVADO PELO FLUTTER
+- Exclusão de categoria: botão para admin ou gerente.
+- Arquivamento/restauração: controles administrativos, coerentes com o backend.
+- Criação/edição de produtos e criação/edição de categorias não apresentam a mesma restrição local explícita nas ações examinadas. Isso não prova que qualquer papel consiga efetivar a escrita.
+- Contexto de loja/papel vem do perfil e navegação. UI e provider não são barreiras de segurança.
+
+NÃO COMPROVÁVEL SEM RULES
+- Quem realmente pode criar/editar/importar produtos, renomear/criar categorias ou excluí-las diretamente.
+- Proteção contra troca arbitrária de storeId, elevação de role e modificação de accessStatus.
+- Se as operações expostas na UI já são negadas por alguma regra remota.
+
+Decisão humana pendente: matriz explícita para criar produto, associar categorias, importar, criar/renomear categoria e excluir categoria. Não herdar automaticamente nem “somente admin” de archive nem todos os papéis de createCatalog.
+
+I. AUDIT LOGS
+
+Padrão existente: stores/{storeId}/auditLogs/{logId}, action/entityType/entityId/storeId, performedBy.uid/role, reason quando aplicável, before/after e timestamp do servidor; archive/restore gravam na transação da alteração.
+
+Recomendação mínima:
+- Alteração efetiva de categoryIds: log transacional com IDs antes/depois e projeção legada resultante; sem copiar todo o produto.
+- Exclusão de categoria: log transacional com ID e nome anterior, ator e resultado concluído.
+- Criação e renomeação: registro é útil para explicar a origem e a mudança dos nomes canônicos. Porém, para garantir ator/atomicidade pelo mesmo padrão, essas operações também precisariam de backend. Não ampliar o CRUD apenas para logging sem decisão.
+- Imagem: não exige log taxonômico adicional por esta análise.
+- Não produzir logs de alteração para no-op nem confiar em performedBy enviado pelo Flutter.
+
+Se criação/renomeação permanecerem diretas na primeira etapa, não prometer auditoria confiável equivalente à de archive/restore. Essa lacuna e a decisão sobre seu escopo devem ser explícitas.
+
+J. ARQUITETURA RECOMENDADA
+
+Autoridade específica de taxonomia no backend autenticado; campos operacionais permanecem nos fluxos atuais quando compatíveis com Rules auditadas.
+
+Flutter envia intenção: productId quando existente, lista de categoryIds e campos iniciais permitidos na criação/importação. Não é autoridade sobre UID, papel, loja, nomes das categorias, audit log ou projeção legada. Um storeId eventualmente transportado deve ser comparado com o perfil, nunca tomado como autorização.
+
+Backend:
+- UID de request.auth.
+- users/{uid} determina a loja; verificar perfil, acesso e papel explicitamente autorizado.
+- Ler a loja e aplicar a política de assinatura que for decidida, sem importar uma regra comercial por suposição.
+- Preferir leituras de autorização dentro da transação da escrita, evitando copiar a janela existente entre leitura do perfil e transação de archive/restore.
+- Validar array de 0..10 IDs, tipos, IDs vazios/inválidos e unicidade conforme contrato B. Não aceitar caminhos arbitrários ou nomes no lugar de IDs.
+- Resolver cada ID somente em stores/{lojaAutorizada}/categories/{id}; categoria ausente rejeita a escrita. Não buscar em outras lojas.
+- Um mesmo texto de ID existente em duas lojas designa documentos distintos; só o documento da loja autorizada participa.
+- Gravar categoryIds e os dois campos legados juntos, conforme projeção de compatibilidade de B, derivando o nome no servidor.
+- Preservar productIds, campos operacionais e referências históricas; não reparar órfãos/ambiguidades automaticamente.
+
+Operações:
+
+A) Criar produto com categoryIds
+Callable recomendada; criação atômica em transação. Ler perfil/loja, categorias e precondição de inexistência do produto; escrever produto inicial com contrato novo e legado temporário. IDs de novas criações devem ser estáveis no retry ou ter mecanismo de idempotência para não duplicar produto. CRUD direto da criação após o corte contraria a autoridade proposta. Não exige mover todas as edições operacionais.
+
+B) Alterar categoryIds
+Callable; transação lê perfil/loja/produto/categorias e atualiza somente taxonomia mais audit. Validar conflito entre duas edições concorrentes, por estado-base ou precondição controlada pelo servidor. Transação isolada com substituição de lista ainda pode aceitar a última intenção enviada; a política de conflito precisa ser explícita.
+
+C) Excluir categoria sem uso
+Callable; transação e consultas da seção G; mesma autorização por loja, papel aprovado e audit. Exclusão direta não deve continuar permitida.
+
+D) Importar associando categorias
+Callable ou operação backend autenticada equivalente, com transações delimitadas por produto/bloco viável. Ler perfil/loja, categorias efetivas e condições de criação; gravar produtos com dual-write e resultado rastreável. Não manter a associação no batch direto atual. Criar categorias faltantes somente após resolução/autorização prevista no contrato de importação; depois validar sua existência na transação de associação. Não prometer atomicidade de toda planilha. Retries devem evitar duplicação; concorrência de nomes não pode escolher uma categoria ambígua silenciosamente.
+
+Preservação do restante:
+Preço, estoque, lotes, imagem e fiscal não precisam ser integralmente migrados para callable por causa de categoryIds. Suas escritas diretas precisam preservar os três campos taxonômicos e respeitar a autorização existente auditada.
+
+O formulário atual reúne edição operacional e taxonômica. Separar em duas requisições exige informar falha parcial e evitar declarar sucesso completo. Se a UX exigir atomicidade de um único “Salvar”, uma operação restrita para esse formulário pode receber os campos permitidos juntos. Isso é uma decisão de fronteira do formulário, não motivo para mover todos os fluxos de estoque/fiscal.
+
+Rules terão o papel de impedir bypass e restringir o CRUD direto remanescente. A callable valida a operação privilegiada; Rules protegem o acesso do cliente. Não criar nem publicar regras por suposição.
+
+K. BLOQUEADORES
+
+PODEMOS IMPLEMENTAR LOCALMENTE AGORA — somente em uma futura etapa autorizada:
+- Validação pura do contrato, planejamento de adapters, desenho de payloads e testes isolados.
+- Código backend não ativado e protótipos em ambiente isolado, após definir papéis.
+- Isso não comprovaria segurança das Rules reais. Nada disso foi implementado ou testado nesta etapa.
+
+PRECISA LOCALIZAR RULES ANTES DE IMPLEMENTAR:
+- Alteração concreta das próprias Rules.
+- Fechar o contrato de permissões/compatibilidade do CRUD direto e qualquer implementação que pressuponha sua autorização efetiva.
+- Escolher mudanças exatas nos campos autorizados do perfil/produto/categoria sem conhecer matches e exceções existentes.
+
+PRECISA LOCALIZAR RULES APENAS ANTES DE PUBLICAR:
+- A lógica interna de uma callable pode ser desenvolvida isoladamente antes, mas sua ativação com garantia de exclusividade exige Rules auditadas, testes de bypass e corte coordenado.
+- A distinção não autoriza adiar a auditoria até depois da ativação. Sem bloquear os writers antigos, não há integridade forte.
+- Confirmar índices necessários às consultas de exclusão antes de disponibilizar a operação.
+
+PRECISA DE DECISÃO HUMANA:
+- Papéis autorizados por operação.
+- Política de assinatura para gestão taxonômica.
+- Fronteira de criação/renomeação de categoria e extensão da auditoria.
+- UX/atomicidade para edição simultânea operacional e taxonômica.
+- Procedimento autorizado para obter as Rules efetivas.
+
+L. DECISÕES HUMANAS RESTANTES
+
+1. Autorizar obtenção somente leitura das Rules efetivas, ou fornecer cópia exportada com identificação do projeto/banco e versão/data. Sem isso, a origem oficial permanece não localizada.
+2. Aprovar matriz de roles por operação; a UI atual e os exemplos backend não encerram essa política.
+3. Decidir se gestão taxonômica exige assinatura active/trial/overdue ou outra política existente. Archive/restore e createCatalog têm comportamentos diferentes.
+4. Decidir se criação/renomeação de categorias entram no backend por necessidade de audit log confiável, ou permanecem diretas com Rules auditadas no primeiro corte.
+5. Definir se edição mista exige uma operação atômica ou se haverá salvamento explícito por domínio, com tratamento de falhas.
+6. Definir a janela de ativação conjunta: aplicação nova, backend e bloqueio dos escritores antigos. Atualizar a UI sem fechar Rules não atende ao contrato.
+
+Não estão reabertas as decisões já aprovadas: máximo 10, sem isActive, exclusão em uso bloqueada, backend como autoridade dos vínculos, dual-write em duas fases, productIds preservados e nenhuma correção automática.
+
+M. PRÓXIMA ETAPA ÚNICA RECOMENDADA
+
+Obter e auditar uma cópia identificada das Firestore Rules efetivamente publicadas, somente leitura, focando users, stores, products, categories e matches sobrepostos que possam autorizá-los.
+
+A cópia pode ser fornecida por Rodrigo ou obtida em uma operação remota de leitura explicitamente autorizada em etapa própria. O resultado deve confirmar permissões atuais e pontos exatos de bloqueio dos writers diretos. Não implementar taxonomia nem alterar/publicar Rules nessa próxima etapa.
+
+ENCERRAMENTO
+
+- Nenhum arquivo do repositório alterado.
+- Nenhuma Rule criada ou alterada, local ou remotamente.
+- Nenhum código implementado ou callable criada.
+- Nenhum teste executado.
+- Nenhuma migration criada ou executada.
+- Nenhuma alteração Firestore ou criação de collection.
+- Nenhum commit, push ou deploy.
+- Única gravação desta entrega: este relatório no Desktop.
+- F7-CAT-TAXONOMIA-C NÃO iniciada.
+- Trabalho encerrado após a entrega deste relatório.

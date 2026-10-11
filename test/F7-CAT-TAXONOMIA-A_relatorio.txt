@@ -1,0 +1,450 @@
+STORE&CONNECT — F7-CAT-TAXONOMIA-A
+Auditoria estática do modelo de produtos e categorias
+Data: 16/09/2026
+Base: C:\Users\rodri\StudioProjects\store_connect
+
+A. ESTADO GIT CONFIRMADO
+
+Branch: feat/f7-intelligent-catalog.
+HEAD: 9b70da5.
+Working tree limpa na validação inicial e na conferência após a auditoria.
+Nenhuma diferença no git diff --stat.
+
+Escopo: leitura do repositório. Não houve consulta ao Firestore, produção, Console Firebase ou serviços externos. Portanto, este relatório descreve o comportamento comprovado pelo código versionado; não certifica o conteúdo dos dados existentes nem as regras/índices efetivamente publicados.
+
+Foram lidos AGENTS.md, docs/codex/CURRENT_WORK.md, docs/catalog/F7_CATALOGO_INTELIGENTE.md e docs/catalog/CATALOGO_TAXONOMIA_COLECOES_DINAMICAS.md. O último é proposta/backlog, não schema aprovado.
+Também foram localizadas referências em README.md, functions/functions_README.md, docs/backups/F5_BACKUP_E_RECUPERACAO.md, docs/comercial/PLANOS_E_ASSINATURAS.md, docs/comercial/MARKETING_E_POSICIONAMENTO_STORE_CONNECT.md e firestore_write_inventory.txt. O contrato mais detalhado do cadastro atual está no documento F7 e nos próprios escritores Dart.
+
+B. SCHEMA ATUAL DE PRODUTO
+
+Path: stores/{storeId}/products/{productId}.
+productId é o ID do documento, gerado automaticamente no cadastro manual e na importação; não integra o mapa base gravado. O pertencimento à loja está no caminho.
+
+Campos gravados pelo cadastro manual:
+- name: string, com trim.
+- name_lowercase: string em minúsculas.
+- price: número, originado de double.
+- lotes: lista de mapas; novos lotes contêm quantidade inteira e validade Timestamp.
+- quantidade: inteiro; entrada manual sem lotes ou soma dos lotes com saldo.
+- minimumStock: inteiro.
+- imageUrl: string; pode ser vazia.
+- categoryId: string ou null.
+- categoryName: string ou null; cópia do nome no produto.
+- createdAt: Timestamp na criação, usando Timestamp.now().
+
+Na importação:
+- Mesmos campos base.
+- categoryId e categoryName são strings; sem categoria, ambos recebem ''.
+- lotes inicia vazio; imageUrl = ''; minimumStock = 0.
+- createdAt usa FieldValue.serverTimestamp().
+- barcode: string opcional.
+- costPrice: número opcional.
+- quantity do modelo de importação é double e integerQuantity usa round().
+
+Mapa fiscal opcional:
+- Cadastro Business: ncm, origem, cfop, unidade, cest, icmsSituacaoTributaria, pisSituacaoTributaria, cofinsSituacaoTributaria, ibsCbsSituacaoTributaria, ibsCbsClassificacaoTributaria e updatedAt.
+- Códigos/unidade são strings; cest pode ser null; updatedAt é Timestamp.
+- Importação Business com NCM grava somente fiscal.ncm e fiscal.updatedAt.
+- Cadastro Pro não cria nem altera o mapa fiscal.
+
+Arquivamento acrescenta:
+- isArchived: boolean.
+- archivedAt: Timestamp do servidor.
+- archivedBy: string UID.
+A restauração altera apenas isArchived para false e preserva archivedAt/archivedBy.
+
+Não foi encontrado categoryIds nem collectionIds no código de aplicação. Não há categoria no Product reduzido de lib/models/product_model.dart: ele representa somente id, name, price, imageUrl, quantidade e minimumStock. Vários fluxos usam mapas Firestore diretamente.
+
+Categoria não é obrigatória nos escritores encontrados. Ausência, null e string vazia precisam ser considerados ao estudar dados legados. A obrigatoriedade nas regras publicadas não pode ser confirmada, pois a fonte Firestore Rules não está no repositório.
+
+Evidências: lib/screens/management/manage_products_screen.dart:570,638,676,707,1003; lib/services/product_import_service.dart:510; lib/models/product_import_item.dart:24; lib/models/product_model.dart:6; functions/products/archiveProduct.js:239; functions/products/restoreProduct.js:337.
+
+C. SCHEMA ATUAL DE CATEGORIA
+
+Path: stores/{storeId}/categories/{categoryId}.
+ID: auto-ID do Firestore; não é o nome da categoria.
+Escopo: categoria pertence à loja pelo caminho.
+
+Campos persistidos pelos dois criadores encontrados:
+- name: string.
+- imageUrl: string, inclusive '' quando não há imagem.
+- createdAt: Timestamp do servidor, somente na criação.
+
+Cadastro/edição manual: CategoryManagementScreen e _CategoryDialog, acesso direto ao Firestore. Nome vazio é rejeitado na UI. Criação usa add(); edição usa update() sobre name e imageUrl. Não foi encontrada verificação de unicidade do nome nesse fluxo.
+
+Importação: ProductImportService procura por nome normalizado com trim().toLowerCase(); reutiliza um ID existente ou prepara um novo documento com doc() e batch.set(). Nomes duplicados normalizados acabam representados por uma única entrada no mapa de análise; não há resolução explícita dessa ambiguidade.
+
+Ordenação: orderBy('name') na gestão, no seletor de produto e no PDV.
+Não foram encontrados campos/ações de ordem manual, ativação/inativação, hierarquia ou arquivamento de categoria.
+
+Exclusão manual: delete() do documento da categoria após confirmação. Esse fluxo não consulta nem atualiza produtos e não implementa impedimento por uso.
+
+Imagem: category_images/{storeId}/{arquivo}.jpg. A edição pode remover a imagem anterior quando substituída; a exclusão da categoria não contém limpeza equivalente da imagem.
+
+Evidências: lib/screens/management/category_management_screen.dart:218,293,317,517,672,714,830; lib/services/product_import_service.dart:127,210,436,470.
+
+D. RELAÇÃO ATUAL PRODUTO → CATEGORIA
+
+Cardinalidade representada: zero ou uma categoria por produto; uma categoria pode ser referenciada por vários produtos.
+Referência: categoryId textual, não DocumentReference.
+Desnormalização: categoryName é copiado para cada produto.
+
+Renomeação:
+- Atualiza categories/{categoryId}.name.
+- Mantém o mesmo ID.
+- Não propaga o nome para products.categoryName.
+- PDV e dropdown leem o nome do documento da categoria e podem mostrar o nome novo.
+- Catálogo público, produtos arquivados e seletor de categorias do catálogo leem o nome copiado no produto e podem continuar mostrando o antigo.
+- Abrir e salvar um produto sem mudar a seleção não força atualização do nome; o estado inicial vem do produto. Selecionar a categoria executa a cópia do nome atual.
+
+Remoção:
+- Não apaga produtos nem limpa categoryId/categoryName.
+- A referência pode ficar órfã.
+- A categoria deixa de ser uma opção nas listas que consultam categories.
+- O produto continua visível em “Todos” e pode continuar exibindo o nome antigo no catálogo público.
+- O seletor de categorias para criar catálogo pode continuar oferecendo a categoria removida, pois deriva os grupos dos próprios produtos.
+- No formulário, safeValue vira null quando o ID não está na lista, mas _selectedCategoryId/_selectedCategoryName não são limpos por essa verificação. Salvar sem selecionar outra categoria pode preservar a referência órfã.
+
+Não foi localizado trigger de renomeação/exclusão de categoria que faça cascata.
+Evidências: manage_products_screen.dart:368,840,876,1730; category_management_screen.dart:299,714; createCatalog.js:1424.
+
+E. FLUXO DE CRIAÇÃO/EDIÇÃO
+
+Manual:
+1. Diálogo recebe storeId e, na edição, DocumentSnapshot do produto.
+2. Carrega os campos e a categoria singular do mapa.
+3. Valida formulário, faz upload da imagem quando necessário, calcula quantidade/lotes.
+4. Grava diretamente no Firestore: add() na criação; update(productData) na edição.
+Não existe callable de criação/edição geral de produto nesse fluxo.
+
+Importação:
+product_import_screen.dart → product_import_mapping_screen.dart → product_import_validation_screen.dart → product_import_confirmation_screen.dart → ProductImportService.
+O mapeamento trata Categoria/Grupo como um campo textual singular. Categoria vazia gera somente aviso quando a coluna foi mapeada.
+O serviço identifica produtos duplicados por nome/código de barras e importa novos produtos; não é um editor em massa dos já existentes. Cria categorias faltantes e produtos em batches de até 400 operações, sem atomicidade global entre todos os batches.
+
+Arquivamento/restauração:
+ManageProductsScreen chama archiveProduct; ArchivedProductsScreen chama restoreProduct.
+As callables exigem autenticação, perfil admin da mesma loja e acesso não revogado; usam transação e registram auditLogs. Não apagam cadastro, categoria, lotes ou estoque.
+O fluxo normal de gestão não exclui fisicamente o produto.
+onProductDelete, em functions/index.js:1591, apenas registra log de uma exclusão ocorrida. Apesar do README desse módulo descrever limpeza de imagem, o código atual não a executa.
+
+F. DEPENDÊNCIAS FLUTTER
+
+- manage_products_screen.dart: cadastro, edição, consulta de produtos, pesquisa por name_lowercase, arquivamento, seleção individual e seleção em massa por categoria para criar catálogo.
+- category_management_screen.dart: gestão direta de categorias e imagens.
+- new_sale_screen.dart: PDV, busca pelo nome e filtro local comparando productData['categoryId'] com _selectedCategoryId.
+- archived_products_screen.dart: lista arquivados, pesquisa, mostra categoryName e restaura produto.
+- product_import_service.dart, product_import_item.dart e telas de importação: categoria singular por nome.
+- catalogs_screen.dart: lista metadados de catálogos via listCatalogs, copia/compartilha links; não resolve categorias.
+- widgets/catalog_created_dialog.dart: apresentação do catálogo recém-criado e compartilhamento.
+- public_catalog_screen.dart: recebe mapas da callable e mostra categoryName.
+- main.dart: separa rota pública de AuthGate/providers privados.
+- product_model.dart: modelo operacional reduzido sem taxonomia.
+- cart_provider.dart e sales_provider.dart: carrinho/vendas; não foi localizada associação a categorias nesses providers.
+
+A UI permite:
+- Nenhuma categoria: sim, no cadastro; o dropdown não tem validator obrigatório.
+- Uma categoria: sim.
+- Múltiplas categorias no produto: não.
+
+Onde é imposto: String? _selectedCategoryId/_selectedCategoryName e DropdownButtonFormField<String>, em manage_products_screen.dart:147,846. Não existe opção explícita “Sem categoria” para limpar uma escolha já feita; ausência inicial permitida não equivale a ação de desvincular.
+
+Selecionar várias categorias no assistente de catálogo significa reunir productIds; não vincular várias categorias ao mesmo produto.
+
+Outros leitores de produto: dashboard_screen.dart, low_stock_report_screen.dart, expiring_products_screen.dart, business_insights_service.dart, payment_options_sheet.dart e confirm_fiado_dialog.dart. Não foi localizada dependência de categoria nesses leitores; exigem atenção de regressão, sem justificar alteração automática.
+
+G. DEPENDÊNCIAS BACKEND
+
+As seis callables estão em functions/catalog/createCatalog.js e exportadas em functions/index.js:2114.
+
+- createCatalog, linha 437: recebe title, productIds e expiresInDays; resolve loja pelo perfil autenticado; valida assinatura, existência, arquivamento e quantidade positiva. Deduplica IDs e limita entrada a 200 produtos. Não valida categoria nem consulta categories.
+- listCatalogs, linha 711: lê até 50 catálogos por createdAt DESC, calcula status efetivo e recupera link. Não lê produtos/categorias.
+- listCatalogRequests, linha 885: lê até 50 pais em stores/{storeId}/catalogRequests por createdAt DESC, sem enriquecer com produtos ou categorias.
+- getCatalogRequest, linha 979: lê pai e itens da solicitação, ordenados por ID; devolve snapshots históricos. Não consulta produto atual nem categoria.
+- getPublicCatalog, linha 1105: valida slug/token, loja, assinatura, catálogo e validade; lê itens por position e produtos atuais por ID. Sua única dependência taxonômica é productData.categoryName na resposta.
+- submitPublicCatalogSelection, linha 1488: recebe slug/token e items[{productId,quantity}]; valida pertencimento à lista de itens do catálogo, reconsulta produto atual, estoque, arquivamento, nome e preço. Não consulta categorias e não aceita categoria como autoridade.
+
+Persistência de solicitação:
+stores/{storeId}/catalogRequests/{requestId}
+Pai: catalogId, status, itemCount, totalUnits, totalAmount, createdAt, updatedAt, source.
+items/{itemId}: productId, name, quantity, price, subtotal.
+Não há snapshot de categoria. Não cria sale, não reserva e não decrementa estoque.
+
+Outras dependências:
+- archiveProduct.js e restoreProduct.js: snapshots de auditoria têm categoryId/categoryName singulares; novos campos não seriam incluídos nesses snapshots automaticamente.
+- syncOfflineSale.js: consulta produtos e atualiza quantidade/lotes, sem lógica de categoria.
+- emitirNfce.js: consulta produto/dados fiscais; sem lógica de categoria de navegação.
+- createStoreSnapshot.js: copia produtos e categorias integralmente, mas não subcoleções internas; a lista de coleções incluídas é explícita.
+- onProductDelete: somente log.
+
+Helpers existentes relevantes: normalizeString, normalizeRole, validateInput, ensurePublicStoreSlug, geração/hash e criptografia do token. Não existe helper atual para resolver múltiplas categorias ou coleções.
+
+H. DEPENDÊNCIAS DO CATÁLOGO PÚBLICO
+
+Persistência:
+- stores/{storeId}/catalogs/{catalogId}: status, title, createdAt, createdByUid, expiresAt, publicTokenHash, productCount, publicTokenEncrypted.
+- items/{catalogItemId}: productId, position, addedAt.
+- catalogPublicTokens/{publicTokenHash}: storeId, catalogId, createdAt.
+- storePublicSlugs/{publicSlug}: estrutura auxiliar de identidade pública.
+
+Não há snapshot de categoria nos itens. getPublicCatalog busca os documentos atuais dos produtos, mas lê o nome desnormalizado nesses documentos, não categories.name.
+
+Apresentação atual:
+- Lista única, responsiva, renderizada em linhas com SliverList.
+- Ordem recebida do backend: items.position ASC, originada da ordem dos productIds na criação.
+- categoryName é um rótulo opcional nos cards mobile/desktop.
+- Sem agrupamento ou ordenação por categoria.
+- Não foi encontrada busca textual nem filtro de categorias implementado nessa tela pública. “Pesquisa” aparece no escopo documental, mas não deve ser contabilizada como recurso existente.
+- Backend omite produtos inexistentes, arquivados ou com quantidade inválida/não positiva.
+- A página usa callable e refresh; não consulta Firestore diretamente.
+
+A seleção interna por categoria é uma conveniência para montar uma lista fixa. Não persiste regra “todos da categoria X”. Mudar categoria, incluir novo produto nela ou renomeá-la não recalcula os itens já gravados.
+
+Impacto de múltiplas categorias:
+- Retirar categoryName sem adaptar backend/UI elimina o rótulo atual.
+- Substituir strings por listas sob as mesmas chaves quebra pressupostos de tipo.
+- Novos campos em paralelo não são automaticamente consumidos.
+- Seções dinâmicas exigiriam novo contrato: hoje submit rejeita produto que não esteja em catalogs/{id}/items. Exibir produtos adicionais sem adaptar a validação produziria rejeição no envio.
+- A seleção pública já é controlada por productId, base útil para evitar duplicidade entre futuras seções.
+
+Evidências: createCatalog.js:650,671,1304,1341,1424,1740; public_catalog_screen.dart:877,1425,1596,1663,1838.
+
+I. ÍNDICES E REGRAS FIRESTORE
+
+- firebase.json existe e está versionado.
+- firestore.rules não foi encontrado.
+- firestore.indexes.json não foi encontrado.
+- firebase.json configura o Emulator Firestore, mas não aponta fonte de regras/índices Firestore.
+- storage.rules está versionado e cobre imagens de produtos/categorias; não substitui regras de documentos Firestore.
+- firestore_write_inventory.txt é inventário de escritas, não fonte oficial de regras.
+- Logs existentes não foram tratados como fonte oficial de regras/índices.
+
+A fonte oficial das regras Firestore NÃO está no repositório. Não é possível confirmar autorização dos CRUDs diretos, isolamento efetivo ou integridade de referências nos clientes.
+
+Consultas relacionadas encontradas:
+- products: orderBy(name_lowercase); dashboard também consulta quantidade por desigualdade.
+- categories: orderBy(name).
+- catalogs e catalogRequests: orderBy(createdAt DESC), limit 50.
+- catalog items: orderBy(position ASC).
+- request items: orderBy(documentId ASC).
+- Produtos públicos e documentos de token/slug: acesso direto por ID.
+
+Não foi identificado índice composto versionado para esses domínios. O filtro atual por categoria ocorre em memória no Flutter, sem where(categoryId) no Firestore.
+Isso não prova ausência de índices configurados remotamente.
+Novos índices só poderão ser especificados após definir consultas, ordenação, paginação e estratégia das associações.
+
+J. TESTES EXISTENTES
+
+Suíte oficial: functions/tests/catalog/*.test.js, descoberta por runCatalogTests.js; comando definido em functions/package.json: npm run test:catalog.
+
+Nove arquivos encontrados:
+1. createCatalog.emulator.test.js — criação/persistência.
+2. createCatalogAuthorization.emulator.test.js — autorização.
+3. createCatalogValidation.emulator.test.js — entrada, elegibilidade, deduplicação/atomicidade.
+4. createCatalogPublicSlugMigration.emulator.test.js — compatibilidade do slug de loja, não migração de categorias.
+5. listCatalogsStatus.emulator.test.js — status da listagem.
+6. getPublicCatalog.emulator.test.js — resposta sanitizada/elegibilidade; verifica categoryName singular.
+7. submitPublicCatalogSelection.emulator.test.js — validação, persistência, totais e preservação de estoque/vendas.
+8. listCatalogRequests.emulator.test.js — autorização, isolamento, listagem e validação de snapshots.
+9. getCatalogRequest.emulator.test.js — detalhe histórico, isolamento e integridade.
+
+Flutter:
+- test/public_catalog_submission_test.dart: testes de envio público com Firebase simulado, payload, clique duplo, sucesso, retry, reconciliação, lifecycle e dispose; parametrizações correspondem aos 15 casos documentados.
+- test/widget_test.dart: smoke test de contador padrão; não cobre cadastro/categorias.
+
+Relacionados:
+- functions/tests/security/storageRules.test.mjs: regras de Storage, inclusive category_images.
+- functions/tests/auth/bootstrapStore.emulator.test.js: bootstrap/identidade da loja.
+- functions/tests/backups/: retenção e execução de backups; não demonstram suporte a novas relações taxonômicas.
+
+Não foram encontrados testes dedicados ao CRUD de categorias, renomeação/exclusão com produtos associados, cadastro/edição manual, importação de categorias, filtro do PDV ou seleção em massa por categoria.
+Nenhum teste foi executado. Resultados históricos documentados não são resultados desta auditoria.
+
+K. ESTRUTURAS SEMELHANTES A COLEÇÕES/PROMOÇÕES
+
+Busca em português/inglês não encontrou modelo operacional de tag, coleção comercial, campanha, featured, offer ou promotion associado aos produtos.
+
+Estruturas próximas:
+- categories: entidade por loja com ID/nome/imagem; padrão de gestão potencialmente aproveitável.
+- catalogs + items: grupo de produtos com título, ordem, validade e link; é publicação estática, não coleção comercial reutilizável e dinâmica.
+- ProductImportMapping: “Grupo” é sinônimo de categoria, não conceito separado.
+- SalesProvider.calculateAbcAnalysis e AbcProduct: agregam vendas por produto, receita e quantidade, ordenando por receita.
+- BusinessInsightsService: utiliza vendas recentes e produtos para alertas, incluindo giro/estoque. Pode informar um futuro critério de “Mais vendidos”, mas não cria essa coleção nem seleciona produtos automaticamente para catálogo.
+- sales representa vendas reais, não promoção. Não é estrutura autorizada para solicitações públicas ou agrupamentos comerciais.
+
+Documentação:
+- F7 cita uso de catálogo como campanha/promoção e propõe CatalogItem.purpose = requested/promotion em backlog.
+- O documento de taxonomia propõe entidades e seções.
+Nenhuma dessas hipóteses corresponde a campo implementado.
+
+L. IMPACTOS PARA MÚLTIPLAS CATEGORIAS
+
+Modelo Firestore:
+Representar múltiplas associações e entidades comerciais separadas; definir IDs válidos da mesma loja, ausência, duplicidade, ordem e remoção. Resolver destino de categoryName desnormalizado.
+
+Backend:
+Adaptar resposta pública e snapshots de auditoria; criar resolução/validação de associações conforme contrato. createCatalog pode continuar baseado em productIds se a lista permanecer fixa; seções dinâmicas alteram elegibilidade e exigem coerência entre leitura e submit. listCatalogs/listCatalogRequests/getCatalogRequest não dependem diretamente da taxonomia atual.
+
+Flutter:
+Trocar estado/editor singular por seleção múltipla; adaptar importação, visualização de arquivados, gestão dos grupos e apresentação pública. O modelo Product reduzido não exige mudança por si só; só deve receber taxonomia se os consumidores passarem a precisar dela.
+
+Catálogo público:
+Definir representação sanitizada de várias categorias/coleções, agrupamento, ordem, deduplicação por productId e reconciliação após refresh. Preservar servidor como autoridade sobre produtos, preço, estoque e totais.
+
+Filtros:
+Trocar igualdade singular no PDV e na seleção em massa por teste de associação. Definir semântica de combinar grupos e de desmarcar categorias sobrepostas. A busca nominal existente é independente da cardinalidade.
+
+Testes:
+Adicionar cobertura de 0/1/N associações, renomeação, exclusão/inativação, IDs órfãos/de outra loja, importação, sobreposição, compatibilidade e novas respostas públicas. Preservar regressões de preço, estoque, isolamento, snapshots e submit.
+
+Índices:
+O filtro local atual não informa o desenho futuro de índices. Consulta server-side por associação e ordenação pode exigir novos índices; especificação depende da alternativa e dos filtros aprovados.
+
+Migração:
+Tratar categoria singular, null, '', nomes desatualizados, IDs órfãos e versões antigas dos escritores. Preservar productIds para não romper referências.
+
+Backup:
+Arrays dentro de products seriam capturados pela cópia integral de campos. Novas entidades/coleções precisam entrar na lista explícita do snapshot; relações em subcoleções não seriam copiadas automaticamente.
+
+M. ATÉ TRÊS ALTERNATIVAS ARQUITETURAIS — SEM VENCEDORA
+
+Todas são possibilidades conceituais. Nenhum nome de nova collection ou schema abaixo foi aprovado.
+
+Alternativa A — arrays categoryIds/collectionIds no produto, metadados dos grupos em entidades por loja.
+Vantagens: leitura do produto traz as associações; adaptação próxima dos mapas atuais; IDs estáveis permitem renomear metadados sem regravar vínculos.
+Desvantagens: relações numerosas ampliam o documento; remover grupo exige política para referências remanescentes; metadados de cada associação não cabem naturalmente em arrays simples.
+Impacto: escritores manuais/importação, filtros, DTO público, auditoria e gestão dos grupos.
+Consultas: simples para navegação local e associação individual; combinações, ordenação e paginação precisam de desenho próprio, sem presumir que qualquer regra booleana caiba em uma consulta.
+Índices: planejar indexação dos arrays e das combinações realmente utilizadas.
+Manutenção: menor quantidade de estruturas de vínculo; exige validação e tratamento de órfãos.
+Catálogo público: backend pode resolver nomes por ID e continuar retornando DTO sanitizado; grupos dinâmicos ainda requerem contrato de elegibilidade.
+
+Alternativa B — documentos de relação próprios para produto/categoria e produto/coleção.
+Vantagens: associação pode ter posição, datas e outros metadados; permite tratar vínculos individualmente e paginar relações.
+Desvantagens: mais documentos, leituras e coordenação; listagem de produtos precisa reunir relações/metadados; backups atuais não percorrem subcoleções.
+Impacto: maior mudança em persistência, consultas Flutter/backend, importação, exclusão e backup.
+Consultas: buscar relações de um grupo/produto e depois resolver produtos/metadados; aumenta o trabalho de composição.
+Índices: dependem da direção das consultas, IDs, tipo de relação e ordem; posicionar subcoleções ou relações por loja é uma decisão adicional.
+Manutenção: exige unicidade do vínculo, consistência e política de limpeza.
+Catálogo público: compatível via resolução no servidor; leitura e submit precisam usar a mesma regra de pertencimento.
+
+Alternativa C — híbrido, com relações canônicas e projeção de IDs no produto.
+Vantagens: relações guardam metadados, enquanto a projeção atende leitores/filtros simples próximos do desenho atual.
+Desvantagens: duas representações podem divergir; custo adicional de escrita, sincronização, reparo e testes.
+Impacto: inclui os consumidores anteriores e um mecanismo confiável de atualização das projeções.
+Consultas: leitura simples pela projeção; consultas mais ricas pelas relações, com definição explícita da fonte canônica.
+Índices: pode reunir necessidades dos arrays e das relações.
+Manutenção: maior complexidade; exige estratégia de consistência e recuperação.
+Catálogo público: tecnicamente compatível, mas uma projeção desatualizada não pode ser autoridade divergente no submit.
+
+N. NECESSIDADE POTENCIAL DE MIGRAÇÃO
+
+O código atual não adapta automaticamente categoryId para múltiplas categorias.
+
+Se preservar dados:
+- Será necessário converter associações existentes ou implementar leitura temporária compatível.
+- Campo novo coexistente permite transição, mas todos os escritores precisam de regra comum; clientes antigos podem atualizar somente o campo singular.
+- Leitura compatível poderia interpretar ID singular válido como uma associação e ausência como nenhuma, sem escrever imediatamente. Isso ainda precisaria ser implementado/testado.
+- IDs órfãos e nomes duplicados/desatualizados exigem decisão; não é seguro reconstruir relações automaticamente só pelo nome.
+
+Se recriar os dados de teste:
+- Pode dispensar conversão desses documentos, após autorização específica.
+- Recriar produtos com novos IDs afeta itens de catálogos, referências de vendas e outros históricos.
+- Catálogos e solicitações existentes precisam de tratamento consciente; serem dados de teste não autoriza exclusão nesta etapa.
+
+Preservando productIds, os CatalogItems atuais continuam referenciando os produtos. Solicitações históricas têm snapshots sem categoria e não precisam ser reescritas apenas pela mudança taxonômica.
+
+Não é possível escolher entre migration, compatibilidade ou recriação sem decidir preservação dos dados e política de versões. Não foi inspecionado o conteúdo remoto para quantificar casos problemáticos.
+
+O. RISCOS
+
+1. Nomes desnormalizados já podem divergir após renomeação.
+2. Exclusão deixa referências órfãs; formulário pode ocultar a seleção visualmente e preservar o ID ao salvar.
+3. Substituir tipo/chave singular diretamente pode quebrar casts, filtros e rótulos.
+4. Categorias sobrepostas exigem semântica clara de contagem e desmarcação; Set de productIds elimina duplicidade de IDs, mas não define a intenção do usuário.
+5. Seções dinâmicas podem oferecer produto que o submit atual rejeita por não estar nos itens estáticos.
+6. Limite atual é 200 produtos por catálogo; não há contrato implementado para milhares de produtos publicados/paginados.
+7. Gestão/PDV carregam listas e filtram localmente; isso precisa ser considerado na futura escala.
+8. Ausência de fonte de Firestore Rules impede comprovar autorização e integridade dos CRUDs diretos.
+9. Novas relações/coleções podem ficar fora dos backups.
+10. Cobertura atual não protege CRUD/filtros taxonômicos.
+11. Clientes antigos e importações concorrentes podem gerar associações divergentes.
+12. Documentação contém registros históricos e propostas: CURRENT_WORK tem checkpoints antigos; functions_README descreve limpeza não presente no trigger; “pesquisa” consta no escopo F7 mas não na tela pública atual. Nenhuma divergência foi corrigida.
+
+P. DECISÕES HUMANAS ANTES DA IMPLEMENTAÇÃO
+
+- Fechar cardinalidade e limites de categorias/coleções por produto; confirmar se zero permanece permitido.
+- Escolher representação dos vínculos e fonte canônica, sem misturar categoria com coleção comercial.
+- Definir escopo das coleções por loja, unicidade de nomes, ordem, inativação e exclusão.
+- Definir se nomes públicos serão resolvidos por ID e como tratar categoryName legado.
+- Decidir comportamento de categorias removidas, referências órfãs e importação com nomes ambíguos.
+- Definir relação entre catálogo estático atual e futuras seções dinâmicas, incluindo pertencimento no submit.
+- Definir repetição visual entre seções, deduplicação na seleção e efeito de desmarcar grupos sobrepostos.
+- Definir ordenação, limites, paginação e primeira versão dos filtros.
+- Decidir preservação/migração/recriação dos dados de teste e compatibilidade com clientes antigos.
+- Identificar a fonte oficial das regras Firestore antes de implementar novas permissões.
+- Definir cobertura de backup para novas entidades/relações.
+- Delimitar a sequência desta frente em relação à F7.8-D, sem iniciar ambas implicitamente.
+
+Próxima etapa possível: fechar o contrato de múltiplas categorias e, depois, os contratos de coleções/seções e compatibilidade. Nenhuma alternativa foi escolhida nesta auditoria.
+
+Q. ARQUIVOS PROVAVELMENTE ENVOLVIDOS FUTURAMENTE
+
+Mudança direta provável:
+- lib/screens/management/manage_products_screen.dart
+- lib/screens/management/category_management_screen.dart
+- lib/screens/sales/new_sale_screen.dart
+- lib/screens/management/archived_products_screen.dart
+- lib/services/product_import_service.dart
+- lib/models/product_import_item.dart
+- lib/screens/products/import/product_import_screen.dart
+- lib/screens/management/product_import_mapping_screen.dart
+- lib/screens/management/product_import_validation_screen.dart
+- lib/screens/management/product_import_confirmation_screen.dart
+- lib/screens/public/public_catalog_screen.dart
+- functions/catalog/createCatalog.js
+- functions/products/archiveProduct.js
+- functions/products/restoreProduct.js
+- functions/backups/createStoreSnapshot.js
+- functions/tests/catalog/*.test.js
+- test/public_catalog_submission_test.dart
+
+Condicionados ao contrato:
+- lib/models/product_model.dart, caso a taxonomia passe a integrar esse modelo.
+- lib/screens/management/catalogs_screen.dart, caso configure seções.
+- lib/screens/management/widgets/catalog_created_dialog.dart e lib/main.dart, somente se fluxos/rotas mudarem.
+- functions/index.js, caso haja novas callables.
+- firebase.json e futuras fontes oficiais de regras/índices, ainda ausentes.
+- Novos arquivos de modelos/gestão/testes de coleções e relações, sem nomes aprovados.
+
+Regressão, sem mudança funcional presumida:
+- functions/sales/syncOfflineSale.js
+- functions/fiscal/emitirNfce.js
+- lib/providers/cart_provider.dart
+- lib/providers/sales_provider.dart
+- lib/widgets/payment_options_sheet.dart
+- lib/widgets/confirm_fiado_dialog.dart
+- lib/screens/dashboard_screen.dart
+- lib/screens/reports/low_stock_report_screen.dart
+- lib/screens/reports/expiring_products_screen.dart
+- lib/services/business_insights_service.dart
+
+Documentação a atualizar somente em etapa futura autorizada:
+- docs/catalog/F7_CATALOGO_INTELIGENTE.md
+- docs/catalog/CATALOGO_TAXONOMIA_COLECOES_DINAMICAS.md
+- docs/codex/CURRENT_WORK.md
+- docs/backups/F5_BACKUP_E_RECUPERACAO.md, se o contrato de backup mudar.
+
+ENCERRAMENTO
+
+Nenhum arquivo do repositório alterado.
+Nenhum teste executado, inclusive destrutivo.
+Nenhuma migration criada ou executada.
+Nenhuma alteração no Firestore ou criação de collections.
+Nenhum commit.
+Nenhum push.
+Nenhum deploy.
+Implementação NÃO iniciada.
+
+Única gravação solicitada: cópia deste relatório fora do repositório, em C:\Users\rodri\Desktop\F7-CAT-TAXONOMIA-A_relatorio.txt.
+Auditoria encerrada após a entrega do relatório.

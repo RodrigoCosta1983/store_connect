@@ -1,0 +1,152 @@
+STORE&CONNECT — F7-CAT-TAXONOMIA-RULES-A (retomada A2)
+Data: 16/09/2026
+RULES-A: PASSOU — validação local, sem publicação.
+
+1. ESTADO INICIAL
+Branch: feat/f7-intelligent-catalog
+HEAD: fad658746b03ab7d6cde1c6c7ae1e696ba9b6974
+Nenhum arquivo rastreado modificado; somente oito relatórios test/*.txt não rastreados:
+F7-CAT-TAXONOMIA-A, B, BR, RETOMADA, RULES-A, RULES-SOURCE, F7.8-A e F7.8-B (todos com sufixo _relatorio.txt).
+O relatório A2 não existia; Test-Path foi conferido inicialmente e novamente antes da criação. Nenhum relatório anterior foi sobrescrito, alterado ou movido.
+firestore.rules e o snapshot tinham no HEAD o mesmo blob ef5ff6e32eac7db03e7774a55f6f21438b925499.
+
+2. LEITURAS E FONTE OPERACIONAL
+Lidos AGENTS.md, partes relevantes de docs/codex/CURRENT_WORK.md, relatórios RETOMADA/RULES-A/RULES-SOURCE, firestore.rules integralmente, firebase.json, functions/package.json e functions/tests/security/storageRules.test.mjs.
+Consultado functions/package-lock.json para confirmar rules-unit-testing.
+Contexto e contratos anteriores mantidos; nenhuma auditoria geral refeita.
+firebase.json aponta firestore.rules como fonte operacional. Snapshot histórico não é editável.
+A regra genérica foi reconferida: exclui products e categories em leitura, criação/edição e exclusão. Nenhuma modificação nela foi necessária.
+
+3. BACKUP
+Backup de firestore.rules criado por Copy-Item antes da edição, fora do repositório:
+C:\Users\rodri\AppData\Local\Temp\F7_CAT_TAXONOMIA_RULES_A_antes_2594c42738ca40b98aac1ea3114933bf.rules
+
+4. DIFF LÓGICO EXATO
+Products CREATE: adicionados categoryIds, categoryId e categoryName à lista de chaves proibidas já existente em !request.resource.data.keys().hasAny(...).
+Products UPDATE: adicionados os mesmos três campos à lista de !request.resource.data.diff(resource.data).affectedKeys().hasAny(...).
+Esse diff detecta inclusão, alteração e remoção sem acessar diretamente valores de campos que podem estar ausentes. Campos reenviados com valor idêntico não integram affectedKeys.
+Proteções dos quatro campos de arquivamento preservadas integralmente, assim como isolamento por loja e DELETE de produtos.
+Categories DELETE: substituída a condição anterior de admin/gerente por allow delete: if false.
+Categories READ/CREATE/UPDATE não alterados.
+Comentários locais ajustados para descrever as duas proteções.
+Nenhuma alteração em roles, users, stores, regra genérica, catálogos ou solicitações.
+Whitespace histórico fora dos trechos alterados preservado; não houve formatação global. Ausência original de newline final preservada.
+
+5. COMPATIBILIDADE
+Produto legado com categoryId/categoryName continua aceitando update operacional se seus vínculos não mudarem. Produto com categoryIds existente também continua aceitando esse update.
+CREATE sem os três campos permanece permitido conforme as condições atuais. CREATE com qualquer desses campos é negado, inclusive null, string vazia ou array vazio.
+Um set substitutivo que omite campos taxonômicos existentes é rejeitado; não contorna o bloqueio removendo campos.
+Isso não adapta os escritores Flutter/importação atuais: caso enviem campos taxonômicos na criação ou os modifiquem na edição, serão rejeitados quando essas Rules forem futuramente publicadas. A publicação exige coordenação posterior; não ocorreu nesta etapa.
+
+6. INFRAESTRUTURA E ARQUIVO DE TESTE
+Criado somente functions/tests/security/firestoreTaxonomyRules.test.mjs (150 linhas).
+Reutilizados @firebase/rules-unit-testing e firebase já declarados/instalados. Sem instalação, sem mudanças em package.json/lock.
+Runner nativo node:test, assertFails/assertSucceeds e SDK cliente Firestore. O teste carrega explicitamente a fonte operacional.
+Projeto fixo fictício demo-taxonomy-rules. Exige FIRESTORE_EMULATOR_HOST em localhost/127.0.0.1; recusa ausência ou host remoto antes de inicializar.
+Fixtures isoladas de usuários/produtos/categoria são criadas com Rules desativadas apenas dentro do Emulator; operações verificadas usam clientes autenticados/ anônimo sujeitos às Rules.
+Fixtures são reinicializadas entre testes. Cleanup e emulators:exec encerram conexões e Emulator.
+O teste de Storage existente não foi alterado/executado: não cobre estes contratos Firestore e exigiria outro serviço.
+
+7. COMANDOS E EXECUÇÃO
+node --check functions/tests/security/firestoreTaxonomyRules.test.mjs
+Resultado: aprovado.
+
+Ambiente temporário do processo:
+JAVA_HOME = C:\Program Files\Eclipse Adoptium\jdk-21.0.6.7-hotspot
+PATH prefixado com JAVA_HOME\bin. Nenhuma alteração permanente de Java.
+
+Comando na raiz:
+firebase emulators:exec --config firebase.json --project demo-taxonomy-rules --only firestore 'node --test functions/tests/security/firestoreTaxonomyRules.test.mjs'
+
+Primeira tentativa no sandbox falhou antes de iniciar testes: Could not spawn java -version; código 1, problema de ambiente.
+Mesmo comando repetido fora do sandbox mediante aprovação: código final 0.
+Rules carregadas/compiladas pelo Emulator e por initializeTestEnvironment com sucesso. Sintaxe diff/affectedKeys validada em execução com casos permitidos e negados.
+Mensagens PERMISSION_DENIED dos casos negativos são esperadas e foram verificadas por assertFails; não são testes falhando.
+Firestore Emulator, hub e logging encerrados ao final. SIGINT do Emulator corresponde ao encerramento normal do emulators:exec.
+
+8. RESULTADOS INDIVIDUAIS
+01 PASSOU — update operacional da própria loja sem taxonomia.
+02 PASSOU — adição de categoryIds negada.
+03 PASSOU — alteração de categoryIds negada.
+04 PASSOU — remoção de categoryIds negada.
+05 PASSOU — adição e alteração de categoryId negadas (dois testes).
+06 PASSOU — remoção de categoryId legado negada.
+07 PASSOU — adição e alteração de categoryName negadas (dois testes).
+08 PASSOU — remoção de categoryName legado negada.
+09 PASSOU — CREATE com categoryIds, inclusive [], negado.
+10 PASSOU — CREATE com categoryId, inclusive null, negado.
+11 PASSOU — CREATE com categoryName, inclusive string vazia, negado.
+12 PASSOU — CREATE válido sem taxonomia permitido.
+13 PASSOU — cliente de outra loja não lê/cria/edita/exclui produtos ou categorias da loja alvo.
+14 PASSOU — update operacional preserva exatamente categoryId/categoryName legados.
+15 PASSOU — operador não exclui categoria; documento preservado.
+16 PASSOU — admin não exclui categoria; documento preservado.
+17 PASSOU — gerente não exclui categoria; documento preservado.
+18 PASSOU — leitura de categoria permitida preservada.
+19 PASSOU — criação de categoria permitida preservada.
+20 PASSOU — update/rename de categoria permitido preservado.
+21 PASSOU — update operacional preserva categoryIds existente.
+22 PASSOU — set substitutivo não remove taxonomia; documento preservado.
+23 PASSOU — proteções de arquivamento na criação/edição e proibição de DELETE de produto preservadas.
+24 PASSOU — cliente anônimo continua sem acesso testado.
+
+TOTAL: 26 testes passaram; 0 falharam; 0 cancelados; 0 ignorados.
+Os cenários 05 e 07 possuem dois testes cada, explicando 26 testes para 24 rótulos de cenário.
+Isolamento entre lojas, updates operacionais, bloqueio de DELETE para os três papéis e preservação do CRUD permitido de categorias confirmados localmente.
+Não foi executada a suíte Admin SDK do catálogo, pois não valida Rules de clientes e nenhum backend foi alterado.
+
+9. REVISÃO E GIT
+git diff --check: aprovado para linhas novas/modificadas de arquivos rastreados.
+git diff --no-index --check -- /dev/null functions/tests/security/firestoreTaxonomyRules.test.mjs: sem erros de whitespace no teste novo.
+git --no-pager diff -- firestore.rules: revisado; somente os dois contratos e comentários correspondentes.
+git --no-pager diff --no-index -- /dev/null functions/tests/security/firestoreTaxonomyRules.test.mjs: conteúdo integral do teste novo revisado, sem staging.
+git --no-pager diff --cached: vazio.
+Aviso Git de futura conversão LF/CRLF não representa erro do check. Trailing whitespace histórico não foi removido.
+
+Status final:
+ M firestore.rules
+?? functions/tests/security/firestoreTaxonomyRules.test.mjs
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+
+Arquivos de projeto alterados: firestore.rules e functions/tests/security/firestoreTaxonomyRules.test.mjs.
+Artefato separado: este relatório A2 novo e não rastreado. Os demais relatórios continuam intactos e não rastreados.
+Nenhum outro arquivo rastreado alterado: firebase.json, snapshot, backend, Flutter, financeiro e manifests/locks preservados.
+Branch e HEAD permanecem no estado inicial.
+
+10. SNAPSHOT IMUTÁVEL
+Arquivo: docs/security/FIRESTORE_RULES_PRODUCAO_2026-09-16.rules
+SHA256 antes:
+8E605C667E25644CFA43F1B2C561282883016172840C19C4CAE5FD5CFD5BDA8A
+SHA256 depois:
+8E605C667E25644CFA43F1B2C561282883016172840C19C4CAE5FD5CFD5BDA8A
+Snapshot histórico intacto. Somente a fonte operacional recebeu o patch.
+
+11. PENDÊNCIAS E PRÓXIMO INCREMENTO
+As proteções estão validadas localmente, não publicadas; não afirmar que produção foi corrigida.
+Futura exclusão segura e escrita taxonômica ainda dependem de backend autorizado, contrato de permissões e concorrência. Esta etapa não verifica uso de categoria nem implementa esses fluxos.
+Próximo incremento recomendado: fechar os contratos pendentes de autorização/payload/concorrência das operações backend taxonômicas e o plano de compatibilidade dos escritores antes de implementá-los ou coordenar publicação. Não implementado aqui.
+Nenhuma decisão nova de matriz de roles, assinatura, migração ou arquitetura foi tomada nesta etapa.
+
+12. CONFIRMAÇÕES
+GIT ADD NÃO EXECUTADO
+COMMIT NÃO EXECUTADO
+PUSH NÃO EXECUTADO
+DEPLOY NÃO EXECUTADO
+FIRESTORE RULES NÃO PUBLICADAS
+FIRESTORE REAL NÃO ALTERADO
+SNAPSHOT HISTÓRICO NÃO ALTERADO
+FIREBASE.JSON NÃO ALTERADO
+BACKEND NÃO ALTERADO
+FLUTTER NÃO ALTERADO
+FLUXO FINANCEIRO/ASAAS NÃO ALTERADO
+
+Nenhum dado real foi acessado. Sem reader, dual-write, importação taxonômica, callable, seções dinâmicas ou segundo incremento.
+Relatório: C:\Users\rodri\StudioProjects\store_connect\test\F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt

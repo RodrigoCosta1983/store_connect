@@ -1,0 +1,168 @@
+STORE&CONNECT — F7-CAT-TAXONOMIA-RULES-A
+Data: 16/09/2026
+Resultado: BLOQUEADO antes da implementação.
+
+1. ESTADO INICIAL
+
+Branch: feat/f7-intelligent-catalog
+HEAD: 56917d8d5405bd915a2c69d0577a69bdaeb3cdc3
+Arquivos rastreados: sem alterações, inclusive no índice.
+git status --short inicial:
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+
+Divergência em relação ao prompt: o relatório de retomada não está na raiz. Foi encontrado em test/, junto dos outros cinco artefatos acima. Nenhum deles foi editado, apagado, movido ou adicionado ao Git por esta execução. Não foi inferida a origem dessa diferença.
+A implementação foi interrompida; somente este relatório de bloqueio foi criado conforme instrução explícita.
+A pasta test já existia. Foi confirmado com Test-Path que o relatório RULES-A ainda não existia antes da gravação.
+
+2. BASE DOCUMENTAL E LEITURAS
+
+Lidos nesta execução: AGENTS.md, firebase.json, .firebaserc, test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt, package.json e functions/package.json.
+Consultados os locks da raiz/functions e a infraestrutura de testes por busca de referências a rules-unit-testing, initializeTestEnvironment e Emulator.
+
+Contexto documental já lido nas etapas anteriores desta mesma conversa e preservado sem refazer a auditoria:
+- docs/codex/CURRENT_WORK.md;
+- partes relevantes de docs/catalog/F7_CATALOGO_INTELIGENTE.md;
+- docs/catalog/CATALOGO_TAXONOMIA_COLECOES_DINAMICAS.md;
+- relatórios A/B/BR anteriormente localizados no Desktop;
+- snapshot docs/security/FIRESTORE_RULES_PRODUCAO_2026-09-16.rules.
+
+Não houve releitura integral de toda a documentação anterior nesta execução: o gate explícito de ausência da fonte operacional foi encontrado antes de qualquer implementação. As conclusões históricas utilizadas estão discriminadas abaixo e não são resultados de testes novos.
+
+3. FONTE OPERACIONAL E BLOQUEIO
+
+Nenhuma fonte operacional local de Firestore Rules foi identificada pelo firebase.json.
+O arquivo possui storage.rules = "storage.rules", destinado a Firebase Storage.
+Possui emulators.firestore.port = 8080, mas não possui configuração firestore.rules nem bloco de fonte operacional Firestore.
+.firebaserc identifica o projeto padrão store-connect-app; não identifica arquivo de Rules.
+A busca de arquivos .rules encontrou storage.rules e o snapshot histórico de produção. Nenhum deles constitui fonte operacional Firestore apontada pelo firebase.json.
+
+A instrução desta etapa determina: se não existir fonte operacional claramente identificável, parar, não transformar o snapshot em fonte e não criar uma nova fonte por suposição.
+Esse é o bloqueio exato de RULES-A. Não depende de mudar backend, Flutter ou instalar dependências.
+
+4. COMPARAÇÃO COM SNAPSHOT E BYPASSES
+
+Não é possível comparar fonte operacional versus snapshot: o primeiro artefato não está identificado.
+O snapshot histórico permanece evidência da auditoria anterior, não foi promovido a fonte operacional nem carregado como tal no Emulator.
+
+Achados anteriores mantidos:
+- products, linha 185 do snapshot: CREATE/UPDATE protegem campos de arquivamento, mas não categoryIds/categoryId/categoryName. Escrita direta desses campos pode contornar a autoridade futura do backend.
+- categories, linha 284: DELETE é permitido a admin/gerente da mesma loja, sem verificar uso.
+- regra genérica, linha 387: exclui products e categories em todas as operações. Não foi possível reconfirmar isso em arquivo operacional inexistente/não identificado.
+
+Não houve nova auditoria geral nem mudança da matriz de roles, isolamento ou arquivamento.
+As decisões já fechadas sobre múltiplas categorias, máximo de 10 por produto, IDs, ausência de isActive e ausência de reparos/migrações automáticas permanecem preservadas.
+
+5. ALTERAÇÕES EM PRODUCTS E CATEGORIES
+
+Products: nenhuma alteração implementada.
+Categories: nenhuma alteração implementada.
+Regra genérica: nenhuma alteração.
+Backend e Flutter: nenhuma alteração.
+
+Contrato autorizado para retomada, sem implementação agora:
+- CREATE de produto continua permitido conforme política atual, desde que não contenha os três campos taxonômicos.
+- UPDATE operacional deve preservar exatamente os campos taxonômicos existentes, incluindo legados; adição, alteração e remoção devem ser rejeitadas.
+- DELETE de categories deve ser negado diretamente a todos os clientes.
+- CREATE/UPDATE de categoria, arquivamento e isolamento permanecem fora de alteração.
+
+Essa restrição de diff permitiria preservar produtos legados em updates operacionais, mas a compatibilidade não foi implementada nem validada em execução nesta etapa.
+A instrução atual de manter criação geral sem taxonomia prevalece sobre propostas históricas de corte total da criação legada.
+
+6. INFRAESTRUTURA DE TESTES
+
+functions/package.json já declara devDependencies:
+- @firebase/rules-unit-testing: ^5.0.2;
+- firebase: ^12.18.0.
+functions/package-lock.json contém rules-unit-testing 5.0.2.
+Existe functions/tests/security/storageRules.test.mjs, com initializeTestEnvironment e carregamento de storage.rules; é teste de Storage, não dos dois contratos Firestore desta etapa.
+functions/package.json possui test:catalog e test:retention via firebase emulators:exec.
+Não foi encontrado teste dedicado de Firestore Rules nas buscas executadas.
+Não houve instalação nem alteração de package.json/package-lock.json.
+Nenhuma preparação de framework foi necessária ou executada antes de resolver a fonte operacional.
+
+7. TESTES E CENÁRIOS
+
+Testes criados/alterados: nenhum.
+Comandos de testes executados: nenhum.
+Emulator não iniciado. Sintaxe de Rules não compilada/validada no Emulator.
+Resultado: 0 testes executados; 0 passaram; 0 falharam. Isso NÃO representa aprovação da etapa.
+
+Resultados individuais dos cenários obrigatórios: todos NÃO EXECUTADOS por bloqueio prévio.
+01. Update operacional da mesma loja: não executado.
+02. Rejeitar adição de categoryIds: não executado.
+03. Rejeitar modificação de categoryIds: não executado.
+04. Rejeitar remoção de categoryIds: não executado.
+05. Rejeitar alteração de categoryId: não executado.
+06. Rejeitar remoção de categoryId legado: não executado.
+07. Rejeitar alteração de categoryName: não executado.
+08. Rejeitar CREATE com categoryIds: não executado.
+09. Rejeitar CREATE com categoryId/categoryName: não executado.
+10. Permitir CREATE válido sem taxonomia: não executado.
+11. Negar acesso de outra loja: não executado.
+12. Permitir update operacional de legado sem mudar taxonomia: não executado.
+13. Negar DELETE de categoria a usuário comum: não executado.
+14. Negar DELETE de categoria a admin: não executado.
+15. Negar DELETE de categoria a gerente: não executado.
+16. Preservar leitura/criação/edição de categorias: não executado.
+
+Isolamento entre lojas: nenhuma regra alterada; não há nova comprovação em teste.
+Updates operacionais: nenhuma regra alterada; funcionamento não foi reconfirmado por teste.
+DELETE de categories: não foi bloqueado por esta execução para nenhum papel. A permissão histórica de admin/gerente permanece no snapshot intacto.
+
+8. ARQUIVOS E VERIFICAÇÕES
+
+Arquivos de projeto alterados pela implementação: nenhum.
+Único arquivo criado nesta execução: test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt, artefato não rastreado.
+Relatórios preexistentes preservados.
+
+Comandos de verificação: git branch --show-current, git rev-parse HEAD, git status --short, git --no-pager diff, git --no-pager diff --cached, git diff --check, Test-Path e Get-FileHash.
+git diff --check: sem erros.
+git --no-pager diff e git --no-pager diff --cached: sem saída.
+
+Snapshot SHA256 preservado:
+8E605C667E25644CFA43F1B2C561282883016172840C19C4CAE5FD5CFD5BDA8A
+Relatório de retomada em test/ SHA256 preservado:
+17F7305012E26960DB5246D3CCB8E4D54956C81299D0E7966DCD2D4A5063A9A5
+
+Arquivos financeiros, catálogo F7, backend, Flutter, configuração e snapshot não foram modificados.
+Nenhum dado real foi acessado ou alterado. Nenhuma migração, limpeza, callable, dual-write ou seções dinâmicas foram iniciados.
+
+9. GIT STATUS FINAL E DIFF
+
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+
+Resumo fiel: nenhum diff de arquivos rastreados e nenhuma alteração no índice. Os seis relatórios iniciais continuam não rastreados; somente RULES-A foi acrescentado nesta execução. git diff padrão não exibe conteúdo de arquivos não rastreados.
+Branch e HEAD preservados.
+
+10. PENDÊNCIAS E PRÓXIMO PASSO
+
+RULES-A não passou: está bloqueado pela ausência de fonte operacional apontada pelo firebase.json.
+Menor próximo passo: identificar uma fonte operacional existente e seu caminho/configuração; se ela realmente não existir, decidir e autorizar explicitamente a criação de uma fonte operacional separada e sua configuração local. Não modificar o snapshot histórico.
+Somente após resolver esse gate, retomar os dois patches exatos de RULES-A e seus testes de cliente no Emulator. Nenhum desses passos futuros foi implementado.
+Não há necessidade demonstrada de dependência importante nova. A presença das dependências nos manifests não equivale a teste executado.
+Não solicitar commit nem publicar Rules nesta entrega.
+
+11. CONFIRMAÇÕES
+
+GIT ADD NÃO EXECUTADO
+COMMIT NÃO EXECUTADO
+PUSH NÃO EXECUTADO
+DEPLOY NÃO EXECUTADO
+FIRESTORE RULES NÃO PUBLICADAS
+SNAPSHOT DE PRODUÇÃO NÃO ALTERADO
+FIRESTORE REAL NÃO ALTERADO
+FLUXO FINANCEIRO/ASAAS NÃO ALTERADO
+
+Relatório salvo em:
+C:\Users\rodri\StudioProjects\store_connect\test\F7-CAT-TAXONOMIA-RULES-A_relatorio.txt

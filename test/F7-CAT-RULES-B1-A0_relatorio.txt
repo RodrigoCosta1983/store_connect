@@ -1,0 +1,387 @@
+F7-CAT-RULES-B1-A0 — AUDITORIA SOMENTE LEITURA
+Data: 2026-09-17
+Root: C:\Users\rodri\StudioProjects\store_connect
+Branch: feat/f7-intelligent-catalog
+HEAD: ec7e66d1d0ff6c00f7d644c49ab94a6a4351f75b
+
+ESCOPO E PRÉ-CONDIÇÕES
+Branch/HEAD confirmados. Nada staged. Tracked modificados exclusivamente os quatro
+arquivos paralelos abaixo. Untracked somente test/*.txt. Código, Rules, Functions,
+relatórios anteriores e formatação não alterados. Única escrita: este relatório
+expressamente solicitado, UTF-8 sem BOM, untracked.
+Auditoria estática: nenhum teste, emulator, chamada Asaas, deploy ou produção executado.
+Não se afirma que a Function publicada seja igual ao código local; isso não foi consultado.
+
+SHA256 INICIAL = FINAL — QUATRO ARQUIVOS INTACTOS
+android/app/build.gradle.kts
+F1F1177AA182FE49667CDF1FD193D7D1E6DD8C71A6255A01C06FE65C82A8759B
+lib/screens/subscription_screen.dart
+61FFBB2E547E61E2B50BD458C2AB0EA06D58C8922CC20EB528EF8025CCF3FA62
+lib/widgets/warning_banner.dart
+BFA479F243DED27C184503ADB5A13FF72DAFF16DB040C0958889488BCAD0422D
+pubspec.yaml
+60BF48C598E2394AA9F7C6942D5884AA393B1604AD001092A70C40707BD9A502
+
+1. FLUXO FLUTTER ATIVO
+Arquivo lido integralmente: lib/screens/subscription_screen.dart.
+_startSubscriptionProcess: linha 184 no working tree.
+- Ativa _isLoading, exige FirebaseAuth.currentUser e lê stores/{widget.storeId}.
+- Se loja não existir, lança erro. Lê document em 200-201, name e phone em 202-203.
+- Se document já existir como string não vazia: não abre modal, não faz update,
+  chama createAsaasSubscription com o valor existente.
+- Se document ausente/null/string vazia: abre _askForDocumentModal (121), com
+  digitsOnly e validação de 11 ou 14 dígitos (sem validação de dígitos verificadores).
+  Modal barrierDismissible false, botão Cancelar retorna null.
+- Cancelamento encerra a tentativa. Confirmação atribui inputDoc à variável local.
+- Em 219-222 executa FirebaseFirestore.instance.collection('stores').doc(widget.storeId)
+  .update({'document': document}). Esse await ocorre ANTES da callable.
+- Sob firestore.rules atual, a mutação de document é negada e a callable não é alcançada.
+- Campo numérico ou outro tipo inesperado pode falhar na atribuição String; a tela
+  ativa não normaliza o valor salvo como a tela alternativa. Não é o gatilho básico de B1.
+
+Payload exato da callable (233-238):
+{ cpfCnpj: document, name: name, email: user.email, phone: phone }
+Não envia storeId. Callable createAsaasSubscription em 228; timeout 120 segundos.
+
+Retorno/erros/retry:
+- Resposta convertida para Map<String,dynamic>.
+- alreadyActive true: SnackBar e retorno ao AuthGate após 2 segundos.
+- paymentUrl presente: launchUrl externo, fallback para clipboard se lançar erro,
+  depois navega para PaymentWaitingScreen com subscriptionId/paymentUrl/storeId.
+- paymentUrl ausente: mensagem "URL do pagamento não disponível".
+- FirebaseFunctionsException: mostra e.message; catch geral mostra interpolação de e.
+  A negação do update direto Firestore cai no catch geral, não no catch de Functions.
+- finally restaura _isLoading false se mounted; botão volta a permitir nova tentativa.
+- Não existe loop automático de retry nem requestId estável na tela.
+  Cada clique reconsulta a loja; se o documento persistiu pelo backend, o próximo
+  clique lê esse valor. Durante o modal o loading é desligado; não há trava global
+  de reentrada no início do método. Nenhuma garantia extra foi presumida.
+
+2. HEAD X WORKTREE / ALTERAÇÃO PARALELA
+Consultado git show HEAD:lib/screens/subscription_screen.dart e diff do arquivo.
+O write direto existe EM AMBOS: HEAD commitado e conteúdo atual do working tree.
+Ele NÃO foi adicionado pela alteração paralela.
+Comparação textual do método _startSubscriptionProcess confirmou que o método
+inteiro é idêntico entre HEAD e worktree, normalizando apenas CRLF para comparação.
+
+Diff paralelo está restrito ao listener:
+- adiciona _parseFlexibleDate (DateTime, String.tryParse, toDate defensivo);
+- troca cast String de trialEndDate pela chamada do helper;
+- passa DateTime resultante diretamente a isBefore.
+A solução futura de B1 pode editar somente o trecho de persistência no método
+_startSubscriptionProcess, preservando byte a byte os blocos paralelos.
+Não restaurar o arquivo pelo HEAD, substituir a tela inteira nem rodar formatter.
+A seleção de diff/staging futura deve separar os hunks dos trabalhos; nenhum staging aqui.
+
+3. CREATEASAASSUBSCRIPTION — IMPLEMENTAÇÃO REAL
+Export e implementação inline: functions/index.js:97, onCall v2, timeoutSeconds 120.
+Não há arquivo de implementação separado para esta callable.
+Admin SDK em index.js:12 e admin.initializeApp:48; db = admin.firestore:127.
+Helpers usados: functions/financeiro/subscriptionLegacyRegistry.js;
+preços/reconciliação: functions/financeiro/subscriptionPricing.js.
+
+Contrato efetivamente lido:
+- request.auth obrigatório; uid vem de request.auth.uid.
+- request.data.storeId opcional, convertido para string/trim.
+- Se ausente (caso da tela ativa), lê users/{uid}.storeId no servidor (150-162).
+- Se presente, não é autoridade: users.storeId == storeId é revalidado na transação.
+  Portanto não é correto dizer que o backend SEMPRE ignora storeId do payload;
+  ele aceita um alvo solicitado, mas confirma vínculo no servidor.
+- cpfCnpj opcional, normalizado removendo não dígitos (179-181).
+- name/email/phone do payload ativo não são fontes canônicas e são ignorados
+  para cadastro financeiro: nome/telefone vêm da loja; e-mail do token autenticado,
+  perfil do usuário ou fallback construído pelo backend (991 em diante).
+- Não há whitelist rígida de chaves do payload neste handler.
+
+Ordem real do caminho normal:
+1. Autenticação; resolve storeId e cria referências.
+2. Transação relê usuário e loja. Exige perfil/loja existentes, accessStatus não
+   revoked, vínculo de loja, role admin e ownerId == uid (232-273).
+3. Normaliza storedDocument (275). Se armazenado e solicitado divergem, rejeita
+   failed-precondition. cleanDocument = storedDocument || requestedDocument.
+4. Exige 11 ou 14 dígitos (295-307). Não há algoritmo de dígitos verificadores nem
+   comprovação de titularidade civil nesta validação; não chamar isso de validação completa.
+5. Lê cpfs_cadastrados/{cleanDocument} e classifica reserva pelo helper:
+   ausente -> criar; mesmo uid/store -> usar; mesmo uid sem storeId -> backfill;
+   vínculo conflitante -> rejeitar; uid legado diferente sem storeId -> prova externa.
+6. No caminho normal, verifica lock subscriptionCreationStatus == creating com
+   idade inferior a 3 minutos. Lock válido rejeita already-exists.
+7. Ainda na mesma transação, adquire lock e, se storedDocument ausente, define
+   storeUpdate.document, documentUpdatedAt, documentUpdatedBy (395-406).
+   Grava/reserva cpfs_cadastrados (412/424) e audit store_document_registered
+   (438-466), registrando apenas hasDocument no audit, não o CPF/CNPJ completo.
+   Persistência de document + reserva + audit + lock é atômica no Firestore.
+8. Só depois relê dados canônicos da loja e inicia integrações Asaas normais.
+9. Se asaasCustomerId já salvo: consulta customer, recusa externalReference
+   diferente; se externalReference ausente, preenche com storeId.
+   Se não salvo: busca por cpfCnpj; reutiliza apenas customer com externalReference
+   da própria loja; senão cria customer exclusivo (POST /customers em 1225).
+   Persiste asaasCustomerId em 1262.
+10. Lista subscriptions ACTIVE por customer/externalReference; se existentes,
+    reconcilia uma assinatura (respeita ID oficialmente comprovado no caminho legado),
+    normaliza billingType quando aplicável e sincroniza preço via helper.
+    Consulta pagamento OVERDUE/PENDING/outro para retornar paymentUrl.
+11. Sem ACTIVE: POST /subscriptions, plano Pro, billingType UNDEFINED; salva ID,
+    pending/pro, nextDueDate e preço imediatamente, liberando lock (1596-1622).
+12. Busca link de pagamento em até 20 tentativas com delay 3s; se não disponível,
+    retorna sucesso waitingPaymentLink, sem apagar assinatura criada.
+
+Exceção: registro legado com uid diferente e sem storeId
+- Primeira transação termina SEM escrita/lock.
+- Exige IDs financeiros já salvos; lê customer/subscription no Asaas.
+- evaluateLegacyFinancialProof exige store.document já existente e igual ao
+  CPF/CNPJ do customer, IDs correspondentes, externalReference == storeId e ACTIVE.
+- Segunda transação revalida usuário, owner, plano, documento, IDs, reserva e lock;
+  migra registro legado e adquire lock com audit, sem substituir document da loja.
+- Uma loja SEM document com reserva de OUTRO uid não é automaticamente reivindicada:
+  a prova exige documento preexistente. Isso é recusa defensiva prevista, não motivo
+  para voltar a gravar document pelo cliente ou para enfraquecer Rules.
+
+Retry/idempotência e limites:
+- Transações serializam reserva/document/lock; documento existente diferente é rejeitado.
+- Lock de 3 minutos reduz chamadas concorrentes; busca customer da própria loja e
+  subscriptions ACTIVE tenta reutilizar recursos já existentes em novas tentativas.
+- Catch limpa o lock somente quando creationLockAcquired está true;
+  preserva HttpsError, converte demais erros para internal.
+- Não há requestId/receipt de idempotência end-to-end nem transação distribuída
+  Firestore + Asaas. Timeout/falha após POST pode deixar efeito remoto pendente de
+  reconciliação. A busca/reuso mitiga duplicação, não prova garantia absoluta.
+- Se Asaas falhar após a primeira transação, document/reserva/audit podem permanecer;
+  não há rollback desses dados. Isso é compatível com retry usando o valor já salvo.
+- O handler observado retorna alreadyExists no reuso, não alreadyActive; a tela
+  tem ramo alreadyActive, mas continua consumindo paymentUrl. Divergência preexistente,
+  não necessária para a correção mínima do write B1.
+- Há logs no ramo de busca/criação que interpolam cleanDocument integral apesar do
+  log mascarado anterior. Achado estático de privacidade a registrar separadamente;
+  nenhum log com CPF real foi coletado e nenhuma correção foi feita nesta auditoria.
+
+4. INVENTÁRIO DOS WRITERS DE document
+Pesquisa global por document, literais, .update, .set, transaction.update e batch.update;
+seguimento das referências/maps. Dependências vendorizadas/build foram classificadas
+como genéricas e excluídas da análise de domínio após inventário de arquivos.
+
+FLUTTER DIRETO
+- lib/screens/subscription_screen.dart:222: único write de stores.document encontrado
+  no código Flutter de aplicação. Confirmado no HEAD e no working tree.
+
+BACKEND ADMIN SDK
+- functions/index.js:399 -> transaction.update(storeRef, storeUpdate): registra
+  stores.document somente quando ausente, após autorização e verificação da reserva.
+- functions/index.js:417/428: document no registro cpfs_cadastrados, não no store;
+  criação/backfill atômicos junto do caminho normal.
+- functions/index.js:879: document no registro cpfs_cadastrados durante migração
+  legada comprovada; não é sobrescrita de stores.document.
+- functions/auth/bootstrapStore.js:268-274: transaction.set(storeRef, {...document})
+  na criação inicial da loja; 332-335 grava document também em cpfs_cadastrados.
+  Exige autenticação, nome/telefone, 11/14 dígitos, usuário sem loja e CPF não reservado.
+  Gera storeId no servidor. Não serve para atualizar loja já vinculada: rejeita
+  existingStoreId (already-exists).
+
+FLUTTER PAYLOAD/LEITURA, NÃO WRITE DIRETO
+- create_store_screen.dart:151-159 envia document à bootstrapStore.
+- subscription/subscription_screen.dart:241 lê document; payload inclui storeId e
+  cpfCnpj somente se documento ausente. Nenhum .set/.update de document.
+- warning_banner.dart:35-51 lê loja e envia cpfCnpj a callable; não persiste document.
+- settings_screen.dart:571-609 chama função financeira com storeId; não grava document.
+- fiscal_settings_screen.dart:274 lê document para preencher CNPJ fiscal; gravações
+  fiscais usam outro mapa/contexto, não stores.document.
+
+TESTES
+- functions/tests/auth/bootstrapStore.emulator.test.js: fixtures/entrada/asserts da
+  criação via backend; dados exclusivamente de testes.
+- functions/tests/financeiro/createAsaasSubscriptionLegacy.emulator.test.js:
+  fixtures Admin de loja/reserva contendo document e asserts; axios mockado.
+- functions/tests/financeiro/subscriptionLegacyRegistry.test.js: objetos em memória
+  para testar classificação/prova, sem writer real de loja.
+
+OUTROS CONTEXTOS
+- functions/financeiro/subscriptionLegacyRegistry.js: lê/compara document, helper puro.
+- functions/fiscal/emitirNfce.js:682: leitura de store.document, não alteração.
+- functions/catalog/createCatalog.js: variáveis de DocumentSnapshot chamadas document.
+- firestore.rules/docs/security: nome de campo protegido e wildcard {document=**}.
+- firestore_write_inventory.txt e relatórios anteriores: registros históricos, não código executável.
+- tests/backups/claimBackupRetentionDelete e productCategoryContract: nomes genéricos
+  de documento/fixtures, não cadastro fiscal de loja.
+- node_modules, relatórios HTML e storyboards: document genérico, DOM/SDK/metadados;
+  não identificam novo writer de stores.document na aplicação.
+Nenhum batch.update adicional de stores.document encontrado.
+
+5. FIRESTORE RULES
+Arquivo lido; match /stores/{storeId} em 57-100.
+read exige usuário autenticado com perfil vinculado à loja; create/delete false.
+update em 69 exige autenticação/perfil/mesma loja E:
+!request.resource.data.diff(resource.data).affectedKeys().hasAny([... 'document', ...])
+Document aparece na linha 78. Adicionar campo ausente, trocar vazio por valor, remover
+ou alterar valor aciona affectedKeys e falha. Regravar valor idêntico não é alteração,
+mas não é o caso do fallback B1 (vazio/ausente -> preenchido).
+Não há exceção de assinatura nem de owner/admin para esse campo neste match.
+Catch-all de subcoleções não se aplica ao documento pai stores/{storeId}.
+cpfs_cadastrados é backend-only em 51-53; auditLogs também backend-only em 167-177.
+
+Liberar document diretamente não seria mera correção de UX:
+- validação atual do update de loja é por vínculo, não exclusivamente owner/admin;
+- romperia coordenação entre documento da loja e reserva cpfs_cadastrados;
+- permitiria substituir identidade financeira usada em Asaas e em contexto fiscal;
+- contornaria conflito de identidade e auditoria do backend;
+- poderia enfraquecer a premissa de store.document preexistente na prova financeira legada.
+Portanto a solução baseada no código existente mantém a Rule. Nenhuma alteração de
+Rule está desenhada ou aplicada. Não se afirma validação legal de CPF/CNPJ.
+
+6. AUTHGATE / DUAS TELAS
+AuthGate importa package:store_connect/screens/subscription_screen.dart em 91.
+Instancia SubscriptionScreen em 287 (loja ausente) e 371 (sem acesso).
+Busca de imports/exports/nomes em lib/ e test/*.dart não encontrou referência à
+biblioteca screens/subscription/subscription_screen.dart fora da própria declaração.
+No grafo estático observado, a tela aninhada não é a selecionada pelo AuthGate;
+a conclusão não depende de presumir que o nome de classe, sozinho, determine o arquivo.
+
+Origem comprovada pelo Git:
+- tela aninhada adicionada em ad547e2, 2026-09-03, "refactor: move store and subscription authority to backend";
+- commit também alterou a tela da raiz e o AuthGate;
+- git show ad547e2 e ad547e2^ confirmam que o import do AuthGate permaneceu apontando
+  para screens/subscription_screen.dart;
+- tela aninhada só tem esse commit no histórico consultado.
+Assim há duas implementações porque a nova biblioteca foi adicionada mantendo a
+anterior e sem redirecionar o import ativo. Intenção humana/causa do engano não pode
+ser afirmada; o fato verificável é a migração não conectada nesse ponto do grafo.
+O cabeçalho da tela aninhada cita o caminho da raiz, mas isso é comentário, não import.
+
+Comparação:
+Ativa: envia cpfCnpj/name/email/phone, não storeId; persiste document diretamente;
+listener exige status active e plano pago ou trial válido; possui parser paralelo.
+Aninhada: envia storeId e cpfCnpj só quando necessário; não grava document; parser
+próprio Timestamp/DateTime/ISO; listener aceita também trial e overdue conforme matriz.
+Ambas mantêm diálogo, fluxo de pagamento e retry manual. Substituir uma pela outra
+mudaria mais do que B1 (matriz de acesso/parser), portanto não é o menor patch.
+
+7. OPÇÕES TÉCNICAS — NENHUMA IMPLEMENTADA
+
+OPÇÃO A — REUTILIZAR createAsaasSubscription COM CPF/CNPJ QUANDO NECESSÁRIO
+Estado encontrado: a capacidade backend dessa opção JÁ ESTÁ IMPLEMENTADA.
+Arquivos de produção necessários à correção mínima: apenas
+lib/screens/subscription_screen.dart, retirando seu await de update direto e deixando
+a callable receber o CPF/CNPJ coletado. O payload atual já é aceito; não é obrigatório
+mudar chaves, navegação, listener, AuthGate ou duplicar normalização para remover B1.
+Functions/index.js, helpers e Rules não precisam mudar para esse objetivo.
+Compatibilidade Rules: total; persistência Admin já autorizada no servidor.
+StoreId: pode continuar omitido como hoje, derivado de users/{uid} e revalidado.
+Documento do cliente: candidato, nunca autoridade; servidor aplica verificações descritas.
+Atomicidade: document/reserva/audit/lock numa transação; Asaas continua externo.
+Duplicação: sem novo round-trip ou novo mecanismo; mantém proteção/limitações existentes.
+Impacto: elimina a falha anterior à callable; documento pode persistir mesmo se a
+etapa Asaas posterior falhar, como previsto pelo backend atual.
+Testes: widget fluxo existente/ausente/cancelamento/erro/retry e transação backend com
+Asaas mockado; cenários detalhados na seção 9.
+
+OPÇÃO B — NOVA CALLABLE DEDICADA AO DOCUMENTO
+Arquivos: novo módulo backend, export em functions/index.js, tela ativa e testes;
+possível extração de contrato compartilhado com assinatura/bootstrap se aprovada.
+Compatível com Rules atuais usando Admin, sem liberar write de cliente.
+Deve derivar loja do perfil ou revalidar alvo solicitado; exigir owner/admin/acesso,
+validar input e reserva, rejeitar troca incompatível e produzir audit.
+Atomicidade limitada à transação documento/reserva/audit dessa nova chamada;
+assinatura seria segunda chamada. Mais estados intermediários/corridas para revalidar.
+Duplicação: nova superfície de retry e risco de duplicar regras de identidade já
+existentes; precisaria semântica idempotente explícita e controle de concorrência.
+Impacto: novo round-trip e integração, sem necessidade funcional demonstrada por B1.
+Testes: mesmos de A mais equivalência de contratos, concorrência entre as duas callables,
+reenvio da chamada dedicada e autorização/limpeza de estados intermediários.
+Não indicada pelo código atual como solução mínima.
+
+OPÇÃO C — OUTRO MECANISMO EXISTENTE
+C1: o mecanismo realmente reutilizável é o fallback transacional já existente de
+createAsaasSubscription (equivale a A, sem backend novo).
+C2: bootstrapStore é existente e também grava documento Admin, mas cria nova loja e
+rejeita usuário com loja; não deve ser reutilizada como setter em loja existente.
+Transformá-la nisso exigiria alterar contrato/backend/testes e aumentaria o risco de
+confundir criação, trial, reserva de slug e vínculo de usuário. Não indicado.
+C3: tela aninhada demonstra integração cliente já compatível; possível usar como
+referência pontual. Trocar import em auth_gate.dart usaria essa outra implementação,
+mas alteraria também listener/matriz/parser e deixaria de preservar a mudança paralela
+ativa como comportamento. Exigiria regressão mais ampla; não é o menor ajuste B1.
+Os três mantêm servidor como autoridade se usados conforme contratos; CPF/CNPJ bruto
+não deve ser aceito como prova de propriedade apenas por ser enviado pelo cliente.
+
+8. SOLUÇÃO MÍNIMA INDICADA PELAS EVIDÊNCIAS
+Em etapa futura autorizada, remover somente o bloco de escrita Firestore direta em
+_startSubscriptionProcess da tela realmente importada, mantendo a variável document
+preenchida pelo modal e a chamada existente createAsaasSubscription.
+A callable local já trata o caso ausente sem precisar que Flutter pré-preencha a loja.
+Não criar outra callable, não alterar Rule, não trocar tela/import, não substituir
+arquivo pelo conteúdo do HEAD, não tocar parser trialEndDate ou outros hunks paralelos.
+Isso remove o blocker técnico B1; não garante aprovação de CPF conflitante, sucesso
+externo Asaas, ausência absoluta de duplicatas ou resolução de todos os achados adjacentes.
+
+9. TESTES NECESSÁRIOS NA IMPLEMENTAÇÃO FUTURA
+- Widget com document existente: sem modal/write Firestore e callable alcançada.
+- Ausente/null/vazio: modal, entrada aceita, nenhuma escrita direta e cpfCnpj enviado.
+- Cancelamento/entrada inválida: nenhuma callable; estado do botão recuperado.
+- Rules negando update de document: demonstrar que o fluxo corrigido não tenta esse write.
+- Rejeições Functions, timeout, retry e navegação/paymentUrl sem regressão.
+- Backend com Firestore Emulator + Asaas mockado: registro ausente cria document,
+  reserva, metadados e audit atomicamente; Asaas só depois do commit.
+- Documento existente mesmo/diferente; faltante/inválido; owner não admin, admin não
+  owner, perfil revogado, outra loja ou loja inexistente; pedido com/sem storeId.
+- CPF ocupado, reserva legada mesmo uid/backfill e outro uid com prova insuficiente.
+- Concorrência: duas lojas mesmo CPF, dois pedidos mesma loja, documentos divergentes,
+  lock vigente; falha após persistência e resposta perdida do Asaas.
+- Regressão do parser paralelo: Timestamp/DateTime/String/null/valor inválido.
+- Preservação dos demais arquivos protegidos e revisão de hunks sem formatter global.
+
+Suítes existentes identificadas, NÃO executadas nesta auditoria:
+functions/tests/financeiro/subscriptionLegacyRegistry.test.js
+functions/tests/financeiro/createAsaasSubscriptionLegacy.emulator.test.js
+functions/tests/auth/bootstrapStore.emulator.test.js
+A suíte Legacy mocka axios e rejeita POST de novos recursos: cobre reconciliação/
+provas/corridas, não prova sozinha o novo cadastro com documento ausente + criação Asaas.
+Novos cenários específicos de B1 devem ser planejados na etapa de implementação.
+
+10. RESPOSTAS OBJETIVAS E SIGNIFICADO
+B1 CONFIRMADO: SIM
+WRITE DIRETO EXISTE NO HEAD: SIM
+RULE ATUAL BLOQUEIA: SIM
+BACKEND ATUAL JÁ RESOLVE SEM MUDANÇA: SIM
+SOLUÇÃO EXIGE MUDANÇA DE BACKEND: NÃO
+ARQUIVO FLUTTER PRECISARÁ MUDAR: SIM
+RULE PRECISARÁ SER ENFRAQUECIDA: NÃO
+
+"Backend resolve sozinho" significa que já valida/persiste o documento sem write
+prévio do Flutter nem alteração de Function. NÃO significa que o app intacto já
+funciona: o await proibido atual precisa ser removido para alcançar a callable.
+"Solução exige backend: NÃO" no quadro final significa NÃO exige backend novo ou
+modificação; a execução da solução continuará usando o backend existente.
+Todas essas conclusões são sobre o código local; nenhum estado publicado foi verificado.
+
+11. VERIFICAÇÃO FINAL
+Quatro SHA256 reconferidos e iguais aos iniciais. Branch/HEAD preservados.
+git diff --check: exit 0; avisos de futura conversão LF->CRLF nos paralelos são
+preexistentes; nenhuma conversão realizada. Stage vazio. Nenhuma correção aplicada.
+
+STATUS FINAL DO GIT
+ M android/app/build.gradle.kts
+ M lib/screens/subscription_screen.dart
+ M lib/widgets/warning_banner.dart
+ M pubspec.yaml
+?? test/F7-CAT-RULES-B1-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+
+GIT ADD: NAO
+COMMIT: NAO
+PUSH: NAO
+DEPLOY: NAO

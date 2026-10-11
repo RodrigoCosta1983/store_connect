@@ -1,0 +1,65 @@
+F7-CAT-TAXONOMIA-CONTRACT-A: CONCLUIDO
+
+Estado inicial
+Branch: feat/f7-intelligent-catalog
+HEAD: 5c54b265eed9b30139deccd592592369d7f553fb
+Nenhum arquivo rastreado modificado. Somente os 10 relatorios preexistentes test/*.txt estavam untracked.
+
+Leituras
+AGENTS.md; somente secao 18 de test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt; padrao simples de assert/execucao em functions/tests/financeiro/subscriptionLegacyRegistry.test.js.
+O contrato explicito desta solicitacao prevaleceu: nenhum limite de bytes ou restricao adicional de IDs foi introduzido.
+
+Arquivos de projeto criados
+functions/products/productCategoryContract.js
+functions/tests/products/productCategoryContract.test.js
+Nenhum arquivo existente alterado. Relatorios anteriores preservados.
+
+API CommonJS criada
+1. validateCategoryIds(categoryIds): valida Array com 0..10 IDs e retorna copia ordenada. Rejeita elementos nao string, vazios, whitespace-only, whitespace externo, barra e duplicatas exatas. Case-sensitive. Nao ordena, deduplica, trunca ou modifica entrada. TypeError para estrutura/ID invalido; RangeError para quantidade acima de 10.
+2. captureTaxonomyState(product): recebe objeto e retorna, para cada campo categoryIds/categoryId/categoryName, {present:false} quando ausente ou {present:true,value:valorOriginal} quando presente. Considera propriedades proprias. Preserva null, undefined explicito, arrays, valores validos e estruturas invalidas sem reparo. Valores compostos sao mantidos por referencia; o helper nao os modifica e nao promete snapshot profundo nem congelamento. Raiz nao objeto, null ou Array e rejeitada.
+3. projectLegacyCategories(categoryIds, resolvedCategories): recebe IDs e Map<ID,{name}> resolvido pelo chamador; revalida IDs defensivamente. Exige resolucao e nome string nao vazio/nao whitespace-only para TODOS os IDs. Retorna copia de categoryIds e projecao singular do primeiro ID/nome canonico. Para [] retorna categoryIds:[], categoryId:null, categoryName:null. Nomes canonicos sao preservados exatamente, sem trim ou normalizacao. Campos legados nao sao consultados. Ausencia ou nome invalido gera TypeError; nao escolhe outra categoria. Sem primaryCategoryId.
+Modulo puro: sem I/O, Firestore, Firebase, Admin SDK, callable ou Flutter.
+
+Testes e comandos executados
+node --check functions/products/productCategoryContract.js: PASSOU.
+node --check functions/tests/products/productCategoryContract.test.js: PASSOU.
+node functions/tests/products/productCategoryContract.test.js: 50 PASSARAM; 0 FALHARAM.
+Cobertura: 0/1/10/11 IDs; entradas null/string/numero/objeto; elementos null/numero; vazio/whitespace/espacos externos/barra; duplicados; case sensitivity; ordem; ausencia de limites extras; imutabilidade; ausencia/null/[]/valor/estruturas invalidas/undefined; legado ausente versus null ou string vazia; propriedades herdadas; projecoes vazia/singular/multipla/reordenada; categorias ausentes na primeira e demais posicoes; nomes invalidos; ausencia de fallback legado; preservacao literal do nome canonico; Map obrigatorio; revalidacao defensiva.
+git diff --check: PASSOU, sem erros.
+git --no-pager diff --exit-code: PASSOU, diff rastreado vazio.
+git diff --no-index --check -- /dev/null functions/products/productCategoryContract.js: sem erros de whitespace.
+git diff --no-index --check -- /dev/null functions/tests/products/productCategoryContract.test.js: sem erros de whitespace.
+Git emitiu apenas aviso de futura conversao LF para CRLF conforme configuracao local; nao houve reformatacao de arquivo existente.
+
+Resumo do diff
+Somente dois arquivos JS novos nao rastreados: contrato puro e teste independente com assert nativo. Nenhuma dependencia instalada; package.json intacto. O terceiro arquivo novo e este artefato de relatorio, fora do codigo do projeto.
+
+Ambiguidades nao implementadas / limites
+Sem politica de criacao/rename de nomes, tamanho maximo ou unicidade de nomes. Nome canonico apenas exige string nao branca; nao normaliza nome ja resolvido. Sem autorizacao, resolucao no banco, transacao, controle de concorrencia, audit log, persistencia, migracao ou reparo. Presenca/valor nao classifica nem corrige estruturas invalidas. Map e formato explicito da API local, nao payload de callable. Erros locais sao TypeError/RangeError, sem contrato remoto.
+
+Proximo passo recomendado
+Revisar as decisoes pendentes do BACKEND-CONTRACT antes de um incremento de persistencia/autorizacao; integrar este contrato somente em etapa futura aprovada. Nao implementar backend ou alterar clientes/Rules nesta etapa.
+
+Confirmacoes
+GIT ADD NÃO EXECUTADO
+COMMIT NÃO EXECUTADO
+PUSH NÃO EXECUTADO
+DEPLOY NÃO EXECUTADO
+FIRESTORE NÃO ACESSADO
+RULES NÃO ALTERADAS
+FLUTTER NÃO ALTERADO
+
+Git status final
+?? functions/products/productCategoryContract.js
+?? functions/tests/products/productCategoryContract.test.js
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt

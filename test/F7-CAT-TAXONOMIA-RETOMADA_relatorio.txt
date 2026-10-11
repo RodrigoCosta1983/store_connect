@@ -1,0 +1,210 @@
+STORE&CONNECT — F7-CAT-TAXONOMIA-RETOMADA
+Relatório final de reconciliação e auditoria do snapshot de Firestore Rules
+Data: 16/09/2026
+
+1. ESTADO INICIAL ENCONTRADO
+
+Repositório: C:\Users\rodri\StudioProjects\store_connect
+Branch: feat/f7-intelligent-catalog
+HEAD: 56917d8d5405bd915a2c69d0577a69bdaeb3cdc3
+git status --short: sem saída; worktree limpa.
+Branch, HEAD e limpeza correspondiam ao estado esperado pelo usuário.
+Antes de criar este relatório, esses dados foram conferidos novamente.
+O arquivo de relatório ainda não existia; nenhum arquivo anterior foi sobrescrito.
+
+2. DOCUMENTOS E RELATÓRIOS UTILIZADOS
+
+- AGENTS.md e instruções fornecidas por Rodrigo nesta conversa.
+- docs/codex/CURRENT_WORK.md, incluindo os checkpoints F7 e a observação financeira atual.
+- docs/catalog/F7_CATALOGO_INTELIGENTE.md: arquitetura, compatibilidade e contratos relevantes da F7.
+- docs/catalog/CATALOGO_TAXONOMIA_COLECOES_DINAMICAS.md.
+- C:\Users\rodri\Desktop\F7-CAT-TAXONOMIA-A_relatorio.txt.
+- C:\Users\rodri\Desktop\F7-CAT-TAXONOMIA-B_relatorio.txt.
+- C:\Users\rodri\Desktop\F7-CAT-TAXONOMIA-BR_relatorio.txt.
+- docs/security/FIRESTORE_RULES_PRODUCAO_2026-09-16.rules, lido integralmente.
+- Histórico Git recente e comparação dos caminhos taxonômicos entre 9b70da5 e HEAD.
+
+Os relatórios A/B/BR foram localizados no Desktop, não na árvore do repositório.
+Foram consultados os pontos atuais de escrita de categorias/produtos no Flutter e referências no backend, sem repetir a auditoria geral A/B.
+
+3. RECONCILIAÇÃO DO RELATÓRIO ANTIGO COM O ESTADO ATUAL
+
+Os relatórios de taxonomia tinham como base 9b70da5.
+Depois dessa base, o histórico registra:
+- f86e159: inclusão do snapshot das Firestore Rules de produção.
+- 1029e07: regularização de registros legados de assinatura com prova Asaas.
+- 3781b3d: normalização de billingType legado.
+- 56917d8: documentação da decisão financeira sobre recorrência.
+
+CURRENT_WORK.md contém registros históricos que não representam isoladamente o HEAD atual. O Git foi usado como autoridade do estado atual.
+A comparação 9b70da5..HEAD não mostrou mudanças nos caminhos examinados: manage_products_screen.dart, category_management_screen.dart, product_import_service.dart, functions/catalog/createCatalog.js e functions/auth/bootstrapStore.js.
+
+O BR encerrava com a necessidade de obter e auditar uma cópia identificada das Rules publicadas. Essa cópia agora foi fornecida no repositório e identificada por Rodrigo como snapshot de produção. Portanto, a conclusão antiga de fonte não localizada não é mais válida.
+O snapshot foi tratado como evidência fornecida de produção nessa data. Não foi feita consulta remota para certificar publicação atual, versão remota ou índices.
+
+Decisões preservadas, confirmadas pelo BR e pelas instruções atuais:
+- Máximo de 10 categorias por produto no contrato de categoryIds; não é limite de 10 categorias cadastradas por loja.
+- Ausência de isActive.
+- Exclusão bloqueada quando houver uso, incluindo produtos arquivados e referências legadas.
+- Backend como autoridade dos vínculos.
+- Preservação dos IDs e dos campos operacionais existentes.
+- Dual-write temporário e transição coordenada, sem reparo ou migração automática.
+- Relação muitos-para-muitos.
+
+Categorias/coleções alimentarem seções automaticamente e evitar manutenção produto a produto continuam como direção aprovada da evolução. O contrato B delimita múltiplas categorias; coleções comerciais e seções dinâmicas não foram antecipadas nesta retomada.
+
+4. AUDITORIA DO SNAPSHOT DAS RULES
+
+Arquivo de referência para todas as linhas abaixo:
+docs/security/FIRESTORE_RULES_PRODUCAO_2026-09-16.rules
+
+4.1 users — linha 7
+
+Leitura: usuário autenticado pode ler o próprio perfil ou perfis da mesma loja, pela claim storeId ou pelo documento users do solicitante. A expressão não exige papel admin/gerente para leitura da mesma loja.
+Criação, linha 21: somente o próprio documento; campos limitados a username, email, storeId e createdAt; storeId deve ser vazio.
+Edição, linha 33: somente o próprio perfil e campos normais explicitamente permitidos. storeId, role e accessStatus não podem ser alterados por esse caminho.
+Exclusão, linha 47: negada ao cliente.
+Resultado: os campos de autoridade do perfil estão protegidos contra alteração direta pelo próprio cliente nessa regra.
+
+4.2 stores — linha 57
+
+Leitura: exige autenticação, existência do perfil e igualdade entre user.storeId e o storeId do caminho.
+Criação: negada ao cliente.
+Edição: mesma loja, sem modificar os campos sensíveis enumerados. ownerId está protegido, assim como os campos financeiros listados na regra.
+Exclusão: negada ao cliente.
+Ownership: ser ownerId não é requisito para essa edição; a autorização é por pertencimento à loja.
+Não há checagem de accessStatus revogado nem de papel nesse bloco.
+Nenhuma alteração financeira foi proposta ou executada.
+
+4.3 products — linha 185
+
+Leitura: exige usuário autenticado com perfil da mesma loja do caminho.
+Criação, linha 195: permitida à mesma loja desde que não inclua os quatro campos de arquivamento enumerados.
+Edição, linha 209: permitida à mesma loja desde que não altere esses campos de arquivamento.
+Exclusão, linha 226: negada.
+
+Bloqueio confirmado: categoryIds, categoryId e categoryName não estão protegidos. O cliente pode incluí-los, alterá-los ou removê-los em uma escrita que satisfaça as demais condições. Não há validação de cardinalidade, tipo, existência de categorias ou coerência entre array e legado.
+Um set substitutivo que preserve os campos protegidos de arquivamento também não encontra proteção específica contra remoção dos campos taxonômicos.
+A regra de criação permite escritores legados fora do backend.
+
+O isolamento é pelo caminho stores/{storeId}, comparado ao perfil. Não há validação de um eventual campo storeId dentro do produto, nem de referências de categoria no conteúdo. IDs taxonômicos precisam ser resolvidos exclusivamente na loja autorizada pelo backend.
+Não há exigência de ownerId, papel reconhecido ou accessStatus não revogado nesse bloco.
+
+4.4 categories — linha 284
+
+Leitura: mesma loja do perfil.
+Criação e edição, linha 294: mesma loja, sem restrição explícita de papel nem validação de schema/nome/vínculos.
+Exclusão, linha 302: mesma loja e role exatamente admin ou gerente.
+
+Bloqueio confirmado: a exclusão não verifica produtos associados. Um admin/gerente pode apagar diretamente uma categoria em uso, contornando uma futura callable de exclusão segura.
+Não há verificação de accessStatus revogado.
+O pertencimento à loja também é pelo caminho, não por campo arbitrário no conteúdo.
+
+4.5 Matches sobrepostos — linha 387
+
+A regra recursiva stores/{storeId}/{subcollection}/{document=**} exclui explicitamente sales, auditLogs, products, customers, categories e cash_flow em cada operação.
+Portanto, ela não concede uma permissão alternativa aos documentos products/categories nem aos seus descendentes.
+Não foi encontrado outro match amplo no snapshot que reabra esses caminhos.
+
+Entretanto, as demais subcoleções recebem leitura/criação/edição para a mesma loja e exclusão para admin/gerente. Isso alcança catalogs/catalogRequests e alcançaria novas coleções comerciais ou relações criadas sob a loja, se não forem explicitamente excluídas.
+Uma futura regra específica restritiva não basta se a regra genérica continuar concedendo a operação. Novas estruturas controladas pelo backend precisam considerar esse match.
+Não foi ampliada esta etapa para corrigir outros domínios.
+
+5. CONCLUSÃO DE SEGURANÇA E BLOQUEIO REAL
+
+O snapshot resolve a falta de fonte para a auditoria, mas confirma ausência das barreiras exigidas pelo BR.
+Criar uma callable não elimina os caminhos diretos autorizados nas Rules.
+
+Cenários concretos permitidos pelo snapshot:
+- Usuário da loja grava categoryIds e os campos legados diretamente, sem validação do backend.
+- Escritor antigo altera categoryId/categoryName e deixa categoryIds divergente.
+- Admin/gerente apaga categoria ainda referenciada por produto ativo ou arquivado.
+
+Isso viola backend como autoridade exclusiva e exclusão bloqueada por uso. A integridade não pode ser atestada com essas permissões.
+Conforme a opção A determinada pelo usuário, nenhum incremento de implementação foi iniciado.
+Não há evidência de necessidade de abandonar arrays ou introduzir documentos de relação. O bloqueio é de autoridade de escrita e proteção contra bypass, não de viabilidade da relação muitos-para-muitos.
+
+6. STATUS DE F7-CAT-TAXONOMIA-BR
+
+A pendência de obter e auditar o snapshot pode ser considerada encerrada, com resultado bloqueante documentado neste relatório.
+BR não pode ser apresentado como aprovação de segurança ou liberação da implementação/ativação da taxonomia. O requisito de fechar os caminhos diretos permanece pendente.
+Não é necessário voltar a solicitar a cópia das Rules já fornecida.
+
+7. PRIMEIRO INCREMENTO E MENOR CORREÇÃO FUTURA
+
+Primeiro incremento implementado: nenhum.
+O relatório B apresenta faseamento proposto, começando por contrato/permissões e comprovação da proteção contra bypass/concorrência. O leitor compatível vem depois, no passo 3. BR admite trabalho puro isolado futuramente, mas isso não remove o bloqueio confirmado nem prevalece sobre a ordem atual de parar na opção A.
+
+Menor correção futura recomendada, em etapa explicitamente autorizada:
+- Preparar uma fonte operacional de Rules separada do snapshot histórico imutável.
+- Bloquear inclusão, alteração e remoção direta de categoryIds/categoryId/categoryName, mantendo updates operacionais compatíveis.
+- Bloquear criação legada de produto no corte coordenado com os novos escritores.
+- Bloquear exclusão direta de categoria; backend deve verificar uso legado/array e excluir em transação coordenada com associações.
+- Excluir da regra genérica futuras estruturas de autoridade do backend quando elas entrarem no escopo.
+- Validar bypass, isolamento e concorrência com cliente não confiável no Emulator, além de testes do backend.
+
+Nenhuma regra foi escrita como proposta executável ou aplicada nesta entrega.
+
+8. RISCOS E PENDÊNCIAS
+
+- Papéis autorizados por operação ainda precisam ser fechados segundo BR. Permissões atuais amplas não equivalem automaticamente à aprovação de uma nova matriz.
+- Política de assinatura da gestão taxonômica permanece decisão documentada pendente; não foi herdada de outro fluxo.
+- Fronteira de criação/renomeação de categoria, audit log e atomicidade da edição mista permanecem pendentes no BR.
+- Publicação futura precisa coordenar backend, aplicação e bloqueio dos escritores antigos/offline.
+- Índices efetivos necessários às consultas de exclusão não foram consultados.
+- Snapshot estático não é teste de execução de Rules nem certificação de dados/estado remoto atual.
+- As Rules examinadas não checam accessStatus revogado nos acessos por loja descritos.
+- Regra genérica exige atenção para futuras coleções comerciais/relações.
+- Não criar migração, limpeza de órfãos ou alteração de IDs automaticamente.
+
+Próximo incremento recomendado: fechar o contrato mínimo das proteções e preparar sua validação local de bypass/concorrência, em etapa autorizada. Não avançar agora para leitores, escritores, seções dinâmicas ou publicação.
+
+9. ARQUIVOS ALTERADOS E VALIDAÇÕES
+
+Durante a auditoria: nenhum arquivo alterado.
+Após solicitação expressa de Rodrigo: criado somente este artefato:
+F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+
+Nenhum arquivo existente foi modificado. Backup de arquivos existentes não foi necessário porque nenhum foi alterado ou sobrescrito.
+Nenhum código, teste, configuração, Rule ou arquivo financeiro foi alterado.
+
+Verificações executadas:
+- Branch/HEAD/status inicial e nova conferência antes do relatório: estado esperado, limpo.
+- Histórico Git recente: reconciliado com 9b70da5 e snapshot f86e159.
+- Diff dos caminhos taxonômicos examinados entre 9b70da5 e HEAD: sem mudanças.
+- git diff --check: aprovado na auditoria.
+- git status --short ao final da auditoria: sem saída.
+- git --no-pager diff ao final da auditoria: sem saída.
+
+Testes funcionais, suíte npm run test:catalog, Flutter, lint e Emulator: não executados nesta retomada, pois o resultado foi auditoria estática bloqueante, sem implementação.
+Resultados históricos de testes não são apresentados como resultados desta execução.
+Não houve consulta ou alteração de dados reais, criação de collections, migração ou execução de operações em produção.
+
+10. GIT FINAL DA ENTREGA DO RELATÓRIO
+
+Branch preservada: feat/f7-intelligent-catalog
+HEAD preservado: 56917d8d5405bd915a2c69d0577a69bdaeb3cdc3
+
+git status --short:
+?? F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+
+git --no-pager diff: sem saída, pois não há alteração em arquivos rastreados.
+git --no-pager diff --cached: sem saída; nada foi adicionado ao índice.
+Resumo fiel da diferença: somente este arquivo .txt novo e não rastreado, contendo o relatório. git diff padrão não inclui conteúdo de arquivo não rastreado.
+git diff --check: sem erros.
+
+11. CONFIRMAÇÕES EXPLÍCITAS
+
+GIT ADD NÃO EXECUTADO
+COMMIT NÃO EXECUTADO
+PUSH NÃO EXECUTADO
+DEPLOY NÃO EXECUTADO
+FIRESTORE RULES NÃO ALTERADAS
+
+Snapshot de produção preservado integralmente.
+Fluxo financeiro/Asaas não alterado.
+Primeiro e segundo incrementos de implementação não iniciados.
+Este .txt é somente um artefato de relatório e não foi incluído em commit.
+
+Caminho da entrega:
+C:\Users\rodri\StudioProjects\store_connect\F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt

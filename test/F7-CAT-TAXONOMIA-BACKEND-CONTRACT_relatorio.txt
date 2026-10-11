@@ -1,0 +1,437 @@
+STORE&CONNECT — F7-CAT-TAXONOMIA-BACKEND-CONTRACT
+Data: 16/09/2026
+BACKEND-CONTRACT: CONCLUÍDO — auditoria e proposta técnica entregues.
+Não significa aprovação das decisões pendentes nem autorização de implementação/publicação.
+
+1. ESTADO INICIAL E LIMITES
+
+Repositório: C:\Users\rodri\StudioProjects\store_connect
+Branch: feat/f7-intelligent-catalog
+HEAD: 5c54b265eed9b30139deccd592592369d7f553fb
+Histórico local confirmado:
+- fad6587 chore(firestore): estabelecer fonte operacional das rules.
+- 5c54b26 fix(firestore): proteger taxonomia contra escrita direta.
+Sem alterações rastreadas ou staged. Untracked iniciais: somente os nove relatórios test/*.txt listados no status final, exceto este novo relatório.
+Não houve fetch ou consulta remota do Git. Ausência de push/deploy desses commits é informação fornecida por Rodrigo, não inferida de uma consulta à produção.
+Test-Path confirmou que o relatório de destino não existia. Nenhum relatório anterior foi modificado.
+Esta execução foi somente leitura + este relatório. Nenhum teste ou Emulator foi executado. Os 26 testes aprovados de RULES-A são resultados históricos confirmados pelo relatório A2 e pelo teste versionado.
+
+2. BASES LIDAS E MÉTODO
+
+Documentação considerada nesta conversa e reconciliada com o HEAD atual:
+- AGENTS.md e instruções atuais de Rodrigo.
+- docs/codex/CURRENT_WORK.md, incluindo checkpoints F7 e decisão financeira; Git prevalece sobre seu estado histórico.
+- docs/catalog/F7_CATALOGO_INTELIGENTE.md, especialmente schema operacional, catálogo público e solicitações.
+- docs/catalog/CATALOGO_TAXONOMIA_COLECOES_DINAMICAS.md, especialmente IDs, cardinalidade, seções e limites de escopo.
+- test/F7-CAT-TAXONOMIA-A_relatorio.txt.
+- test/F7-CAT-TAXONOMIA-B_relatorio.txt.
+- test/F7-CAT-TAXONOMIA-BR_relatorio.txt.
+- test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt.
+- test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt.
+- firestore.rules e firebase.json.
+
+Código e infraestrutura examinados nas partes relevantes:
+- functions/index.js: exports de produtos/auth/catálogo; onProductDelete.
+- functions/catalog/createCatalog.js: autenticação, papel, loja, assinatura, consultas e DTO público.
+- functions/auth/bootstrapStore.js: atribuição transacional de storeId/ownerId/role.
+- functions/usuarios/convidarFuncionario.js e revogarAcessoFuncionario.js: autoridade de perfil e revogação.
+- functions/products/archiveProduct.js e restoreProduct.js.
+- functions/sales/syncOfflineSale.js.
+- functions/backups/createStoreSnapshot.js e referências de tests/backups.
+- functions/fiscal/emitirNfce.js: leitura de produtos; persistência fiscal na venda.
+- lib/screens/management/manage_products_screen.dart, category_management_screen.dart, archived_products_screen.dart.
+- lib/services/product_import_service.dart e referências das telas de importação.
+- lib/widgets/payment_options_sheet.dart e confirm_fiado_dialog.dart.
+- lib/services/offline_sales_sync_service.dart.
+- lib/data/local/offline_sales_repository.dart e app_database.dart.
+- lib/providers/user_role_provider.dart, sales_provider.dart e referências de leitores.
+- lib/screens/sales/new_sale_screen.dart e public/public_catalog_screen.dart.
+- functions/tests/security/firestoreTaxonomyRules.test.mjs; storageRules.test.mjs como infraestrutura existente.
+- functions/tests/catalog: runner, autorização, criação, getPublicCatalog, submit e leituras internas; referências de fixtures.
+- functions/tests/auth/bootstrapStore.emulator.test.js e manifests/lock já disponíveis.
+
+Busca por categoryIds/categoryId/categoryName e por products/categories foi feita em lib/functions e arquivos de scripts do repositório, acompanhando referências de documento, batch e transaction. Não se usou apenas o inventário histórico firestore_write_inventory.txt: ele contém linhas desatualizadas, leituras e operações locais que não são escritores Firestore.
+Nenhum novo escritor de taxonomia de produção foi encontrado fora dos caminhos abaixo. A completude é relativa ao código disponível, não a scripts externos, consoles ou clientes não versionados.
+
+3. RECONCILIAÇÃO
+
+A/B/BR não podiam examinar Rules publicadas. RETOMADA resolveu a falta de snapshot e confirmou bypasses. RULES-SOURCE criou fonte operacional. RULES-A fechou localmente os dois bypasses, com 26 testes de cliente no Emulator.
+firestore.rules é agora a fonte operacional, declarada em firebase.json. O snapshot permanece histórico e imutável.
+Não assumir que produção tem essas proteções: nenhuma publicação está autorizada ou constatada aqui.
+RULES-A permite CREATE de produto sem os três campos taxonômicos. Isso prevalece sobre a proposta histórica de bloquear toda criação direta no corte. Updates que deixam os três campos inalterados continuam permitidos.
+READ/CREATE/UPDATE de categories continuam diretos. Somente DELETE foi bloqueado. Essa diferença importa para qualquer promessa de auditoria exclusiva de criação/rename.
+
+4. INVENTÁRIO COMPLETO DOS ESCRITORES DE PRODUÇÃO ENCONTRADOS
+
+12 caminhos, em 8 arquivos. A contagem separa CREATE/UPDATE/DELETE do mesmo método.
+Nos itens abaixo, flags ID/NOME/ARRAY significam escrita em products.categoryId/categoryName/categoryIds, não em logs ou snapshots.
+
+P1 — Cadastro manual de produto
+Arquivo: lib/screens/management/manage_products_screen.dart:549,637,715-722.
+Método: _saveProduct, ramo de criação. Cliente; CREATE por collection.add(productData).
+Campos: name, name_lowercase, price, lotes, quantidade, minimumStock, imageUrl, categoryId, categoryName, createdAt; opcional fiscal (ncm, origem, cfop, unidade, cest, situações tributárias, classificação IBS/CBS, updatedAt).
+ID=SIM; NOME=SIM; ARRAY=NÃO. Sem categoria envia null, não omite chaves.
+Offline: sem fila própria; escrita SDK pode ficar pendente/cacheada onde suportado; upload de imagem depende de rede. Não há garantia de conclusão offline.
+RULES-A: toda criação desse ramo será negada, inclusive sem categoria, pois inclui chaves proibidas.
+
+P2 — Edição manual e imagem de produto
+Mesmo arquivo/método, linhas 637-713. Cliente; UPDATE por doc.update(productData), não substituição do documento inteiro.
+Campos: mesmo mapa operacional de P1, sem createdAt; fiscal quando Business. Imagem persistida no mesmo mapa após upload Storage.
+ID=SIM; NOME=SIM; ARRAY=NÃO.
+Offline: mesma ressalva SDK/upload de P1.
+RULES-A: funciona somente se ambos os legados permanecerem exatamente iguais ao servidor; qualquer inclusão, remoção ou alteração rejeita toda a escrita. Mesmo uma intenção de editar só preço pode falhar se o formulário reenvia legado obsoleto ou null em campo antes ausente. Array novo é preservado fisicamente, mas antes do corte escritores antigos podem gerar divergência com o singular.
+
+P3 — Importação de produtos
+Arquivo: lib/services/product_import_service.dart:371-660.
+Método: importProducts; cliente; CREATE por WriteBatch.set em novos auto-IDs, blocos de até 400 operações.
+Campos: name, name_lowercase, price, lotes=[], quantidade=integerQuantity, minimumStock=0, imageUrl='', categoryId, categoryName, createdAt servidor; barcode/costPrice opcionais; fiscal.ncm/fiscal.updatedAt se isBusiness recebido e NCM disponível.
+ID=SIM; NOME=SIM; ARRAY=NÃO. Sem categoria grava ''. Não atualiza produto existente.
+Offline: analyze usa get sem Source.server; batch pode enfileirar onde SDK suporta, mas confirmação depende de servidor. Não existe protocolo próprio offline/idempotente da importação.
+RULES-A: produtos rejeitados inclusive com strings vazias; batch com produto rejeita atomicamente aquele bloco. Blocos anteriores só de categorias podem já ter sido gravados. Não há atomicidade da planilha.
+
+P4 — Venda imediata online, baixa de estoque
+Arquivo: lib/widgets/payment_options_sheet.dart:259,326,364,414.
+Método: _handleInstantSale. Cliente; UPDATE transacional.
+Campos: quantidade por incremento negativo, ou quantidade/lotes após cálculo FIFO.
+ID=NÃO; NOME=NÃO; ARRAY=NÃO.
+Offline: transação exige rede; a alternativa _saveInstantSaleOffline:586 grava venda pendente local, não modifica documento products no Firestore.
+RULES-A: não bloqueia esses patches operacionais. Não refatorar vendas por causa de taxonomia.
+
+P5 — Venda fiado, baixa de estoque
+Arquivo: lib/widgets/confirm_fiado_dialog.dart:158,171,269-287.
+Método: _submitFiadoSale. Cliente; batch.update de quantidade via incremento negativo.
+ID=NÃO; NOME=NÃO; ARRAY=NÃO.
+Offline: fluxo exige previamente loja via Source.server; não é fluxo offline completo, embora batch SDK possa ficar pendente se conexão cair depois.
+RULES-A: preservado; não escreve taxonomia.
+
+P6 — Arquivamento
+Arquivo: functions/products/archiveProduct.js:99-258.
+Callable archiveProduct. Backend Admin SDK; UPDATE em transação, com auditLogs.
+Campos no produto: isArchived=true, archivedAt servidor, archivedBy UID.
+ID=NÃO; NOME=NÃO; ARRAY=NÃO no produto; log copia legados observados.
+Offline: execução backend requer rede; não há fila taxonômica cliente.
+RULES-A: Admin SDK não depende de Rules; atualização parcial preserva taxonomia.
+
+P7 — Restauração
+Arquivo: functions/products/restoreProduct.js:146-380.
+Callable restoreProduct. Backend Admin SDK; UPDATE transacional de isArchived=false e auditLogs.
+ID=NÃO; NOME=NÃO; ARRAY=NÃO no produto. Não apaga archivedAt/archivedBy nem recria produto.
+Offline: não. RULES-A: preservado.
+
+P8 — Sincronização de venda offline
+Arquivo: functions/sales/syncOfflineSale.js:714,1022,1053.
+Callable syncOfflineSale. Backend Admin SDK; UPDATE transacional de quantidade ou quantidade/lotes junto à venda identificada por localSaleId.
+ID=NÃO; NOME=NÃO; ARRAY=NÃO.
+Offline: venda originada em fila local; a escrita Firestore ocorre online no backend. Replay da mesma venda não repete baixa.
+RULES-A: preservado. A autorização atual é ownerId, não deve ser copiada para taxonomia.
+
+C1 — Criação manual de categoria
+Arquivo: lib/screens/management/category_management_screen.dart:218-337.
+Método: _saveCategory, criação. Cliente; CREATE por add.
+Campos: name com trim, imageUrl, createdAt servidor. Sem storeId no documento; loja é o caminho. Auto-ID.
+ID/NOME/ARRAY de produto=NÃO. Offline: SDK pendente possível; upload de imagem depende de rede.
+RULES-A: continua permitido à própria loja.
+
+C2 — Rename/edição de imagem de categoria
+Mesmo arquivo/método, ramo update:299-320.
+Cliente; UPDATE de name/imageUrl, ID preservado. Sem fan-out em produtos.
+ID/NOME/ARRAY de produto=NÃO. Offline: mesma ressalva C1.
+RULES-A: continua permitido; não garante audit log backend nem controle de conflito.
+
+C3 — Exclusão de categoria
+Arquivo: category_management_screen.dart:672-720.
+Método: _deleteCategory e callback do diálogo. Cliente; DELETE direto.
+Não verifica uso nem altera produtos. Botão para admin/gerente; UI não é autoridade.
+ID/NOME/ARRAY de produto=NÃO. Offline: pedido SDK pode ficar pendente, sem garantia de confirmação.
+RULES-A: DELETE negado a todos, inclusive admin/gerente. Novo cliente precisará chamar backend antes do corte.
+
+C4 — Criação de categorias pela importação
+Arquivo: product_import_service.dart:436-493.
+Método: importProducts. Cliente; CREATE por batch.set em auto-IDs preparados.
+Campos: name, imageUrl='', createdAt servidor. Não grava storeId nem isActive.
+ID/NOME/ARRAY de produto=NÃO neste write; associações vêm de P3.
+Offline: mesma ressalva P3.
+RULES-A: categoria isolada continua permitida, mas pode compartilhar batch com produto proibido; risco de falha parcial entre blocos e categorias criadas sem produtos.
+
+4.1 Caminhos investigados que NÃO são outros escritores products/categories
+
+- functions/index.js:2236 onProductDelete apenas registra log de exclusão ocorrida; não exclui documento/imagem.
+- functions/catalog/createCatalog.js lê produtos. Grava catalogs/items/tokens/slugs e catalogRequests, não produtos/categorias. getPublicCatalog ainda lê categoryName do produto.
+- functions/backups/createStoreSnapshot.js lê e serializa documentos completos de products/categories para artefato; não restaura nem regrava origem. Arrays já são serializados.
+- emitirNfce lê produto; writes fiscais encontrados são na venda. Não é editor do produto.
+- offline_sales_sync_service._refreshProductStocksFromServer:230 faz GET Source.server para refrescar cache; não escreve estoque remoto.
+- OfflineSalesRepository/AppDatabase gravam fila SQLite de vendas/estados, não taxonomia Firestore.
+- SalesProvider e carrinho escrevem vendas/cash_flow ou memória. Campo sales.products é snapshot de itens, não coleção products.
+- Dashboard, relatórios, PDV, arquivados e catálogo público são leitores de taxonomia nos pontos encontrados.
+- Upload/remoção Storage de imagens não são writes de documento products/categories além de P1/P2/C1/C2.
+- Fixtures em functions/tests/catalog, tests/security e artefatos de backup são escritores de teste, não caminhos do aplicativo. firestoreTaxonomyRules.test.mjs faz set/update/delete deliberados no projeto demo; testes de catálogo usam Admin SDK para semear/alterar produtos. Não foram executados nesta etapa.
+
+5. OPERAÇÕES BACKEND MÍNIMAS PROPOSTAS
+
+Nomes abaixo são proposta de API, não exports existentes ou nomes já aprovados.
+
+Núcleo indispensável para o corte:
+1. setProductCategories: replace completo de vínculos de produto existente, transacional, sem regravar estoque/preço.
+2. deleteCategory: exclusão transacional somente sem uso.
+3. createProduct: criação atômica de produto e seus vínculos, reutilizável pela importação. Criar primeiro documento direto e tentar associar depois não satisfaz atomicidade do cadastro com categoria.
+
+Complemento proposto para gestão de categoria com auditoria confiável:
+4. createCategory.
+5. renameCategory.
+Essas duas não são estritamente exigidas por RULES-A, que manteve CREATE/UPDATE diretos. Sua adoção como autoridade exclusiva depende de D3; não fingir que callables sozinhas removem bypass de criação/rename.
+
+Não propor callable genérica de CRUD, microserviço, job de importação ou endpoints add/remove no primeiro corte. Importação pode reutilizar createCategory + createProduct, uma operação por entidade, com retomada explícita. Cinco operações propostas no total; três obrigatórias para o núcleo, duas condicionais para ampliar gestão auditada.
+
+Replace foi escolhido na proposta porque coincide com a intenção do formulário e com B: lista completa validada, ordem estável e projeção legada atômica. Add/remove reduz conflito de intenções independentes, mas exigiria contrato de ordem, limite concorrente, desfazer e compatibilidade da UI; arrayUnion/arrayRemove sozinho não resolve validação de referências nem exclusão. Não há vantagem demonstrada para introduzir isso agora.
+
+6. AUTORIZAÇÃO — MATRIZ NÃO HERDADA
+
+Comum às cinco operações propostas:
+- request.auth.uid obrigatório; sem autenticação: unauthenticated.
+- Ler users/{uid}; perfil ausente, papel inválido ou revoked: permission-denied.
+- storeId canônico vem exclusivamente desse perfil; validar string não vazia/ID válido e ler stores/{storeId}. Nunca aceitar loja como autoridade no payload.
+- Ler perfil/loja na transação da alteração; o alvo sempre deriva desse caminho. Se perfil muda de loja/revoga durante a operação, retry deve reautorizar e não reutilizar referências antigas.
+- ownerId não concede bypass por si. Bootstrap cria owner como admin; owner sem perfil/papel válido não recebe promoção nem reparo automático. Exceção especial de proprietário exigiria decisão nova.
+- Normalização proposta: trim/lowercase de papéis conhecidos; aliases caixa/vendedor para operador só se aprovados na matriz D1, seguindo precedente do catálogo. Ausente/desconhecido NÃO vira operador como fallback de UI.
+- accessStatus revoked rejeitado, conforme precedentes de archive/restore/catalog. Ausente não é revogação nos precedentes; propor mesma compatibilidade, sem inventar exigência de campo active para todos os legados.
+- Assinatura: DECISÃO PENDENTE D2. createCatalog restringe active/trial/overdue; archive/restore não. CRUD direto atual não verifica assinatura nas Rules; não importar política de outro domínio.
+
+Operação | Evidência atual | Papéis da nova operação
+createCategory | Rules permitem qualquer perfil da loja | DECISÃO PENDENTE D1
+renameCategory | Rules permitem qualquer perfil da loja | DECISÃO PENDENTE D1
+deleteCategory | snapshot/UI eram admin/gerente; Rules locais agora negam todos | DECISÃO PENDENTE D1; preservar admin/gerente é opção compatível, não aprovação presumida
+setProductCategories | edição direta da loja sem role gate | DECISÃO PENDENTE D1
+createProduct/importação | criação direta da loja sem role gate | DECISÃO PENDENTE D1
+
+Opções factuais para D1: (a) admin/gerente/operador reconhecidos nas operações não destrutivas e admin/gerente na exclusão; (b) admin/gerente na gestão taxonômica; (c) admin apenas. Nenhuma escolhida arbitrariamente. Ausentes/desconhecidos são rejeitados na proposta em todas.
+
+7. CONTRATO COMUM DE PAYLOAD E ERROS
+
+Objeto simples, chaves explícitas; rejeitar campos extras e payload ausente/null/array. UID, role, storeId, nomes legados, timestamps, audit e estado de arquivamento não são recebidos como autoridade.
+IDs existentes: strings opacas, case-sensitive, não vazias, sem espaços externos, '/' ou IDs reservados/inválidos de documento; respeitar limite Firestore de ID. Não exigir auto-ID de 20 caracteres e não converter números/nomes em ID.
+categoryIds obrigatório nas operações de vínculo/criação, array de 0..10 strings; validar antes de qualquer deduplicação. Duplicados, null, escalar e tipos mistos rejeitados. Não truncar nem limpar silenciosamente.
+[] é intenção explícita de desvincular. Omissão nunca significa limpar.
+Cada ID desejado deve existir em stores/{lojaDoPerfil}/categories/{id}, com nome canônico utilizável. Ausente ou só existente em outra loja: failed-precondition, categoria indisponível na própria loja, sem procurar nem revelar dados externos. Mesmo ID em duas lojas resolve somente o documento local.
+Erros propostos: invalid-argument para formato; permission-denied para autorização; not-found para alvo na própria loja ausente; failed-precondition para categoria em uso/indisponível ou estado não suportado; aborted com motivo estável taxonomy-conflict para base obsoleta; already-exists para requestId reutilizado com conteúdo diferente; unavailable para falhas transitórias. Não incluir documentos privados na mensagem.
+
+8. PAYLOADS PROPOSTOS
+
+8.1 setProductCategories({productId, categoryIds, expectedTaxonomy})
+Todos obrigatórios; nenhum opcional no primeiro incremento.
+expectedTaxonomy é precondição, nunca fonte de persistência. Objeto com somente as chaves taxonômicas observadas no snapshot anterior: categoryIds, categoryId, categoryName. Chave ausente deve continuar ausente; null/''/[] não são equivalentes. Comparar presença e valor exatos na transação, inclusive ordem do array. Não usar preço/estoque como base do conflito.
+Estados usuais antigos/new são representáveis em JSON. Tipos anômalos não representáveis, array inválido/acima de 10 ou projeções estruturais corrompidas retornam failed-precondition; não reparar por essa API normal. Órfão string pode ser retirado/substituído explicitamente pelo usuário no novo array válido, com audit antes/depois.
+Transação: perfil, loja, produto, categorias desejadas, antes de qualquer write; validar base; atualizar somente os três campos e audit. Não criar produto ausente. Resultado: {success:true, productId, changed, categoryIds, categoryId, categoryName}. Esse retorno privado não altera DTO público.
+Se estado já é exatamente o resultado desejado válido (inclusive projeção), retornar changed:false sem log; se base divergiu e resultado atual é outro, aborted. Reenviar não faz merge automático com a edição de outra aba.
+
+8.2 deleteCategory({categoryId, expectedName})
+Obrigatórios; expectedName é string exatamente observada, não nome usado para localizar categoria. Proposta de precondição contra renomeação entre diálogo e ação. Ausência atual após autorização pode retornar {success:true, categoryId, alreadyAbsent:true}, sem log e sem afirmar quem a excluiu.
+Se existe e nome difere da base: aborted; se usada: failed-precondition/category-in-use. Sucesso real: {success:true, categoryId, alreadyAbsent:false}. Não apaga imagem Storage nem produto.
+
+8.3 createCategory({requestId, name, imageUrl?})
+requestId obrigatório, UUID aleatório estável por intenção, reutilizado em retries; validar formato/limite (36 caracteres da representação UUID). Não é categoryId nem autorização.
+name obrigatório string, trim, não vazio. Proposta técnica de limite 100 pontos de código após trim: NOVA, depende de D4; não tratar como limite já existente. Preservar grafia/acentos/espaços internos.
+imageUrl opcional, default ''. Se fornecido, string URL HTTPS de imagem no prefixo category_images da loja no bucket configurado, ou ''; proposta de limite 2048 caracteres. Validar no servidor, não aceitar URLs externas arbitrárias; não buscar URL na rede. Regra de imagens integra D4. Upload continua fora da transação Firestore.
+ID da categoria novo gerado no servidor, estável durante retries da transação. Criar name/imageUrl/createdAt servidor; sem storeId redundante, isActive, campos de ordem/campanha ou categoria principal.
+Audit de criação na mesma transação; receipt de idempotência conforme seção 12. Resposta {success:true, categoryId, replayed}. Não reutilizar categoria por nome sem escolha explícita.
+
+8.4 renameCategory({categoryId, name, expectedName})
+Obrigatórios. name passa pela mesma validação do CREATE; expectedName representa exatamente o nome anterior observado. Preservar ID, imageUrl e createdAt; update somente name e audit.
+Se nome atual já é o novo nome normalizado: changed:false. Se diverge de expectedName e não é o desejado: aborted. Não precisa alterar todos os produtos nem batch de fan-out.
+Resposta {success:true, categoryId, name, changed}.
+Imagem não será escrita por esta operação; a edição direta de imagem só pode permanecer separada se futura proteção de name/política de metadados permitir. Não redesenhar Storage aqui.
+
+8.5 createProduct({requestId, product, categoryIds})
+Obrigatórios. Não aceita productId existente para sobrescrever. requestId com mesma semântica de criação de categoria. Produto novo recebe ID servidor; IDs existentes nunca mudam.
+product: allowlist baseada no cadastro atual: name, price, quantidade, lotes, minimumStock, imageUrl; opcionais barcode, costPrice e fiscal. Não aceitar name_lowercase, createdAt, storeId, três campos taxonômicos, isArchived/archived* ou campos arbitrários dentro desse objeto.
+Servidor deriva name_lowercase, timestamps e legado. Inteiros de estoque/mínimo/lotes devem ser seguros e não negativos, preço/custo números finitos não negativos; quantidade consistente com soma dos lotes quando usados. Datas em formato explícito convertido pelo servidor, sem confiar em Timestamp serializado arbitrário.
+Fiscal só permitido conforme plano real lido no servidor; nunca confiar em isBusiness enviado pelo Flutter. Preservar os campos fiscais já usados, sem reformar regra tributária.
+Limites exatos de nome de produto, quantidade de lotes, formato de datas, barcode/imagem e allowlist/tipos fiscais ainda precisam do subcontrato D9: não considerar essa callable pronta para implementação completa com um Map irrestrito.
+Criação, validação das categorias e dual-write em uma transação, audit/receipt juntos. Resultado {success:true, productId, replayed}. Importação reutiliza a mesma capacidade com lote vazio e 0/1 categoria inicialmente.
+
+9. CATEGORY IDS E LEGADO
+
+Preservar o contrato B, explicitamente retomado por BR:
+- categoryIds é canônico e ordenado para serialização; vínculo é semanticamente conjunto.
+- Primeiro ID na ordem de inclusão define categoryId temporário; categoryName é nome atual dessa entidade lido na transação.
+- Isso NÃO cria categoria principal de negócio. Não adicionar campo primaryCategoryId.
+- [] grava categoryId=null e categoryName=null, não deleta chaves. Escolha já proposta em B para representar vazio consistentemente; os escritores atuais usam null ou ''.
+- Os três campos são escritos atomicamente pelo servidor. Cliente não escolhe nome legado, não envia esses valores como resultado desejado.
+- Array presente prevalece sobre singular na leitura, inclusive []; ausência permite fallback legado. Array inválido não autoriza fallback.
+- Leitura/estoque/arquivamento/rename nunca materializam ou reparam array automaticamente.
+- Rename altera somente categoria. categoryName persistido pode ficar antigo até uma gravação taxonômica explícita; futuros leitores devem resolver categories.name. Não propagar rename para milhares de produtos.
+- DTO público atual ainda copia categoryName persistido. Resolver nomes atuais e DTO aditivo serão incrementos separados, antes de oferecer experiência multicategoria completa.
+- Retirada de dual-write depende de consumidores migrados e evidência sobre dados/escritores; não se dá automaticamente neste contrato. Não excluir campos em massa.
+
+Não reabrir a projeção do primeiro ID como se fosse uma nova questão sem resposta: B a descreve e BR a referencia. Permanecem pendentes apenas detalhes de protocolo/ativação e exceções de dados, não a criação de uma categoria principal.
+
+10. CRIAÇÃO/RENAME E DUPLICIDADE
+
+Schema real: categories/{id} contém name, imageUrl e createdAt; nenhum isActive, storeId interno, name_lowercase, revision ou índice de nome. Gestão usa trim/não vazio, sem maxLength ou garantia de unicidade. Importação compara trim+lowercase e atualmente colapsa homônimos no mapa, escolhendo um ID silenciosamente.
+Proposta mínima: continuar permitindo nomes duplicados no cadastro, sem reserva global. ID define identidade. Aviso de duplicidade pode existir na UI, mas não é exclusão mútua. Aprovação do limite/semântica nova em D4.
+Na importação, dois nomes normalizados iguais são ambíguos: exigir seleção explícita de ID. Não escolher último documento, não fundir, não retirar acentos ou separar nome por vírgula/';'.
+Se Rodrigo exigir unicidade forte normalizada, será outra decisão estrutural: transação de simples busca e create com IDs diferentes não deve ser apresentada como reserva exclusiva robusta de nome. Seria necessário mecanismo compartilhado de reserva e seu tratamento de legados. Não proposto no primeiro corte.
+Rename: precondição expectedName e update transacional de um documento + audit, custo independente da quantidade de produtos. Nenhum fan-out, contador ou lock manual.
+Criação/rename auditados pelo backend não cobrem os writers diretos C1/C2/C4. Para exclusividade real, D3 deve incluir futura barreira de CREATE/name nas Rules e adaptação desses escritores. Não houve qualquer edição de Rules nesta etapa.
+
+11. EXCLUSÃO SEGURA
+
+Algoritmo proposto no Admin SDK, após autorização:
+1. Na mesma transação, ler perfil/loja e categoria no caminho autorizado.
+2. Conferir existência e expectedName.
+3. transaction.get(products.where('categoryIds','array-contains',categoryId).limit(1)).
+4. transaction.get(products.where('categoryId','==',categoryId).limit(1)).
+5. Não filtrar isArchived. Qualquer resultado bloqueia, inclusive legado residual quando array está vazio/divergente.
+6. Se ambas vazias e precondições de integridade atendidas, transaction.delete(categoryRef) + audit na mesma transação. Todas as leituras antes das escritas.
+7. Falha de consulta/índice/timeout rejeita; nunca interpretar erro como ausência de uso.
+
+Concorrência: TODO escritor autorizado de vínculos, inclusive criação/importação, deve ler as categorias desejadas dentro da mesma transação que grava o produto. A categoria lida também é o documento removido pela exclusão. Associação que serializa antes faz a consulta de uso encontrar o produto; exclusão que serializa antes faz a associação encontrar categoria ausente e falhar. Retries revalidam o estado.
+Não basta consultar fora da transação e depois deletar, nem validar categoria fora da transação e depois batch de associações.
+Não é necessário presumir que query vazia trava todo o intervalo; o desenho combina isolamento serializável com dependência explícita no documento da categoria em todos os escritores. Deve ser comprovado com testes concorrentes reais no Emulator antes da liberação.
+O Admin SDK Node suporta transaction.get(Query). Não confundir com capacidades do SDK Flutter.
+Não adicionar contador, coleção de relações ou documento lock: não há necessidade demonstrada para o contrato 0..10. Não introduzir contador que ainda poderia ser contornado pelos writers antigos.
+
+categoryName legado:
+Não é ID, pode estar obsoleto ou duplicado; não usar igualdade de nome como prova de vínculo nem reconstruir associação. Os escritores atuais produzem pares ID/nome, e os vínculos comprovados estão nos dois campos de ID.
+Nome sem ID utilizável ou schema inválido é anomalia que esta auditoria de código não quantificou em dados reais. Duas queries por ID não provam ausência de todos os formatos corrompidos imagináveis. Para liberar exclusão em lojas legadas, D8 exige inventário somente leitura autorizado e tratamento explícito das exceções; não certificar esses dados sem inspecioná-los.
+Se houver referência somente por nome, opção conservadora é manter exclusão bloqueada até resolução explícita, não inferir a qual homônimo pertence. Não propor varredura completa e normalização de todos os produtos em cada delete nem migração automática.
+
+Referências adicionais: CatalogItems guardam productId, não categoria; solicitações guardam snapshots sem categoria; vendas referenciam produtos. AuditLogs/backups com nomes/IDs são históricos e não bloqueiam delete. Nenhuma coleção comercial/seção dinâmica operacional encontrada. Futuros referenciais exigirão extensão explícita da verificação.
+Não excluir Storage ou cascata. Não reutilizar IDs de categorias excluídas na futura criação.
+
+12. CONCORRÊNCIA E IDEMPOTÊNCIA
+
+Proposta D5: base taxonômica explícita, sem revision nova inicialmente. Comparar na transação resolve duas abas sem forçar conflito de negócio por alterações de preço/estoque. Conflito devolve erro e exige recarga; não resolver silenciosamente por última escrita.
+Transação pode fazer retry por qualquer alteração física do produto (inclusive estoque), mas após retry a comparação somente taxonômica ainda permite a intenção se os vínculos não mudaram. Não regravar campos operacionais lidos anteriormente.
+Limite da comparação por estado: não detecta ciclo A->B->A (ABA). É suficiente apenas se o contrato for detectar divergência atual, não toda edição intermediária. Se auditoria de toda revisão for requisito, será necessário revision protegido contra cliente; RULES-A atual não protege um novo campo revision. D5 deve escolher explicitamente, sem adicionar campo desprotegido.
+
+Retries de set/rename: se alvo já está no estado desejado, no-op sem log; se outra edição mudou o estado, conflito e não reverter. Não prometer resposta original ou exatamente uma execução a nível de transporte. Delete de alvo já ausente retorna alreadyAbsent, sem log duplicado; sem recriação de ID pelo backend.
+Criação precisa idempotência durável: auto-ID novo por chamada duplicaria produto/categoria. Proposta de usar auditLogs existente como comprovante da criação, com ID determinístico derivado no servidor de loja+UID+operação+requestId (hash), e campos adicionais requestHash/resultId. A transação lê esse comprovante antes de criar; mesmo payload retorna o ID original, payload diferente rejeita. Não recria entidade excluída em replay; retorna replay histórico e o cliente recarrega existência atual.
+Isso reutiliza coleção já protegida para escrita backend, sem inventar serviço de idempotência. É extensão proposta do contrato de audit (D5), não padrão já implementado. A retenção desse comprovante deve cobrir o período de retry e impedir reutilização de IDs; não pode ser limpo automaticamente enquanto garantir deduplicação. Sem aprovação, não considerar criação idempotente resolvida.
+Gerar refs de entidade/log fora do callback de retry; nenhum upload, envio externo ou efeito irreversível dentro da transação. Autorizar novamente até no replay.
+
+Cenários:
+- Duas abas: primeiro commit altera base; segunda conflita salvo mesmo resultado idempotente.
+- Importação versus edição: importação cria, não edita existentes. Deduplicação por requestId não garante unicidade por nome/barcode; análise de duplicados é distinta. Replays não sobrescrevem produto já criado/editado.
+- Rename versus vínculo: transação de vínculo lê categoria; commit usa nome consistente nesse instante. Rename posterior não faz fan-out, por contrato.
+- Delete versus vínculo: protocolo da seção 11; obrigatório também para importação.
+- Duas exclusões: uma efetiva com log; outra já ausente.
+- Callback/requisição repetido: regras de no-op, comprovante e conflito acima.
+- Cliente antigo offline: ao sincronizar depois do corte, alteração taxonômica/criação antiga ou delete direto falha pelas Rules. Não aceitar version gate de UI como barreira; não reabrir permissão para permitir fila antiga. Atualização compatível/aviso são requisitos do rollout.
+
+13. IMPORTAÇÃO E CRIAÇÃO ATÔMICA
+
+Não existe backend atual de importação de produtos. ProductImportService analisa por nome_lowercase/barcode, prepara categorias e produtos, grava batch de 400. Análise repetida não é transação de unicidade nem proteção contra concorrência.
+Não ignorar taxonomia silenciosamente para escapar de RULES-A: isso perderia intenção da planilha. Não manter escrita direta dos legados. Não criar produto parcial e associar numa segunda chamada como fluxo de sucesso completo.
+Proposta inicial: análise/preview continua no cliente; usuário confirma IDs de categorias inequívocos, resolve ambiguidades e autoriza criações faltantes. Criar categorias por operação autorizada e confirmada; depois createProduct por linha, usando a transação comum e requestId estável por tentativa lógica de importação/linha. Uma célula de categoria vira zero/um ID; nenhum parsing multicategoria automático.
+Para lote grande, executar sequencialmente ou concorrência pequena controlada, guardar resultados/requestIds e permitir retomada das falhas. Sem nova callable batch até medição justificar. Não prometer atomicidade da planilha nem rollback automático; categoria criada sem produto após falha é resultado parcial informado.
+Quando seleção foi explícita por ID, rename concorrente não troca identidade: servidor usa nome atual. Quando ainda se está resolvendo nome automático, ambiguidade precisa ser revista antes de materializar a intenção; não selecionar homônimo arbitrário.
+Deduplicação por nome/barcode hoje é heurística de análise, não unicidade garantida no servidor. Não adicionar reserva global de produto nesta etapa. D9 deve fechar limites/validações da criação; importação nunca informa isBusiness como autoridade.
+
+14. AUDIT LOG
+
+Padrão real em archive/restore e bootstrap: stores/{storeId}/auditLogs/{id}, action/entityType/entityId/storeId/performedBy{uid,role}/reason/before/after/createdAt; servidor, na mesma transação. Rules negam escrita direta e regra genérica exclui auditLogs.
+Eventos propostos: category_created, category_renamed, category_deleted, product_categories_changed; createProduct pode registrar product_created com projeção taxonômica, sem duplicar um segundo evento para o mesmo ato.
+Snapshots mínimos: categoria ID/name/imageUrl quando pertinente; produto somente presença/valores dos três campos taxonômicos. Preservar distinção ausente/null/[] e evidência de legado, sem inventar array vazio no before. Não copiar preço, lotes, fiscal ou dados pessoais em log de vínculo.
+Ator e timestamp no servidor; reason não obrigatório nem aceito livremente no payload mínimo inicial. No-op sem audit de alteração. Falha de transação não deixa audit de sucesso.
+Criação/rename diretos continuarem permitidos impede trilha completa desses eventos: não mascarar essa lacuna. D3 decide extensão; não criar triggers de reparo/audit como substituto de autoridade.
+Snapshots atuais archive/restore não incluem array. Adaptação futura de observabilidade pode ser localizada, sem mudar arquivamento nem reescrever logs antigos.
+
+15. ARQUIVADOS E LEGADOS
+
+Exclusão sempre considera ativos E arquivados; estoque zero não libera categoria.
+archive/restore/syncOfflineSale preservam vínculos; operações continuam independentes da nova API. Regras de elegibilidade do catálogo e venda não mudam.
+Edição taxonômica de arquivados: DECISÃO PENDENTE D7. Opções: permitir manutenção explícita usando mesma operação/autorização, sem restaurar produto; ou exigir restauração antes de editar. Atual Rules não proíbem edição operacional em arquivado, mas UI separa a gestão. Recomendação de produto ainda não aprovada: permitir manutenção explícita para retirar vínculo quando necessário, sem alterar isArchived.
+Legados válidos podem continuar sem categoryIds até salvamento taxonômico explícito. Sem conversão em leitura, boot, rename, stock ou archive. Não executar migração para começar o contrato.
+Array presente inválido, nomes sem identidade e referências órfãs não são apagados por conveniência. Correção é intenção explícita autorizada ou tratamento de exceção separado; nada automático.
+
+16. ORDEM FUTURA DE IMPLEMENTAÇÃO E ROLLOUT
+
+1. Registrar aprovação das decisões aplicáveis abaixo; contrato proposto não é permissão automática para publicar.
+2. Implementar primeiro o incremento puro da seção 18 e seus testes, sem callable exposta.
+3. Implementar transações backend em pequenos incrementos; validar autorização, conflito, dual-write, criação idempotente, exclusão concorrente e rollback com Emulator e clientes sujeitos às Rules.
+4. Preparar leitores compatíveis (Dart/backend público) antes de liberar múltiplos vínculos. Preservar contrato público atual até incremento específico de DTO.
+5. Preparar todos os writers: cadastro novo atômico, edição separando campos operacionais de taxonomia ou operação mista aprovada, importação por backend, delete de categoria por backend. C1/C2/C4 também se D3 exigir gestão exclusiva. Não esquecer imagens/erros parciais.
+6. Preparar cliente com transição explícita; backend pode ser publicado primeiro em fase controlada, mas NÃO liberar multicategoria/exclusão segura enquanto escritores diretos puderem contornar o protocolo. UI flag sozinha não prova exclusividade.
+7. Ensaiar atualização de cliente e corte em ambiente isolado. Um cliente novo não deve assumir que regras remotas já estão endurecidas apenas por versão local. Não usar produção para teste.
+8. Em janela futura explicitamente autorizada: disponibilizar backend pronto; distribuir cliente compatível; coordenar suspensão breve de alterações taxonômicas/importações/exclusões; reconciliar filas/versões antigas; publicar RULES-A (e eventual proteção adicional aprovada por D3); verificar versão efetiva antes de liberar operações dependentes. Não habilitar delete seguro antes dessa barreira.
+9. Se novos writers tiverem gravado arrays antes do corte, writers antigos ainda podem divergir. Evitar essa janela: clientes preparados mantêm intenção singular compatível até a barreira, ou manter funcionalidade suspensa durante a troca. Só depois liberar multicategoria com leitores prontos.
+10. Clientes antigos que não forem atualizados inevitavelmente terão ações bloqueadas: não existe sequência que simultaneamente mantenha a escrita direta antiga e garanta autoridade exclusiva. D10 precisa aceitar atualização obrigatória/janela e mensagens de erro. Estoque operacional compatível pode continuar; não prometer zero interrupção para toda versão antiga.
+11. Retirada futura do legado apenas após evidência e etapa própria. Rollback não pode reabrir escrita taxonômica direta após multicategoria; preferir suspender novas ações mantendo barreira.
+
+Não foi executada nenhuma dessas publicações. Localmente RULES-A já está pronta, mas não se deve publicá-la isoladamente agora: P1/P3 e C3 atuais quebrariam.
+
+17. DECISÕES PENDENTES — 10 GRUPOS EXPLÍCITOS
+
+D1 — Matriz de papéis por cada uma das cinco operações, aliases legados e eventual exceção owner. Evidências/opções na seção 6; nenhuma matriz herdada silenciosamente.
+D2 — Política de assinatura da gestão/criação/importação: sem novo gate como archive/restore, ou active/trial/overdue como createCatalog, ou contrato específico. Não implementar bloqueio comercial por suposição.
+D3 — Criação/rename de categoria: manter diretos no primeiro corte (auditoria parcial) ou adotar as duas callables e futura proteção de CREATE/name com adaptação de writers/imagem. As duas opções não têm a mesma garantia.
+D4 — Limites novos de nome/imagem e política explícita de duplicidade: proposta 100 pontos de código, imagem HTTPS da loja até 2048 caracteres, sem unicidade forte. Não confundir com regras já existentes.
+D5 — Protocolo de conflito/idempotência: aprovar comparação de estado com limite ABA e comprovante de criação no auditLogs, ou exigir revision/protocolo mais forte com proteção adicional. Não adicionar revision desprotegido.
+D6 — UX/atomicidade da edição mista: salvar taxonomia separadamente e informar falhas parciais, ou estender uma operação restrita do formulário para atomicidade com campos operacionais validados. Não mover vendas/estoque para callable por consequência.
+D7 — Edição de vínculos em produto arquivado, conforme seção 15. Exclusão considerar arquivados NÃO está pendente.
+D8 — Gate para dados anômalos/nome-only antes da liberação de delete: inventário autorizado somente leitura e bloqueio conservador de exceções, ou política explícita alternativa. Nenhuma identificação por nome automática.
+D9 — Subcontrato operacional de createProduct/importação: limites/tipos exatos de lotes/datas, nome/barcode/imagem e fiscal, retomada dos requestIds e tratamento de resultados parciais. Nunca aceitar mapa irrestrito nem ignorar categoria.
+D10 — Janela de rollout/atualização de clientes antigos e liberação da multicategoria. Não autoriza deploy antecipadamente.
+
+As dez entradas são grupos de decisão, não dez permissões já aprovadas. Não estão pendentes: máximo 10 POR PRODUTO, array muitos-para-muitos, IDs preservados, sem isActive, sem migração/reparo automático, backend dos vínculos e exclusão em uso bloqueada.
+
+18. PRIMEIRO INCREMENTO DE IMPLEMENTAÇÃO RECOMENDADO
+
+Implementar SOMENTE um módulo puro do contrato já estabelecido de categoryIds e projeção legada, com testes unitários. Sem I/O, callable, export no index, writer Flutter, Rules ou dados. Isso entrega base verificável sem inventar os papéis que D1 ainda precisa fechar.
+Responsabilidades: validar lista 0..10/IDs/duplicados; preservar ordem; gerar projeção primeira categoria/nome canônico a partir de categorias já resolvidas pelo chamador; [] -> null/null; nunca resolver nomes pelo legado; distinguir chave ausente de array vazio na representação de estado. O módulo não pode alegar autorização ou existência de categoria no banco — isso pertence à futura transação.
+Arquivos prováveis, novos e propostos:
+- functions/products/productCategoryContract.js.
+- functions/tests/products/productCategoryContract.test.js.
+Não tocar functions/index.js nesse primeiro incremento. Nenhuma criação desses arquivos ocorreu aqui.
+Testes recomendados: 0/1/10 e 11 IDs; null/escalar/mapa; strings inválidas/reservadas/caminhos/bytes; duplicados; case sensitivity; ordem/reinclusão; ausência vs null vs []; projeção com mapa local resolvido; categoria sem nome; inputs imutáveis; nenhuma escolha por categoryName legado; nenhuma deduplicação/truncamento/reparo silencioso.
+Depois, com D1/D2/D5 aprovadas, primeiro incremento com persistência: setProductCategories isolada no módulo, sem ativação pública automática; testes de transação/permissões/conflito e audit. Delete depende do protocolo completo dos writers, não deve ser liberado sozinho.
+
+19. RISCOS E VERIFICAÇÕES
+
+Riscos principais: publicação de Rules antes dos writers; callables Admin SDK sem autorização própria; categoria removida por caminho legado antes do corte; criação/rename ainda diretos; nomes duplicados e legados anômalos; lista obsoleta de duas abas; reenvio duplicando criações; batch de importação parcialmente aplicado; fan-out desnecessário; falso sucesso após duas requisições do mesmo formulário; rollback reabrindo bypass.
+Nenhuma necessidade demonstrada de mudar relação muitos-para-muitos ou criar coleção de vínculos/contador/lock. O modo de concorrência e índices remotos não foram consultados. Verificar índices de campo único array/equality antes da futura ativação; não criar índices por suposição.
+Limites de nome e proposta de idempotência são novos e estão rotulados; não tratados como fatos históricos aprovados.
+Nenhum teste, Emulator ou dependência foi executado/instalado nesta etapa. git diff --check foi usado somente como verificação de worktree e não mostrou problemas.
+
+20. REFERÊNCIAS TÉCNICAS EXTERNAS CONSULTADAS (SOMENTE DOCUMENTAÇÃO PÚBLICA)
+
+- Transaction serializability and isolation: https://firebase.google.com/docs/firestore/transaction-data-contention
+  Confirma isolamento serializável, retry/contenda e leituras antes de writes. A aplicação ao protocolo associação/delete desta proposta é análise técnica; precisa de teste concorrente futuro, não certificação de produção.
+- API Node Transaction.get(Query): https://docs.cloud.google.com/nodejs/docs/reference/firestore/latest/firestore/transaction
+  Confirma que a consulta de uso pode ocorrer dentro da transação de servidor; não implica suporte igual no cliente Flutter.
+- Offline persistence: https://firebase.google.com/docs/firestore/manage-data/enable-offline
+  Sustenta a possibilidade de writes clientes pendentes e sincronização posterior. Não prova que todo fluxo com upload/get servidor funcione offline; as ressalvas estão no inventário.
+Nenhuma API do projeto, Console ou Firestore real foi consultada.
+
+21. GIT STATUS FINAL
+
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+
+Nenhuma diferença rastreada ou staged. Única criação desta execução: este .txt não rastreado, fora de código/configuração. git diff normal não mostra arquivos não rastreados.
+Branch e HEAD iniciais preservados. Nenhum primeiro incremento implementado.
+
+22. CONFIRMAÇÕES
+
+ARQUIVOS DE PROJETO ALTERADOS: NENHUM
+GIT ADD NÃO EXECUTADO
+COMMIT NÃO EXECUTADO
+PUSH NÃO EXECUTADO
+DEPLOY NÃO EXECUTADO
+FIRESTORE RULES NÃO ALTERADAS
+FIRESTORE RULES NÃO PUBLICADAS
+FIRESTORE REAL NÃO ALTERADO
+BACKEND NÃO ALTERADO
+FLUTTER NÃO ALTERADO
+ASAAS NÃO ALTERADO
+
+Relatório salvo em:
+C:\Users\rodri\StudioProjects\store_connect\test\F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt

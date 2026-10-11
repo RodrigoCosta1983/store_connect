@@ -1,0 +1,156 @@
+STORE&CONNECT — F7-CAT-TAXONOMIA-RULES-SOURCE
+Data: 16/09/2026
+Resultado: PASSOU
+
+1. ESTADO INICIAL
+
+Branch: feat/f7-intelligent-catalog
+HEAD: 56917d8d5405bd915a2c69d0577a69bdaeb3cdc3
+Nenhum arquivo rastreado modificado e nenhuma alteração no índice.
+git status --short inicial:
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+
+Esses relatórios preexistentes foram preservados sem edição, exclusão, movimentação ou git add.
+Test-Path confirmou inexistência de firestore.rules e deste relatório antes das alterações. A pasta test já existia.
+
+2. ARQUIVOS LIDOS
+
+- AGENTS.md.
+- docs/codex/CURRENT_WORK.md.
+- test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt.
+- test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt.
+- docs/security/FIRESTORE_RULES_PRODUCAO_2026-09-16.rules integralmente.
+- firebase.json integralmente.
+- .firebaserc.
+- package.json.
+- functions/package.json.
+- Log local do Firestore Emulator para verificação final.
+
+3. FONTE OPERACIONAL ANTERIOR
+
+Não existia firestore.rules na raiz. firebase.json não possuía bloco firestore nem referência a fonte Firestore Rules. A busca de arquivos .rules encontrou somente storage.rules e o snapshot histórico.
+storage.rules é fonte de Storage, não Firestore. A configuração emulators.firestore.port = 8080 não declarava uma fonte de Rules.
+.firebaserc mantinha projeto padrão store-connect-app. Esse arquivo não foi alterado.
+
+4. SNAPSHOT E CÓPIA EXATA
+
+Snapshot: docs/security/FIRESTORE_RULES_PRODUCAO_2026-09-16.rules
+SHA256 original:
+8E605C667E25644CFA43F1B2C561282883016172840C19C4CAE5FD5CFD5BDA8A
+Tamanho original: 12040 bytes.
+O SHA256 correspondeu ao valor exigido pelo usuário antes de qualquer alteração.
+
+Criado firestore.rules na raiz por Copy-Item, sem leitura/regravação textual do conteúdo.
+SHA256 de firestore.rules após cópia e na verificação final:
+8E605C667E25644CFA43F1B2C561282883016172840C19C4CAE5FD5BDA8A
+Tamanho de firestore.rules: 12040 bytes.
+
+SHA256 final do snapshot:
+8E605C667E25644CFA43F1B2C561282883016172840C19C4CAE5FD5CFD5BDA8A
+Tamanho final do snapshot: 12040 bytes.
+
+Equivalência byte a byte confirmada pela operação de cópia binária e pela igualdade de SHA256 e tamanho antes/depois. Encoding, BOM, espaços, finais de linha e bytes finais do snapshot foram preservados na cópia. Nenhuma edição foi feita em firestore.rules após a cópia.
+
+5. BACKUP E FIREBASE.JSON
+
+Antes da edição foi criada cópia de firebase.json fora do repositório:
+C:\Users\rodri\AppData\Local\Temp\firebase_antes_rules_source_f4e44a52126b4783951b1bf42a6e549d.json
+
+Única alteração textual no firebase.json: inserção de três linhas antes de storage:
+"firestore": {
+"rules": "firestore.rules"
+},
+
+Configuração operacional final: firestore.rules = "firestore.rules".
+Functions, hosting, storage, flutter e emulators foram preservados. Nenhuma configuração de índices adicionada; nenhuma porta ou project ID persistido alterado.
+Parse via Get-Content -Raw firebase.json | ConvertFrom-Json: aprovado.
+Verificação programática de $config.firestore.rules igual a 'firestore.rules': aprovada.
+
+6. FIRESTORE EMULATOR
+
+JDK 21 configurado somente no ambiente do processo:
+JAVA_HOME = C:\Program Files\Eclipse Adoptium\jdk-21.0.6.7-hotspot
+PATH do processo prefixado com JAVA_HOME\bin.
+Nenhuma configuração permanente de Java alterada.
+
+Comando executado na raiz:
+firebase emulators:exec --config firebase.json --project demo-rules-source --only firestore 'node --version'
+
+Primeira tentativa no sandbox: falhou com "Could not spawn java -version" e aviso de acesso à configuração de atualização do Firebase CLI; código 1. Não houve erro de sintaxe de Rules nessa tentativa, pois Java nem iniciou.
+Repetição do mesmo comando fora do sandbox, mediante aprovação: código 0.
+
+Resultado da repetição:
+- CLI reconheceu demo-rules-source como projeto fictício, com serviços não emulados indisponíveis.
+- Firestore Emulator iniciou em modo standard usando firebase.json e sua fonte firestore.rules.
+- Sem erro de carregamento/compilação das Rules.
+- Endpoint local registrado: http://127.0.0.1:8080.
+- Comando local inofensivo node --version retornou v22.17.0.
+- Script encerrou com código 0.
+- CLI encerrou Firestore Emulator, hub e logging ao terminar.
+- SIGINT registrado no encerramento é o sinal normal de parada pelo emulators:exec.
+
+O project ID fictício foi usado somente como argumento do teste, sem mudar .firebaserc nem firebase.json.
+Nenhuma leitura/escrita de documentos foi necessária. Nenhum dado real foi acessado ou alterado. Nenhuma Rule foi publicada.
+Essa validação cobre inicialização/carregamento da fonte; não representa testes funcionais das permissões nem correção dos bypasses conhecidos.
+
+7. DIFF E ESCOPO
+
+Arquivos de PROJETO alterados/criados exatamente:
+- firebase.json: três linhas adicionadas para apontar a fonte operacional.
+- firestore.rules: arquivo novo, cópia idêntica de 12040 bytes do snapshot.
+
+Artefato adicional de auditoria, fora de implementação:
+- test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt, novo e não rastreado.
+
+git diff --check: aprovado, sem erros. Git emitiu aviso de conversão futura LF para CRLF em firebase.json, sem alteração adicional de lógica e sem falha do check.
+git --no-pager diff -- firebase.json firestore.rules: somente as três linhas de firebase.json, pois firestore.rules é não rastreado e não foi staged.
+Comparação explícita do arquivo novo com snapshot: SHA256 e tamanho idênticos conforme seção 4.
+git --no-pager diff --cached: vazio.
+Nenhum outro arquivo rastreado mudou. Logs locais de execução do Emulator não aparecem como alterações no status do Git.
+
+8. GIT STATUS FINAL
+
+ M firebase.json
+?? firestore.rules
+?? test/F7-CAT-TAXONOMIA-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-BR_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-B_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt
+?? test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt
+?? test/F7.8-A_relatorio.txt
+?? test/F7.8-B_relatorio.txt
+
+Branch e HEAD preservados. Nenhum arquivo adicionado ao índice.
+
+9. LÓGICA E PRÓXIMO PASSO
+
+Nenhuma lógica de segurança foi alterada. Todos os matches, permissões, roles, campos e bypasses conhecidos permanecem exatamente como no snapshot.
+Não foram modificados products, categories, users, stores, catalogs, catalogRequests ou regra genérica.
+Não houve implementação de taxonomia, backend, Flutter, importação, dual-write ou migração.
+
+Próximo incremento recomendado: F7-CAT-TAXONOMIA-RULES-A, agora com fonte operacional local definida. NÃO implementado nesta etapa. As proteções taxonômicas e o bloqueio de DELETE de categories continuam pendentes.
+RULES-SOURCE encerra somente a preparação da fonte local; não autoriza publicação.
+
+10. CONFIRMAÇÕES
+
+GIT ADD NÃO EXECUTADO
+COMMIT NÃO EXECUTADO
+PUSH NÃO EXECUTADO
+DEPLOY NÃO EXECUTADO
+FIRESTORE RULES NÃO PUBLICADAS
+FIRESTORE REAL NÃO ALTERADO
+SNAPSHOT DE PRODUÇÃO NÃO ALTERADO
+BACKEND NÃO ALTERADO
+FLUTTER NÃO ALTERADO
+FLUXO FINANCEIRO/ASAAS NÃO ALTERADO
+RULES-A NÃO IMPLEMENTADO
+
+Caminho do relatório:
+C:\Users\rodri\StudioProjects\store_connect\test\F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt

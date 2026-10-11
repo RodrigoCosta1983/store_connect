@@ -1,0 +1,603 @@
+STORE&CONNECT — F7-CAT-TAXONOMIA-B
+Contrato técnico proposto de múltiplas categorias
+Data: 16/09/2026
+
+Status: análise e desenho. Nenhuma implementação autorizada por este relatório.
+As decisões humanas já fornecidas são premissas. Recomendações novas estão identificadas, com pendências consolidadas em T.
+Coleções comerciais e seções dinâmicas estão fora deste contrato.
+
+A. ESTADO GIT E BASES
+
+Projeto: C:\Users\rodri\StudioProjects\store_connect
+Branch confirmada: feat/f7-intelligent-catalog.
+HEAD confirmado: 9b70da5.
+Working tree limpa na validação inicial e na conferência final da análise; git diff --stat sem alterações.
+
+Referências lidas: AGENTS.md; docs/codex/CURRENT_WORK.md; docs/catalog/F7_CATALOGO_INTELIGENTE.md; docs/catalog/CATALOGO_TAXONOMIA_COLECOES_DINAMICAS.md; C:\Users\rodri\Desktop\F7-CAT-TAXONOMIA-A_relatorio.txt.
+A documentação de taxonomia continua sendo proposta/backlog. Registros históricos da F7 não são tratados como comportamento atual quando o código mostra evolução posterior.
+
+Detalhes reconfirmados por leitura:
+- manage_products_screen.dart:638,707,1655: mapas singulares, escrita direta e seleção por categoria.
+- product_import_service.dart:470,510,622: criação de categorias/produtos e batches.
+- new_sale_screen.dart:930: filtro singular.
+- archived_products_screen.dart:775: nome copiado no produto.
+- functions/catalog/createCatalog.js:1424: categoryName singular no DTO.
+- functions/products/archiveProduct.js:79 e restoreProduct.js:112: snapshots singulares.
+- functions/backups/createStoreSnapshot.js:143,212,278: arrays serializados e documentos completos de produtos/categorias.
+- firebase.json: nenhuma fonte de Firestore Rules/índices apontada; arquivos não versionados.
+
+Foram consultadas somente páginas públicas oficiais do Firebase para confirmar limites de Rules, índices e transações. Nenhum acesso ao projeto remoto, Console, dados ou produção. Nenhum teste.
+
+B. CONTRATO PROPOSTO DE categoryIds
+
+Path preservado: stores/{storeId}/products/{productId}.
+Entidades preservadas: stores/{storeId}/categories/{categoryId}.
+Novo campo: categoryIds: string[].
+
+Contrato dos novos escritores:
+1. Toda criação nova grava categoryIds, inclusive [].
+2. Toda gravação explícita de categorias envia/grava o conjunto completo desejado.
+3. [] significa decisão explícita de não associar categoria.
+4. Omissão é permitida somente em documentos legados ou em updates parciais que não alteram taxonomia, como baixa de estoque. Não significa limpar.
+5. null, valor escalar, mapa ou elementos não string são rejeitados.
+6. IDs vazios, somente espaços, com espaços externos, caminhos e identificadores inválidos para um documento Firestore são rejeitados. Não converter tipos nem corrigir IDs silenciosamente.
+7. IDs são opacos e sensíveis a maiúsculas: não aplicar lowercase, normalização de nomes ou exigir auto-ID de 20 caracteres.
+8. Duplicados na entrada de escrita são rejeitados. A UI trabalha como conjunto e não deve produzi-los.
+9. Todos os IDs precisam resolver documentos na própria loja no momento da escrita. ID inexistente/órfão não é aceito em nova associação.
+10. Nunca procurar uma categoria globalmente para tentar resolver referência ausente localmente.
+11. Mesmo texto de ID em duas lojas identifica entidades diferentes. Se existe na loja atual, resolve a entidade local; o array não carrega nem aceita um caminho externo.
+12. Gravação substitui o array atomicamente no documento; não usa uma sequência de append/remove como contrato do formulário.
+
+Ordem:
+Preservar ordem de primeira inclusão no editor; remoção conserva a ordem restante e reinclusão vai ao fim. Não haverá reordenação manual nesta versão. A ordem serve apenas à estabilidade de serialização e à projeção legada, sem prioridade de negócio e sem categoria principal. Filtros/comparações de pertencimento usam conjunto. Listas visuais de categorias podem ordenar por nome atual, com ID como desempate.
+
+Limite técnico:
+Recomendo máximo inicial de 10 categorias por produto, sujeito à aprovação de Rodrigo.
+Não é limite do Firestore nem requisito observado do negócio. É um orçamento conservador proposto para limitar validações, tamanho do DTO e complexidade da UI. Com o catálogo atual de 200 produtos, delimita no máximo 2.000 referências antes da deduplicação por requisição; ainda exige leitura em blocos/concorrência limitada e medição antes de liberar.
+Não há evidência que prove ser 10 o valor ideal. Se não aprovado, MAX_CATEGORIES_PER_PRODUCT permanece uma decisão pendente; não substituir por “ilimitado” silenciosamente.
+O limite aplica-se à entrada antes de qualquer normalização/deduplicação. Dados persistidos acima dele são anômalos, não truncados silenciosamente para salvar.
+
+Validação:
+- Frontend: feedback de tipo, limite, seleção e categorias disponíveis.
+- Autoridade confiável: servidor na persistência; nunca apenas Flutter.
+- Direção técnica recomendada, dependente de aprovação arquitetural: operações autenticadas para criação de produto e atualização de vínculos, com validação de todas as referências e coordenação com exclusão. Não implica refatorar vendas/estoque.
+- Se mantido CRUD direto, Rules precisam comprovar essas garantias. Uma consulta no Flutter antes de update não substitui validação confiável.
+- O mecanismo de escrita é gate obrigatório antes de habilitar o recurso; a ausência das Rules impede considerá-lo resolvido hoje.
+
+C. FONTE CANÔNICA
+
+Vínculo: products/{productId}.categoryIds.
+Nome/metadados atuais: categories/{categoryId}.
+categoryId/categoryName são exclusivamente representação legada.
+
+Para leitores novos:
+- Se a chave categoryIds existe, ela prevalece, inclusive quando [].
+- Não fazer união com categoryId.
+- Fallback singular somente quando a chave categoryIds está ausente.
+- Campo novo presente mas inválido não autoriza fallback ao singular.
+- Resolver nomes sempre na coleção de categorias da mesma loja.
+- categoryName não decide identidade, vínculo nem nome atual.
+
+Novos escritores atualizam categoryIds. Durante janela de compatibilidade, também derivam categoryId/categoryName do resultado, na mesma escrita atômica do produto. Clientes não enviam nome legado como autoridade.
+
+Não parar imediatamente a projeção legada enquanto leitores antigos precisarem dela. Remover sua escrita somente após consumidores migrados, escritores antigos bloqueados e dados convertidos. Remoção física posterior é uma operação separada e autorizada.
+
+D. CONTRATO LEGADO E ESTRATÉGIA DE ESCRITA
+
+Semântica temporária:
+- categoryId = primeiro ID de categoryIds na ordem persistida.
+- categoryName = nome atual desse documento no momento da gravação.
+- categoryIds = [] implica categoryId = null e categoryName = null.
+- Projeção é apenas compatibilidade. Não cria “categoria principal”, não significa última categoria escolhida nem prioridade comercial.
+- Leitores antigos enxergam no máximo essa categoria; dual-write não lhes fornece suporte real a múltiplas.
+
+Comparação:
+A. Dual-write isolado: preserva leitores antigos parcialmente, mas não impede escritores antigos de causar divergência.
+B. Somente categoryIds com leitores antigos: inseguro funcionalmente; PDV, importação, arquivados e público antigos perdem/ignoram categorias.
+C. Duas fases, recomendada: leitores compatíveis primeiro; depois troca controlada de escritores, dual-write temporário e migração. A ativação depende de bloquear escrita antiga.
+
+Exemplo do problema: produto com categoryIds=[A,B]; aplicativo antigo grava categoryId=C. Se aceito, leitores novos continuam vendo A/B e antigos veem C. Não promover C automaticamente, pois isso perde intenção e reintroduz duas fontes canônicas.
+
+Controle obrigatório:
+- Impedir criação legada e alteração direta dos campos taxonômicos por clientes antigos após o corte.
+- Updates operacionais que não mudam taxonomia podem continuar autorizados conforme regras existentes auditadas.
+- Não confiar apenas em versão informada pelo cliente nem em pedir para fechar a aba.
+- Tratar escritas offline pendentes: rejeitar alterações taxonômicas obsoletas, mostrar necessidade de atualizar/reabrir.
+- Edições concorrentes novas precisam conferir a base taxonômica lida; se mudou, rejeitar a gravação obsoleta e pedir recarga, sem sobrescrever silenciosamente.
+- A comparação da base deve distinguir campo ausente de []; mudanças em preço/estoque não devem forçar regravação taxonômica.
+- Não criar trigger de sincronização bidirecional entre singular e array.
+
+Matriz de leitura/edição:
+
+A — categoryIds não vazio e válido:
+Ler somente array; exibir nomes atuais; editar todos os vínculos; salvar array validado + projeção temporária. Sem reparo.
+
+B — categoryIds=[]:
+Ler nenhuma categoria mesmo que legado tenha valor. Exibir “Sem categoria” internamente e nenhum rótulo público. Salvar [] e projeção null. Divergência residual pode ser reportada; não ressuscitar o singular.
+
+C — array ausente, categoryId válido local:
+Ler provisoriamente [categoryId], resolver nome atual, abrir editor com uma seleção. Próximo salvamento explícito de categorias ou migração pode materializar [id]. Leitura não grava.
+
+D — array ausente, categoryId=null:
+Ler []; editor vazio; próxima gravação taxonômica materializa [].
+
+E — array ausente, categoryId="":
+Mesmo comportamento de D. categoryId ausente também equivale a ausência de vínculo legado.
+
+F — singular aponta para categoria removida:
+Leitor público omite categoria, sem omitir produto. Internamente indicar vínculo indisponível. Editor mantém a pendência visível e exige remover/substituir explicitamente antes de salvar taxonomia. Não recriar pelo nome. Migração reporta exceção, sem descartar vínculo automaticamente.
+
+G — categoryName divergente:
+Ignorar o nome copiado; exibir categories/{id}.name. Não exige alterar vínculos nem migrar por nome. Próxima escrita taxonômica atualiza a projeção; nenhuma propagação em massa por renomeação.
+
+H — array com ID inválido/órfão:
+Leitura tolerante usa somente referências sintaticamente válidas, únicas e resolvidas localmente para apresentação; registra diagnóstico interno. Editor mostra pendência e exige correção explícita. Escrita estrita rejeita enquanto houver referência inválida. Leitura jamais repara o documento.
+Array null/escalar: nenhum vínculo utilizável, erro interno de dados e editor bloqueado até correção explícita; sem fallback.
+Duplicados persistidos: uma ocorrência visual, diagnóstico e canonicalização somente por escrita autorizada.
+Array acima do limite aprovado: não truncar nem cair no legado; bloquear edição taxonômica até correção e omitir metadados taxonômicos públicos desse produto, preservando elegibilidade operacional.
+
+I — ID que só existe em outra loja:
+Tratar como indisponível localmente; não ler a outra loja nem revelar nome/origem. Escrita retorna categoria inválida/indisponível da loja atual. Reparo explícito para retirar/substituir.
+
+Falha de rede/permissão ao carregar categories não equivale a documento inexistente:
+Manter estado de carregamento/erro ou último cache válido; não transformar em [] nem salvar remoções. Backend público retorna erro transitório em falha de leitura; omissão individual aplica-se a ausência confirmada/dado inválido, não a indisponibilidade geral.
+
+E. RENOMEAÇÃO
+
+Renomear categories/{id}.name preserva ID e categoryIds.
+Produtos não precisam ser regravados.
+Telas privadas usam mapa de categorias da loja, preferencialmente reutilizando snapshots/listeners; nome atualizado aparece quando o snapshot atual chega.
+Cache privado deve ser isolado por loja, descartado na troca de loja/sessão e atualizado pelos novos snapshots. Cache offline pode estar desatualizado; isso não autoriza escrita com referências não revalidadas.
+Backend público resolve nomes a cada requisição; não introduzir cache persistente entre chamadas nesta versão. Deduplicar leituras dentro da mesma chamada é permitido.
+Página pública aberta muda na próxima atualização já prevista, sem prometer tempo real.
+categoryName persistido pode ficar antigo durante a janela legada. Leitores novos o ignoram. Não fazer fan-out em produtos para mantê-lo atualizado.
+O categoryName temporário do DTO público será derivado dos nomes atuais pelo backend, não do campo legado do produto.
+
+F. EXCLUSÃO E INATIVAÇÃO
+
+Comparação das alternativas:
+
+A — Impedir exclusão se houver uso.
+Consistência: preserva vínculos, desde que verificação e exclusão sejam confiáveis e coordenadas com novas associações.
+Custo: consultas de existência; sem atualização em massa dos produtos.
+UX: explicar “Categoria em uso; remova os vínculos antes de excluir”.
+Batch: sem cascata.
+Risco: consulta no cliente seguida de delete separado mantém corrida e pode gerar órfãos.
+
+B — Excluir e remover ID dos produtos.
+Consistência: exige limpar todos os vínculos e projeções.
+Custo/impacto: proporcional à quantidade de produtos, incluindo arquivados.
+UX: conveniente, mas ação de amplo efeito.
+Batch: grandes conjuntos exigem processamento em etapas, retomada e coordenação.
+Risco: falhas parciais e novas associações durante limpeza. Não recomendado para primeira versão.
+
+C — Inativar/arquivar.
+Consistência: mantém documento e vínculos.
+Custo: pequena escrita, porém todas as telas/importação/filtros precisam de semântica de status.
+UX: reversível.
+Batch: sem cascata.
+Risco: não cria órfãos físicos, mas status ignorado por consumidor antigo produz comportamento divergente.
+
+D — Inativação normal + excluir somente sem uso.
+Consistência: combina preservação com limpeza restrita.
+Custo/impacto: inclui o status e as verificações de A.
+UX: flexível, com mais ações/estados.
+Batch: não exige cascata.
+Risco: depende de todos os consumidores respeitarem o ciclo de vida.
+
+Recomendação para esta primeira versão: A, sem introduzir isActive.
+Múltiplas associações não exigem, por si, um novo estado de categoria. D pode ser uma evolução separada se houver necessidade operacional de esconder categorias em uso.
+
+Contrato de A:
+- Considerar produtos ativos E arquivados.
+- Enquanto houver legado, verificar categoryIds contendo ID e categoryId==ID. Por prudência, referência singular residual também bloqueia exclusão até reparo, mesmo se array prevalece na leitura.
+- Solicitações históricas, snapshots de auditLogs e backups não bloqueiam exclusão; são registros históricos, não vínculos operacionais.
+- Categoria nunca deve ser excluída pelo delete direto atual sem verificação confiável.
+- Recomenda-se exclusão autenticada no backend e escritas de vínculo transacionais, lendo os documentos das categorias envolvidos.
+- Exclusão deve ler categoria e verificar uso dentro da transação; não fazer “consultar e depois apagar” em chamadas independentes.
+- Se consulta falha ou integridade do conjunto de dados ainda não foi validada, falhar fechado.
+- A ativação da exclusão segura depende de bloquear caminhos alternativos de escrita/exclusão e testar concorrência real no Emulator. Até isso existir, não liberar exclusão no novo fluxo.
+- Ausência de uso permite excluir apenas a categoria; não altera produtos.
+- Permissões exatas de gestão precisam ser confirmadas pelas Rules atuais; não ampliar papéis implicitamente.
+
+Firestore documenta isolamento serializável de transações; a proposta acima depende de aplicar esse mecanismo em TODOS os escritores relevantes, não apenas no botão de excluir:
+[Transações e concorrência](https://firebase.google.com/docs/firestore/transaction-data-contention).
+
+isActive nesta etapa:
+Recomendação explícita: não adicionar, não filtrar campo presumido e não implementar inativação.
+Se Rodrigo preferir C/D, o contrato deve ser revisado antes da implementação para definir legado sem campo, reativação, novos vínculos, exibição/filtros e importação. Categoria inativa não deve virar uma regra improvisada que oculta produto do catálogo.
+
+G. UI DE CRIAÇÃO/EDIÇÃO DE PRODUTO
+
+Padrão conceitual: seletor múltiplo com checklist pesquisável e resumo em chips removíveis. Reaproveitar diálogos/formulários atuais, sem definir layout visual final.
+
+Comportamento:
+- Novo produto começa com seleção vazia.
+- Adicionar marca uma categoria existente da própria loja.
+- Remover chip ou desmarcar retira somente aquele vínculo.
+- “Limpar categorias” deixa []; salvar sem categoria é permitido.
+- Nome vem do mapa categories; não é texto editável no vínculo.
+- Legado válido abre como uma seleção; só materializa array em escrita explícita.
+- Categoria removida durante edição gera pendência/erro ao salvar, sem remover automaticamente.
+- Se carregamento de categorias falhar, não substituir o estado por vazio.
+- Não oferecer categoria inexistente; criação de categoria é ação separada e explícita.
+- Estado de edição deve conservar pendências para que não desapareçam apenas porque o seletor não encontra o ID.
+- Concorrência taxonômica detectada pede recarga/revisão.
+- Não oferecer ações de inativação na versão recomendada.
+
+H. IMPORTAÇÃO
+
+Alternativas:
+A. Manter categoria singular com schema singular: não serve ao novo escritor.
+B. Separador em uma célula: exige escape e tratamento de nomes que já contêm o separador; amplia ambiguidades.
+C. Várias colunas: explícito, mas amplia mapeamento, validação e UX.
+D. Preservar uma coluna Categoria/Grupo e converter para array de zero/um ID: recomendada.
+
+Contrato inicial:
+- Célula vazia → [].
+- Nome resolvido sem ambiguidade → [id].
+- Nenhum parsing automático de vírgulas, ponto e vírgula ou barras. “A;B” continua um nome único, não duas categorias.
+- Normalização de comparação: trim + lowercase, mantendo o padrão atual. Não retirar acentos nem fundir espaços internos silenciosamente.
+- Nome persistido/apresentado preserva a grafia da entidade; correspondência por normalização não muda o nome existente.
+- Nenhuma correspondência: apresentar categoria a criar na confirmação, preservando o fluxo atual de criação automática após confirmação.
+- Uma correspondência: reutilizar ID.
+- Duas ou mais correspondências normalizadas: bloquear a linha até escolha explícita de ID ou correção; nunca escolher a última entrada do mapa.
+- Repetições do mesmo nome na planilha reutilizam a mesma resolução/categoria por operação.
+- Revalidar resolução antes da escrita. Se surgiu ambiguidade após análise, interromper a parte afetada e pedir revisão.
+- Não prometer unicidade global de nomes: ela não existe hoje. Não criar índice/collection de reserva de nomes neste escopo.
+- Criar categoria antes de validar/gravar produto dependente, ou na mesma operação atômica cujo servidor conhece a nova entidade.
+- Não associar ID ainda não persistido devido a batch anterior que falhou.
+- Se houver falha parcial, informar resultados efetivos; não apagar produtos/categorias automaticamente.
+- Os batches atuais de 400 não são garantia de compatibilidade com futuras Rules ou transações.
+- Não converter importação em atualização de produtos existentes nesta etapa.
+
+I. PDV E FILTROS
+
+Semântica nova: selectedCategoryId pertence ao conjunto efetivo de categoryIds.
+- Produto multicategoria aparece em cada filtro correspondente.
+- Na lista de um filtro aparece uma vez, pela identidade productId.
+- Produto sem categoria aparece em “Todos”, mantendo demais critérios operacionais.
+- Referências indisponíveis não criam filtros fantasmas.
+- Nomes dos filtros vêm de categories.
+- Pesquisa nominal e ocultação de arquivados permanecem independentes.
+- Filtro continua local inicialmente, sobre os documentos já carregados.
+- Não há necessidade demonstrada de trocar o PDV para arrayContains agora.
+- Se categoria selecionada desaparecer, limpar o filtro para “Todos” e informar; falha de rede não equivale a exclusão.
+- Paginação e consultas combinadas ficam fora desta primeira versão.
+
+J. PRODUTOS ARQUIVADOS
+
+Tela mostra todas as categorias resolvidas atualmente, não apenas categoryName.
+Precisa do mapa categories da mesma loja; evitar uma consulta por card.
+Sem vínculos → “Sem categoria”.
+Vínculos não resolvidos → indicação interna de categoria indisponível, sem procurar em outra loja nem usar nome legado como atual.
+Falha geral de leitura → erro/carregamento de categorias, preservando a lista de produtos.
+
+archiveProduct/restoreProduct:
+- Incluir categoryIds nos snapshots novos quando o campo existir, preservando a diferença entre ausente e [].
+- Snapshot é registro do valor observado, não limpeza automática nem resolução retroativa de nomes.
+- Preservar os campos legados nos logs durante a transição.
+- Dados anômalos observados devem permanecer identificáveis no registro; não inventar array vazio para esconder corrupção.
+- Logs antigos não serão reescritos.
+- Arquivar/restaurar não modifica categoryIds no produto.
+- Referência órfã já existente não impede, por si, arquivar/restaurar; a operação de estado não é edição de taxonomia.
+- Produto arquivado continua contando como uso ao excluir categoria.
+
+K. CATÁLOGO PÚBLICO
+
+DTO recomendado por produto:
+categories: [{id: string, name: string}]
+Sempre um array; [] quando não há categorias públicas resolvidas.
+
+Comparação:
+- Só IDs: não atende a exibição sem consulta adicional do navegador, que deve permanecer sem acesso direto ao Firestore.
+- Só nomes: perde identidade estável e não distingue nomes iguais.
+- IDs + nomes: recomendado; permite exibição e identidade sem tornar cliente autoridade.
+
+Contrato:
+- Backend resolve IDs na coleção da loja já autenticada pelo catálogo.
+- Aplicar precedência array/legado da seção D.
+- Deduplicar IDs entre os produtos e ler categorias em blocos com concorrência limitada, evitando consulta repetida por ocorrência.
+- Expor apenas id e nome atual não vazio, sem path, storeId, timestamps ou documento completo.
+- IDs ausentes, inválidos ou sem nome válido são omitidos da lista pública de categorias.
+- Não revelar diagnóstico interno nem nome de outra loja.
+- Categoria não afeta elegibilidade: produto continua sujeito às regras existentes de pertencimento ao catálogo, estoque e arquivamento.
+- Array taxonômico inválido não autoriza uso de categoryName legado; produto pode ser exibido sem rótulos.
+- Falha de serviço ao consultar categorias deve gerar erro transitório, não ser mascarada como ausência de categorias.
+- Ordenar apresentação por nome atual e desempatar por ID; não alterar position/ordem dos produtos.
+- Não adicionar filtros públicos nem seções dinâmicas neste contrato.
+
+Compatibilidade de API:
+Adicionar categories mantendo categoryName string temporariamente.
+Esse categoryName é calculado pelo backend a partir da primeira referência resolvida na ordem persistida; '' se nenhuma. Nunca copiar products.categoryName.
+Frontend novo usa categories. categories=[] não faz fallback ao rótulo singular.
+Publicar futuramente backend compatível antes do frontend consumidor; eventual fallback a DTO antigo sem categories deve ser somente de apresentação e temporário, removido após a troca coordenada.
+Retirada do campo público categoryName exige etapa própria após encerrar compatibilidade.
+
+L. SELEÇÃO EM MASSA PARA CRIAR CATÁLOGO
+
+Continua sendo conveniência para montar lista estática de productIds. Backend createCatalog e CatalogItems não passam a persistir regras de categoria.
+
+Contrato de intenção local proposto:
+- M: IDs incluídos manualmente.
+- G: categorias explicitamente marcadas, cada uma com conjunto de productIds capturado na seleção.
+- X: exclusões explícitas de produtos.
+- Seleção final = (M união dos conjuntos de G) menos X, intersectada com produtos elegíveis atuais.
+
+Regras:
+1. Produto em A e B entra uma vez.
+2. Desmarcar A remove apenas sua contribuição; B ou inclusão manual podem manter o produto.
+3. Categoria marcada representa intenção, não dedução de “todos os produtos estão selecionados”.
+4. Mostrar contagem selecionada/total e exceções para não esconder seleções parciais.
+5. Remover individualmente produto adiciona exclusão explícita em X, prevalecendo sobre grupos; UI informa essa exceção.
+6. Selecionar individualmente remove exclusão e inclui em M.
+7. Marcar/reaplicar categoria é ação explícita de incluir seus produtos elegíveis e limpa exclusões desses produtos, com comportamento apresentado na UI.
+8. Não adicionar automaticamente novos produtos a G por uma atualização remota. Reaplicar a categoria é ação explícita de recapturar seus membros.
+9. Mudanças de estoque/arquivamento reduzem elegibilidade antes da confirmação; backend revalida.
+10. Renomeação não muda conjuntos; remoção de categoria não apaga silenciosamente os productIds já escolhidos na montagem estática, mas gera aviso para revisão.
+11. Fechar/cancelar a montagem limpa sua intenção local.
+12. Limite permanece 200 produtos únicos, aplicado à união final antes do envio; servidor mantém sua validação.
+13. Enviar só a lista de IDs, título e validade. A ordem será a lista final exibida, sem ordenar por categoria no backend.
+
+Exemplo: A={p1,p2}, B={p2,p3}. A+B seleciona p1,p2,p3. Desmarcar A deixa p2,p3. p1 permanece apenas se houver inclusão manual. Exclusão explícita de p2 o retira mesmo com B marcado.
+
+M. BACKEND — ALTERAÇÕES E REGRESSÕES
+
+createCatalog:
+Sem alteração do contrato/eligibilidade por categoria; regressão. Mantém productIds, deduplicação, limite, estoque e arquivamento.
+
+getPublicCatalog:
+Alteração necessária. Leitor compatível, resolução por loja, categories no DTO, projeção singular temporária e tratamento de falhas.
+
+submitPublicCatalogSelection:
+Sem mudança taxonômica; regressão. Não exigir categoria para aceitar produto. Não ampliar payload nem alterar preços, estoque, totais ou snapshots da solicitação.
+
+archiveProduct/restoreProduct:
+Alteração localizada nos snapshots de auditoria. Preservar comportamento operacional e ausência de migração implícita.
+
+listCatalogs:
+Sem alteração; regressão de contrato/status/link.
+
+listCatalogRequests/getCatalogRequest:
+Sem alteração; preservar snapshots históricos sem categorias e sem enriquecimento.
+
+Backups:
+Sem alteração funcional prevista; teste de serialização/cobertura de arrays e preservação de IDs.
+
+Operações de escrita taxonômica/exclusão:
+Nova responsabilidade confiável necessária; não é coberta por createCatalog ou submit. Caminho recomendado é backend autenticado e Rules impedindo bypass, sujeito à decisão arquitetural/auditoria de permissões. Nomes e assinaturas de novas callables não são aprovados aqui.
+A criação de produto deve validar e gravar categorias junto do produto, sem criar produto parcial e depois “tentar” completar vínculos.
+Edição de vínculos deve ser atômica no produto e não regravar preço/estoque a partir de snapshot desatualizado.
+Importação precisa usar a mesma autoridade para as associações; não basta adaptar só o cadastro manual.
+
+N. BACKUP
+
+Confirmado no código:
+encodeFirestoreValue trata arrays recursivamente.
+readCollectionForSnapshot copia doc.data() integralmente e conserva ID.
+products e categories já fazem parte das coleções do snapshot.
+
+Logo, categoryIds dentro de products e os documentos atuais de categories são cobertos sem novo domínio/subcoleção.
+Não há mudança funcional de backup exigida pelo desenho recomendado.
+Adicionar teste de []/[id]/[idA,idB], campos legados coexistentes e IDs preservados.
+Snapshot atual lê coleções separadamente; não presumir consistência global em um único instante sob alterações concorrentes. Para uma futura migração, gerar backup e executar na janela controlada, com escritores taxonômicos suspensos.
+Não criar rotina de restore nem alterar retenção nesta etapa.
+
+O. MIGRAÇÃO E TRANSIÇÃO RECOMENDADAS
+
+Comparação:
+A. Migração única isolada: simples para poucos dados, mas leitores/escritores antigos continuam podendo divergir.
+B. Leitura compatível + migração posterior: segura para introduzir consumidores novos antes de converter tudo; não resolve sozinha escritores antigos.
+C. Dual-write temporário: ajuda leitores antigos, mas requer bloqueio dos escritores antigos e prazo de retirada.
+D. Recriação seletiva: rejeitada neste contrato; contraria preservação de productIds e a instrução de não recriar produtos.
+
+Recomendação: combinar B e C em duas fases, seguida de migração controlada no próprio documento.
+
+Fase de preparação:
+- Localizar/auditar Rules e permissões.
+- Introduzir leitores compatíveis, DTO aditivo e consumidores novos.
+- Preparar todos os escritores e validações, ainda sem liberar multicategoria.
+- Definir/exercitar bloqueio de versões antigas e concorrência.
+- Validar a transição em Emulator antes de qualquer dado persistente real.
+
+Fase de corte:
+- Janela controlada para suspender alterações taxonômicas/importações/exclusões.
+- Backup e inventário autorizado de dados.
+- Ativar barreira confiável contra escritores legados.
+- Liberar novos escritores com dual-write; migrar documentos legados na janela ou retomar por lotes com controle de concorrência.
+- Preservar cada productId e todos os campos não taxonômicos.
+
+Contrato da futura migração:
+- Dry-run primeiro: contagens, plano por documento e lista de exceções, sem escrita.
+- Ausência de array + ID válido local → [id].
+- Ausência de array + singular ausente/null/'' → [].
+- Array existente válido → não substituir por singular.
+- Array inválido, ID órfão/externo ou dados ambíguos → relatório de exceção; nenhuma limpeza automática.
+- Não reconstruir categorias pelo categoryName.
+- Reconsultar produto/categorias e usar transação/precondição para não sobrescrever mudança posterior ao dry-run.
+- Atualizar somente campos taxonômicos aprovados; não usar set substituindo documento inteiro.
+- Processamento retomável e idempotente, com limites de lote definidos pelos testes.
+- Guardar pré-imagem dos campos alterados em artefato autorizado para eventual reversão; não restaurar estoque/preço antigos.
+- Não tocar CatalogItems, productIds, sales ou snapshots de catalogRequests.
+- Falha/reexecução não duplica produtos nem refaz conversão sobre array canônico novo.
+
+Retirada do legado:
+Somente após inventário sem dependências, dados regulares migrados, exceções resolvidas e comprovação do bloqueio de escritores antigos.
+Primeiro cessar dependência/leitura; depois cessar projeção; remoção física dos campos é outra mudança autorizada.
+Não reverter aplicação para um escritor singular depois que multicategoria existir. Rollback deve preservar arrays e a barreira de escrita.
+
+P. RULES E ÍNDICES
+
+Rules:
+A fonte oficial continua ausente. Nada neste relatório cria ou presume uma regra publicada.
+
+Pode ser desenvolvido futuramente sem mudar Rules de imediato, em ambiente local:
+leitores puros, UI com dados simulados, DTO/resolvedor server-side, serialização de backup e testes de domínio. Isso não autoriza publicação nem prova proteção do cliente direto.
+
+Antes de habilitar novas escritas/exclusão:
+- localizar fonte/regras efetivas;
+- auditar roles e isolamento;
+- impedir alteração taxonômica/criação antiga e exclusão direta que contorne backend;
+- proteger updates operacionais para não destruir categoryIds;
+- testar cliente não confiável separadamente do Admin SDK.
+
+categoryIds amplia o risco: cliente pode gravar tipos errados, arrays enormes ou referências alheias. Validação Flutter não é barreira de segurança.
+Rules têm limites de leituras auxiliares e não oferecem laços genéricos; 10 leituras por operação e 20 no conjunto de determinadas operações atômicas exigem orçamento que inclua autenticação/loja e categorias. Portanto, 10 categorias NÃO significa que dez exists() extras cabem no CRUD direto. Batches atuais de 400 não podem ser assumidos válidos.
+Bibliotecas de servidor ignoram Rules: novas operações backend precisam validar autorização explicitamente.
+[Condições e limites de Rules](https://firebase.google.com/docs/firestore/security/rules-conditions).
+
+Índices:
+- Armazenar array não exige, por si, novo índice composto manual.
+- Filtro local do PDV não exige índice novo.
+- arrayContains simples utiliza índice de array de campo único, normalmente mantido automaticamente; verificar exceções remotas antes de depender dele.
+- A exclusão segura proposta pode consultar products por categoryIds arrayContains id e, separadamente, categoryId == id, sem ordenação adicional. Isso é verificação administrativa de uso, não mudança do PDV para busca server-side.
+- Consultas combinadas/ordenações futuras podem exigir índices adicionais; outro escopo.
+- Não há evidência de necessidade de criar firestore.indexes.json nesta etapa.
+[Índices Firestore](https://firebase.google.com/docs/firestore/query-data/index-overview).
+
+Q. MATRIZ MÍNIMA DE TESTES FUTUROS
+
+Backend/Emulator:
+1. Escrita com [], um ID e vários IDs: persistência correta e projeção atômica.
+2. null, escalar, elemento não string, vazio, caminho, duplicado, limite e limite+1: rejeitar sem escrita parcial.
+3. ID inexistente/outra loja: rejeitar, sem leitura/vazamento externo.
+4. Mesmo texto de ID em duas lojas: resolver somente a categoria local.
+5. Precedência array sobre singular, principalmente [].
+6. Campo presente inválido: sem fallback ou reparo implícito.
+7. Renomeação: DTO usa nome atual, produto permanece inalterado.
+8. Exclusão em uso por ativo/arquivado/legado: rejeitar.
+9. Exclusão sem uso: permitir pela operação autorizada.
+10. Concorrência vínculo versus exclusão, edição versus edição e importação versus exclusão: nenhum novo órfão/sobrescrita silenciosa.
+11. Escritor antigo, escrita offline obsoleta e bypass direto: rejeitar taxonomia, sem bloquear indevidamente updates operacionais permitidos.
+12. getPublicCatalog: categories sanitizado, []/órfãos/erros, leitura deduplicada, compatibilidade singular e isolamento.
+13. Taxonomia não altera elegibilidade, preço, estoque, totais ou pertencimento do submit.
+14. Auditoria archive/restore: array observado, distinção ausente/[], logs antigos preservados.
+15. Backup: serialização e IDs preservados.
+16. Importação: categoria criada/reutilizada, vazio, ambiguidade, revalidação e falha parcial.
+17. Inativação: na proposta recomendada, nenhum campo/fluxo novo. Se aprovada depois, adicionar matriz de ativo/legado/inativo/reativado antes de implementar.
+
+Flutter/unit/widget:
+- Editor 0/1/N, inclusão/remoção/limpar, limite, validação e cancelamento.
+- Leitura dos nove casos A–I e tipos anômalos.
+- Categoria removida durante edição; carregamento falho não limpa seleção.
+- Renomeação atualiza nome sem mudar IDs.
+- Cache isolado por loja e estado offline não tratado como exclusão.
+- Importação singular → array, nome composto com separador literal, ambiguidade bloqueada.
+- PDV: produto em todos os filtros associados, uma ocorrência, sem categoria em Todos, pesquisa preservada.
+- Arquivados: múltiplos nomes, indisponíveis e erro de carregamento.
+- DTO público novo/legado temporário, layout com nomes longos e várias categorias, [] sem fallback.
+- Seleção em massa: sobreposição, desmarcação, contribuição manual, exclusão explícita, recaptura e 200 IDs únicos.
+- Regressão dos testes de envio público atuais.
+
+Migração:
+- Dry-run sem escrita.
+- Conversão válida e preservação exata de productId/campos não taxonômicos.
+- Array existente nunca sobrescrito pelo legado.
+- Órfãos/externos/tipos inválidos entram em exceções.
+- Segunda execução sem alterações adicionais.
+- Retomada após interrupção.
+- Mudança concorrente detectada.
+- Reversão limitada aos campos aprovados, sem perda de array novo nem restauração de estoque antigo.
+
+Regressão oficial:
+São nove ARQUIVOS de teste, não nove funções:
+createCatalog.emulator.test.js;
+createCatalogAuthorization.emulator.test.js;
+createCatalogValidation.emulator.test.js;
+createCatalogPublicSlugMigration.emulator.test.js;
+listCatalogsStatus.emulator.test.js;
+getPublicCatalog.emulator.test.js;
+submitPublicCatalogSelection.emulator.test.js;
+listCatalogRequests.emulator.test.js;
+getCatalogRequest.emulator.test.js.
+A futura mudança aditiva do DTO requer ampliar as expectativas de resposta, preservando verificações de não exposição de campos privados.
+Executar futuramente com Emulator/JDK 21 e chave temporária no processo quando necessária, sem imprimir secrets.
+Nenhum destes testes foi executado nesta etapa.
+
+R. FASEAMENTO PROPOSTO — NENHUMA FASE EXECUTADA
+
+Os números abaixo são passos futuros desta implementação, não autorização nem início de F7-CAT-TAXONOMIA-C.
+
+1. Aprovar contrato e pendências de T; localizar/auditar Rules, papéis e estratégia de escritores.
+2. Definir autoridade de escrita e comprovar proteção contra bypass/concorrência em ambiente isolado.
+3. Criar leitor compatível compartilhado conceitualmente entre Dart/backend, com testes dos casos A–I.
+4. Adaptar PDV, arquivados e montagem de catálogo para leitura nova, sem liberar novos vínculos.
+5. Adaptar backend público com categories aditivo e categoryName calculado; depois adaptar UI pública.
+6. Preparar cadastro/edição e importação com validação confiável e dual-write; ainda sem ativação isolada de um escritor.
+7. Preparar exclusão segura, auditoria e testes de backup.
+8. Executar regressões e ensaio da transição/migração no Emulator; resolver falhas antes do corte.
+9. Após autorização específica, realizar janela de corte, bloqueio de legado, backup, dry-run e migração in-place; resolver exceções sem limpeza implícita.
+10. Liberar multicategoria somente com todos os leitores/escritores e controles prontos.
+11. Retirar legado gradualmente por critérios verificáveis; limpeza física separada.
+
+Cada passo de código futuro: escopo pequeno, validações proporcionais, testes relevantes e revisão de diff. Regressão não fica só para o fim. Deploy e operações em dados reais continuam dependendo de autorização explícita imediatamente antes.
+
+S. RISCOS E LIMITES
+
+- Dual-write sozinho não resolve escritores antigos.
+- Aprovação de arrays não aprova automaticamente novas callables/permissões.
+- Rules ausentes impedem garantir integridade do CRUD direto.
+- Exclusão segura exige coordenação, não apenas um aviso na UI.
+- Limite de 10 é recomendação de orçamento, ainda sem medição e aprovação.
+- Nomes duplicados existentes impedem associação automática inequívoca por importação.
+- Cache atrasado não pode causar limpeza indevida.
+- Migração não deve tocar IDs nem snapshots históricos.
+- Novos nomes no público elevam leituras; deduplicação/limites precisam de testes.
+- Projeção singular dá apenas compatibilidade parcial; não representa todas as categorias.
+- Clientes offline e rollback para versões antigas são riscos de perda/divergência.
+- Leitura tolerante não substitui reparo autorizado nem validação estrita de escrita.
+- Backups atuais não garantem fotografia transacional entre coleções.
+- Recomendação de backend transacional é evolução arquitetural a aprovar, não capacidade já existente.
+
+T. DECISÕES HUMANAS FINAIS
+
+JÁ ACEITAS PELO USUÁRIO:
+- Produto pode ter 0..N categorias.
+- Entidades por loja e vínculos por IDs estáveis.
+- Direção categoryIds: string[], sem mudar tipo de categoryId.
+- Nome atual canônico em categories/{id}.
+- Legados temporários, productIds preservados e produtos não recriados.
+- Sem documentos de relação nesta primeira versão.
+- Coleções comerciais/seções dinâmicas fora desta etapa.
+
+DECISÕES TÉCNICAS QUE JÁ PODEM SER FECHADAS NO CONTRATO PROPOSTO:
+- [] explícito para nenhuma categoria; null rejeitado em escrita.
+- Array presente prevalece sobre singular; fallback apenas na ausência.
+- Sem união entre fontes e sem categoria principal.
+- Nomes resolvidos por ID e loja; renomeação sem fan-out em produtos.
+- Validação em frontend e camada confiável; nunca apenas Flutter.
+- IDs inválidos/duplicados/externos rejeitados na escrita; leitura sem reparo.
+- Filtro local por pertencimento, sem duplicidade.
+- Importação inicial singular convertida em zero/um ID.
+- Catálogo permanece estático e categoria não altera elegibilidade.
+- DTO categories com IDs/nomes, com projeção singular temporária.
+- Arrays já cobertos pelo backup.
+Esses pontos constituem a proposta técnica entregue; não significam implementação autorizada.
+
+AINDA PRECISAM DE DECISÃO/APROVAÇÃO DE RODRIGO:
+1. Aprovar máximo inicial de 10 categorias ou fornecer necessidade que justifique outro orçamento.
+2. Aprovar exclusão bloqueada por uso e adiar isActive; se preferir inativação, revisar o ciclo de vida antes de implementar.
+3. Aprovar autoridade de escrita: recomendação de backend autenticado/transacional para vínculos/criação e exclusão, com bloqueio de bypass; confirmar papéis após auditar Rules. Esta é a principal decisão arquitetural pendente.
+4. Aprovar janela de corte/bloqueio dos clientes antigos, inclusive escritas offline, e dual-write temporário com critérios de retirada.
+5. Aprovar tratamento de exceções: nenhum descarte automático de órfãos/ambíguos; correção explícita antes da conclusão da migração.
+6. Aprovar a semântica de intenção da seleção em massa, especialmente exclusão individual e reaplicação de categoria.
+7. Confirmar quando executar futuramente migração nos dados de teste preservados, após dry-run e backup. Não há autorização nesta etapa.
+8. Localizar/disponibilizar a fonte oficial das Rules como pré-requisito de ativação, sem criar regras presumidas.
+
+Não há bloqueio técnico grave identificado para usar arrays sem documentos de relação. O contrato de dados é viável; autoridade de escrita, exclusão e transição precisam das decisões acima antes de ser considerado pronto para implementação.
+
+ENCERRAMENTO
+
+Nenhum arquivo do repositório alterado.
+Nenhum código implementado.
+Nenhuma migration criada ou executada.
+Nenhum teste executado.
+Nenhuma alteração no Firestore ou criação de collections.
+Nenhuma regra alterada.
+Nenhum índice criado.
+Nenhum commit.
+Nenhum push.
+Nenhum deploy.
+
+Única gravação permitida: este relatório em C:\Users\rodri\Desktop\F7-CAT-TAXONOMIA-B_relatorio.txt.
+F7-CAT-TAXONOMIA-C NÃO iniciada.
