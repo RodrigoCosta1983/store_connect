@@ -59,10 +59,14 @@ for (const method of ["log", "warn", "error"]) {
 
 // Usar os construtores reais do SDK para verificar metadados de deploy.
 // Firestore, Auth, Storage e Axios sao substituidos antes de importar o index.
+const originalAsaasEnv = process.env.ASAAS_ENV;
+process.env.ASAAS_ENV = "sandbox";
 const functions = require("../../index");
 const discoveryReads = secretReads;
 
 after(() => {
+  if (originalAsaasEnv === undefined) delete process.env.ASAAS_ENV;
+  else process.env.ASAAS_ENV = originalAsaasEnv;
   asaasApiKey.value = originalValue;
   mock.restoreAll();
 });

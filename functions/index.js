@@ -52,10 +52,8 @@ exports.syncAsaasSubscriptionPrices =
 // Inicializa o Firebase apenas UMA VEZ aqui no index principal
 admin.initializeApp();
 
-const ASAAS_ENV = process.env.ASAAS_ENV || "sandbox";
-const ASAAS_URL = ASAAS_ENV === "production"
-  ? "https://www.asaas.com/api/v3"
-  : "https://sandbox.asaas.com/api/v3";
+const {resolveAsaasConfig} = require("./financeiro/asaasConfig");
+const {baseUrl: ASAAS_URL} = resolveAsaasConfig();
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 

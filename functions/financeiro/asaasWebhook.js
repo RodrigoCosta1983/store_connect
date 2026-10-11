@@ -67,12 +67,8 @@ const {
 // AMBIENTE ASAAS
 // -----------------------------------------------------------------------------
 
-const ASAAS_ENV = process.env.ASAAS_ENV || "sandbox";
-
-const ASAAS_URL =
-  ASAAS_ENV === "production"
-    ? "https://www.asaas.com/api/v3"
-    : "https://sandbox.asaas.com/api/v3";
+const {resolveAsaasConfig} = require("./asaasConfig");
+const {baseUrl: ASAAS_URL} = resolveAsaasConfig();
 
 
 // -----------------------------------------------------------------------------

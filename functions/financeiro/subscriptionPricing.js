@@ -82,13 +82,8 @@ const {getAsaasApiKey} = require("./asaasSecrets");
 // AMBIENTE ASAAS
 // =============================================================================
 
-const ASAAS_ENV =
-    process.env.ASAAS_ENV || "sandbox";
-
-const ASAAS_URL =
-    ASAAS_ENV === "production"
-? "https://www.asaas.com/api/v3"
-    : "https://sandbox.asaas.com/api/v3";
+const {resolveAsaasConfig} = require("./asaasConfig");
+const {environment: ASAAS_ENV, baseUrl: ASAAS_URL} = resolveAsaasConfig();
 
 // =============================================================================
 // PREÇOS OFICIAIS
@@ -120,7 +115,7 @@ const SUBSCRIPTION_PLANS = {
 
 const SUBSCRIPTION_PRICE_POLICY = {
   updatePendingPayments:
-  ASAAS_ENV !== "production",
+  ASAAS_ENV === "sandbox",
 };
 
 // =============================================================================
