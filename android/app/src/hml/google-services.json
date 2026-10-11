@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "324469869942",
+    "project_id": "store-connect-hml",
+    "storage_bucket": "store-connect-hml.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:324469869942:android:4482c313ccd8c0e9ae7e57",
+        "android_client_info": {
+          "package_name": "com.storeeconnect.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCOqzr__maSqX2y1lkLQMBL3lI_sAeDy5Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,3 +1,4 @@
+import 'package:store_connect/firebase/app_environment.dart';
 // ============================================================================
 // ARQUIVO: manage_products_screen.dart
 // ============================================================================
@@ -2075,7 +2076,8 @@ class ManageProductsScreen extends StatefulWidget {
 }
 
 class _ManageProductsScreenState extends State<ManageProductsScreen> {
-  static const String _catalogPublicBaseUrl = 'https://app.storeconnect.com.br';
+  static String get _catalogPublicBaseUrl =>
+      AppConfiguration.environment.publicBaseUrl;
 
   final _searchController = TextEditingController();
 

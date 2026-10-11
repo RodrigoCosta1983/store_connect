@@ -55,6 +55,22 @@ android {
         multiDexEnabled = true
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
+    flavorDimensions += "environment"
+    productFlavors {
+        create("hml") {
+            dimension = "environment"
+            applicationId = "com.storeeconnect.app"
+        }
+        create("prod") {
+            dimension = "environment"
+            applicationId = "com.storeeconnect.app"
+        }
+    }
+
     buildTypes {
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
