@@ -2274,12 +2274,6 @@ exports.expireTrials =
 // Cria loja + owner admin + trial + reserva de CPF/CNPJ somente no backend.
 // -----------------------------------------------------------------------
 
-const {
-  bootstrapStore,
-} = require("./auth/bootstrapStore");
-
-exports.bootstrapStore =
-  bootstrapStore;
 
 
 

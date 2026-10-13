@@ -1,18 +1,37 @@
 
 {
-"functions": {
-"source": "functions",
-"runtime": "nodejs22",
-"gen": "1",
-"ignore": [
-"node_modules",
-".git",
-"firebase-debug.log",
-"firebase-debug.*.log",
-"*.local",
-"tests/**"
-]
-},
+"functions": [
+  {
+    "source": "functions",
+    "runtime": "nodejs22",
+    "gen": "1",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "*.local",
+      "tests/**"
+    ],
+    "codebase": "default",
+    "predeploy": [
+      "node scripts/check-bootstrap-codebase-migration.js"
+    ]
+  },
+  {
+    "source": "functions-bootstrap",
+    "codebase": "bootstrap",
+    "runtime": "nodejs22",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "*.local",
+      "tests/**"
+    ]
+  }
+],
 "firestore": {
 "rules": "firestore.rules"
 },

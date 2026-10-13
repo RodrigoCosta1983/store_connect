@@ -5,7 +5,7 @@ const admin = require("firebase-admin");
 
 const {
   bootstrapStore,
-} = require("../../auth/bootstrapStore");
+} = require("../auth/bootstrapStore");
 
 const EXPECTED_FIRESTORE_HOST = "127.0.0.1:8080";
 const PROJECT_ID = "store-connect-app";

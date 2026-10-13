@@ -1,0 +1,15 @@
+{
+  "name": "storeconnect-bootstrap",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test": "node --test tests/bootstrapStore.runtime.test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "13.7.0",
+    "firebase-functions": "7.0.6"
+  }
+}

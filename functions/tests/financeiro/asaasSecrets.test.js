@@ -63,7 +63,6 @@ const originalAsaasEnv = process.env.ASAAS_ENV;
 delete process.env.ASAAS_ENV;
 const originalApiKeyEnv = process.env.ASAAS_API_KEY;
 delete process.env.ASAAS_API_KEY;
-const bootstrap = require("../../auth/bootstrapStore").bootstrapStore;
 const functions = require("../../index");
 const discoveryReads = secretReads;
 process.env.ASAAS_ENV = "sandbox";
@@ -183,13 +182,9 @@ test("schedulers rejeitam ausencia antes de consultar lojas ou Asaas", async () 
 });
 
 
-test("bootstrap export carrega sem ambiente/credencial e preserva callable", () => {
-  assert.equal(functions.bootstrapStore, bootstrap);
+test("default carrega sem credencial e nao exporta bootstrapStore", () => {
+  assert.equal(functions.bootstrapStore, undefined);
   assert.equal(discoveryReads, 0);
-  assert.equal(bootstrap.__endpoint.platform, "gcfv2");
-  assert.equal(bootstrap.__endpoint.availableMemoryMb, 256);
-  assert.equal(bootstrap.__endpoint.timeoutSeconds, 30);
-  assert.deepEqual(bootstrap.__endpoint.secretEnvironmentVariables || [], []);
 });
 
 for (const environment of [undefined, "invalid"]) {
