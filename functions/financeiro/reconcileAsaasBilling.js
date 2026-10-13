@@ -22,7 +22,6 @@ const db =
 
 
 const {resolveAsaasConfig} = require("./asaasConfig");
-const {baseUrl: ASAAS_URL} = resolveAsaasConfig();
 
 
 const PAYMENT_PAGE_SIZE =
@@ -95,6 +94,7 @@ function getTodaySaoPaulo() {
 
 function getAsaasHeaders() {
 
+  resolveAsaasConfig();
   const apiKey =
     getAsaasApiKey();
 
@@ -132,7 +132,7 @@ async function fetchPaymentsByStatus(
 
     const response =
       await axios.get(
-        `${ASAAS_URL}/payments`,
+        `${resolveAsaasConfig().baseUrl}/payments`,
         {
           headers,
 
@@ -535,7 +535,7 @@ async function reconcileStore(
 
   const subscriptionResponse =
     await axios.get(
-      `${ASAAS_URL}/subscriptions/${subscriptionId}`,
+      `${resolveAsaasConfig().baseUrl}/subscriptions/${subscriptionId}`,
       {
         headers,
       }

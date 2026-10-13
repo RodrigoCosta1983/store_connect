@@ -83,7 +83,6 @@ const {getAsaasApiKey} = require("./asaasSecrets");
 // =============================================================================
 
 const {resolveAsaasConfig} = require("./asaasConfig");
-const {environment: ASAAS_ENV, baseUrl: ASAAS_URL} = resolveAsaasConfig();
 
 // =============================================================================
 // PREÇOS OFICIAIS
@@ -114,8 +113,9 @@ const SUBSCRIPTION_PLANS = {
 // =============================================================================
 
 const SUBSCRIPTION_PRICE_POLICY = {
-  updatePendingPayments:
-  ASAAS_ENV === "sandbox",
+  get updatePendingPayments() {
+    return resolveAsaasConfig().environment === "sandbox";
+  },
 };
 
 // =============================================================================
@@ -145,6 +145,7 @@ function normalizeMoney(value) {
 // =============================================================================
 
 function getAsaasHeaders() {
+  resolveAsaasConfig();
   const apiKey =
       getAsaasApiKey();
 
@@ -218,7 +219,7 @@ async function syncOverdueSubscriptionPayments({
 
   const overdueResponse =
     await axios.get(
-      `${ASAAS_URL}/payments`,
+      `${resolveAsaasConfig().baseUrl}/payments`,
       {
         headers,
         params: {
@@ -267,7 +268,7 @@ async function syncOverdueSubscriptionPayments({
     );
 
     await axios.put(
-      `${ASAAS_URL}/payments/${payment.id}`,
+      `${resolveAsaasConfig().baseUrl}/payments/${payment.id}`,
       {
         billingType:
           payment.billingType || "UNDEFINED",
@@ -382,7 +383,7 @@ async function syncAsaasSubscriptionPrice({
 
   const subscriptionResponse =
     await axios.get(
-      `${ASAAS_URL}/subscriptions/${subscriptionId}`,
+      `${resolveAsaasConfig().baseUrl}/subscriptions/${subscriptionId}`,
       {
         headers,
       }
@@ -517,7 +518,7 @@ async function syncAsaasSubscriptionPrice({
   // ===========================================================================
 
   await axios.put(
-    `${ASAAS_URL}/subscriptions/${subscriptionId}`,
+    `${resolveAsaasConfig().baseUrl}/subscriptions/${subscriptionId}`,
     {
       value:
         expectedPrice,
@@ -652,6 +653,7 @@ updatePendingPayments =
 SUBSCRIPTION_PRICE_POLICY
     .updatePendingPayments,
 } = {}) {
+resolveAsaasConfig();
 getAsaasApiKey();
 const db =
 admin.firestore();
@@ -665,7 +667,7 @@ console.log(
 );
 
 console.log(
-`🌐 Ambiente: ${ASAAS_ENV}`
+`🌐 Ambiente: ${resolveAsaasConfig().environment}`
 );
 
 console.log(
@@ -814,7 +816,7 @@ skipped,
 errors,
 
 environment:
-ASAAS_ENV,
+resolveAsaasConfig().environment,
 
 updatePendingPayments,
 };

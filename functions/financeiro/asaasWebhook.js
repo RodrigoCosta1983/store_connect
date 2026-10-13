@@ -68,7 +68,6 @@ const {
 // -----------------------------------------------------------------------------
 
 const {resolveAsaasConfig} = require("./asaasConfig");
-const {baseUrl: ASAAS_URL} = resolveAsaasConfig();
 
 
 // -----------------------------------------------------------------------------
@@ -100,7 +99,7 @@ async function getSubscriptionBillingState(
   // ---------------------------------------------------------------------------
 
   const overdueRes = await axios.get(
-    `${ASAAS_URL}/payments`,
+    `${resolveAsaasConfig().baseUrl}/payments`,
     {
       headers,
       params: {
@@ -139,7 +138,7 @@ async function getSubscriptionBillingState(
   // ---------------------------------------------------------------------------
 
   const pendingRes = await axios.get(
-    `${ASAAS_URL}/payments`,
+    `${resolveAsaasConfig().baseUrl}/payments`,
     {
       headers,
       params: {
@@ -240,7 +239,7 @@ async function getSubscriptionBillingState(
 
   try {
     const subRes = await axios.get(
-      `${ASAAS_URL}/subscriptions/${subscriptionId}`,
+      `${resolveAsaasConfig().baseUrl}/subscriptions/${subscriptionId}`,
       { headers }
     );
 
@@ -294,6 +293,7 @@ exports.asaasWebhook = onRequest(
 
     try {
 
+      resolveAsaasConfig();
       const ASAAS_API_KEY = getAsaasApiKey();
       const body =
         typeof req.body === "string"
@@ -865,7 +865,7 @@ exports.asaasWebhook = onRequest(
               // ---------------------------------------------------------------
 
               await axios.put(
-                `${ASAAS_URL}/subscriptions/${eventSubscriptionId}`,
+                `${resolveAsaasConfig().baseUrl}/subscriptions/${eventSubscriptionId}`,
                 {
                   value:
                     PRO_PRICE,

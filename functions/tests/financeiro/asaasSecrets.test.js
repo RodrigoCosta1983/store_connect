@@ -60,13 +60,19 @@ for (const method of ["log", "warn", "error"]) {
 // Usar os construtores reais do SDK para verificar metadados de deploy.
 // Firestore, Auth, Storage e Axios sao substituidos antes de importar o index.
 const originalAsaasEnv = process.env.ASAAS_ENV;
-process.env.ASAAS_ENV = "sandbox";
+delete process.env.ASAAS_ENV;
+const originalApiKeyEnv = process.env.ASAAS_API_KEY;
+delete process.env.ASAAS_API_KEY;
+const bootstrap = require("../../auth/bootstrapStore").bootstrapStore;
 const functions = require("../../index");
 const discoveryReads = secretReads;
+process.env.ASAAS_ENV = "sandbox";
 
 after(() => {
   if (originalAsaasEnv === undefined) delete process.env.ASAAS_ENV;
   else process.env.ASAAS_ENV = originalAsaasEnv;
+  if (originalApiKeyEnv === undefined) delete process.env.ASAAS_API_KEY;
+  else process.env.ASAAS_API_KEY = originalApiKeyEnv;
   asaasApiKey.value = originalValue;
   mock.restoreAll();
 });
@@ -175,3 +181,73 @@ test("schedulers rejeitam ausencia antes de consultar lojas ou Asaas", async () 
   }
   assert.deepEqual(operations, []);
 });
+
+
+test("bootstrap export carrega sem ambiente/credencial e preserva callable", () => {
+  assert.equal(functions.bootstrapStore, bootstrap);
+  assert.equal(discoveryReads, 0);
+  assert.equal(bootstrap.__endpoint.platform, "gcfv2");
+  assert.equal(bootstrap.__endpoint.availableMemoryMb, 256);
+  assert.equal(bootstrap.__endpoint.timeoutSeconds, 30);
+  assert.deepEqual(bootstrap.__endpoint.secretEnvironmentVariables || [], []);
+});
+
+for (const environment of [undefined, "invalid"]) {
+  test(`fluxos financeiros rejeitam ambiente ${environment} antes de efeitos`, async () => {
+    if (environment === undefined) delete process.env.ASAAS_ENV;
+    else process.env.ASAAS_ENV = environment;
+    const readsBefore = secretReads;
+    try {
+      const request = {auth: {uid: "owner-unit-test"}, data: {storeId: "store-unit-test", plan: "pro"}};
+      for (const name of ["createAsaasSubscription", "changeAsaasPlan", "listAsaasInvoices", "getAsaasPortalUrl", "syncAsaasSubscriptionPrices", "reconcileAsaasBilling"]) {
+        await assert.rejects(functions[name].run(request), /Invalid or missing ASAAS_ENV/);
+      }
+      const response = {
+        statusCode: 200,
+        status(code) { this.statusCode = code; return this; },
+        send(body) { this.body = body; return this; },
+      };
+      await functions.asaasWebhook({method: "POST", body: {}}, response);
+      assert.equal(response.statusCode, 500);
+      assert.equal(response.body, "Erro interno");
+      assert.equal(secretReads, readsBefore);
+      assert.deepEqual(operations, []);
+    } finally {
+      process.env.ASAAS_ENV = "sandbox";
+    }
+  });
+}
+
+
+for (const environment of ["sandbox", "production"]) {
+  test(`portal usa URL central e credencial do helper em ${environment}`, async () => {
+    const originalFirestore = admin.firestore;
+    const originalGet = axios.get;
+    let observed = false;
+    process.env.ASAAS_ENV = environment;
+    suppliedValue = fixture;
+    admin.firestore = () => ({collection: (name) => ({doc: () => ({get: async () => ({
+      exists: true,
+      data: () => name === "users"
+        ? {storeId: "store-unit-test", role: "admin", accessStatus: "active"}
+        : {ownerId: "owner-unit-test", asaasSubscriptionId: "sub-unit-test"},
+    })})})});
+    axios.get = async (url, options) => {
+      assert.equal(url, require("../../financeiro/asaasConfig").resolveAsaasConfig().baseUrl + "/payments");
+      assert.ok(options.headers.access_token === fixture);
+      assert.equal(options.params.subscription, "sub-unit-test");
+      observed = true;
+      throw new Error("Stop after verifying mocked request");
+    };
+    try {
+      await assert.rejects(functions.getAsaasPortalUrl.run({
+        auth: {uid: "owner-unit-test"}, data: {storeId: "store-unit-test"},
+      }));
+      assert.equal(observed, true);
+    } finally {
+      admin.firestore = originalFirestore;
+      axios.get = originalGet;
+      process.env.ASAAS_ENV = "sandbox";
+    }
+  });
+}

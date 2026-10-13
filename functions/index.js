@@ -53,7 +53,6 @@ exports.syncAsaasSubscriptionPrices =
 admin.initializeApp();
 
 const {resolveAsaasConfig} = require("./financeiro/asaasConfig");
-const {baseUrl: ASAAS_URL} = resolveAsaasConfig();
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -117,6 +116,7 @@ const {
        );
      }
 
+     resolveAsaasConfig();
      const ASAAS_API_KEY = getAsaasApiKey();
      const userId = request.auth.uid;
 
@@ -561,13 +561,13 @@ const {
              legacySubscriptionResponse,
            ] = await Promise.all([
              axios.get(
-               `${ASAAS_URL}/customers/${legacyCustomerId}`,
+               `${resolveAsaasConfig().baseUrl}/customers/${legacyCustomerId}`,
                {
                  headers,
                }
              ),
              axios.get(
-               `${ASAAS_URL}/subscriptions/${legacySubscriptionId}`,
+               `${resolveAsaasConfig().baseUrl}/subscriptions/${legacySubscriptionId}`,
                {
                  headers,
                }
@@ -1056,7 +1056,7 @@ const {
          try {
            const existingCustomerResponse =
              await axios.get(
-               `${ASAAS_URL}/customers/${customerId}`,
+               `${resolveAsaasConfig().baseUrl}/customers/${customerId}`,
                {
                  headers,
                }
@@ -1096,7 +1096,7 @@ const {
              );
 
              await axios.put(
-               `${ASAAS_URL}/customers/${customerId}`,
+               `${resolveAsaasConfig().baseUrl}/customers/${customerId}`,
                {
                  externalReference:
                    storeId,
@@ -1144,7 +1144,7 @@ const {
 
          const search =
            await axios.get(
-             `${ASAAS_URL}/customers`,
+             `${resolveAsaasConfig().baseUrl}/customers`,
              {
                headers,
 
@@ -1225,7 +1225,7 @@ const {
 
            const create =
              await axios.post(
-               `${ASAAS_URL}/customers`,
+               `${resolveAsaasConfig().baseUrl}/customers`,
                {
                  name,
 
@@ -1284,7 +1284,7 @@ const {
 
        const subscriptionsRes =
          await axios.get(
-           `${ASAAS_URL}/subscriptions`,
+           `${resolveAsaasConfig().baseUrl}/subscriptions`,
            {
              headers,
              params: {
@@ -1401,7 +1401,7 @@ const {
             try {
               const billingTypeUpdate =
                 await axios.put(
-                  `${ASAAS_URL}/subscriptions/${existingSubscription.id}`,
+                  `${resolveAsaasConfig().baseUrl}/subscriptions/${existingSubscription.id}`,
                   {
                     billingType:
                       "UNDEFINED",
@@ -1492,7 +1492,7 @@ const {
 
          const paymentsRes =
            await axios.get(
-             `${ASAAS_URL}/payments`,
+             `${resolveAsaasConfig().baseUrl}/payments`,
              {
                headers,
                params: {
@@ -1565,7 +1565,7 @@ const {
 
        const subResponse =
          await axios.post(
-           `${ASAAS_URL}/subscriptions`,
+           `${resolveAsaasConfig().baseUrl}/subscriptions`,
            {
              customer: customerId,
              billingType: "UNDEFINED",
@@ -1649,7 +1649,7 @@ const {
        ) {
          const payments =
            await axios.get(
-             `${ASAAS_URL}/payments`,
+             `${resolveAsaasConfig().baseUrl}/payments`,
              {
                headers,
                params: {
@@ -2438,6 +2438,7 @@ exports.changeAsaasPlan = onCall(
       );
     }
 
+    resolveAsaasConfig();
     const ASAAS_API_KEY = getAsaasApiKey();
     const db = admin.firestore();
 
@@ -2681,7 +2682,7 @@ exports.changeAsaasPlan = onCall(
 
       const currentSubscription =
         await axios.get(
-          `${ASAAS_URL}/subscriptions/${subscriptionId}`,
+          `${resolveAsaasConfig().baseUrl}/subscriptions/${subscriptionId}`,
           { headers }
         );
 
@@ -2707,7 +2708,7 @@ exports.changeAsaasPlan = onCall(
 
       const updateResponse =
         await axios.put(
-          `${ASAAS_URL}/subscriptions/${subscriptionId}`,
+          `${resolveAsaasConfig().baseUrl}/subscriptions/${subscriptionId}`,
           {
             value:
               selectedPlan.price,

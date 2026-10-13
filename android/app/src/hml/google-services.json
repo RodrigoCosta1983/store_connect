@@ -12,7 +12,20 @@
           "package_name": "com.storeeconnect.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "324469869942-38aj1pk41qd85qbb1q0hu3ago87aai5p.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.storeeconnect.app",
+            "certificate_hash": "b2bbebd975458ae3da9b1423ae92fe59c3713839"
+          }
+        },
+        {
+          "client_id": "324469869942-u261si9hsdh11j8k0lt4a4lrm3csniav.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCOqzr__maSqX2y1lkLQMBL3lI_sAeDy5Y"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "324469869942-u261si9hsdh11j8k0lt4a4lrm3csniav.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

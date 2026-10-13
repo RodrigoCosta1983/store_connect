@@ -61,14 +61,13 @@ for (const relative of [
   "index.js", "financeiro/faturas.js", "financeiro/asaasWebhook.js",
   "financeiro/subscriptionPricing.js", "financeiro/reconcileAsaasBilling.js",
 ]) {
-  test(`${relative} propaga rejeicao do resolvedor central`, () => {
-    const sentinel = new Error("Invalid or missing ASAAS_ENV");
+  test(`${relative} carrega sem resolver configuracao Asaas`, () => {
     let calls = 0;
-    assert.throws(() => loadIsolated(path.resolve(__dirname, "../..", relative), () => {
+    loadIsolated(path.resolve(__dirname, "../..", relative), () => {
       calls++;
-      throw sentinel;
-    }), (error) => error === sentinel);
-    assert.equal(calls, 1);
+      throw new Error("Invalid or missing ASAAS_ENV");
+    });
+    assert.equal(calls, 0);
   });
 }
 
@@ -80,7 +79,8 @@ for (const environment of ["sandbox", "production"]) {
       calls++;
       return resolveAsaasConfig();
     });
-    assert.equal(calls, 1);
+    assert.equal(calls, 0);
     assert.equal(pricing.SUBSCRIPTION_PRICE_POLICY.updatePendingPayments, environment === "sandbox");
+    assert.equal(calls, 1);
   });
 }

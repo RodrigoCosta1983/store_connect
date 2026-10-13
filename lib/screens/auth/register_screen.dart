@@ -32,7 +32,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:store_connect/services/google_sign_in_configuration.dart';
 
 import 'package:store_connect/screens/auth/email_verification_screen.dart';
 import 'package:store_connect/screens/auth/create_store_screen.dart';
@@ -138,22 +138,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _googleSignIn() async {
     setState(() => _isLoading = true);
     try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) {
-        if (mounted) setState(() => _isLoading = false);
-        return;
-      }
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(
-        credential,
-      );
+      final userCredential = await signInWithGoogle();
+      if (userCredential == null) return;
 
       // Se for usuário novo pelo Google, manda criar a loja. Senão, vai pro Gate.
       if (userCredential.additionalUserInfo?.isNewUser ?? false) {

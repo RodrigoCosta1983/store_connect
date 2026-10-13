@@ -5,7 +5,6 @@ const axios = require("axios");
 const {asaasApiKey, getAsaasApiKey} = require("./asaasSecrets");
 
 const {resolveAsaasConfig} = require("./asaasConfig");
-const {baseUrl: ASAAS_URL} = resolveAsaasConfig();
 
 
   /**
@@ -33,6 +32,7 @@ const {baseUrl: ASAAS_URL} = resolveAsaasConfig();
       );
     }
 
+    resolveAsaasConfig();
     const ASAAS_API_KEY =
       getAsaasApiKey();
 
@@ -140,7 +140,7 @@ const {baseUrl: ASAAS_URL} = resolveAsaasConfig();
       // Busca somente cobranças da assinatura oficial da loja.
       const response =
         await axios.get(
-          `${ASAAS_URL}/payments`,
+          `${resolveAsaasConfig().baseUrl}/payments`,
           {
             headers: {
               "access_token":
@@ -256,6 +256,7 @@ const {baseUrl: ASAAS_URL} = resolveAsaasConfig();
       throw new HttpsError("unauthenticated", "O usuário deve estar logado.");
     }
 
+    resolveAsaasConfig();
     const ASAAS_API_KEY = getAsaasApiKey();
     const userId = request.auth.uid;
 
@@ -370,7 +371,7 @@ const {baseUrl: ASAAS_URL} = resolveAsaasConfig();
       // Não usamos apenas customer/asaasCustomerId porque um mesmo customer
       // pode estar associado a mais de uma loja no Asaas. O isolamento
       // financeiro deve seguir a asaasSubscriptionId oficial do Firestore.
-      const response = await axios.get(`${ASAAS_URL}/payments`, {
+      const response = await axios.get(`${resolveAsaasConfig().baseUrl}/payments`, {
         headers: {
           "access_token": ASAAS_API_KEY,
           "User-Agent": "StoreConnectApp/1.0"

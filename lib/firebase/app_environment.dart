@@ -23,6 +23,13 @@ enum AppEnvironment {
     hml => '1:324469869942:web:0d50059ae896f7e3ae7e57',
   };
 
+  String get googleSignInWebClientId => switch (this) {
+    production =>
+      '294766590074-s5uc0aaaege2em5vsg8j5mimih6at2i1.apps.googleusercontent.com',
+    hml =>
+      '324469869942-u261si9hsdh11j8k0lt4a4lrm3csniav.apps.googleusercontent.com',
+  };
+
   void validateIdentity({
     required String? projectId,
     required String? appId,

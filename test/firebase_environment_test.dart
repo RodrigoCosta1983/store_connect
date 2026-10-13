@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:store_connect/firebase/app_environment.dart';
+import 'package:store_connect/services/google_sign_in_configuration.dart';
 import 'package:store_connect/firebase/firebase_bootstrap.dart';
 import 'package:store_connect/firebase/firebase_options_hml.dart';
 import 'package:store_connect/firebase/firebase_options_prod.dart';
@@ -42,6 +43,7 @@ void main() {
       expect(() => AppEnvironment.parse(value), throwsStateError);
     }
     expect(() => AppConfiguration.environment, throwsStateError);
+    expect(createGoogleSignIn, throwsStateError);
     expect(legacy.main, throwsStateError);
     expect(() => DefaultFirebaseOptions.currentPlatform, throwsStateError);
   });
@@ -104,6 +106,32 @@ void main() {
               )
               as Map<String, dynamic>;
       expect(config['project_info']['project_id'], environment.projectId);
+      final expectedWebClient = environment == AppEnvironment.production
+          ? '294766590074-s5uc0aaaege2em5vsg8j5mimih6at2i1.apps.googleusercontent.com'
+          : '324469869942-u261si9hsdh11j8k0lt4a4lrm3csniav.apps.googleusercontent.com';
+      expect(environment.googleSignInWebClientId, expectedWebClient);
+      final oauth = (config['client'] as List).expand(
+        (client) => client['oauth_client'] as List,
+      );
+      expect(
+        oauth
+            .where((client) => client['client_type'] == 3)
+            .map((client) => client['client_id']),
+        [expectedWebClient],
+      );
+      if (environment == AppEnvironment.hml) {
+        final androidOauth = oauth.singleWhere(
+          (client) => client['client_type'] == 1,
+        );
+        expect(
+          androidOauth['client_id'],
+          '324469869942-38aj1pk41qd85qbb1q0hu3ago87aai5p.apps.googleusercontent.com',
+        );
+        expect(
+          androidOauth['android_info']['certificate_hash'],
+          'b2bbebd975458ae3da9b1423ae92fe59c3713839',
+        );
+      }
       final clients = config['client'] as List;
       expect(clients, hasLength(1));
       expect(
@@ -138,6 +166,10 @@ void main() {
         isNot('1:294766590074:android:82c38b9f3a34123dafe3c3'),
       );
       expect(File('android/app/google-services.json').existsSync(), isFalse);
+      expect(
+        File('web/index.html').readAsStringSync(),
+        isNot(contains('google-signin-client_id')),
+      );
     },
   );
 
@@ -245,6 +277,9 @@ void main() {
         await initializeEnvironmentFirebase(AppEnvironment.hml);
         expect(Firebase.app().options.projectId, 'store-connect-hml');
         expect(AppConfiguration.environment, AppEnvironment.hml);
+        final googleSignIn = createGoogleSignIn();
+        expect(googleSignIn.clientId, isNull);
+        expect(googleSignIn.serverClientId, isNull);
         expect(host.initializes, 1);
         expect(
           () => AppConfiguration.configure(AppEnvironment.production),

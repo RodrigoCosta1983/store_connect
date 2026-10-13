@@ -92,7 +92,10 @@ import 'package:store_connect/screens/subscription_screen.dart';
 import 'package:store_connect/screens/home_screen.dart';
 
 class AuthGate extends StatefulWidget {
-  const AuthGate({super.key});
+  const AuthGate({super.key, this.auth, this.firestore});
+
+  final FirebaseAuth? auth;
+  final FirebaseFirestore? firestore;
 
   @override
   State<AuthGate> createState() => _AuthGateState();
@@ -122,17 +125,27 @@ class _AuthGateState extends State<AuthGate> {
     _lastUidProcessed = uid;
 
     try {
+      final userRef = (widget.firestore ?? FirebaseFirestore.instance)
+          .collection('users')
+          .doc(uid);
+      final userDoc = await userRef.get();
+      if (!userDoc.exists) {
+        // A criação inicial do perfil pertence ao bootstrapStore.
+        return;
+      }
+
       final packageInfo = await PackageInfo.fromPlatform();
       final versaoAtual = '${packageInfo.version}+${packageInfo.buildNumber}';
 
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+      await userRef.update({
         'versao_app': versaoAtual,
         'ultimo_login': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      });
 
-      debugPrint('🚀 Info de login/versão sincronizada para: $uid');
+      debugPrint('Info de login/versão sincronizada.');
     } catch (e) {
-      debugPrint('❌ Erro ao registrar versão: $e');
+      debugPrint('Erro ao registrar versão '
+          '(${e is FirebaseException ? e.code : 'unknown'}).');
     }
   }
 
@@ -183,7 +196,7 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+      stream: (widget.auth ?? FirebaseAuth.instance).authStateChanges(),
       builder: (context, authSnapshot) {
         // -----------------------------------------------------------------------
         // AGUARDANDO FIREBASE AUTH
@@ -221,12 +234,25 @@ class _AuthGateState extends State<AuthGate> {
         // -----------------------------------------------------------------------
 
         return StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance
+          stream: (widget.firestore ?? FirebaseFirestore.instance)
               .collection('users')
               .doc(user.uid)
               .snapshots(),
           builder: (context, userDocSnapshot) {
-            if (userDocSnapshot.connectionState == ConnectionState.waiting) {
+            if (userDocSnapshot.hasError) {
+              final error = userDocSnapshot.error;
+              debugPrint('Erro ao carregar perfil '
+                  '(${error is FirebaseException ? error.code : 'unknown'}).');
+              return const Scaffold(
+                body: Center(
+                  child: Text('Não foi possível carregar seu perfil. '
+                      'Tente novamente mais tarde.'),
+                ),
+              );
+            }
+
+            if (userDocSnapshot.connectionState == ConnectionState.waiting ||
+                !userDocSnapshot.hasData) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );
