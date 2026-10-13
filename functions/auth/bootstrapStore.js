@@ -107,6 +107,7 @@ const bootstrapStore = onCall(
   {
     timeoutSeconds: 30,
     memory: "256MiB",
+    serviceAccount: "storeconnect-bootstrap@",
   },
   async (request) => {
     if (!request.auth) {
