@@ -226,7 +226,7 @@ Upload Key conhecida, conforme identificação operacional fornecida:
 
 **Não assumir Upload Key = Play App Signing Key.** O AAB enviado não determina sozinho o certificado dos APKs distribuídos.
 
-A auditoria B4C somente leitura já foi realizada nesta sessão; a conclusão/configuração permanece NEXT/PENDING. Evidências em 11/10/2026:
+A auditoria B4C somente leitura está concluída; arquitetura B4C3 confirmada na seção 31. Configuração B4C4 permanece pendente. Evidências históricas em 11/10/2026:
 
 | Item | Resultado |
 | --- | --- |
@@ -498,7 +498,7 @@ Consolidado em 11/10/2026. DONE vale apenas para o escopo indicado, não para pr
 | B3 | Android/Web Firebase Apps | DONE | Identidades na matriz |
 | B4A | Split HML/PROD | DONE | Flavors, entrypoints e guards locais; não equivale a build validado |
 | B4B | FlutterFire metadata | DONE | Commit de referência criado/enviado anteriormente |
-| B4C | OAuth/SHA | NEXT/PENDING | Auditoria realizada; conferência Play e configuração pendentes |
+| B4C | OAuth/SHA audit | DONE | Auditoria e arquitetura B4C3 concluídas; configuração B4C4 pendente (seção 31) |
 | B5 | Secrets por ambiente + project/env guard | PENDING | `ASAAS_API_KEY` transitório |
 | Webhook | Isolamento/validação por ambiente | PENDING | Evolução do contrato atual |
 | Schedulers | Isolamento/ativação segura HML | PENDING | Não assumir estado remoto |
@@ -523,3 +523,114 @@ Atualizações devem registrar evidência, data e escopo; distinguir planejado, 
 Somente este Markdown foi criado. Não altera código, configuração Firebase, secrets, OAuth, SHA, Auth, Storage, Functions, Asaas, Billing ou Google Play. Não executa seed, scheduler, Emulator, testes de código, build, deploy, stage, commit ou push.
 
 IDs públicos Firebase e fingerprints públicos podem constar; valores de API keys, tokens, passwords, client secrets e material privado jamais devem ser registrados.
+
+## 31. P5.1.1-B4C-3 — decisão OAuth HML (13/10/2026)
+
+Auditoria somente leitura, HEAD `7b716caf1a7607e13f7e6acfc905e9ecbadb954f`.
+Nenhuma configuração remota ou código foi alterado. Após falha inicial,
+a consulta `firebase apps:sdkconfig ANDROID` do app PROD
+`1:294766590074:android:f993b08bb3f300b2afe3c3`, projeto `store-connect-app`,
+foi concluída com Firebase CLI 15.32.0. Parse em memória de
+`client[].oauth_client[]`, sem expor API keys, confirmou os três Android
+clients e o Web Client PROD. Resultado: P5_1_1B_B4C3_OAUTH_ARCHITECTURE_CONFIRMED.
+
+B4C OAuth/SHA audit: DONE. B4C3 OAuth architecture: DONE.
+Próxima etapa: B4C4 — Google Provider HML / debug SHA / external OAuth safelist.
+B4C4 não executada; configuração e validação de login permanecem pendentes.
+
+### Certificados e distribuição
+
+Package `com.storeeconnect.app` em ambos os ambientes. Cada par package+SHA-1
+OAuth Android é globalmente único entre projetos Google Cloud/Firebase.
+Closed Test e Production compartilham Play App Signing desta aplicação,
+conforme certificados oficialmente identificados por Rodrigo nesta etapa:
+
+| Certificado | SHA-1 | Decisão HML futura |
+| --- | --- | --- |
+| Debug | B2:BB:EB:D9:75:45:8A:E3:DA:9B:14:23:AE:92:FE:59:C3:71:38:39 | OAuth Android próprio HML, após conferir unicidade |
+| Upload / release local | 63:8C:0F:42:C6:FE:B5:9E:78:95:FC:17:39:20:61:5A:18:D3:E4:E9 | Manter OAuth PROD; external client safelist somente se suportar instalação local release |
+| Play App Signing | FD:47:E8:BA:1E:E3:99:29:F9:1D:3D:04:F6:5B:B4:24:F9:E6:40:74 | Manter OAuth PROD; external client safelist HML para Closed Test |
+| Legado desconhecido | 05:4B:E6:8A:EC:12:1C:F6:D3:93:80:E2:52:72:DD:A9:6F:30:5C:BB | UNKNOWN_LEGACY_SHA = SIM; não usar no HML |
+
+Esta identificação atualiza a pendência histórica da seção 13 sobre qual SHA
+pertence ao Play. HML não duplicará OAuth Android PROD. PROD clients nunca
+devem ser removidos ou movidos para liberar HML. PACKAGE_SHA_DUPLICATION_REQUIRED = NÃO.
+
+### Mapeamentos OAuth confirmados via SDK config PROD
+
+Todos os Android clients abaixo pertencem ao package `com.storeeconnect.app`.
+Client IDs são identificadores públicos, sem client secrets.
+
+| Certificado / tipo | OAuth Client ID público |
+| --- | --- |
+| Upload 63:8C | `294766590074-vvofb78210aa7r9p0qebi788446mcptk.apps.googleusercontent.com` |
+| Play App Signing FD:47 | `294766590074-aifgoqphl8iihmr391kll3ke7u6g14fi.apps.googleusercontent.com` |
+| Legado 05:4B | `294766590074-4if12hscuagb9ej5fm4bh8cravukb4u7.apps.googleusercontent.com` |
+| Web PROD (tipo 3) | `294766590074-s5uc0aaaege2em5vsg8j5mimih6at2i1.apps.googleusercontent.com` |
+
+MANUAL_CLOUD_CONSOLE_CHECK_REQUIRED = NÃO. Identificação OAuth do SHA legado
+confirmada; sua origem funcional continua desconhecida.
+
+### Ciclo HML → PROD
+
+HML e PROD não são duas linhas independentes do produto. Exemplo conceitual,
+sem definir próximos versionCodes reais:
+
++49 PROD estável → +50 / +51 / +52 / +53 testados em HML → versão aprovada →
+mesmo código/commit → NOVO build PROD → nova release de Produção.
+
+**HML aprova código; não promove o artefato HML para Produção.**
+
+### Código e audiência do token
+
+`pubspec.yaml`: google_sign_in ^6.2.1; lock: 6.3.0, Android 6.2.1,
+Web 0.12.4+4. LoginScreen e RegisterScreen usam GoogleSignIn().signIn(),
+sem clientId/serverClientId. Existe a mesma chamada em signup_screen_DELET.dart,
+sem referência encontrada a esse arquivo em lib. Não há GoogleSignIn.instance.
+
+A implementação Android instalada lê default_web_client_id quando não há
+serverClientId e usa esse Web Client ID em requestIdToken. O plugin Gradle
+Google Services gera esse recurso a partir de oauth_client de tipo 3.
+Recursos antigos em build/app/generated/res/google-services/{debug,release}
+contêm o Web Client PROD; são artefatos legados, sem comprovar flavors atuais.
+
+HML NÃO usará o Web Client PROD como audiência final. HML terá OAuth Web
+Client próprio (`client_type == 3`), que fornecerá o futuro
+`default_web_client_id` do flavor HML e será o server client ID Android HML.
+Closed Test HML via Google Play usa a assinatura FD:47; seu OAuth Android
+permanece no PROD e será autorizado no Google provider HML como external
+project client. Upload Key 63:8C será autorizada externamente somente se
+login Google em release local HML for requisito. SHA 05:4B permanece
+UNKNOWN_LEGACY_SHA e não será utilizado no HML até identificação funcional.
+Debug HML poderá ter OAuth Android próprio para `com.storeeconnect.app` +
+SHA B2:BB. Nenhum par package+SHA será duplicado entre projetos; clients PROD
+não devem ser removidos ou movidos para tentar liberar essas combinações.
+Implementação e validação de token/login ficam para etapa futura autorizada.
+
+O JSON local PROD contém dois Android clients (Upload e legado 05:4B) e um
+Web; não contém FD:47. O JSON local HML não contém OAuth clients. Inclusão
+automática de external safelist em google-services.json não foi comprovada:
+VERIFY_AFTER_PROVIDER_ENABLE. Não editar JSON manualmente para simular metadata.
+
+### Web HML futuro
+
+OAuth Web próprio store-connect-hml; PROD mantém seu Web Client. Origem:
+https://store-connect-hml.web.app. AuthDomain atual:
+store-connect-hml.firebaseapp.com. Callback Firebase, quando usado:
+https://store-connect-hml.firebaseapp.com/__/auth/handler. Conferir authorized
+domains/origins e redirects conforme o fluxo; google_sign_in Web usa Google
+Identity Services e não depende diretamente desse callback Firebase.
+
+Hoje web/index.html:10 fixa o Web Client PROD em google-signin-client_id;
+o plugin Web usa essa meta tag porque não há clientId explícito no Dart.
+Mudança mínima futura: remover a meta tag fixa e fornecer clientId somente
+no Web em todas as construções GoogleSignIn ativas, por configuração central
+selecionada por AppConfiguration.environment. main_hml.dart e main_prod.dart
+já configuram esse ambiente via bootstrap. Adicionar o ID público HML somente
+após existir, sem fallback PROD; rejeitar configuração HML ausente. No Android,
+tratar serverClientId separadamente de clientId Web. Não implementado.
+
+Referências oficiais:
+- https://support.google.com/firebase/answer/6401008?hl=en
+- https://developers.google.com/android/guides/google-services-plugin
+- https://firebase.googleblog.com/2016/12/working-with-multiple-firebase-projects-in-an-android-app.html
