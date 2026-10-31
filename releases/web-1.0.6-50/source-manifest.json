@@ -1,0 +1,1304 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "1.0.6+50",
+  "scope": "Independent Web source snapshot; no F7 ancestry is imported",
+  "sourceFiles": [
+    {
+      "path": ".metadata",
+      "sha256": "e40be56bc02b5411295d835ffde5a4c43084c4e1386b3387cd42bead3e1d48ed",
+      "bytes": 1296,
+      "role": "package-config"
+    },
+    {
+      "path": "analysis_options.yaml",
+      "sha256": "b63207cf529949ec4727b68c23dbb38ce255b6f6f4ae1effcb5c1dcf2852d238",
+      "bytes": 1448,
+      "role": "package-config"
+    },
+    {
+      "path": "assets/ico/icon.png",
+      "sha256": "0a4659b7bcca8b7027d80bce1d40d9d67f25b3b3797256c92a0bf6b982b9b123",
+      "bytes": 315848,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/ico/icon1.png",
+      "sha256": "e0d98e7b76e1ff86bb38d841b1f2658d86a8ef818c642fd3f4a93ca7f02e3fd6",
+      "bytes": 241735,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/ico/logo_1080.png",
+      "sha256": "19b7db4648a7a2731197e6039f09d2a35f179fb7bd2e2c8d59266b6b6c9d645e",
+      "bytes": 384701,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/ico/logo_512.png",
+      "sha256": "1009a343829e2d32114ce6290eb649498121348ae28a5721bcd73a8850a85d9e",
+      "bytes": 113791,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/2x/google-logo.png",
+      "sha256": "aca2a8fdeca560e08d5e51b94b750e85a8f0bc69ab0ebe9a98b1428c52ec1e14",
+      "bytes": 1071,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/3x/google-logo.png",
+      "sha256": "f6710f3f06762580c816820de274ea55bd045b1aff738b8c5495ab565d7d2b16",
+      "bytes": 1512,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/README/Análise ABC.png",
+      "sha256": "6235eb6a4320f310f427cab92bdea3e642fbbe50daea814adf6de123be60e609",
+      "bytes": 89688,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/README/Contas a Receber.png",
+      "sha256": "aae90e3724c89457637efe30004dff8cfd1a5f92ffda2d956b2358ef65dd9777",
+      "bytes": 53815,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/README/Dashboard.png",
+      "sha256": "512fc85a6686b01608257f63dea5d83bbd29866b75e2d4a345d5500d0464cf49",
+      "bytes": 975742,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/README/Gerenciar Produtos.png",
+      "sha256": "c9c0e63792d16cb78e27500436a836281de67a643e5b30ba28c0a8ece628ee16",
+      "bytes": 1206634,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/README/Gerenciar Produtos_.png",
+      "sha256": "1a2497f4b00f07f47b703e98f5dbae62778f81158f4cdf940f10d072caefe835",
+      "bytes": 225965,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/README/Perfil e Segurança.png",
+      "sha256": "4ec78b3636ba9f2472cb950a6ea48197aa142043225846d5beb8a6394e535fc5",
+      "bytes": 78145,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/README/Tela de Venda.png",
+      "sha256": "8a3fbb27a5a3f2eabb69196b0f12fdf82c5642b94154e8baa70ad13edff5c025",
+      "bytes": 1099363,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/README/Tela_de_Venda.png",
+      "sha256": "544718ce09765c2fabe0cfc471b5532250882bb0bd171cb4d426e599e34b6cee",
+      "bytes": 1030015,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/background_claro_test.png",
+      "sha256": "b9c6411c9466776a26c1e46fc37fc3cb53f216cca65932926d0a1adc6a0d0695",
+      "bytes": 12687,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/background_dark_mode.png",
+      "sha256": "03dea2e6009b2d1fe0381dffafce49811a485caa0f62bf2b050b9a6598a47aae",
+      "bytes": 3963679,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/background_light_mode.jpg",
+      "sha256": "ba71237b5efb0b61ee7aabf35f41859f1c7c4c7f0cdc4e5d8351db3b31b5c118",
+      "bytes": 193277,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/google-logo.png",
+      "sha256": "b09a2244dd4c1ab566498617216115e276eb848cb62e6f765b973c22be87bb53",
+      "bytes": 2640,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/google_logo.png",
+      "sha256": "4c5ea6a0320cb01a6a4cd15d3a0f6b47b9dd37c3df48cd2190eb6742b0cc5f33",
+      "bytes": 1132,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/logo.png",
+      "sha256": "dec6e06cfcccb04bc3b1f95cd129ce14029fc066ac64d2957c66a2971861ddf8",
+      "bytes": 335381,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/logo1.png",
+      "sha256": "4c9e475b26b5d511a4fd7ff408e1680fc21b7baa50836f5024289b82b77482fd",
+      "bytes": 333661,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/logo_web.png",
+      "sha256": "4c6e990e13f350e4d2aa37f45cefc88723169757105c423b44af3f628426c48b",
+      "bytes": 123790,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "assets/images/pix_qrcode.png",
+      "sha256": "a690109a983a47499c4852f10b0f411f8b7e7924e956fdfa95766dca340fe30f",
+      "bytes": 63893,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "lib/app_bootstrap.dart",
+      "sha256": "60ff0e96f3f2c910603d2f598ab3f4387e4d9bd7706cc714f8b6ca9db40b3d3f",
+      "bytes": 6802,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/app_database.dart",
+      "sha256": "f0eab897dcf4d70831984c050c06a64a5cf2f1a1cbdc266c705bfedf0f2cc62c",
+      "bytes": 31731,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/app_database.g.dart",
+      "sha256": "559a84c52ddd989d40115324362c4ea16bcc90d745991a52ab4067f6f1dbe6b6",
+      "bytes": 43092,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/contextual_sale_mutation_store.dart",
+      "sha256": "57710c202eff8bcf277096da5cb765523a78ce6deeaa96bec1bed36b48c0a939",
+      "bytes": 3968,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/offline_sales_repository.dart",
+      "sha256": "c1c164cd9b14f649dd7bf0eb556c80b453d6925019e9d98776e8885fdcb55b12",
+      "bytes": 16121,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/product_mutation_store.dart",
+      "sha256": "ccb664a03c2869325d1bb705637a2459e4c260fc5edaad53751524012ce387cf",
+      "bytes": 385,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/product_mutation_store_factory.dart",
+      "sha256": "6cacc2da1307a7667bbf63cf9ae231fa57facc025bbb1146fb47119ca6dad337",
+      "bytes": 315,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/product_mutation_store_native.dart",
+      "sha256": "2fcb28cdd35dd67c6c43a229536d056d607d334490c10580f748abb6a029edde",
+      "bytes": 1952,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/product_mutation_store_unsupported.dart",
+      "sha256": "a507f95721b4532a465c49bc3860f7eb8bb597caf0ff99b384131770d5f642f3",
+      "bytes": 162,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/product_mutation_store_web.dart",
+      "sha256": "4eea216659a97ca87fa512b3be9f46875d82406f446a1befa39c40a6bc2f2aa9",
+      "bytes": 3850,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/sale_mutation_store.dart",
+      "sha256": "5ea020ba9cf6bbec7509e6dd961bc22ab7e5ae9abc2ccea8ae79563244814eb8",
+      "bytes": 2864,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/sale_mutation_store_factory.dart",
+      "sha256": "9dd9d7b326bd7404c7261bca9d5d9d956f0fd8c957cacea95bab23a241f730a0",
+      "bytes": 297,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/sale_mutation_store_native.dart",
+      "sha256": "acb37c602d46f8d2dcd37413481238d07e7c7623a347253d299d513e62d813e5",
+      "bytes": 3430,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/sale_mutation_store_unsupported.dart",
+      "sha256": "b146f89b71385bc9f589552a039c369e28de3ef232429ad01e449d6a2c03ef8d",
+      "bytes": 154,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/sale_mutation_store_web.dart",
+      "sha256": "80861dbab043441ce3e8c678e7029c18a05e397fe103f89eeaf3ab8d102c17db",
+      "bytes": 7102,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/variant_intent_store.dart",
+      "sha256": "770b3e921754ae72b265e05f0f1b3ca0c901508effa8cac9cda7cd85f06f3018",
+      "bytes": 383,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/variant_intent_store_factory.dart",
+      "sha256": "cd74f6e82cddd1694563da431e8d257a17cae7a8a70d8e1df1c58c6f5d035300",
+      "bytes": 303,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/variant_intent_store_native.dart",
+      "sha256": "d8c0f6fe96acea1c0876ae2c527911217c280e8df48bfad7a230097cd9776091",
+      "bytes": 1925,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/variant_intent_store_unsupported.dart",
+      "sha256": "d33ca20350e45f6aeedf4a00f94cbf9d155bbf34649486a6c51c7b7e88c4e1c6",
+      "bytes": 159,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/data/local/variant_intent_store_web.dart",
+      "sha256": "48d4f288d79fc8c0c8ac3ba5043f5b87c8f2d99863653b452afcb17db37fdbc1",
+      "bytes": 3826,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/firebase/app_check_policy.dart",
+      "sha256": "1bd30107aa120a9c6059a076c9ba79d9d6325226a36b79f69e653b43d0484a4e",
+      "bytes": 308,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/firebase/app_environment.dart",
+      "sha256": "4e16f6ce7a1af0279f253c21e3d3793760609fe6c10da11799c7f6109347de49",
+      "bytes": 1983,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/firebase/commercial_checkout_bundle.dart",
+      "sha256": "849edf6c71ede43282969ccb664a09c4ec0543ad390265734df816ccb361f3ac",
+      "bytes": 1226,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/firebase/commercial_checkout_origin.dart",
+      "sha256": "1044760abcdd7457966314632a74dd60fb1c2a8e4d1025d5ba23076e3e432d2b",
+      "bytes": 8958,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/firebase/firebase_bootstrap.dart",
+      "sha256": "ae8fd958118ee2e0317e631f78a8ef0a0e51604f852ef8d9243a4fb1496ce99b",
+      "bytes": 1633,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/firebase/firebase_options_hml.dart",
+      "sha256": "bfac9d5a44e765635a8e1c7b3abf5cbe4c44d2d5ad7c5937ff364379d91ded37",
+      "bytes": 788,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/firebase/firebase_options_prod.dart",
+      "sha256": "f2d603bf4512922796fc29500db8513562ade0abe5df34c72cf646e36292c34b",
+      "bytes": 824,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/main_prod.dart",
+      "sha256": "78b273b05a7e18caac4743b538b80877d42f84660fd5c94d433588d87dcb5ab8",
+      "bytes": 131,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/models/abc_product_model.dart",
+      "sha256": "1ab291057597cb0101717773c14dde9ae99ce4a214feeda97da4478807c2acc9",
+      "bytes": 393,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/models/business_insight.dart",
+      "sha256": "8a8b80fa292fcd2632a82fccf5dc5a57f138c17c1dfbedb43076928cf4280805",
+      "bytes": 1977,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/models/cart_item_model.dart",
+      "sha256": "799c1e99a4525cb707405389c320b3f24e69ab0f59ccffbd3bc9e1ca1811ed0b",
+      "bytes": 2663,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/models/customer_model.dart",
+      "sha256": "abaa388bbddebf23567cab732379889598728d0bba2c48667eb861aa964bda9a",
+      "bytes": 1968,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/models/installment_model.dart",
+      "sha256": "6152e7f6ffefa67cf08376410d7a919270ab7404d5930645f7066828a7e5762c",
+      "bytes": 1010,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/models/product_import_item.dart",
+      "sha256": "e2ba9302afad04200d5959be670ff18db993715da3e0f087820858ac06a07bcb",
+      "bytes": 1842,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/models/product_model.dart",
+      "sha256": "573ba2c71d45918f1b3c66ee307bed5937a01f9b7ad0f0b461363a0ad98dc137",
+      "bytes": 1572,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/models/sale_order_model.dart",
+      "sha256": "b1b99cecac011c7e1ee54a7becb259eb5fd9de018a4ff1dd60b8cdcda4654fc3",
+      "bytes": 3528,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/models/sale_payment_allocation.dart",
+      "sha256": "4406808d6fdd3319e21f2785ace494c2258e76ca8ce2f91fb91eef7de910b584",
+      "bytes": 2831,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/providers/cart_provider.dart",
+      "sha256": "7b5d1a2bb36e0ddfb6b2049dc97d617be6aca1c30cdccf598583365915ab9840",
+      "bytes": 4632,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/providers/cash_flow_provider.dart",
+      "sha256": "51d374479f31dd0d3eea507fbf7bcf7621504948470d55cf2a0faeb7f4ac204c",
+      "bytes": 4252,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/providers/sales_provider.dart",
+      "sha256": "167001182298b73b4288620c4848fe6f8bd84620f09062bc32a8291d3feeea10",
+      "bytes": 15132,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/providers/theme_provider.dart",
+      "sha256": "d50a54266583f2c4d00d71b49407d826b7bc34ef5586b4358f50ee733f8292a5",
+      "bytes": 1327,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/providers/user_role_provider.dart",
+      "sha256": "c54d5b31e14ff1dee9ab7b39be77fd5b951edbb4eeaa01043ca92e728942e702",
+      "bytes": 10065,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/auth/auth_gate.dart",
+      "sha256": "b1a3d2a0d7d4e3d1d62161a2a909a8c43b5a1a606b4fb6d6899de532e21079eb",
+      "bytes": 16120,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/auth/create_store_screen.dart",
+      "sha256": "39b7ac00a1508df0171f1ad6c998b3decdc34b1de4e749e44b9ec32b16728ccd",
+      "bytes": 12999,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/auth/email_verification_screen.dart",
+      "sha256": "a8c526f6fef150da3222b070b199f3562c5bca168e1b3ac7bc2e9730f8639677",
+      "bytes": 5807,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/auth/login_screen.dart",
+      "sha256": "bf3b0a2b847163faeca710702a64c48758c27c7457bf431afd05c77b502a1ccf",
+      "bytes": 20303,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/auth/register_screen.dart",
+      "sha256": "0d4bea2c70990ae155ee30e683ec606d4b54c78728c389f56d27f8f3cd82dba5",
+      "bytes": 15055,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/cart/cart_screen.dart",
+      "sha256": "0b4b313290e2e9d3be3677a1153e7bfc6ff09e0124abe1ff6990abb1edca51d4",
+      "bytes": 12989,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/dashboard_screen.dart",
+      "sha256": "8afeffcd16903b187c8d64e2cab56221d28f4750f759777882804283d1892470",
+      "bytes": 12133,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/employees/employees_screen.dart",
+      "sha256": "6d953d06fe15ed082dc82c95d69ecbda9d9c5dc5473d08ae09a5d9764ba51039",
+      "bytes": 28595,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/finance/invoices_screen.dart",
+      "sha256": "2788e4d89ca96b71208a5a16dd8ade50f33e502207d9344f398c69d867d4560d",
+      "bytes": 32570,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/finance/manual_cash_screen.dart",
+      "sha256": "fe61adc8adee7352f98a1b84d3aa3cfb26955f7339cc56e43c91821727e0781e",
+      "bytes": 4142,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/fiscal/fiscal_settings_screen.dart",
+      "sha256": "3bf64a8fbc7428b757ae915b0e13e8ccf8ea931cdd8dc8bc1456ed1be7dd0c60",
+      "bytes": 51819,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/fiscal/widgets/ncm_search_dialog.dart",
+      "sha256": "5dd02e953292d09d7fb2a530c112ef21d0cf8483e86ec0ecd1e65abebabdb66b",
+      "bytes": 25372,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/home_screen.dart",
+      "sha256": "bf7c4519d2c3ede0a913d830d0f790779e9b444b24defd4c0c32d344cd5ecda0",
+      "bytes": 12243,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/archived_customers_screen.dart",
+      "sha256": "8eebe5daa30d4c1e22d3bbbbad70225ab64775169ea9acdd6115b8cef824f37b",
+      "bytes": 27167,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/archived_products_screen.dart",
+      "sha256": "e8b58fbe1dcae8e41fffebc8f854df882a5ae0f04fa56e58e014334e570106c7",
+      "bytes": 32447,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/catalog_request_detail_screen.dart",
+      "sha256": "0b62fae3ca993e8705161c1d827d2ddac994a59b72e1bcb7df49dab6b8f4451f",
+      "bytes": 31048,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/catalog_requests_screen.dart",
+      "sha256": "d47ad94b2fa2158500aa7ede5c63de4167e7baf4d754a6c52e4f89a1db89b7c7",
+      "bytes": 28495,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/catalogs_screen.dart",
+      "sha256": "eff1a090f43606388d9e13c3edb77df99e9f49cad5ccb86d8d156b3214d9a6cb",
+      "bytes": 22263,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/category_management_screen.dart",
+      "sha256": "2908eecfd53d0ad0b83417c8a1c4f09fa635705787933d2849422b29c970fd6e",
+      "bytes": 36028,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/customer_receivables_screen.dart",
+      "sha256": "875847fd506cb9a35e7eb267cd5b330b5b66eb4487cdc57fce0254c405cdc5c4",
+      "bytes": 20923,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/manage_customers_screen.dart",
+      "sha256": "dcc35e7da897503313ccefcdd30ce7c2b6c2b2b51dfb8b8dbe66f80b70d4f554",
+      "bytes": 35407,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/manage_products_screen.dart",
+      "sha256": "0a2f38f11be5c3ed020b345446956106559af2928102f9c1200ff508ed31f878",
+      "bytes": 160841,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/product_import_confirmation_screen.dart",
+      "sha256": "bdd44d07d9ca6da2edd215f85944643c16a871c6a5b0c259444c86643e1d234c",
+      "bytes": 21326,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/product_import_mapping_screen.dart",
+      "sha256": "8440c3919d8255ad862a118f37869a8f8fd315dc8afec965bf3fa89c9a2aa4b1",
+      "bytes": 26132,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/product_import_validation_screen.dart",
+      "sha256": "0645e12d790e494c1ea2b7556a72c83e1116f723b0a6d3b2c8185a9a037bb6a8",
+      "bytes": 39225,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/widgets/catalog_configuration_dialog.dart",
+      "sha256": "ec8f638e7dbb3d6bbf5222d0e70aed79f61b9f144ff1261795f6c4f6b27f24a3",
+      "bytes": 1335,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/widgets/catalog_created_dialog.dart",
+      "sha256": "ba6f21b5020798f301c40a2372f1f902a2f978b2f18c536a6978bebd765acae5",
+      "bytes": 1868,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/widgets/catalog_dynamic_section_card.dart",
+      "sha256": "0ea3e9a8de7a3f8a5738819cc07cbf18759dbc7f1b3f1fd0d57831234c69d7b8",
+      "bytes": 2100,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/management/widgets/catalog_preview_button.dart",
+      "sha256": "d293bfa46ec0b5cc50589700058365c5b5b860a02cf282d5e470e0229c180fc6",
+      "bytes": 2149,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/payment_waiting_screen.dart",
+      "sha256": "24d37e6e7782ec8df87b461ed85dc1f7de2aaae4f61b2bdf5a3f32a41b63a3ac",
+      "bytes": 7087,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/products/import/product_import_screen.dart",
+      "sha256": "eb451ffb3971b1987e83b77f61d8dcf57d6c0202a27dd51958ca5d1e37f98225",
+      "bytes": 28014,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/profile/profile_screen.dart",
+      "sha256": "2fd709582b876108441fac06de8fbe040d0eb2c12d502da0915c5402ebd57da0",
+      "bytes": 35174,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/public/public_catalog_screen.dart",
+      "sha256": "1bf6ac8ef1121d47cb875afda7c4a08322577a167c8c630487288e5343ff3184",
+      "bytes": 83255,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/reports/abc_report_screen.dart",
+      "sha256": "50ab9f80d8f79a80dc2386162ea7f0acf9cf1d234f19717696dbf5b433cdc33b",
+      "bytes": 6743,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/reports/accounts_receivable_screen.dart",
+      "sha256": "b56b93ae20716a199de09754342be72b6e84ef0e4b6cb931956a5b7174ea4cd3",
+      "bytes": 5741,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/reports/customer_debt_detail_screen.dart",
+      "sha256": "691bd8bed72463d3d7e56b897e0972d95fab28c3aa032419fa36dc19340f0d34",
+      "bytes": 8407,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/reports/expiring_products_screen.dart",
+      "sha256": "1764f1340fa041d98a7327f90721760bd932f6f3b3e6159aac3745c3d17f7f8e",
+      "bytes": 4758,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/reports/low_stock_report_screen.dart",
+      "sha256": "d713e4f856b51a7a265657148163b6364d0f36621cd21e3b5a25006e1dfa23d1",
+      "bytes": 3930,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/reports/reports_hub_screen.dart",
+      "sha256": "26e4efb3221083e626600ef9247705a7af30c90edfa0f358b00710a6da9b2343",
+      "bytes": 6644,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/reports/sales_by_period_screen.dart",
+      "sha256": "f0b3c5af12bd0f8fa09322481e0e66b5aec92109167a423a3702b3b04d318d5d",
+      "bytes": 5689,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/sales/new_sale_screen.dart",
+      "sha256": "19d5ee4934704905782662e79d4b469b8772bd94426e8493bc6f74a931e0c594",
+      "bytes": 70860,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/sales/sales_history_screen.dart",
+      "sha256": "3e5ee04f666c60e4a2d3deab94482311b74cf2693df7f2eae04c5be06880dbe2",
+      "bytes": 5509,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/settings_screen.dart",
+      "sha256": "f112388d3b91ec00f5d3f40168eb0e4d662c545e8ad85b38fc46c8e2cad12f0e",
+      "bytes": 55480,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/screens/subscription_screen.dart",
+      "sha256": "031a4c21ed75813e0f84d7ed291507e9893245fc049b1952c60eddf5728b9abc",
+      "bytes": 20818,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/android_checkout_cart.dart",
+      "sha256": "ef8208e23ecc8dfc4ca83bc4eec3dbc4717dbcac93e23fb34a970161ff11756c",
+      "bytes": 15324,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/business_insights_service.dart",
+      "sha256": "9d88a93a082d2360957b129671ee27fafd5a02c2642cef9df391c06afc48c39d",
+      "bytes": 18341,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/checkout_coordinator_ports.dart",
+      "sha256": "d4409ce543e45a137958a9165078dd55e4a187e22257d13ccf9ec6e6dbc2e7b5",
+      "bytes": 5209,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/checkout_sale_associated_preparation.dart",
+      "sha256": "f9900a22eebdde9f2f28e4bb16441af831b6ffe2adecac03b0975e98be29982a",
+      "bytes": 21305,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/checkout_sale_preparation.dart",
+      "sha256": "932b0319b054a0dbba7dc4a5c886474b5a241d990614d96229be4ba788436aa3",
+      "bytes": 14914,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/commercial_checkout_legacy_guard.dart",
+      "sha256": "2e53ae30620e143ce8df1248e9182d63c54cc3aa84fdfb163e936a462acb7838",
+      "bytes": 2973,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/google_sign_in_configuration.dart",
+      "sha256": "c673056f034849401f590c0f8769dbb68488a020e5f2aef456284894e871ed43",
+      "bytes": 1249,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/home/radar_preferences_screen.dart",
+      "sha256": "5e6026f4b5d89a3410bdd9debbca2f25787dd6a320616b005bf34f16dee949a0",
+      "bytes": 9093,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/home/smart_home_screen.dart",
+      "sha256": "2f42b1bbac4a607cd02760b990a2c0b9409de6f64fe63baad146468dd70a8b6a",
+      "bytes": 22463,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/navigation_service.dart",
+      "sha256": "090543ac8d7516ccee5df06e0676540a69e0ffc6ba07506d0c3f08a4c6739399",
+      "bytes": 726,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/offline_sale_command.dart",
+      "sha256": "a32d766a2555800bb89a53f8590cc8c84ac63d915bc3f790e7bbceb337e54a84",
+      "bytes": 2462,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/offline_sale_queue_sync.dart",
+      "sha256": "96308d17c97ccdfe881be00a6ce881e78ea94f6096afe3dbc3ac9504f6e47e88",
+      "bytes": 13430,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/offline_sales_sync_service.dart",
+      "sha256": "3ca6c74e9aef1db4ce7eb587d6ce8e177d9622d94ed40170b573516c4d66829f",
+      "bytes": 39,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/pdf_receipt_service.dart",
+      "sha256": "a2ab6f57f900eca67d55cb5e76659dbacc28fee4b16f744817fc4025d2686982",
+      "bytes": 56955,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/product_cadastral_edit.dart",
+      "sha256": "88fe892813ffb59e829aa938661ffe52724d3d47d5760c54d6b8a79acd2b035c",
+      "bytes": 23734,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/product_cod_service.dart",
+      "sha256": "551507c774aa196af8f7db07dda914d1e302a62114471e112d2f54294f3a3410",
+      "bytes": 1112,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/product_import_service.dart",
+      "sha256": "43657bd57f9fdf73502207c6288865d03de184703226f74f9d46f88348b33aec",
+      "bytes": 26344,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/product_mutation_api.dart",
+      "sha256": "46362307b0fb0409966b68525521be7c61408e23e3e9f4f5f02fec5f7d75dd04",
+      "bytes": 3867,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/product_mutation_command.dart",
+      "sha256": "1600d16b4affae7588fd1eaf45c7507e6b19a15c66bd2b04a1321492e4092ef6",
+      "bytes": 11936,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/product_mutation_ledger.dart",
+      "sha256": "ebb1cfbe10ef4b8c14f1a41d3d28dd2a9ccf361280d2f241c07db65a8961124a",
+      "bytes": 11309,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/product_stock_draft.dart",
+      "sha256": "0a42acfc5e85a432481fef05606aa49211a0583059174a3874665bef8e0429f3",
+      "bytes": 5047,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/product_stock_edit.dart",
+      "sha256": "d92ba87740bc6d284dbb0ba2d37dbd3c03df0af85021e67b529ae8b43defe871",
+      "bytes": 14752,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/product_update_service.dart",
+      "sha256": "0213b0f8224d188c19de14db02cc9607e4fdf9b65f8011c9e7a073cb2bfe4785",
+      "bytes": 1704,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/product_variants_form_draft.dart",
+      "sha256": "608e1e4b208f035f383d0ab7e8f1a11b98f1dd524b58e0e2cd0ac15b5c5060cd",
+      "bytes": 9289,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/product_variants_read_state.dart",
+      "sha256": "da47f4b5d4ccd52b056a82b4bf06ce6a5d7a2c818c36d23b3ecf233d3c957314",
+      "bytes": 5381,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/sale_associated_reservation.dart",
+      "sha256": "849998f3b2460e36230a15b5bfcb28396e3c6ec8982e1cbf9a37f65fa7445d16",
+      "bytes": 2369,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/sale_mutation_command.dart",
+      "sha256": "ebbb90452cce387c666dbc41c16fc0445008896c27ed3ae43d3013de49370382",
+      "bytes": 6901,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/sale_mutation_ledger.dart",
+      "sha256": "159ba2778ae849e3fadf699832686279c8e031e1a3d464b7918d436f80370cbb",
+      "bytes": 22044,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/subscription_billing_access.dart",
+      "sha256": "80f939083adcf27d248e65cdff2cd2d5f747dd82302238144c352a1971c08b71",
+      "bytes": 5796,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/variant_authoritative_contract.dart",
+      "sha256": "c141a554eff76f56df6826c454904d109baa3b406820a9a7610336dc831f11e1",
+      "bytes": 16116,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/variant_intent_ledger.dart",
+      "sha256": "0786277a6286fbec81ddcb803e820564f611fb710446c86d922dc8b7218955b4",
+      "bytes": 12939,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/variant_preview_state.dart",
+      "sha256": "f6b200752022c2439ff1da9d8929505b9755d1fee1e992b166c1abe65eb121f5",
+      "bytes": 18264,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/variant_product_management.dart",
+      "sha256": "0defedf5275747cc53468d218604b2ca19037b190d8d479fd6b9757de5e3b411",
+      "bytes": 5384,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/variant_product_registration.dart",
+      "sha256": "b657254ce03e4b62c85204cc6b2c496f641fb5d614061f7ed61fc966d3c185f6",
+      "bytes": 9743,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/services/variant_sale.dart",
+      "sha256": "bb406bf580a4516f886b428089a56cf2470e093319edb185114e78b84fd42fd6",
+      "bytes": 21996,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/themes/app_theme.dart",
+      "sha256": "da539bb12816f262d46b3f258cb966af31a23e0061a2af3343ef63d0f8630360",
+      "bytes": 1854,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/KpiCard.dart",
+      "sha256": "e0cf5d76285d0cef1c22a0f217737b6280ca40d9d2706ae8dbef9dacbe0d78e8",
+      "bytes": 2561,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/account_legal_links.dart",
+      "sha256": "947e8ed57c37f8b464b89645bd078076cbfc7548ccc266388f55b6547bec402a",
+      "bytes": 1678,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/app_drawer.dart",
+      "sha256": "38695798f92a81debec0d466f6b69a2ea96d4f17246e71c830e59ce9cdaccd0f",
+      "bytes": 12189,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/cart_item_widget.dart",
+      "sha256": "727ce72303a4a6e02c4b91ee9e55c3d6a25ce896bc25820e4cc6da11dcd96aad",
+      "bytes": 10252,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/category_management_groups.dart",
+      "sha256": "e612af9a143b419cd8ae9e8336090024def0be1f933103202cc5f3ffb82eb5ee",
+      "bytes": 7725,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/confirm_fiado_dialog.dart",
+      "sha256": "314a0a039b77d1d6aa74be3e281100056e4fe664dd6a2e41b1d95127ff278be0",
+      "bytes": 17301,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/dynamic_background.dart",
+      "sha256": "8b625b90eaa7cefd7dad8f40c085b054372ba333f7dfa66dd8d703ec1cd72500",
+      "bytes": 773,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/order_item_widget.dart",
+      "sha256": "cc4d3c9fdb3337bd49f5d3a587313fae94f236663db50c3b36aac58aaa6433d5",
+      "bytes": 19143,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/payment_options_sheet.dart",
+      "sha256": "f9a24a0a727b664edc712f2f6939339e90d7c6649e715c70b52c157cf19dbbb7",
+      "bytes": 32291,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/product_cadastral_edit_dialog.dart",
+      "sha256": "74b34e586f270e4024f3556fba4ebf209d5b726547560623cef63b408f253c44",
+      "bytes": 16749,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/product_category_groups.dart",
+      "sha256": "611c604f92354cf09f0d39a9cdadb1d691dab2aafac2e6599a086b5dc55f731a",
+      "bytes": 5854,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/product_stock_edit_dialog.dart",
+      "sha256": "60354fa4014bf4c86731307dd99efe1184e9a24b7ddc543d6df0ada7deb582ce",
+      "bytes": 13375,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/product_stock_lots_editor.dart",
+      "sha256": "afb658ab30a2e1a25600afa3e8411be7706c3faea5cbd931240c6ad77da7e7b9",
+      "bytes": 5162,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/product_variants_form.dart",
+      "sha256": "1212856a8999c3fb9ccc58f13e637958420e31946c8295de939793cb8b6c535e",
+      "bytes": 16465,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/split_payment_dialog.dart",
+      "sha256": "2a661b9f2b78ae5243acd72f356f0a6fe53cb425b1be39e423c343d5bb89af6d",
+      "bytes": 5901,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/variant_product_management_dialog.dart",
+      "sha256": "48f6854b95765fedb76b1a644475b6c8e5a333fb3575f59ff9474dd742dec144",
+      "bytes": 19189,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/variant_sale_widgets.dart",
+      "sha256": "c5b0c5dafd9226fa6d0b5d1c24ef8c90cbcbd26f1d20f940ee88a61ed510846e",
+      "bytes": 17231,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "lib/widgets/warning_banner.dart",
+      "sha256": "18324c2dbce2f2d23628c9fc409688f896b925ace73ec6e291b0dd917e7bc77f",
+      "bytes": 15256,
+      "role": "production-compilation-source"
+    },
+    {
+      "path": "pubspec.lock",
+      "sha256": "00222efda04c56ec1f9d36e9e7c1e555a9da8e66987b95249f662c33c242cf77",
+      "bytes": 47134,
+      "role": "package-config"
+    },
+    {
+      "path": "pubspec.yaml",
+      "sha256": "1bebbcb6e25705f59dda2bc4213c79ea8e3ad5028d88eef7e9225ff0db4ac4a0",
+      "bytes": 5421,
+      "role": "package-config"
+    },
+    {
+      "path": "test/account_legal_links_test.dart",
+      "sha256": "2d83af4d6ee00aa2b46de232bb976c48c650cf07108c8ea81e51ecc4fccd3709",
+      "bytes": 1423,
+      "role": "approved-test-or-transitive-dependency"
+    },
+    {
+      "path": "test/fixtures/sales_characterization_fixtures.dart",
+      "sha256": "705a420072985c308a2f9c34d5fb5eab187697558c15055b8fd48858bae70b4d",
+      "bytes": 1944,
+      "role": "approved-test-or-transitive-dependency"
+    },
+    {
+      "path": "test/prod_p0_03_a_s01_characterization_test.dart",
+      "sha256": "2e1eeaccbaf8dbbd0091309de5dcf5bc61300156d1062c428659679afee3d390",
+      "bytes": 8277,
+      "role": "approved-test-or-transitive-dependency"
+    },
+    {
+      "path": "test/sales_writers_characterization_test.dart",
+      "sha256": "5a10eaeb8d5b1b92702b1d39966742a467a2285abf380178b08ab2dd83765e18",
+      "bytes": 16607,
+      "role": "approved-test-or-transitive-dependency"
+    },
+    {
+      "path": "test/subscription_billing_access_test.dart",
+      "sha256": "ad9f6e42dac2cf70400c8663096cc894c96f96607a17244156d01d9004c8e548",
+      "bytes": 10917,
+      "role": "approved-test-or-transitive-dependency"
+    },
+    {
+      "path": "test/support/sales_characterization_firestore.dart",
+      "sha256": "79b5a84641b4274f98d73fa365c6b44dafcdca79083cf342b8a59c2047760e78",
+      "bytes": 7549,
+      "role": "approved-test-or-transitive-dependency"
+    },
+    {
+      "path": "web/favicon.png",
+      "sha256": "a72055ee01061e21fe156760e3a0d4aca4ba31eb7102d53ac5e49a322ab1734b",
+      "bytes": 646,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "web/icons/Icon-192 .png",
+      "sha256": "e6ce3ca9319b54f46e59a2c7543fdcce05532c4bf667630deb7ec4c02de781b2",
+      "bytes": 42463,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "web/icons/Icon-192.png",
+      "sha256": "e6ce3ca9319b54f46e59a2c7543fdcce05532c4bf667630deb7ec4c02de781b2",
+      "bytes": 42463,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "web/icons/Icon-512.png",
+      "sha256": "bb5f99160ae4e69468abff24a662d3c79938a5d9661aed7a2085c490e72a3a45",
+      "bytes": 196843,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "web/icons/Icon-512_.png",
+      "sha256": "4c6e990e13f350e4d2aa37f45cefc88723169757105c423b44af3f628426c48b",
+      "bytes": 123790,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "web/icons/Icon_512.png",
+      "sha256": "3fdd7950bc7bdd0b85e3affd52912aad068ff8c2bdce5b998396d4ea3030368d",
+      "bytes": 1004772,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "web/index.html",
+      "sha256": "9a96e7f9002d062f1184fb6e6eef92e1b18369bfcf9b8c21161ccd6d6edd537b",
+      "bytes": 833,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "web/logo_512.png",
+      "sha256": "4c6e990e13f350e4d2aa37f45cefc88723169757105c423b44af3f628426c48b",
+      "bytes": 123790,
+      "role": "product-static-asset-or-web-bootstrap"
+    },
+    {
+      "path": "web/manifest.json",
+      "sha256": "7d35990970f044bfa20153ea4c3e5a1e99392adf58489efe7ab20f48e780cb49",
+      "bytes": 822,
+      "role": "product-static-asset-or-web-bootstrap"
+    }
+  ],
+  "sourceBytesMatchFrozenCandidate": true,
+  "productionEntryPoint": "app/lib/main_prod.dart",
+  "commercialCheckoutV2": false,
+  "toolchain": {
+    "flutter": "3.32.6",
+    "dart": "3.8.1"
+  },
+  "expectedPublishedBundleSha256": "cde6da845f9ef51c8595a8026e26b27ef76acf97ac7449c08d06c359455869d8",
+  "expectedDistributionZipSha256": "8ff0b6c2509ef25ec81913e4c750688e797344668108f801fd35832657fbc068",
+  "publishedHostingVersion": "sites/store-connect-app/versions/baf98bec2ed1b967",
+  "compiledFilesNotIncluded": true,
+  "excludedCandidateFiles": [
+    "lib/firebase/android_checkout_emulator.dart",
+    "lib/firebase/android_checkout_emulator_bundle.dart",
+    "lib/firebase/checkout_sdk_manifest.dart",
+    "lib/firebase/isolated_checkout/demo_profile.dart",
+    "lib/firebase/isolated_checkout/inert_owner.dart",
+    "lib/firebase/isolated_checkout/structure_port.dart",
+    "lib/firebase/web_app_check_cache_stub.dart",
+    "lib/firebase/web_app_check_cache_web.dart",
+    "lib/firebase/web_app_check_policy.dart",
+    "lib/firebase_options.dart",
+    "lib/fixtures/variant_preview_fixture.dart",
+    "lib/main.dart",
+    "lib/main_hml.dart",
+    "lib/previews/f10_feedback_main.dart",
+    "lib/previews/f10_local_backend.dart",
+    "lib/previews/variant_preview_main.dart",
+    "lib/screens/auth/signup_screen_DELET.dart",
+    "lib/screens/subscription/subscription_screen.dart",
+    "lib/services/checkout_coordinator.dart",
+    "lib/services/checkout_coordinator_preparation_adapter.dart",
+    "lib/services/checkout_intention_reader.dart",
+    "lib/services/checkout_presentation_controller.dart",
+    "lib/services/commercial_operation_service.dart",
+    "lib/services/debt_payment_error_message.dart",
+    "lib/services/debt_payment_service.dart",
+    "lib/services/offline_sale_preparation.dart",
+    "lib/services/sale_mutation_api.dart",
+    "lib/utils/payment/payment_mobile.dart",
+    "lib/widgets/checkout_intention_panel.dart",
+    "lib/widgets/dynamic_background_.dart",
+    "lib/widgets/monthly_sales_chart.dart",
+    "lib/widgets/sales_chart.dart",
+    "lib/widgets/variant_preview_panel.dart",
+    "test/android_checkout_callable_channel_test.dart",
+    "test/android_checkout_cart_test.dart",
+    "test/app_check_policy_test.dart",
+    "test/auth_gate_first_login_test.dart",
+    "test/auto_offline_compat_test.dart",
+    "test/cart_checkout_revision_test.dart",
+    "test/catalog_configuration_dialog_test.dart",
+    "test/catalog_dynamic_sections_ui_contract_test.dart",
+    "test/catalog_dynamic_section_card_test.dart",
+    "test/catalog_preview_test.dart",
+    "test/catalog_requests_screen_test.dart",
+    "test/catalog_request_detail_screen_test.dart",
+    "test/category_management_screen_test.dart",
+    "test/checkout_associated_preparation_native_test.dart",
+    "test/checkout_associated_preparation_web_test.dart",
+    "test/checkout_associated_result_recovery_native_test.dart",
+    "test/checkout_coordinator_native_test.dart",
+    "test/checkout_coordinator_test.dart",
+    "test/checkout_coordinator_web_test.dart",
+    "test/checkout_intention_reader_native_test.dart",
+    "test/checkout_intention_reader_web_test.dart",
+    "test/checkout_presentation_test.dart",
+    "test/checkout_sale_preparation_native_test.dart",
+    "test/checkout_sale_preparation_web_test.dart",
+    "test/checkout_sdk_bundle_web_test.dart",
+    "test/checkout_sdk_explicit_url_r2_web_test.dart",
+    "test/checkout_sdk_manifest_test.dart",
+    "test/checkout_sdk_r4a_structure_test.dart",
+    "test/commercial_checkout_test.dart",
+    "test/commercial_hml_preparation_test.dart",
+    "test/commercial_legacy_compatibility_test.dart",
+    "test/debt_payment_error_message_test.dart",
+    "test/F7-CAT-RULES-B1-A0_relatorio.txt",
+    "test/F7-CAT-RULES-B1-B_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-A_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-BACKEND-CONTRACT_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-BR_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-B_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-CONTRACT-A_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-FLUTTER-DELETE-B_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-GLOBAL-A0_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-IMPORT-B4_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-IMPORT-B_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-IMPORT-C2-R1_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-IMPORT-C_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-RETOMADA_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-RULES-A2_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-RULES-A_relatorio.txt",
+    "test/F7-CAT-TAXONOMIA-RULES-SOURCE_relatorio.txt",
+    "test/F7.8-A_relatorio.txt",
+    "test/F7.8-B_relatorio.txt",
+    "test/F7.8-D1-A0_relatorio.txt",
+    "test/F7.8-D1-B1_relatorio.txt",
+    "test/F7.8-D2-B1_relatorio.txt",
+    "test/F7.8-E0_relatorio.txt",
+    "test/F7.8-E1-SECRET-B1_relatorio.txt",
+    "test/F7.9-A0_relatorio.txt",
+    "test/F7.9-B0_relatorio.txt",
+    "test/F7.9-B1_relatorio.txt",
+    "test/F7.9-C0_relatorio.txt",
+    "test/F7.9-C1_relatorio.txt",
+    "test/F7.9-D0_relatorio.txt",
+    "test/F7.9-D1_relatorio.txt",
+    "test/F7.9-F1_relatorio.txt",
+    "test/firebase_environment_test.dart",
+    "test/fixtures/sale_v2_command_cases.json",
+    "test/home_navigation_test.dart",
+    "test/offline_sales_local_persistence_test.dart",
+    "test/offline_sale_preparation_test.dart",
+    "test/offline_sale_queue09_test.dart",
+    "test/product_cadastral_durable_native_test.dart",
+    "test/product_cadastral_durable_web_test.dart",
+    "test/product_cadastral_edit_dialog_test.dart",
+    "test/product_cadastral_edit_test.dart",
+    "test/product_category_groups_test.dart",
+    "test/product_cod_test.dart",
+    "test/product_dialog_retry_test.dart",
+    "test/product_edit_state_test.dart",
+    "test/product_import_service_test.dart",
+    "test/product_mutation_ledger_test.dart",
+    "test/product_mutation_store_native_test.dart",
+    "test/product_mutation_store_web_test.dart",
+    "test/product_registration_variants_test.dart",
+    "test/product_stock_durable_native_test.dart",
+    "test/product_stock_durable_web_test.dart",
+    "test/product_stock_edit_dialog_test.dart",
+    "test/product_stock_edit_test.dart",
+    "test/product_update_service_test.dart",
+    "test/product_variants_form_draft_test.dart",
+    "test/product_variants_form_test.dart",
+    "test/product_variants_read_state_test.dart",
+    "test/prod_p0_03_a_recovery_contract_test.dart",
+    "test/public_catalog_dynamic_sections_test.dart",
+    "test/public_catalog_mobile_selection_sheet_test.dart",
+    "test/public_catalog_submission_test.dart",
+    "test/sales_backlog_characterization_test.dart",
+    "test/sale_association_native_test.dart",
+    "test/sale_association_web_test.dart",
+    "test/sale_atomic_store_native_test.dart",
+    "test/sale_atomic_store_web_test.dart",
+    "test/sale_mutation_command_test.dart",
+    "test/sale_mutation_ledger_test.dart",
+    "test/sale_mutation_store_native_test.dart",
+    "test/sale_mutation_store_web_test.dart",
+    "test/split_payment_test.dart",
+    "test/support/checkout_associated_preparation_cases.dart",
+    "test/support/checkout_coordinator_fakes.dart",
+    "test/support/checkout_coordinator_store_cases.dart",
+    "test/support/checkout_intention_reader_cases.dart",
+    "test/support/checkout_sale_preparation_cases.dart",
+    "test/support/checkout_sdk_demo_server.cjs",
+    "test/support/checkout_sdk_endpoint_feasibility.cjs",
+    "test/support/checkout_sdk_probe_bundle.dart",
+    "test/support/checkout_sdk_probe_context_port.dart",
+    "test/support/checkout_sdk_r2_responders.cjs",
+    "test/support/f10_a1_pipe_probe.cjs",
+    "test/support/product_cadastral_durability.dart",
+    "test/support/product_cadastral_harness.dart",
+    "test/support/product_stock_durability.dart",
+    "test/support/sale_association_cases.dart",
+    "test/support/sale_atomic_store_cases.dart",
+    "test/support/sale_ledger_cases.dart",
+    "test/support/sale_product_preservation.dart",
+    "test/support/variant_ledger_cases.dart",
+    "test/T6-A0_rules_hierarchy_audit.txt",
+    "test/T6-A1_rules_boundary_relatorio.txt",
+    "test/T6-A2-A0_product_update_authorization_audit.txt",
+    "test/T6-A2-A1_product_update_authorization_relatorio.txt",
+    "test/T6-A3-A0_product_category_tree_audit.txt",
+    "test/T6-A3-A1_stored_parent_contract_relatorio.txt",
+    "test/T6-A3-A2_createProduct_category_tree_relatorio.txt",
+    "test/T6-A3-A3_setProductCategories_category_tree_relatorio.txt",
+    "test/T6-A3-A4_hierarchy_combined_regression_relatorio.txt",
+    "test/T6-A4-A0_import_hierarchy_regression_audit.txt",
+    "test/variant_authoritative_contract_test.dart",
+    "test/variant_authoritative_web_test.dart",
+    "test/variant_intent_ledger_native_test.dart",
+    "test/variant_intent_ledger_web_test.dart",
+    "test/variant_preview_isolation_test.dart",
+    "test/variant_preview_panel_test.dart",
+    "test/variant_preview_state_test.dart",
+    "test/variant_product_registration_test.dart",
+    "test/variant_sales_abc_test.dart",
+    "test/variant_sale_test.dart",
+    "test/web_app_check_policy_test.dart",
+    "test/widget_test.dart",
+    "tool/web_compatibility_pending_validation.dart",
+    "tool/web_compatibility_sdk_validation.dart"
+  ],
+  "historyHasExposedSandboxCredential": false,
+  "remotePushAllowed": false,
+  "revocationEvidencePending": true,
+  "sourceProvenanceCommit": "30f4f8db2a4a59d21696fde3d673144aded31154",
+  "originalF7HistoryStillExposed": true,
+  "originalLocalCommitsPreserved": [
+    "68811ded964495d8ad1a4e4b8168ff5d398d0021",
+    "379c592678edfb599833555735b2de5313406d4f",
+    "f9322cbe81b5b72204cbc680bea2b7eb6d580ac8"
+  ],
+  "sourceFilesUnmodified": true
+}

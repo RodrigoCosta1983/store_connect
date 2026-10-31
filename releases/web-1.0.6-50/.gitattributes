@@ -1,0 +1,2 @@
+# Preserve exact bytes of the frozen Web candidate, including lockfile line endings.
+app/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

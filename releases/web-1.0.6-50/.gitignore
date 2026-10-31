@@ -1,0 +1,11 @@
+app/.dart_tool/
+app/build/
+app/.flutter-plugins*
+app/.packages
+app/.env*
+*.zip
+*.apk
+*.aab
+*.sqlite*
+*.db
+*.log
