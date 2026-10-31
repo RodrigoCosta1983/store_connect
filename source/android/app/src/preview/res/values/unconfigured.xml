@@ -1,0 +1,5 @@
+<resources>
+    <!-- Empty compile-only symbols for the unused main Activity. No Firebase app configuration. -->
+    <string name="project_id" translatable="false"></string>
+    <string name="google_app_id" translatable="false"></string>
+</resources>
