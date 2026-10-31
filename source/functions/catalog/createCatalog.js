@@ -1,0 +1,3006 @@
+// ============================================================================
+// STORE CONNECT - CRIAÇÃO SEGURA DE CATÁLOGO
+// ============================================================================
+//
+// Arquivo:
+//   functions/catalog/createCatalog.js
+//
+// F7.2-D
+//
+// Nesta primeira etapa a função implementa apenas autenticação, autorização
+// e validação do contrato de entrada.
+//
+// IMPORTANTE:
+// - ainda não cria documentos no Firestore;
+// - ainda não gera token público;
+// - ainda não consulta os produtos;
+// - Admin SDK ignora Firestore Rules, portanto toda autorização é feita aqui.
+// ============================================================================
+
+"use strict";
+
+const {
+  onCall,
+  HttpsError,
+} = require("firebase-functions/v2/https");
+const {defineSecret} = require("firebase-functions/params");
+
+const admin = require("firebase-admin");
+const {
+  Timestamp,
+  FieldValue,
+} = require("firebase-admin/firestore");
+const crypto = require("crypto");
+const {
+  CatalogRequestContractError,
+  validateCatalogRequestPublicPayload,
+  normalizeCatalogRequestRole,
+  resolveCatalogRequestActorName,
+  decideCatalogRequestTransition,
+  validateCatalogRequestLifecycle,
+  projectCatalogRequestListFields,
+  projectCatalogRequestDetailFields,
+} = require("./catalogRequestContract");
+
+const {
+  CatalogDynamicSectionsError,
+  DYNAMIC_SECTION_DEFINITIONS,
+  createDefaultDynamicSections,
+  validateDynamicSectionsInput,
+  normalizeStoredDynamicSections,
+  productMatchesCategoryIds,
+  getActiveDynamicCategoryIds,
+} = require("./catalogDynamicSections");
+
+const catalogTokenEncryptionKey = defineSecret(
+    "CATALOG_TOKEN_ENCRYPTION_KEY",
+);
+
+const {
+  dynamicSectionsEqual,
+  validateDynamicCategoryAuthority,
+} = require("./catalogDynamicCategoryAuthority");
+
+
+const ENCRYPTION_ALGORITHM = "aes-256-gcm";
+const ENCRYPTION_VERSION = 1;
+
+const MAX_TITLE_LENGTH = 100;
+const MAX_PRODUCTS = 200;
+const MIN_EXPIRATION_DAYS = 1;
+const MAX_EXPIRATION_DAYS = 30;
+
+const ALLOWED_SUBSCRIPTION_STATUS = new Set([
+  "active",
+  "trial",
+  "overdue",
+]);
+
+function isFirestoreTimestamp(value) {
+  return value instanceof Timestamp;
+}
+
+function serializeTimestamp(value) {
+  return value instanceof Timestamp ? value.toDate().toISOString() : null;
+}
+
+function transitionContractError(error) {
+  if (!(error instanceof CatalogRequestContractError)) return error;
+  const code = {
+    permission: "permission-denied",
+    precondition: "failed-precondition",
+    conflict: "aborted",
+    validation: "invalid-argument",
+  }[error.code] || "invalid-argument";
+  return new HttpsError(code, "Transição de solicitação inválida.", {
+    reason: error.reason,
+  });
+}
+
+function normalizeString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+
+function validateDynamicSectionsField(
+    data,
+    {
+      defaultWhenMissing = false,
+    } = {},
+) {
+  const source =
+    data &&
+    typeof data === "object" &&
+    !Array.isArray(data) ?
+      data :
+      {};
+
+  const hasField =
+    Object.prototype.hasOwnProperty.call(
+        source,
+        "dynamicSections",
+    );
+
+  if (!hasField) {
+    return {
+      hasField: false,
+      value:
+        defaultWhenMissing ?
+          createDefaultDynamicSections() :
+          undefined,
+    };
+  }
+
+  try {
+    return {
+      hasField: true,
+      value:
+        validateDynamicSectionsInput(
+            source.dynamicSections,
+        ),
+    };
+  } catch (error) {
+    if (error instanceof CatalogDynamicSectionsError) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Configuração das seções dinâmicas é inválida.",
+          {
+            reason: error.reason,
+          },
+      );
+    }
+
+    throw error;
+  }
+}
+
+const MAX_DYNAMIC_PRODUCTS_PER_SECTION = 12;
+
+function projectDynamicCatalogProduct(
+    productSnapshot,
+    position,
+) {
+  if (
+    !productSnapshot ||
+    !productSnapshot.exists
+  ) {
+    return null;
+  }
+
+  const productData =
+    productSnapshot.data() || {};
+
+  if (productData.isArchived === true) {
+    return null;
+  }
+
+  const quantidade =
+    Number(productData.quantidade ?? 0);
+
+  if (
+    !Number.isFinite(quantidade) ||
+    quantidade <= 0
+  ) {
+    return null;
+  }
+
+  const rawPrice =
+    Number(productData.price ?? 0);
+
+  const price =
+    Number.isFinite(rawPrice) &&
+    rawPrice >= 0 ?
+      rawPrice :
+      0;
+
+  return {
+    productId:
+      productSnapshot.id,
+
+    name:
+      normalizeString(
+          productData.name,
+      ) || "Produto",
+
+    price,
+
+    imageUrl:
+      normalizeString(
+          productData.imageUrl,
+      ),
+
+    quantidade,
+
+    categoryName:
+      normalizeString(
+          productData.categoryName,
+      ),
+
+    position,
+  };
+}
+
+async function resolveDynamicCatalogSections({
+  storeRef,
+  storedDynamicSections,
+  excludedProductIds = new Set(),
+  reader = null,
+  includeVariants = false,
+}) {
+  const normalizedSections =
+    normalizeStoredDynamicSections(
+        storedDynamicSections,
+    );
+
+  const activeCategoryIds =
+    getActiveDynamicCategoryIds(
+        normalizedSections,
+    );
+
+  if (activeCategoryIds.length === 0) {
+    return {
+      sections: [],
+      allowedProductIds: new Set(),
+    };
+  }
+
+  const productsCollection =
+    storeRef.collection("products");
+
+  const queryPromises = [];
+
+  for (const categoryId of activeCategoryIds) {
+    const modern = productsCollection.where("categoryIds", "array-contains", categoryId);
+    const legacy = productsCollection.where("categoryId", "==", categoryId);
+    queryPromises.push(reader ? reader.get(modern) : modern.get());
+    queryPromises.push(reader ? reader.get(legacy) : legacy.get());
+  }
+
+  const querySnapshots =
+    await Promise.all(queryPromises);
+
+  const candidateSnapshotsById =
+    new Map();
+
+  for (const querySnapshot of querySnapshots) {
+    for (const productSnapshot of querySnapshot.docs) {
+      candidateSnapshotsById.set(
+          productSnapshot.id,
+          productSnapshot,
+      );
+    }
+  }
+
+  const candidateSnapshots =
+    [...candidateSnapshotsById.values()]
+        .sort((left, right) => {
+          if (left.id < right.id) {
+            return -1;
+          }
+
+          if (left.id > right.id) {
+            return 1;
+          }
+
+          return 0;
+        });
+
+  const excludedIds =
+    excludedProductIds instanceof Set ?
+      excludedProductIds :
+      new Set();
+
+  const sections = [];
+  const allowedProductIds = new Set();
+
+  for (
+    const definition
+    of DYNAMIC_SECTION_DEFINITIONS
+  ) {
+    const sectionConfig =
+      normalizedSections[definition.id];
+
+    if (
+      !sectionConfig ||
+      sectionConfig.enabled !== true ||
+      sectionConfig.categoryIds.length === 0
+    ) {
+      continue;
+    }
+
+    const sectionProducts = [];
+
+    for (
+      const productSnapshot
+      of candidateSnapshots
+    ) {
+      if (
+        sectionProducts.length >=
+        MAX_DYNAMIC_PRODUCTS_PER_SECTION
+      ) {
+        break;
+      }
+
+      if (
+        excludedIds.has(
+            productSnapshot.id,
+        )
+      ) {
+        continue;
+      }
+
+      const productData =
+        productSnapshot.data() || {};
+
+      if (
+        !productMatchesCategoryIds(
+            productData,
+            sectionConfig.categoryIds,
+        )
+      ) {
+        continue;
+      }
+
+      const product =
+        projectDynamicCatalogProduct(
+            productSnapshot,
+            sectionProducts.length,
+        );
+
+      if (includeVariants && productData.productKind === "variantParent" && productData.isArchived !== true) {
+        const options = await require("./variantCatalogV1").publicRows(storeRef.firestore, storeRef, productSnapshot.id, reader);
+        if (sectionProducts.length + options.length > MAX_DYNAMIC_PRODUCTS_PER_SECTION) {
+          throw new HttpsError("failed-precondition", "As opções excedem o limite da seção dinâmica. Publique esse pai na seleção principal.");
+        }
+        sectionProducts.push(...options.map((row, i) => ({...row, position: sectionProducts.length + i, categoryName: productData.categoryName || ""})));
+        if (options.length) allowedProductIds.add(productSnapshot.id);
+        continue;
+      }
+
+      if (!product) {
+        continue;
+      }
+
+      sectionProducts.push(product);
+
+      allowedProductIds.add(
+          productSnapshot.id,
+      );
+    }
+
+    if (sectionProducts.length > 0) {
+      sections.push({
+        id: definition.id,
+        title: definition.title,
+        products: sectionProducts,
+      });
+    }
+  }
+
+  return {
+    sections,
+    allowedProductIds,
+  };
+}
+
+function getCatalogTokenEncryptionKey() {
+  const rawKey = normalizeString(
+      catalogTokenEncryptionKey.value(),
+  );
+
+  if (!rawKey) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Chave de criptografia dos tokens de catálogo não configurada.",
+    );
+  }
+
+  let key;
+
+  try {
+    key = Buffer.from(rawKey, "base64");
+  } catch (error) {
+    console.error(
+        "[createCatalog] Falha ao decodificar chave Base64:",
+        error,
+    );
+
+    throw new HttpsError(
+        "internal",
+        "A chave de criptografia do catálogo possui formato inválido.",
+    );
+  }
+
+  if (key.length !== 32) {
+    console.error(
+        "[createCatalog] Chave inválida. Bytes encontrados:",
+        key.length,
+    );
+
+    throw new HttpsError(
+        "internal",
+        "A chave de criptografia do catálogo deve possuir exatamente 32 bytes.",
+    );
+  }
+
+  return key;
+}
+
+
+function buildPublicSlugBase(value) {
+  const normalized = normalizeString(value)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60)
+      .replace(/-+$/g, "");
+
+  return normalized || "loja";
+}
+
+async function ensurePublicStoreSlug(db, storeRef, knownStoreData) {
+  const knownPublicSlug = normalizeString(
+      knownStoreData?.publicSlug,
+  );
+
+  if (knownPublicSlug) {
+    return knownPublicSlug;
+  }
+
+  const publicSlugBase = buildPublicSlugBase(
+      knownStoreData?.name,
+  );
+
+  const publicSlugFallback =
+    `${publicSlugBase}-${storeRef.id}`;
+
+  const publicSlugBaseRef = db
+      .collection("storePublicSlugs")
+      .doc(publicSlugBase);
+
+  const publicSlugFallbackRef = db
+      .collection("storePublicSlugs")
+      .doc(publicSlugFallback);
+
+  return db.runTransaction(async (transaction) => {
+    const currentStoreSnapshot =
+      await transaction.get(storeRef);
+
+    if (!currentStoreSnapshot.exists) {
+      throw new HttpsError(
+          "not-found",
+          "Loja não encontrada.",
+      );
+    }
+
+    const currentStoreData =
+      currentStoreSnapshot.data() || {};
+
+    const existingPublicSlug = normalizeString(
+        currentStoreData.publicSlug,
+    );
+
+    if (existingPublicSlug) {
+      return existingPublicSlug;
+    }
+
+    const publicSlugBaseSnapshot =
+      await transaction.get(publicSlugBaseRef);
+
+    const publicSlugFallbackSnapshot =
+      await transaction.get(publicSlugFallbackRef);
+
+    let publicSlug;
+    let publicSlugRef;
+    let publicSlugSnapshot;
+
+    const baseOwnerStoreId = normalizeString(
+        publicSlugBaseSnapshot.data()?.storeId,
+    );
+
+    const fallbackOwnerStoreId = normalizeString(
+        publicSlugFallbackSnapshot.data()?.storeId,
+    );
+
+    if (
+      !publicSlugBaseSnapshot.exists ||
+      baseOwnerStoreId === storeRef.id
+    ) {
+      publicSlug = publicSlugBase;
+      publicSlugRef = publicSlugBaseRef;
+      publicSlugSnapshot = publicSlugBaseSnapshot;
+    } else if (
+      !publicSlugFallbackSnapshot.exists ||
+      fallbackOwnerStoreId === storeRef.id
+    ) {
+      publicSlug = publicSlugFallback;
+      publicSlugRef = publicSlugFallbackRef;
+      publicSlugSnapshot = publicSlugFallbackSnapshot;
+    } else {
+      throw new HttpsError(
+          "already-exists",
+          "Não foi possível reservar uma URL pública para esta loja.",
+      );
+    }
+
+    transaction.set(
+        storeRef,
+        { publicSlug },
+        { merge: true },
+    );
+
+    if (!publicSlugSnapshot.exists) {
+      transaction.set(
+          publicSlugRef,
+          {
+            storeId: storeRef.id,
+            publicSlug,
+            createdAt:
+              FieldValue.serverTimestamp(),
+            createdBy: "system:createCatalog:publicSlug",
+          },
+      );
+    }
+
+    return publicSlug;
+  });
+}
+
+function encryptCatalogPublicToken(publicToken) {
+  const key = getCatalogTokenEncryptionKey();
+
+  const iv = crypto.randomBytes(12);
+
+  const cipher = crypto.createCipheriv(
+      ENCRYPTION_ALGORITHM,
+      key,
+      iv,
+  );
+
+  const encrypted = Buffer.concat([
+    cipher.update(publicToken, "utf8"),
+    cipher.final(),
+  ]);
+
+  const authTag = cipher.getAuthTag();
+
+  return {
+    ciphertext: encrypted.toString("base64"),
+    iv: iv.toString("base64"),
+    authTag: authTag.toString("base64"),
+    version: ENCRYPTION_VERSION,
+  };
+}
+
+
+function decryptCatalogPublicToken(encryptedToken) {
+  try {
+    if (
+      !encryptedToken ||
+      typeof encryptedToken !== "object"
+    ) {
+      throw new Error(
+          "Token público criptografado não informado.",
+      );
+    }
+
+    const version = Number(encryptedToken.version);
+
+    if (version !== ENCRYPTION_VERSION) {
+      throw new Error(
+          `Versão de criptografia não suportada: ${version}.`,
+      );
+    }
+
+    const key = getCatalogTokenEncryptionKey();
+
+    const iv = Buffer.from(
+        normalizeString(encryptedToken.iv),
+        "base64",
+    );
+
+    const authTag = Buffer.from(
+        normalizeString(encryptedToken.authTag),
+        "base64",
+    );
+
+    const ciphertext = Buffer.from(
+        normalizeString(encryptedToken.ciphertext),
+        "base64",
+    );
+
+    if (
+      iv.length !== 12 ||
+      authTag.length !== 16 ||
+      ciphertext.length === 0
+    ) {
+      throw new Error(
+          "Token público criptografado está incompleto ou inválido.",
+      );
+    }
+
+    const decipher = crypto.createDecipheriv(
+        ENCRYPTION_ALGORITHM,
+        key,
+        iv,
+    );
+
+    decipher.setAuthTag(authTag);
+
+    const decrypted = Buffer.concat([
+      decipher.update(ciphertext),
+      decipher.final(),
+    ]);
+
+    const publicToken = decrypted
+        .toString("utf8")
+        .trim();
+
+    if (!publicToken) {
+      throw new Error(
+          "Token público descriptografado ficou vazio.",
+      );
+    }
+
+    return publicToken;
+  } catch (error) {
+    console.error(
+        "[createCatalog] Falha ao descriptografar token público:",
+        error.message,
+    );
+
+    throw new HttpsError(
+        "failed-precondition",
+        "Não foi possível recuperar o token público do catálogo.",
+    );
+  }
+}
+
+function generatePublicToken() {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+function hashPublicToken(token) {
+  return crypto
+      .createHash("sha256")
+      .update(token, "utf8")
+      .digest("hex");
+}
+
+function normalizeRole(value) {
+  const role = normalizeString(value).toLowerCase();
+
+  switch (role) {
+    case "admin":
+      return "admin";
+
+    case "gerente":
+      return "gerente";
+
+    case "operador":
+    case "caixa":
+    case "vendedor":
+      return "operador";
+
+    default:
+      return null;
+  }
+}
+
+function validateProductIds(data) {
+  if (!Array.isArray(data?.productIds) || data.productIds.length === 0) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Informe pelo menos um produto.",
+    );
+  }
+
+  if (data.productIds.length > MAX_PRODUCTS) {
+    throw new HttpsError(
+        "invalid-argument",
+        `O catálogo pode possuir no máximo ${MAX_PRODUCTS} produtos.`,
+    );
+  }
+
+  const normalizedProductIds = data.productIds.map((value) => {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Todos os productIds devem ser strings válidas.",
+      );
+    }
+
+    const productId = value.trim();
+
+    if (productId.includes("/")) {
+      throw new HttpsError(
+          "invalid-argument",
+          "productId inválido.",
+      );
+    }
+
+    return productId;
+  });
+
+  const productIds = [...new Set(normalizedProductIds)];
+
+  return productIds;
+}
+
+function validateInput(data) {
+  const title = normalizeString(data?.title);
+
+  if (!title) {
+    throw new HttpsError(
+        "invalid-argument",
+        "O título do catálogo é obrigatório.",
+    );
+  }
+
+  if (title.length > MAX_TITLE_LENGTH) {
+    throw new HttpsError(
+        "invalid-argument",
+        `O título deve possuir no máximo ${MAX_TITLE_LENGTH} caracteres.`,
+    );
+  }
+
+  const productIds = validateProductIds(data);
+
+  const expiresInDays = data?.expiresInDays;
+
+  if (
+    !Number.isInteger(expiresInDays) ||
+    expiresInDays < MIN_EXPIRATION_DAYS ||
+    expiresInDays > MAX_EXPIRATION_DAYS
+  ) {
+    throw new HttpsError(
+        "invalid-argument",
+        `expiresInDays deve ser um inteiro entre ${MIN_EXPIRATION_DAYS} e ${MAX_EXPIRATION_DAYS}.`,
+    );
+  }
+
+  return {
+    title,
+    productIds,
+    expiresInDays,
+  };
+}
+
+function validateCatalogProduct(productSnapshot, productId) {
+  if (!productSnapshot.exists) {
+    throw new HttpsError(
+        "not-found",
+        `Produto não encontrado: ${productId}.`,
+    );
+  }
+
+  const productData = productSnapshot.data() || {};
+
+  if (productData.isArchived === true) {
+    throw new HttpsError(
+        "failed-precondition",
+        `O produto ${productId} está arquivado e não pode ser publicado.`,
+    );
+  }
+
+  // Selecting a parent explicitly publishes its active options, never the parent.
+  if (productData.productKind === "variantParent") {
+    if (productData.variantSchemaVersion !== 1 || productData.quantidade !== 0 ||
+        !Array.isArray(productData.lotes) || productData.lotes.length) {
+      throw new HttpsError("failed-precondition", "Estrutura do produto pai inválida.");
+    }
+    return;
+  }
+  const availableQuantity = Number(productData.quantidade ?? 0);
+
+  if (
+    !Number.isFinite(availableQuantity) ||
+    availableQuantity <= 0
+  ) {
+    throw new HttpsError(
+        "failed-precondition",
+        `O produto ${productId} está sem estoque e não pode ser publicado.`,
+    );
+  }
+
+}
+
+async function authorizeCatalogDraft(db, uid) {
+  const userSnapshot = await db
+      .collection("users")
+      .doc(uid)
+      .get();
+
+  if (!userSnapshot.exists) {
+    throw new HttpsError(
+        "permission-denied",
+        "Perfil do usuário não encontrado.",
+    );
+  }
+
+  const userData = userSnapshot.data() || {};
+  const accessStatus = normalizeString(userData.accessStatus)
+      .toLowerCase();
+
+  if (accessStatus === "revoked") {
+    throw new HttpsError(
+        "permission-denied",
+        "O acesso deste usuário está revogado.",
+    );
+  }
+
+  const userRole = normalizeRole(userData.role);
+
+  if (!userRole) {
+    throw new HttpsError(
+        "permission-denied",
+        "O perfil deste usuário não possui um papel válido.",
+    );
+  }
+
+  const storeId = normalizeString(userData.storeId);
+
+  if (!storeId) {
+    throw new HttpsError(
+        "failed-precondition",
+        "Nenhuma loja válida está vinculada ao usuário.",
+    );
+  }
+
+  // ======================================================================
+  // 4. LOJA / ASSINATURA
+  // ======================================================================
+
+  const storeSnapshot = await db
+      .collection("stores")
+      .doc(storeId)
+      .get();
+
+  if (!storeSnapshot.exists) {
+    throw new HttpsError(
+        "not-found",
+        "Loja não encontrada.",
+    );
+  }
+
+  const storeData = storeSnapshot.data() || {};
+  const subscriptionStatus = normalizeString(
+      storeData.subscriptionStatus,
+  ).toLowerCase();
+
+  if (!ALLOWED_SUBSCRIPTION_STATUS.has(subscriptionStatus)) {
+    throw new HttpsError(
+        "failed-precondition",
+        "A assinatura da loja está inativa ou expirada.",
+    );
+  }
+  return {storeId, storeSnapshot, storeData};
+}
+
+// Administrative draft: reads only; no catalog, slug or token is allocated.
+const previewCatalog = onCall(
+    {timeoutSeconds: 30, memory: "256MiB"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Authentication required.");
+      }
+      const {title, productIds} = validateInput(request.data);
+      const {value: dynamicSections} = validateDynamicSectionsField(
+          request.data, {defaultWhenMissing: true},
+      );
+      const db = admin.firestore();
+      const {storeSnapshot, storeData} =
+        await authorizeCatalogDraft(db, request.auth.uid);
+      const storeRef = storeSnapshot.ref;
+      if (Object.values(dynamicSections).some((section) => section.enabled)) {
+        await validateDynamicCategoryAuthority(dynamicSections, storeRef, db);
+      }
+      const snapshots = await db.getAll(
+          ...productIds.map((id) => storeRef.collection("products").doc(id)),
+      );
+      const products = snapshots.map((snapshot, position) => {
+        validateCatalogProduct(snapshot, productIds[position]);
+        return projectDynamicCatalogProduct(snapshot, position);
+      });
+      const {sections} = await resolveDynamicCatalogSections({
+        storeRef,
+        storedDynamicSections: dynamicSections,
+        excludedProductIds: new Set(productIds),
+      });
+      return {
+        success: true,
+        store: {
+          name: normalizeString(storeData.name) ||
+            normalizeString(storeData.storeName) || "Loja",
+          logoUrl: normalizeString(storeData.logoUrl),
+          phone: normalizeString(storeData.phone),
+        },
+        catalog: {title, productCount: products.length},
+        products,
+        dynamicSections: sections,
+      };
+    },
+);
+
+const createCatalog = onCall(
+    {
+      secrets: [catalogTokenEncryptionKey],
+      timeoutSeconds: 30,
+      memory: "256MiB",
+    },
+    async (request) => {
+      // ======================================================================
+      // 1. AUTENTICAÇÃO
+      // ======================================================================
+
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated",
+            "É necessário estar autenticado.",
+        );
+      }
+
+      const uid = request.auth.uid;
+
+      // ======================================================================
+      // 2. CONTRATO DE ENTRADA
+      // ======================================================================
+
+      const {
+        title,
+        productIds,
+        expiresInDays,
+      } = validateInput(request.data);
+
+
+        const {
+          value: dynamicSections,
+        } = validateDynamicSectionsField(
+            request.data,
+            {
+              defaultWhenMissing: true,
+            },
+        );
+      const db = admin.firestore();
+
+      // ======================================================================
+      // 3. USUÁRIO
+      // ======================================================================
+
+      const {storeId, storeSnapshot, storeData} =
+        await authorizeCatalogDraft(db, uid);
+
+      // ======================================================================
+      // 5. PRODUTOS SELECIONADOS
+      // ======================================================================
+
+      const hasEnabledDynamicSection = Object.values(dynamicSections).some(
+          (section) => section.enabled === true,
+      );
+      if (hasEnabledDynamicSection) {
+        await validateDynamicCategoryAuthority(
+            dynamicSections, storeSnapshot.ref, db,
+        );
+      }
+
+      const productsCollection = db
+          .collection("stores")
+          .doc(storeId)
+          .collection("products");
+
+      const productRefs = productIds.map(
+          (productId) => productsCollection.doc(productId),
+      );
+
+      const productSnapshots = await db.getAll(...productRefs);
+
+      const validatedProducts = [];
+
+      for (let index = 0; index < productSnapshots.length; index += 1) {
+        const productSnapshot = productSnapshots[index];
+        const productId = productIds[index];
+
+        validateCatalogProduct(productSnapshot, productId);
+
+        validatedProducts.push({
+          productId,
+        });
+      }
+
+      // ======================================================================
+      // 5.1 SLUG PÚBLICO DA LOJA
+      // ======================================================================
+
+      const publicSlug = await ensurePublicStoreSlug(
+          db,
+          storeSnapshot.ref,
+          storeData,
+      );
+
+      // ======================================================================
+      // 6. TOKEN PÚBLICO
+      // ======================================================================
+
+      const publicToken = generatePublicToken();
+      const publicTokenHash = hashPublicToken(publicToken);
+      const publicTokenEncrypted = encryptCatalogPublicToken(publicToken);
+
+
+      // ======================================================================
+      // 7. DATAS CONTROLADAS PELO BACKEND
+      // ======================================================================
+
+      const nowMilliseconds = Date.now();
+
+      const expiresAt = Timestamp.fromMillis(
+          nowMilliseconds + (expiresInDays * 24 * 60 * 60 * 1000),
+      );
+
+      const serverTimestamp =
+        FieldValue.serverTimestamp();
+
+      // ======================================================================
+      // 8. REFERÊNCIAS DO CATÁLOGO
+      // ======================================================================
+
+      const catalogRef = db
+          .collection("stores")
+          .doc(storeId)
+          .collection("catalogs")
+          .doc();
+
+      const catalogId = catalogRef.id;
+
+      const publicTokenRef = db
+          .collection("catalogPublicTokens")
+          .doc(publicTokenHash);
+
+      // ======================================================================
+      // 9. WRITE BATCH ATÔMICO
+      // ======================================================================
+
+      const batch = db.batch();
+
+      batch.create(
+          catalogRef,
+          {
+            status: "active",
+            title,
+            createdAt: serverTimestamp,
+            createdByUid: uid,
+            expiresAt,
+            publicTokenHash,
+            productCount: validatedProducts.length,
+            publicTokenEncrypted,
+              dynamicSections,
+          },
+      );
+
+      for (let index = 0; index < validatedProducts.length; index += 1) {
+        const validatedProduct = validatedProducts[index];
+
+        const itemRef = catalogRef
+            .collection("items")
+            .doc();
+
+        batch.create(
+            itemRef,
+            {
+              productId: validatedProduct.productId,
+              position: index,
+              addedAt: serverTimestamp,
+            },
+        );
+      }
+
+      batch.create(
+          publicTokenRef,
+          {
+            storeId,
+            catalogId,
+            createdAt: serverTimestamp,
+          },
+      );
+
+      // ======================================================================
+      // 10. COMMIT
+      // ======================================================================
+
+      await batch.commit();
+
+      // ======================================================================
+      // 11. RETORNO
+      // ======================================================================
+
+      return {
+        success: true,
+        catalogId,
+        publicSlug,
+        publicToken,
+        expiresAt: expiresAt.toDate().toISOString(),
+        productCount: validatedProducts.length,
+      };
+    },
+);
+
+
+/**
+ * Retorna os dados internos necessarios para editar um catalogo.
+ *
+ * Importante:
+ * - a loja e resolvida exclusivamente pelo usuario autenticado;
+ * - publicToken/publicTokenEncrypted/publicTokenHash nao sao retornados;
+ * - nenhuma identidade publica do catalogo e alterada.
+ */
+const getCatalogForEdit = onCall(
+    {
+      timeoutSeconds: 30,
+      memory: "256MiB",
+    },
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated",
+            "É necessário estar autenticado.",
+        );
+      }
+
+      const uid = request.auth.uid;
+      const db = admin.firestore();
+
+      const catalogId = normalizeString(
+          request.data?.catalogId,
+      );
+
+      if (!catalogId || catalogId.includes("/")) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Catálogo inválido.",
+        );
+      }
+
+      const userSnapshot = await db
+          .collection("users")
+          .doc(uid)
+          .get();
+
+      if (!userSnapshot.exists) {
+        throw new HttpsError(
+            "permission-denied",
+            "Perfil do usuário não encontrado.",
+        );
+      }
+
+      const userData = userSnapshot.data() || {};
+
+      const accessStatus = normalizeString(
+          userData.accessStatus,
+      ).toLowerCase();
+
+      if (accessStatus === "revoked") {
+        throw new HttpsError(
+            "permission-denied",
+            "O acesso deste usuário está revogado.",
+        );
+      }
+
+      const userRole = normalizeRole(userData.role);
+
+      if (!userRole) {
+        throw new HttpsError(
+            "permission-denied",
+            "O perfil deste usuário não possui um papel válido.",
+        );
+      }
+
+      const storeId = normalizeString(userData.storeId);
+
+      if (!storeId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Nenhuma loja válida está vinculada ao usuário.",
+        );
+      }
+
+      const storeRef = db
+          .collection("stores")
+          .doc(storeId);
+
+      const catalogRef = storeRef
+          .collection("catalogs")
+          .doc(catalogId);
+
+      // Internal reads remain available, as in listCatalogs.
+      return db.runTransaction(async (transaction) => {
+        const catalogSnapshot = await transaction.get(catalogRef);
+
+        if (!catalogSnapshot.exists) {
+          throw new HttpsError(
+              "not-found",
+              "Catálogo não encontrado.",
+          );
+        }
+
+        const catalogData = catalogSnapshot.data() || {};
+
+        const itemsSnapshot = await transaction.get(
+            catalogRef.collection("items").orderBy("position", "asc"),
+        );
+
+        const productIds = [];
+
+        for (const itemSnapshot of itemsSnapshot.docs) {
+          const productId = normalizeString(
+              itemSnapshot.data()?.productId,
+          );
+
+          if (productId) {
+            productIds.push(productId);
+          }
+        }
+
+        const expiresAt = catalogData.expiresAt;
+
+        return {
+          success: true,
+          catalog: {
+            catalogId: catalogSnapshot.id,
+            title: normalizeString(catalogData.title),
+            status:
+              normalizeString(catalogData.status).toLowerCase() ||
+              "unknown",
+            expiresAt:
+              expiresAt &&
+              typeof expiresAt.toDate === "function" ?
+                expiresAt.toDate().toISOString() :
+                null,
+            productCount: productIds.length,
+            productIds,
+              dynamicSections:
+                normalizeStoredDynamicSections(
+                    catalogData.dynamicSections,
+                ),
+
+          },
+        };
+      }, {readOnly: true});
+    },
+);
+
+
+/**
+ * Atualiza os dados editaveis de um catalogo existente.
+ *
+ * Preserva obrigatoriamente:
+ * - catalogId
+ * - publicTokenHash
+ * - publicTokenEncrypted
+ * - publicSlug da loja
+ * - createdAt
+ * - createdByUid
+ *
+ * expiresAt so e alterado quando expiresAtIso for enviado.
+ */
+const updateCatalog = onCall(
+    {
+      timeoutSeconds: 30,
+      memory: "256MiB",
+    },
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated",
+            "É necessário estar autenticado.",
+        );
+      }
+
+      const uid = request.auth.uid;
+      const db = admin.firestore();
+
+      const catalogId = normalizeString(
+          request.data?.catalogId,
+      );
+
+      const title = normalizeString(
+          request.data?.title,
+      );
+
+      if (!catalogId || catalogId.includes("/")) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Catálogo inválido.",
+        );
+      }
+
+      if (!title || title.length > MAX_TITLE_LENGTH) {
+        throw new HttpsError(
+            "invalid-argument",
+            "O título do catálogo deve ter entre 1 e 100 caracteres.",
+        );
+      }
+
+      const productIds = validateProductIds(request.data);
+
+
+        const dynamicSectionsInput =
+          validateDynamicSectionsField(
+              request.data,
+          );
+      const userSnapshot = await db
+          .collection("users")
+          .doc(uid)
+          .get();
+
+      if (!userSnapshot.exists) {
+        throw new HttpsError(
+            "permission-denied",
+            "Perfil do usuário não encontrado.",
+        );
+      }
+
+      const userData = userSnapshot.data() || {};
+
+      const accessStatus = normalizeString(
+          userData.accessStatus,
+      ).toLowerCase();
+
+      if (accessStatus === "revoked") {
+        throw new HttpsError(
+            "permission-denied",
+            "O acesso deste usuário está revogado.",
+        );
+      }
+
+      const userRole = normalizeRole(userData.role);
+
+      if (!userRole) {
+        throw new HttpsError(
+            "permission-denied",
+            "O perfil deste usuário não possui um papel válido.",
+        );
+      }
+
+      const storeId = normalizeString(userData.storeId);
+
+      if (!storeId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Nenhuma loja válida está vinculada ao usuário.",
+        );
+      }
+
+      const storeRef = db
+          .collection("stores")
+          .doc(storeId);
+
+      const catalogRef = storeRef.collection("catalogs").doc(catalogId);
+      const productRefs = productIds.map(
+          (productId) => storeRef.collection("products").doc(productId),
+      );
+
+      await db.runTransaction(async (transaction) => {
+        // Every edit reads and writes this parent: concurrent edits conflict.
+        const catalogSnapshot = await transaction.get(catalogRef);
+        if (!catalogSnapshot.exists) {
+          throw new HttpsError("not-found", "Catálogo não encontrado.");
+        }
+
+        const storeSnapshot = await transaction.get(storeRef);
+        if (!storeSnapshot.exists) {
+          throw new HttpsError("not-found", "Loja não encontrada.");
+        }
+        const subscriptionStatus = normalizeString(
+            storeSnapshot.data()?.subscriptionStatus,
+        ).toLowerCase();
+        if (!ALLOWED_SUBSCRIPTION_STATUS.has(subscriptionStatus)) {
+          throw new HttpsError(
+              "failed-precondition",
+              "A assinatura da loja está inativa ou expirada.",
+          );
+        }
+
+        const itemsSnapshot = await transaction.get(
+            catalogRef.collection("items"),
+        );
+        if (itemsSnapshot.size > MAX_PRODUCTS) {
+          throw new HttpsError(
+              "failed-precondition",
+              `Catálogo inconsistente: mais de ${MAX_PRODUCTS} itens existentes.`,
+          );
+        }
+        const productSnapshots = await transaction.getAll(...productRefs);
+        productSnapshots.forEach((snapshot, index) => {
+          validateCatalogProduct(snapshot, productIds[index]);
+        });
+
+        const catalogUpdates = {
+          title,
+          productCount: productIds.length,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedByUid: uid,
+        };
+
+          if (dynamicSectionsInput.hasField && !dynamicSectionsEqual(
+              dynamicSectionsInput.value,
+              catalogSnapshot.data().dynamicSections,
+          )) {
+            await validateDynamicCategoryAuthority(
+                dynamicSectionsInput.value, storeRef, transaction,
+            );
+            catalogUpdates.dynamicSections =
+              dynamicSectionsInput.value;
+          }
+
+
+        if (Object.prototype.hasOwnProperty.call(request.data, "expiresAtIso")) {
+          const value = request.data.expiresAtIso;
+          const milliseconds = typeof value === "string" && value.trim() ?
+            new Date(value).getTime() : NaN;
+          const now = Date.now();
+          if (!Number.isFinite(milliseconds) || milliseconds <= now ||
+              milliseconds > now + MAX_EXPIRATION_DAYS * 24 * 60 * 60 * 1000) {
+            throw new HttpsError(
+                "invalid-argument",
+                "A validade deve ser uma data futura em até 30 dias.",
+            );
+          }
+          catalogUpdates.expiresAt = Timestamp.fromMillis(milliseconds);
+        }
+
+        // At most 200 deletes + 200 creates + 1 parent update = 401 writes.
+        for (const itemSnapshot of itemsSnapshot.docs) {
+          transaction.delete(itemSnapshot.ref);
+        }
+        productIds.forEach((productId, position) => {
+          transaction.create(catalogRef.collection("items").doc(), {
+            productId,
+            position,
+            addedAt: FieldValue.serverTimestamp(),
+          });
+        });
+        transaction.update(catalogRef, catalogUpdates);
+      });
+
+      return {
+        success: true,
+        catalogId,
+        productCount: productIds.length,
+      };
+    },
+);
+const listCatalogs = onCall(
+    {
+      secrets: [catalogTokenEncryptionKey],
+      timeoutSeconds: 30,
+      memory: "256MiB",
+    },
+    async (request) => {
+      // ======================================================================
+      // 1. AUTENTICAÇÃO
+      // ======================================================================
+
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated",
+            "É necessário estar autenticado.",
+        );
+      }
+
+      const uid = request.auth.uid;
+      const db = admin.firestore();
+
+      // ======================================================================
+      // 2. USUÁRIO / LOJA
+      // ======================================================================
+
+      const userSnapshot = await db
+          .collection("users")
+          .doc(uid)
+          .get();
+
+      if (!userSnapshot.exists) {
+        throw new HttpsError(
+            "permission-denied",
+            "Perfil do usuário não encontrado.",
+        );
+      }
+
+      const userData = userSnapshot.data() || {};
+
+      const accessStatus = normalizeString(
+          userData.accessStatus,
+      ).toLowerCase();
+
+      if (accessStatus === "revoked") {
+        throw new HttpsError(
+            "permission-denied",
+            "O acesso deste usuário está revogado.",
+        );
+      }
+
+      const userRole = normalizeRole(userData.role);
+
+      if (!userRole) {
+        throw new HttpsError(
+            "permission-denied",
+            "O perfil deste usuário não possui um papel válido.",
+        );
+      }
+
+      const storeId = normalizeString(userData.storeId);
+
+      if (!storeId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Nenhuma loja válida está vinculada ao usuário.",
+        );
+      }
+
+      const storeSnapshot = await db
+          .collection("stores")
+          .doc(storeId)
+          .get();
+
+      if (!storeSnapshot.exists) {
+        throw new HttpsError(
+            "not-found",
+            "Loja não encontrada.",
+        );
+      }
+
+      const storeData = storeSnapshot.data() || {};
+      const publicSlug = normalizeString(storeData.publicSlug);
+
+      // ======================================================================
+      // 3. CATÁLOGOS
+      // ======================================================================
+
+      const catalogsSnapshot = await storeSnapshot.ref
+          .collection("catalogs")
+          .orderBy("createdAt", "desc")
+          .limit(50)
+          .get();
+
+      const catalogs = [];
+
+      for (const catalogSnapshot of catalogsSnapshot.docs) {
+        const catalogData = catalogSnapshot.data() || {};
+
+        let publicUrl = null;
+        let linkAvailable = false;
+
+        const encryptedToken =
+          catalogData.publicTokenEncrypted;
+
+        if (
+          encryptedToken &&
+          publicSlug
+        ) {
+          try {
+            const publicToken =
+              decryptCatalogPublicToken(encryptedToken);
+
+            publicUrl =
+              `https://app.storeconnect.com.br/${publicSlug}/catalogo/${publicToken}`;
+
+            linkAvailable = true;
+          } catch (error) {
+            console.error(
+                `[listCatalogs] Link indisponível para catálogo ${catalogSnapshot.id}:`,
+                error.message,
+            );
+          }
+        }
+
+        const createdAt = catalogData.createdAt;
+        const expiresAt = catalogData.expiresAt;
+
+        const storedStatus =
+          normalizeString(catalogData.status).toLowerCase() ||
+          "unknown";
+
+        const isExpired =
+          storedStatus === "active" &&
+          expiresAt &&
+          typeof expiresAt.toMillis === "function" &&
+          Date.now() >= expiresAt.toMillis();
+
+        const effectiveStatus =
+          isExpired ? "expired" : storedStatus;
+
+        catalogs.push({
+          catalogId: catalogSnapshot.id,
+          title: normalizeString(catalogData.title),
+          status: effectiveStatus,
+          createdAt:
+            createdAt &&
+            typeof createdAt.toDate === "function" ?
+              createdAt.toDate().toISOString() :
+              null,
+          expiresAt:
+            expiresAt &&
+            typeof expiresAt.toDate === "function" ?
+              expiresAt.toDate().toISOString() :
+              null,
+          productCount:
+            Number(catalogData.productCount ?? 0),
+          publicSlug,
+          publicUrl,
+          linkAvailable,
+        });
+      }
+
+      // ======================================================================
+      // 4. RETORNO
+      // ======================================================================
+
+      return {
+        success: true,
+        catalogs,
+      };
+    },
+);
+
+// F7.8-C1: leitura interna, sem enriquecimento ou escrita.
+const listCatalogRequests = onCall(
+    {timeoutSeconds: 30, memory: "256MiB"},
+    async (request) => {
+      // Mesma semantica de autorizacao de listCatalogs.
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated", "É necessário estar autenticado.",
+        );
+      }
+
+      const db = admin.firestore();
+      const userSnapshot = await db.collection("users")
+          .doc(request.auth.uid).get();
+      if (!userSnapshot.exists) {
+        throw new HttpsError(
+            "permission-denied", "Perfil do usuário não encontrado.",
+        );
+      }
+
+      const userData = userSnapshot.data() || {};
+      if (normalizeString(userData.accessStatus).toLowerCase() === "revoked") {
+        throw new HttpsError(
+            "permission-denied", "O acesso deste usuário está revogado.",
+        );
+      }
+      if (!normalizeRole(userData.role)) {
+        throw new HttpsError(
+            "permission-denied",
+            "O perfil deste usuário não possui um papel válido.",
+        );
+      }
+      const storeId = normalizeString(userData.storeId);
+      if (!storeId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Nenhuma loja válida está vinculada ao usuário.",
+        );
+      }
+      const storeSnapshot = await db.collection("stores").doc(storeId).get();
+      if (!storeSnapshot.exists) {
+        throw new HttpsError("not-found", "Loja não encontrada.");
+      }
+
+      const data = request.data;
+      if (data != null && (
+        typeof data !== "object" || Array.isArray(data) ||
+        Object.getPrototypeOf(data) !== Object.prototype ||
+        Object.keys(data).length !== 0
+      )) {
+        throw new HttpsError(
+            "invalid-argument", "Esta operação não aceita parâmetros.",
+        );
+      }
+
+      const requestsRef =
+        storeSnapshot.ref.collection("catalogRequests");
+
+      const [snapshot, openCountSnapshot] = await Promise.all([
+        requestsRef
+            .orderBy("createdAt", "desc")
+            .limit(50)
+            .get(),
+        requestsRef
+            .where("status", "in", ["pending", "in_progress"])
+            .count()
+            .get(),
+      ]);
+
+      const openRequestCount =
+        openCountSnapshot.data().count;
+      const requests = snapshot.docs.map((document) => {
+        const saved = document.data();
+        // Validacao estrutural: nao inventar valores nem definir novos status.
+        if (
+          !normalizeString(saved.catalogId) || saved.catalogId.includes("/") ||
+          !normalizeString(saved.status) || !normalizeString(saved.source) ||
+          !Number.isSafeInteger(saved.itemCount) || saved.itemCount < 1 ||
+          saved.itemCount > MAX_PRODUCTS ||
+          !Number.isSafeInteger(saved.totalUnits) ||
+          saved.totalUnits < saved.itemCount ||
+          typeof saved.totalAmount !== "number" ||
+          !Number.isFinite(saved.totalAmount) || saved.totalAmount < 0 ||
+          !Number.isSafeInteger(Math.round(saved.totalAmount * 100))
+        ) {
+          throw new HttpsError(
+              "internal", "Não foi possível carregar as solicitações.",
+          );
+        }
+        try {
+          validateCatalogRequestLifecycle(saved, isFirestoreTimestamp);
+        } catch (error) {
+          throw new HttpsError(
+              "internal", "Não foi possível carregar as solicitações.",
+          );
+        }
+        let lifecycle;
+        try {
+          lifecycle = projectCatalogRequestListFields(saved);
+        } catch (error) {
+          throw new HttpsError(
+              "internal", "Não foi possível carregar as solicitações.",
+          );
+        }
+
+        return {
+          requestId: document.id,
+          catalogId: saved.catalogId,
+          status: saved.status,
+          itemCount: saved.itemCount,
+          totalUnits: saved.totalUnits,
+          totalAmount: saved.totalAmount,
+          createdAt: serializeTimestamp(saved.createdAt),
+          updatedAt: serializeTimestamp(saved.updatedAt),
+          source: saved.source,
+          ...lifecycle,
+        };
+      });
+      return {success: true, requests, openRequestCount};
+    },
+);
+
+// F7.8-C2: detalhe historico, exclusivamente a partir do snapshot persistido.
+const getCatalogRequest = onCall(
+    {timeoutSeconds: 30, memory: "256MiB"},
+    async (request) => {
+      // Mesma semantica de autorizacao de listCatalogRequests/listCatalogs.
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated", "É necessário estar autenticado.",
+        );
+      }
+      const db = admin.firestore();
+      const userSnapshot = await db.collection("users")
+          .doc(request.auth.uid).get();
+      if (!userSnapshot.exists) {
+        throw new HttpsError(
+            "permission-denied", "Perfil do usuário não encontrado.",
+        );
+      }
+      const userData = userSnapshot.data() || {};
+      if (normalizeString(userData.accessStatus).toLowerCase() === "revoked") {
+        throw new HttpsError(
+            "permission-denied", "O acesso deste usuário está revogado.",
+        );
+      }
+      if (!normalizeRole(userData.role)) {
+        throw new HttpsError(
+            "permission-denied",
+            "O perfil deste usuário não possui um papel válido.",
+        );
+      }
+      const storeId = normalizeString(userData.storeId);
+      if (!storeId) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Nenhuma loja válida está vinculada ao usuário.",
+        );
+      }
+      const storeSnapshot = await db.collection("stores").doc(storeId).get();
+      if (!storeSnapshot.exists) {
+        throw new HttpsError("not-found", "Loja não encontrada.");
+      }
+
+      const data = request.data;
+      const requestId = normalizeString(data?.requestId);
+      if (
+        !data || typeof data !== "object" || Array.isArray(data) ||
+        Object.getPrototypeOf(data) !== Object.prototype ||
+        Object.keys(data).length !== 1 ||
+        !Object.prototype.hasOwnProperty.call(data, "requestId") ||
+        !requestId || requestId.includes("/") ||
+        requestId === "." || requestId === ".." ||
+        /^__.*__$/.test(requestId) || Buffer.byteLength(requestId, "utf8") > 1500
+      ) {
+        throw new HttpsError("invalid-argument", "Solicitação inválida.");
+      }
+
+      const document = await storeSnapshot.ref.collection("catalogRequests")
+          .doc(requestId).get();
+      if (!document.exists) {
+        throw new HttpsError("not-found", "Solicitação não encontrada.");
+      }
+      const saved = document.data();
+      const invalidSnapshot = () => new HttpsError(
+          "internal", "Não foi possível carregar a solicitação.",
+      );
+      const validMoney = (value) => typeof value === "number" &&
+        Number.isFinite(value) && value >= 0 &&
+        Number.isSafeInteger(Math.round(value * 100));
+      // Mesmos limites estruturais do pai usados na listagem.
+      if (
+        !normalizeString(saved.catalogId) || saved.catalogId.includes("/") ||
+        !normalizeString(saved.status) || !normalizeString(saved.source) ||
+        !Number.isSafeInteger(saved.itemCount) || saved.itemCount < 1 ||
+        saved.itemCount > MAX_PRODUCTS ||
+        !Number.isSafeInteger(saved.totalUnits) ||
+        saved.totalUnits < saved.itemCount || !validMoney(saved.totalAmount)
+      ) {
+        throw invalidSnapshot();
+      }
+      try {
+        validateCatalogRequestLifecycle(saved, isFirestoreTimestamp);
+      } catch (error) {
+        throw invalidSnapshot();
+      }
+      let lifecycle;
+      try {
+        lifecycle = projectCatalogRequestDetailFields(saved.requestVersion === 3 ? {...saved, requestVersion: 2} : saved);
+        if (saved.requestVersion === 3) lifecycle.requestVersion = 3;
+      } catch (error) {
+        throw invalidSnapshot();
+      }
+
+      // Sem limit: todos os itens. A ordem por ID nao e a ordem da selecao.
+      const itemsSnapshot = await document.ref.collection("items")
+          .orderBy(admin.firestore.FieldPath.documentId(), "asc").get();
+      if (itemsSnapshot.size !== saved.itemCount) {
+        throw invalidSnapshot();
+      }
+      const productIds = new Set();
+      const items = itemsSnapshot.docs.map((itemDocument) => {
+        const item = itemDocument.data();
+        const identity = saved.requestVersion === 3 ? JSON.stringify([item.productId, item.variantId ?? null]) : item.productId;
+        if (
+          !normalizeString(item.productId) || item.productId.includes("/") ||
+          productIds.has(identity) || !normalizeString(item.name) ||
+          !Number.isSafeInteger(item.quantity) || item.quantity < 1 ||
+          !validMoney(item.price) || !validMoney(item.subtotal)
+        ) {
+          throw invalidSnapshot();
+        }
+        productIds.add(identity);
+        return {
+          itemId: itemDocument.id,
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.subtotal,
+          ...(saved.requestVersion === 3 ? {schemaVersion: 3, variantId: item.variantId ?? null,
+            parentName: item.parentName ?? null, attributes: item.attributes ?? [], cod: item.cod ?? null,
+            unitPriceCents: item.unitPriceCents, subtotalCents: item.subtotalCents} : {}),
+        };
+      });
+      return {
+        success: true,
+        request: {
+          requestId: document.id,
+          catalogId: saved.catalogId,
+          status: saved.status,
+          itemCount: saved.itemCount,
+          totalUnits: saved.totalUnits,
+          totalAmount: saved.totalAmount,
+          createdAt: serializeTimestamp(saved.createdAt),
+          updatedAt: serializeTimestamp(saved.updatedAt),
+          source: saved.source,
+          ...lifecycle,
+          items,
+        },
+      };
+    },
+);
+
+// F7.9-D1: transição interna atômica do lifecycle da solicitação.
+const transitionCatalogRequest = onCall(
+    {timeoutSeconds: 30, memory: "256MiB"},
+    async (request) => {
+      if (!request.auth) {
+        throw new HttpsError(
+            "unauthenticated", "É necessário estar autenticado.",
+        );
+      }
+      const data = request.data;
+      const requestId = normalizeString(data?.requestId);
+      const action = data?.action;
+      if (
+        !data || typeof data !== "object" || Array.isArray(data) ||
+        Object.getPrototypeOf(data) !== Object.prototype ||
+        Object.keys(data).length !== 2 ||
+        !Object.prototype.hasOwnProperty.call(data, "requestId") ||
+        !Object.prototype.hasOwnProperty.call(data, "action") ||
+        !requestId || requestId.includes("/") || requestId === "." ||
+        requestId === ".." || /^__.*__$/.test(requestId) ||
+        Buffer.byteLength(requestId, "utf8") > 1500
+      ) {
+        throw new HttpsError("invalid-argument", "Solicitação inválida.");
+      }
+
+      const db = admin.firestore();
+      const uid = request.auth.uid;
+      const userRef = db.collection("users").doc(uid);
+      const userSnapshot = await userRef.get();
+      if (!userSnapshot.exists) {
+        throw new HttpsError(
+            "permission-denied", "Perfil do usuário não encontrado.",
+        );
+      }
+      const initialUser = userSnapshot.data() || {};
+      if (normalizeString(initialUser.accessStatus).toLowerCase() === "revoked") {
+        throw new HttpsError(
+            "permission-denied", "O acesso deste usuário está revogado.",
+        );
+      }
+      try {
+        normalizeCatalogRequestRole(initialUser.role);
+      } catch (error) {
+        throw new HttpsError(
+            "permission-denied", "O perfil deste usuário não possui um papel válido.",
+        );
+      }
+      const initialStoreId = normalizeString(initialUser.storeId);
+      if (!initialStoreId) {
+        throw new HttpsError(
+            "failed-precondition", "Nenhuma loja válida está vinculada ao usuário.",
+        );
+      }
+      const storeRef = db.collection("stores").doc(initialStoreId);
+      if (!(await storeRef.get()).exists) {
+        throw new HttpsError("not-found", "Loja não encontrada.");
+      }
+
+      const requestRef = storeRef.collection("catalogRequests").doc(requestId);
+      const auditRef = storeRef.collection("auditLogs").doc();
+      try {
+        const result = await db.runTransaction(async (transaction) => {
+          const freshUser = await transaction.get(userRef);
+          const freshStore = await transaction.get(storeRef);
+          const requestDocument = await transaction.get(requestRef);
+          if (!freshUser.exists) {
+            throw new HttpsError("permission-denied", "Perfil do usuário não encontrado.");
+          }
+          if (!freshStore.exists) {
+            throw new HttpsError("not-found", "Loja não encontrada.");
+          }
+          const userData = freshUser.data() || {};
+          if (normalizeString(userData.accessStatus).toLowerCase() === "revoked") {
+            throw new HttpsError("permission-denied", "O acesso deste usuário está revogado.");
+          }
+          let role;
+          try {
+            role = normalizeCatalogRequestRole(userData.role);
+          } catch (error) {
+            throw new HttpsError("permission-denied", "O perfil deste usuário não possui um papel válido.");
+          }
+          const storeId = normalizeString(userData.storeId);
+          if (storeId !== initialStoreId) {
+            throw new HttpsError("permission-denied", "A loja do usuário não corresponde à solicitação.");
+          }
+          if (!requestDocument.exists) {
+            throw new HttpsError("not-found", "Solicitação não encontrada.");
+          }
+          const saved = requestDocument.data() || {};
+          try {
+            validateCatalogRequestLifecycle(saved, isFirestoreTimestamp);
+          } catch (error) {
+            throw new HttpsError("internal", "Não foi possível atualizar a solicitação.");
+          }
+          let decision;
+          try {
+            decision = decideCatalogRequestTransition({
+              status: saved.status,
+              action,
+              role,
+              authUid: uid,
+              attendedByUid: saved.attendedByUid,
+              completedByUid: saved.completedByUid,
+              cancelledByUid: saved.cancelledByUid,
+            });
+          } catch (error) {
+            throw transitionContractError(error);
+          }
+          if (!decision.changed) {
+            return {changed: false, status: decision.status};
+          }
+          const actorName = resolveCatalogRequestActorName(userData);
+          const now = FieldValue.serverTimestamp();
+          const fieldPrefix = {
+            start: "attended",
+            complete: "completed",
+            cancel: "cancelled",
+          }[action];
+          const updates = {
+            status: decision.status,
+            updatedAt: now,
+          };
+          updates[fieldPrefix + "ByUid"] = uid;
+          updates[fieldPrefix + "ByName"] = actorName;
+          updates[fieldPrefix + "At"] = now;
+          transaction.update(requestRef, updates);
+          transaction.set(auditRef, {
+            action: {
+              start: "catalog_request_started",
+              complete: "catalog_request_completed",
+              cancel: "catalog_request_cancelled",
+            }[action],
+            entityType: "catalogRequest",
+            entityId: requestId,
+            storeId,
+            performedBy: {uid, role},
+            before: {status: saved.status},
+            after: {status: decision.status},
+            createdAt: now,
+          });
+          return {changed: true, status: decision.status};
+        });
+        return {success: true, requestId, ...result};
+      } catch (error) {
+        if (error instanceof CatalogRequestContractError) {
+          throw transitionContractError(error);
+        }
+        throw error;
+      }
+    },
+);
+
+const getPublicCatalog = onCall(
+    {
+      timeoutSeconds: 30,
+      memory: "256MiB",
+    },
+    async (request) => {
+      // ======================================================================
+      // F7.5-B1 - LEITURA PÚBLICA SEGURA DO CATÁLOGO
+      // ======================================================================
+
+      const db = admin.firestore();
+
+      // ======================================================================
+      // 1. ENTRADA
+      // ======================================================================
+
+      const publicSlug = normalizeString(
+          request.data?.publicSlug,
+      ).toLowerCase();
+
+      const publicToken = normalizeString(
+          request.data?.publicToken,
+      );
+
+      const validSlug =
+        publicSlug.length <= 128 &&
+        /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(publicSlug);
+
+      const validToken =
+        publicToken.length <= 256 &&
+        /^[A-Za-z0-9_-]{32,256}$/.test(publicToken);
+
+      if (!validSlug || !validToken) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Link de catálogo inválido.",
+        );
+      }
+
+      // ======================================================================
+      // 2. LOCALIZAÇÃO PELO HASH DO TOKEN
+      // ======================================================================
+
+      const publicTokenHash =
+        hashPublicToken(publicToken);
+
+      const publicTokenSnapshot = await db
+          .collection("catalogPublicTokens")
+          .doc(publicTokenHash)
+          .get();
+
+      if (!publicTokenSnapshot.exists) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      const publicTokenData =
+        publicTokenSnapshot.data() || {};
+
+      const storeId =
+        normalizeString(publicTokenData.storeId);
+
+      const catalogId =
+        normalizeString(publicTokenData.catalogId);
+
+      if (!storeId || !catalogId) {
+        console.error(
+            "[getPublicCatalog] Índice público inválido.",
+        );
+
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      // ======================================================================
+      // 3. LOJA E CATÁLOGO
+      // ======================================================================
+
+      const storeRef = db
+          .collection("stores")
+          .doc(storeId);
+
+      const catalogRef = storeRef
+          .collection("catalogs")
+          .doc(catalogId);
+
+      const [
+        storeSnapshot,
+        catalogSnapshot,
+      ] = await Promise.all([
+        storeRef.get(),
+        catalogRef.get(),
+      ]);
+
+      if (
+        !storeSnapshot.exists ||
+        !catalogSnapshot.exists
+      ) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      const storeData =
+        storeSnapshot.data() || {};
+
+      const catalogData =
+        catalogSnapshot.data() || {};
+
+      // ======================================================================
+      // 4. CONFIRMA SLUG E HASH
+      // ======================================================================
+
+      const storedPublicSlug =
+        normalizeString(storeData.publicSlug)
+            .toLowerCase();
+
+      const storedTokenHash =
+        normalizeString(catalogData.publicTokenHash)
+            .toLowerCase();
+
+      if (
+        storedPublicSlug !== publicSlug ||
+        storedTokenHash !== publicTokenHash
+      ) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      // ======================================================================
+      // 5. DISPONIBILIDADE DA LOJA
+      // ======================================================================
+
+      const subscriptionStatus =
+        normalizeString(storeData.subscriptionStatus)
+            .toLowerCase();
+
+      if (
+        !ALLOWED_SUBSCRIPTION_STATUS.has(
+            subscriptionStatus,
+        )
+      ) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      // ======================================================================
+      // 6. STATUS E EXPIRAÇÃO DO CATÁLOGO
+      // ======================================================================
+
+      const status =
+        normalizeString(catalogData.status)
+            .toLowerCase();
+
+      if (status !== "active") {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      const expiresAt =
+        catalogData.expiresAt;
+
+      if (
+        !expiresAt ||
+        typeof expiresAt.toMillis !== "function"
+      ) {
+        console.error(
+            `[getPublicCatalog] Catálogo ${catalogId} sem expiresAt válido.`,
+        );
+
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      if (Date.now() >= expiresAt.toMillis()) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo expirou.",
+        );
+      }
+
+      // ======================================================================
+      // 7. ITENS DO CATÁLOGO
+      // ======================================================================
+
+      const itemsSnapshot = await catalogRef
+          .collection("items")
+          .orderBy("position", "asc")
+          .get();
+
+      const catalogItems = [];
+
+      for (const itemSnapshot of itemsSnapshot.docs) {
+        const itemData =
+          itemSnapshot.data() || {};
+
+        const productId =
+          normalizeString(itemData.productId);
+
+        if (
+          !productId ||
+          productId.includes("/")
+        ) {
+          continue;
+        }
+
+        const rawPosition =
+          Number(itemData.position);
+
+        catalogItems.push({
+          productId,
+          position:
+            Number.isFinite(rawPosition) ?
+              rawPosition :
+              catalogItems.length,
+        });
+      }
+
+      // ======================================================================
+      // 8. PRODUTOS ATUAIS
+      // ======================================================================
+
+      const productsCollection =
+        storeRef.collection("products");
+
+      const productRefs = catalogItems.map(
+          (item) =>
+            productsCollection.doc(
+                item.productId,
+            ),
+      );
+
+      const productSnapshots =
+        productRefs.length > 0 ?
+          await db.getAll(...productRefs) :
+          [];
+
+      const productSnapshotsById =
+        new Map();
+
+      for (const productSnapshot of productSnapshots) {
+        productSnapshotsById.set(
+            productSnapshot.id,
+            productSnapshot,
+        );
+      }
+
+      const products = [];
+
+      for (const item of catalogItems) {
+        const productSnapshot =
+          productSnapshotsById.get(
+              item.productId,
+          );
+
+        if (
+          !productSnapshot ||
+          !productSnapshot.exists
+        ) {
+          continue;
+        }
+
+        const productData =
+          productSnapshot.data() || {};
+
+        if (productData.isArchived === true) {
+          continue;
+        }
+
+        if (productData.productKind === "variantParent") {
+          const options = await require("./variantCatalogV1").publicRows(db, storeRef, item.productId);
+          products.push(...options.map(row => ({...row, position: item.position, categoryName: productData.categoryName || ""})));
+          if (products.length > 400) throw new HttpsError("failed-precondition", "Reduza as opções deste catálogo.");
+          continue;
+        }
+
+        const quantidade =
+          Number(productData.quantidade ?? 0);
+
+        if (
+          !Number.isFinite(quantidade) ||
+          quantidade <= 0
+        ) {
+          continue;
+        }
+
+        const rawPrice =
+          Number(productData.price ?? 0);
+
+        const price =
+          Number.isFinite(rawPrice) &&
+          rawPrice >= 0 ?
+            rawPrice :
+            0;
+
+        products.push({
+          productId:
+            item.productId,
+
+          name:
+            normalizeString(
+                productData.name,
+            ) || "Produto",
+
+          price,
+
+          imageUrl:
+            normalizeString(
+                productData.imageUrl,
+            ),
+
+          quantidade,
+
+          categoryName:
+            normalizeString(
+                productData.categoryName,
+            ),
+
+          position:
+            item.position,
+        });
+      }
+
+      // ======================================================================
+      // 9. SECOES DINAMICAS
+      // ======================================================================
+
+      const mainCatalogProductIds =
+        new Set(
+            catalogItems.map(
+                (item) => item.productId,
+            ),
+        );
+
+      const {
+        sections: dynamicSections,
+      } = await resolveDynamicCatalogSections({
+        storeRef,
+        storedDynamicSections:
+          catalogData.dynamicSections,
+        excludedProductIds:
+          mainCatalogProductIds,
+        includeVariants: true,
+      });
+
+      // ======================================================================
+      // 10. RETORNO PÚBLICO SEGURO
+      // ======================================================================
+
+      return {
+        success: true,
+
+        store: {
+          name:
+            normalizeString(storeData.name) ||
+            normalizeString(
+                storeData.storeName,
+            ) ||
+            "Loja",
+
+          logoUrl:
+            normalizeString(
+                storeData.logoUrl,
+            ),
+
+          phone:
+            normalizeString(
+                storeData.phone,
+            ),
+        },
+
+        catalog: {
+          title:
+            normalizeString(
+                catalogData.title,
+            ) ||
+            "Catálogo",
+
+          expiresAt:
+            expiresAt
+                .toDate()
+                .toISOString(),
+
+          productCount:
+            products.length,
+        },
+
+        products,
+        dynamicSections,
+      };
+    },
+);
+
+// ============================================================================
+// F7.7-D - PERSISTENCIA SEGURA DA SOLICITACAO PUBLICA
+//
+// Solicitacao e itens sao persistidos atomicamente, sem venda ou reserva.
+// O snapshot representa o estado observado na revalidacao do servidor.
+// ============================================================================
+
+const submitPublicCatalogSelection = onCall(
+    {
+      timeoutSeconds: 30,
+      memory: "256MiB",
+    },
+    async (request) => {
+      const db = admin.firestore();
+
+      // ======================================================================
+      // 1. ENTRADA PÚBLICA
+      // ======================================================================
+
+      let publicPayload;
+      try {
+        publicPayload = validateCatalogRequestPublicPayload(request.data);
+      } catch (error) {
+        if (error instanceof CatalogRequestContractError) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Seleção de catálogo inválida.",
+              {reason: error.reason},
+          );
+        }
+        throw error;
+      }
+
+      const publicSlug = normalizeString(
+          request.data?.publicSlug,
+      ).toLowerCase();
+
+      const publicToken = normalizeString(
+          request.data?.publicToken,
+      );
+
+      const rawItems = request.data?.items;
+
+      const validSlug =
+        publicSlug.length <= 128 &&
+        /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(publicSlug);
+
+      const validToken =
+        publicToken.length <= 256 &&
+        /^[A-Za-z0-9_-]{32,256}$/.test(publicToken);
+
+      if (
+        !validSlug ||
+        !validToken ||
+        !Array.isArray(rawItems) ||
+        rawItems.length === 0 ||
+        rawItems.length > MAX_PRODUCTS
+      ) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Seleção de catálogo inválida.",
+        );
+      }
+
+      const requestedItems = [];
+      const requestedProductIds = new Set();
+
+      for (const rawItem of rawItems) {
+        if (
+          !rawItem ||
+          typeof rawItem !== "object" ||
+          Array.isArray(rawItem)
+        ) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Seleção de catálogo inválida.",
+          );
+        }
+
+        const productId = normalizeString(
+            rawItem.productId,
+        );
+
+        const quantity = rawItem.quantity;
+
+        if (
+          !productId ||
+          productId.includes("/") ||
+          !Number.isSafeInteger(quantity) ||
+          quantity <= 0
+        ) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Seleção de catálogo inválida.",
+          );
+        }
+
+        if (requestedProductIds.has(productId)) {
+          throw new HttpsError(
+              "invalid-argument",
+              "Produto duplicado na seleção.",
+          );
+        }
+
+        requestedProductIds.add(productId);
+
+        requestedItems.push({
+          productId,
+          quantity,
+        });
+      }
+
+      // ======================================================================
+      // 2. RESOLUÇÃO SEGURA PELO HASH DO TOKEN
+      // ======================================================================
+
+      const publicTokenHash =
+        hashPublicToken(publicToken);
+
+      const publicTokenSnapshot = await db
+          .collection("catalogPublicTokens")
+          .doc(publicTokenHash)
+          .get();
+
+      if (!publicTokenSnapshot.exists) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      const publicTokenData =
+        publicTokenSnapshot.data() || {};
+
+      const storeId =
+        normalizeString(publicTokenData.storeId);
+
+      const catalogId =
+        normalizeString(publicTokenData.catalogId);
+
+      if (!storeId || !catalogId) {
+        console.error(
+            "[submitPublicCatalogSelection] Índice público inválido.",
+        );
+
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      // ======================================================================
+      // 3. LOJA E CATÁLOGO
+      // ======================================================================
+
+      const storeRef = db
+          .collection("stores")
+          .doc(storeId);
+
+      const catalogRef = storeRef
+          .collection("catalogs")
+          .doc(catalogId);
+
+      const [
+        storeSnapshot,
+        catalogSnapshot,
+      ] = await Promise.all([
+        storeRef.get(),
+        catalogRef.get(),
+      ]);
+
+      if (
+        !storeSnapshot.exists ||
+        !catalogSnapshot.exists
+      ) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      const storeData =
+        storeSnapshot.data() || {};
+
+      const catalogData =
+        catalogSnapshot.data() || {};
+
+      // ======================================================================
+      // 4. CONFIRMA SLUG E TOKEN
+      // ======================================================================
+
+      const storedPublicSlug =
+        normalizeString(storeData.publicSlug)
+            .toLowerCase();
+
+      const storedTokenHash =
+        normalizeString(catalogData.publicTokenHash)
+            .toLowerCase();
+
+      if (
+        storedPublicSlug !== publicSlug ||
+        storedTokenHash !== publicTokenHash
+      ) {
+        throw new HttpsError(
+            "not-found",
+            "Catálogo não encontrado ou indisponível.",
+        );
+      }
+
+      // ======================================================================
+      // 5. DISPONIBILIDADE DA LOJA
+      // ======================================================================
+
+      const subscriptionStatus =
+        normalizeString(storeData.subscriptionStatus)
+            .toLowerCase();
+
+      if (
+        !ALLOWED_SUBSCRIPTION_STATUS.has(
+            subscriptionStatus,
+        )
+      ) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      // ======================================================================
+      // 6. STATUS E EXPIRAÇÃO DO CATÁLOGO
+      // ======================================================================
+
+      const status =
+        normalizeString(catalogData.status)
+            .toLowerCase();
+
+      if (status !== "active") {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      const expiresAt =
+        catalogData.expiresAt;
+
+      if (
+        !expiresAt ||
+        typeof expiresAt.toMillis !== "function"
+      ) {
+        console.error(
+            `[submitPublicCatalogSelection] ` +
+            `Catálogo ${catalogId} sem expiresAt válido.`,
+        );
+
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo não está disponível.",
+        );
+      }
+
+      if (Date.now() >= expiresAt.toMillis()) {
+        throw new HttpsError(
+            "failed-precondition",
+            "Este catálogo expirou.",
+        );
+      }
+
+      // ======================================================================
+      // 7. CONFIRMAR PERTENCIMENTO AO CATÁLOGO
+      // ======================================================================
+
+      const catalogItemsSnapshot = await catalogRef
+          .collection("items")
+          .get();
+
+      const catalogProductIds = new Set();
+
+      for (
+        const itemSnapshot
+        of catalogItemsSnapshot.docs
+      ) {
+        const itemData =
+          itemSnapshot.data() || {};
+
+        const productId =
+          normalizeString(itemData.productId);
+
+        if (
+          productId &&
+          !productId.includes("/")
+        ) {
+          catalogProductIds.add(productId);
+        }
+      }
+
+      const {
+        allowedProductIds:
+          dynamicAllowedProductIds,
+      } = await resolveDynamicCatalogSections({
+        storeRef,
+        storedDynamicSections:
+          catalogData.dynamicSections,
+        excludedProductIds:
+          catalogProductIds,
+      });
+
+      const allowedProductIds =
+        new Set(catalogProductIds);
+
+      for (
+        const productId
+        of dynamicAllowedProductIds
+      ) {
+        allowedProductIds.add(productId);
+      }
+
+      for (const item of requestedItems) {
+        if (!allowedProductIds.has(item.productId)) {
+          throw new HttpsError(
+              "failed-precondition",
+              "A seleção precisa ser atualizada.",
+              {
+                reason: "product-not-in-catalog",
+                productId: item.productId,
+              },
+          );
+        }
+      }
+
+      // ======================================================================
+      // 8. RECONSULTAR PRODUTOS ATUAIS
+      // ======================================================================
+
+      const productsCollection =
+        storeRef.collection("products");
+
+      const productRefs = requestedItems.map(
+          (item) =>
+            productsCollection.doc(
+                item.productId,
+            ),
+      );
+
+      const productSnapshots =
+        productRefs.length > 0 ?
+          await db.getAll(...productRefs) :
+          [];
+
+      const productSnapshotsById =
+        new Map();
+
+      for (
+        const productSnapshot
+        of productSnapshots
+      ) {
+        productSnapshotsById.set(
+            productSnapshot.id,
+            productSnapshot,
+        );
+      }
+
+      const validatedItems = [];
+      let totalUnits = 0;
+      let totalCents = 0;
+
+      for (const requestedItem of requestedItems) {
+        const productSnapshot =
+          productSnapshotsById.get(
+              requestedItem.productId,
+          );
+
+        if (
+          !productSnapshot ||
+          !productSnapshot.exists
+        ) {
+          throw new HttpsError(
+              "failed-precondition",
+              "A seleção precisa ser atualizada.",
+              {
+                reason: "product-unavailable",
+                productId:
+                  requestedItem.productId,
+                availableQuantity: 0,
+              },
+          );
+        }
+
+        const productData =
+          productSnapshot.data() || {};
+
+        if (productData.isArchived === true) {
+          throw new HttpsError(
+              "failed-precondition",
+              "A seleção precisa ser atualizada.",
+              {
+                reason: "product-archived",
+                productId:
+                  requestedItem.productId,
+                availableQuantity: 0,
+              },
+          );
+        }
+
+        const rawAvailableQuantity =
+          Number(
+              productData.quantidade ?? 0,
+          );
+
+        const availableQuantity =
+          Number.isFinite(
+              rawAvailableQuantity,
+          ) ?
+            Math.max(
+                0,
+                Math.floor(
+                    rawAvailableQuantity,
+                ),
+            ) :
+            0;
+
+        if (
+          availableQuantity <= 0 ||
+          requestedItem.quantity >
+            availableQuantity
+        ) {
+          throw new HttpsError(
+              "failed-precondition",
+              "A quantidade selecionada não está mais disponível.",
+              {
+                reason: "insufficient-stock",
+                productId:
+                  requestedItem.productId,
+                availableQuantity,
+              },
+          );
+        }
+
+        const name = normalizeString(productData.name);
+        const rawPrice = productData.price;
+        const unitCents = Math.round(rawPrice * 100);
+        const subtotalCents = unitCents * requestedItem.quantity;
+
+        // Mesmo arredondamento monetario usado em syncOfflineSale.
+        // Nunca converter preco ausente/invalido em produto gratuito.
+        if (
+          !name ||
+          typeof rawPrice !== "number" ||
+          !Number.isFinite(rawPrice) ||
+          rawPrice < 0 ||
+          !Number.isSafeInteger(unitCents) ||
+          !Number.isSafeInteger(subtotalCents) ||
+          !Number.isSafeInteger(totalCents + subtotalCents) ||
+          !Number.isSafeInteger(totalUnits + requestedItem.quantity)
+        ) {
+          throw new HttpsError(
+              "failed-precondition",
+              "Os dados do produto precisam ser atualizados.",
+              {
+                reason: "invalid-product-data",
+                productId: requestedItem.productId,
+              },
+          );
+        }
+
+        totalUnits += requestedItem.quantity;
+        totalCents += subtotalCents;
+        validatedItems.push({
+          productId: requestedItem.productId,
+          name,
+          quantity: requestedItem.quantity,
+          price: unitCents / 100,
+          subtotal: subtotalCents / 100,
+        });
+      }
+
+      // ======================================================================
+      // 9. PERSISTENCIA ATOMICA DO SNAPSHOT REVALIDADO
+      //
+      // Disponibilidade observada, sem reserva ou garantia futura.
+      // Reenvios independentes criam novas solicitacoes nesta etapa.
+      // ======================================================================
+
+      const requestRef = storeRef.collection("catalogRequests").doc();
+      const serverTimestamp = FieldValue.serverTimestamp();
+      const totalAmount = totalCents / 100;
+      const batch = db.batch();
+
+      const requestDocument = {
+        catalogId,
+        status: "pending",
+        itemCount: validatedItems.length,
+        totalUnits,
+        totalAmount,
+        createdAt: serverTimestamp,
+        updatedAt: serverTimestamp,
+        source: "public_catalog",
+      };
+
+      if (publicPayload.version === 2) {
+        Object.assign(requestDocument, {
+          requestVersion: 2,
+          customerName: publicPayload.customerName,
+          customerPhone: publicPayload.customerPhone,
+          note: publicPayload.note,
+        });
+      }
+
+      batch.create(requestRef, requestDocument);
+
+      for (const item of validatedItems) {
+        batch.create(requestRef.collection("items").doc(), item);
+      }
+
+      await batch.commit();
+
+      return {
+        success: true,
+        requestId: requestRef.id,
+        validatedItemCount: validatedItems.length,
+        totalUnits,
+        totalAmount,
+      };
+    },
+);
+
+module.exports = {
+  variantCatalogSupport: {resolveDynamicCatalogSections},
+  previewCatalog,
+  createCatalog,
+  listCatalogs,
+  getCatalogForEdit,
+  updateCatalog,
+  listCatalogRequests,
+  getCatalogRequest,
+  transitionCatalogRequest,
+  getPublicCatalog,
+  submitPublicCatalogSelection,
+};
