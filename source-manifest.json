@@ -1,0 +1,471 @@
+{
+  "version": 1,
+  "domain": "engineering",
+  "branch": "preserve/engineering-support-20261031",
+  "status": "local-only-awaiting-selection-and-push-review",
+  "independentHistory": true,
+  "sourceInventoryCount": 894,
+  "sourceFiles": [
+    {
+      "source": "functions/backups/createStoreSnapshot.js",
+      "destination": "source/functions/backups/createStoreSnapshot.js",
+      "sha256": "9f6eca9d6ecb52db48b3dff86c47551a123389ebb8bfb23e8c07e6807cd53cd4",
+      "bytes": 23574,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/backups/storeRestoreEmulator.js",
+      "destination": "source/functions/backups/storeRestoreEmulator.js",
+      "sha256": "7f79a89dac1f9d87e8f8e8e865025f880e118968112aa224e0eb338ef666b8ae",
+      "bytes": 11377,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/backups/storeRestorePlanner.js",
+      "destination": "source/functions/backups/storeRestorePlanner.js",
+      "sha256": "08749bb117f534f84c2654872a994b904cc5c29ed611208b1291b507180ca9c6",
+      "bytes": 3481,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/backups/storeSnapshotParser.js",
+      "destination": "source/functions/backups/storeSnapshotParser.js",
+      "sha256": "064780d8ec7cad4e62c5f54fe736895840eaceb0fdcb97804c0d68f6b2058e06",
+      "bytes": 12478,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/catalog/createCatalog.js",
+      "destination": "source/functions/catalog/createCatalog.js",
+      "sha256": "5a87d6e7e916b4421c43ea42021a256e5340a3931ebc34a7ebc8fa392477fd74",
+      "bytes": 86414,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/fiscal/emitirNfce.js",
+      "destination": "source/functions/fiscal/emitirNfce.js",
+      "sha256": "bd169bba504a5b4a279df3cccad28c7c45f1c93abf43abd7d5ca06c3f11682a9",
+      "bytes": 30020,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/tests/restore/storeRestorePlanner.test.js",
+      "destination": "source/functions/tests/restore/storeRestorePlanner.test.js",
+      "sha256": "82cb0431db4de2e61c861737f6a414b0a803f62880ab0abe761f8d7282c05cc4",
+      "bytes": 9715,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/restore/storeSnapshotParser.test.js",
+      "destination": "source/functions/tests/restore/storeSnapshotParser.test.js",
+      "sha256": "49fc9e5bb0ac14d2d9f453306b2acf23c20c9d3a7089e123805e2a30fe9e6fd6",
+      "bytes": 15944,
+      "role": "tests"
+    },
+    {
+      "source": "docs/backups/F9_RESTORE_INTEGRIDADE.md",
+      "destination": "source/docs/backups/F9_RESTORE_INTEGRIDADE.md",
+      "sha256": "e7bb2d18dc1bdcfba3bec527418aef79de1c23efb5ae94491e9b6e6081f99e80",
+      "bytes": 6670,
+      "role": "documentation"
+    },
+    {
+      "source": "functions/backups/variantSnapshotV2.js",
+      "destination": "source/functions/backups/variantSnapshotV2.js",
+      "sha256": "615e7fd69bc3478168b37ab4bf1ba51a7f176ecbaf7fde23f7e1a98a5432f398",
+      "bytes": 10285,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/catalog/variantCatalogV1.js",
+      "destination": "source/functions/catalog/variantCatalogV1.js",
+      "sha256": "8db772bb4ac38c2566e8719ae0799c8707895f7b7d754ae91beeaa30af29780e",
+      "bytes": 8932,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/fiscal/salePayments.js",
+      "destination": "source/functions/fiscal/salePayments.js",
+      "sha256": "1684b0ae18d2f1b5d56cf47f6b4bb276c1ca5a8ac9cd5fe2e75c6d527df33af0",
+      "bytes": 434,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/tests/restore/productCodeRestoreSafety.emulator.test.js",
+      "destination": "source/functions/tests/restore/productCodeRestoreSafety.emulator.test.js",
+      "sha256": "858e827359fb4f65715f6948ac7ce53df180a57b4dc1fa95e257d23724182e15",
+      "bytes": 3753,
+      "role": "tests"
+    },
+    {
+      "source": "lib/widgets/account_legal_links.dart",
+      "destination": "source/lib/widgets/account_legal_links.dart",
+      "sha256": "947e8ed57c37f8b464b89645bd078076cbfc7548ccc266388f55b6547bec402a",
+      "bytes": 1678,
+      "role": "source-and-config"
+    },
+    {
+      "source": "scripts/b4br3/gate.test.cjs",
+      "destination": "source/scripts/b4br3/gate.test.cjs",
+      "sha256": "a55f89d7f9144bc9efcc291130b32a199e26b197b9dddbdcc575810d099a1c91",
+      "bytes": 5119,
+      "role": "tests"
+    },
+    {
+      "source": "scripts/b4br3/scan.dart",
+      "destination": "source/scripts/b4br3/scan.dart",
+      "sha256": "7c5c2a225586416c27d0980fdfdac19a0891c73b7e053849180a367b9d71b5a7",
+      "bytes": 5994,
+      "role": "source-and-config"
+    },
+    {
+      "source": "scripts/b4br4a/check-local-cache.cjs",
+      "destination": "source/scripts/b4br4a/check-local-cache.cjs",
+      "sha256": "756343a3c9d5013e825a09806b5a57142c9416cb50ce2bab8e1b4e28d82967e4",
+      "bytes": 3663,
+      "role": "source-and-config"
+    },
+    {
+      "source": "scripts/b4br4a/declarations.dart",
+      "destination": "source/scripts/b4br4a/declarations.dart",
+      "sha256": "9a3eeaf4a1ced217da357048ad1bb87a1ee166904c9c5bd4d327f288eafd628c",
+      "bytes": 1883,
+      "role": "source-and-config"
+    },
+    {
+      "source": "scripts/b4br4a/dependencies.dart",
+      "destination": "source/scripts/b4br4a/dependencies.dart",
+      "sha256": "9d42bb8bf0b4e56831bd10568872826b356e0ed8b5a9f0983a17434adf5dbf76",
+      "bytes": 2391,
+      "role": "source-and-config"
+    },
+    {
+      "source": "scripts/b4br4a/verify.test.cjs",
+      "destination": "source/scripts/b4br4a/verify.test.cjs",
+      "sha256": "909522ccd35c67b58a0177a608cf6a17dee99c11abb6ada1ad132b3801cd2a25",
+      "bytes": 4641,
+      "role": "tests"
+    },
+    {
+      "source": "scripts/b4br4b/README.md",
+      "destination": "source/scripts/b4br4b/README.md",
+      "sha256": "9868b2f7fd08707ee56cbdc1f8877bac38cb7e35e6f528ec62cae6273898e4ab",
+      "bytes": 3326,
+      "role": "documentation"
+    },
+    {
+      "source": "scripts/b4br4b/inspect.cjs",
+      "destination": "source/scripts/b4br4b/inspect.cjs",
+      "sha256": "6a210ae6c2500b86b7e4dc76f5fdc85aef9c2ff5bb10f0ce769a5816d1bce50f",
+      "bytes": 7535,
+      "role": "source-and-config"
+    },
+    {
+      "source": "scripts/b4br4b/inspect.test.cjs",
+      "destination": "source/scripts/b4br4b/inspect.test.cjs",
+      "sha256": "3976b1e3caa3011d14ac7f44a245d50eb55f4f881a92854fb518e783e3122476",
+      "bytes": 2815,
+      "role": "tests"
+    },
+    {
+      "source": "scripts/b4br4b/matrix-README.md",
+      "destination": "source/scripts/b4br4b/matrix-README.md",
+      "sha256": "f14f99855682b0d8b03b65f8300c3eaababa39e08f1c91e8d1d66fc80614231c",
+      "bytes": 3525,
+      "role": "documentation"
+    },
+    {
+      "source": "scripts/b4br4b/matrix.cjs",
+      "destination": "source/scripts/b4br4b/matrix.cjs",
+      "sha256": "c52c776422ea0e318a18479635564e677f45b62ca64d9d02b02d547e6d5f3d5e",
+      "bytes": 15241,
+      "role": "source-and-config"
+    },
+    {
+      "source": "scripts/b4br4b/matrix.test.cjs",
+      "destination": "source/scripts/b4br4b/matrix.test.cjs",
+      "sha256": "186aedb77ce600188b031824613bc5a7ed1449a69078624aa60015b5a87c0132",
+      "bytes": 7175,
+      "role": "tests"
+    },
+    {
+      "source": "scripts/b4br4b03/README.md",
+      "destination": "source/scripts/b4br4b03/README.md",
+      "sha256": "fcd4d3528a02fc2909d42a7bd12467f358948adf53d40fafa9e0cdbe6de6d012",
+      "bytes": 3435,
+      "role": "documentation"
+    },
+    {
+      "source": "scripts/b4br4b03/functions-validator.cjs",
+      "destination": "source/scripts/b4br4b03/functions-validator.cjs",
+      "sha256": "f57479de329e663b82827167bf2b51e86e1d13b0406ae82937fe819a5948a614",
+      "bytes": 3204,
+      "role": "source-and-config"
+    },
+    {
+      "source": "scripts/b4br4b03/functions-validator.test.cjs",
+      "destination": "source/scripts/b4br4b03/functions-validator.test.cjs",
+      "sha256": "bc9a70ff3d76350f1624b9d4b5b15bd62b60d35555fee0408fd1d02a1ab26575",
+      "bytes": 6327,
+      "role": "tests"
+    },
+    {
+      "source": "scripts/b4br4b03/review-functions.cjs",
+      "destination": "source/scripts/b4br4b03/review-functions.cjs",
+      "sha256": "22a34bd956f710a7d9a6c916ed1d8968b9bdf96c71626085473e934dfe3df744",
+      "bytes": 6596,
+      "role": "source-and-config"
+    },
+    {
+      "source": "scripts/b4br4b03/review-functions.test.cjs",
+      "destination": "source/scripts/b4br4b03/review-functions.test.cjs",
+      "sha256": "984daaa558d6b700345057015fa24ceb33278c0c78dec713ee6c863bce0f3ac0",
+      "bytes": 1998,
+      "role": "tests"
+    },
+    {
+      "source": "scripts/check-f9-commercial-hml.cjs",
+      "destination": "source/scripts/check-f9-commercial-hml.cjs",
+      "sha256": "74e5d7f086489b652a16d6d0caf9f06b143cc923e6e201137b67c6ed6030e698",
+      "bytes": 3995,
+      "role": "source-and-config"
+    },
+    {
+      "source": "scripts/f9-commercial-hml-admission.cjs",
+      "destination": "source/scripts/f9-commercial-hml-admission.cjs",
+      "sha256": "3dd540c02a57f38a1ec76e2506307da687567be3080266b5d2c5f8cc815a2657",
+      "bytes": 2931,
+      "role": "source-and-config"
+    },
+    {
+      "source": "scripts/seed-hml-categories.cjs",
+      "destination": "source/scripts/seed-hml-categories.cjs",
+      "sha256": "ddff550721edcef4c362c4d4582ad2d389d658e48e43a6c458b9bd7ac1ee3f2c",
+      "bytes": 22031,
+      "role": "source-and-config"
+    },
+    {
+      "source": "test/account_legal_links_test.dart",
+      "destination": "source/test/account_legal_links_test.dart",
+      "sha256": "2d83af4d6ee00aa2b46de232bb976c48c650cf07108c8ea81e51ecc4fccd3709",
+      "bytes": 1423,
+      "role": "tests"
+    },
+    {
+      "source": "tools/consolidacao-hml/baseline-rules.cjs",
+      "destination": "source/tools/consolidacao-hml/baseline-rules.cjs",
+      "sha256": "4d9e69e34ef650286e70939b36c86b77237ba68924012dd3fc44e5d557b9e0ef",
+      "bytes": 668,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/consolidacao-hml/collect.cjs",
+      "destination": "source/tools/consolidacao-hml/collect.cjs",
+      "sha256": "13e1c45562269ea24f449e8d62d5a11b9c490701db4b8b6545dc0e60b6881c76",
+      "bytes": 6574,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/consolidacao-hml/control-plane.cjs",
+      "destination": "source/tools/consolidacao-hml/control-plane.cjs",
+      "sha256": "03400b421f4af0cb38c690430d129bacf2e5d3314fb4691174c5659a5dce6158",
+      "bytes": 3086,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/consolidacao-hml/inventory.cjs",
+      "destination": "source/tools/consolidacao-hml/inventory.cjs",
+      "sha256": "b1e73137a67ae601eaeb4a0203bc1743f43d8f8faae7728fbe855074d5db164a",
+      "bytes": 5129,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/consolidacao-hml/logs.cjs",
+      "destination": "source/tools/consolidacao-hml/logs.cjs",
+      "sha256": "059d9a5d54f0919bf5ab721a352e136bff7cb8ee7ef1432c61ff688dd0c8ca70",
+      "bytes": 2929,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/consolidacao-hml/plan.cjs",
+      "destination": "source/tools/consolidacao-hml/plan.cjs",
+      "sha256": "e7860690a663c4aef0c33b827022edbd841cd5e427baf26c8a3fe377c6caab30",
+      "bytes": 6160,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/consolidacao-hml/plan.test.cjs",
+      "destination": "source/tools/consolidacao-hml/plan.test.cjs",
+      "sha256": "98bf5a75c51bc3d5ba2d16cf69b7f47f93cfc650922b9361d118395632da641e",
+      "bytes": 3223,
+      "role": "tests"
+    },
+    {
+      "source": "tools/consolidacao-hml/preservation.cjs",
+      "destination": "source/tools/consolidacao-hml/preservation.cjs",
+      "sha256": "8b66f1d06436c24e0d2d48edc06d12bed538f422ee8206601735d1a0507ed9e9",
+      "bytes": 1841,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/consolidacao-hml/run-emulator.cjs",
+      "destination": "source/tools/consolidacao-hml/run-emulator.cjs",
+      "sha256": "9ecfa5f466245eb9c804802708c7476b004a9d9dddf74f7838c234714b31565c",
+      "bytes": 1625,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/consolidacao-hml/run-offline.cjs",
+      "destination": "source/tools/consolidacao-hml/run-offline.cjs",
+      "sha256": "9f1f9549a4ef8ecec8ab16b1b7c37e4b8d24145ed3dd823f5d72aad48cf27139",
+      "bytes": 1389,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/consolidacao-hml/session-diff.cjs",
+      "destination": "source/tools/consolidacao-hml/session-diff.cjs",
+      "sha256": "510046bf42ef38e1969ce2cb75567751a32548ccb3385ca9520168d08d64d21e",
+      "bytes": 2213,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-hml/Read-TestStoreInventory.ps1",
+      "destination": "source/tools/finance-hml/Read-TestStoreInventory.ps1",
+      "sha256": "203977cf8321c30cb3c52ca72f43172d6f84a2e2241da77248fe2e96c8fcf1c8",
+      "bytes": 6336,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-hml/Test-ReadTestStoreInventory.ps1",
+      "destination": "source/tools/finance-hml/Test-ReadTestStoreInventory.ps1",
+      "sha256": "c30c01be78bb2760eb48f07fdd714eeb6ab42fbb182c77af6cd9c0dfcb0f723c",
+      "bytes": 3266,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-hml/financialCandidate.test.cjs",
+      "destination": "source/tools/finance-hml/financialCandidate.test.cjs",
+      "sha256": "0a0ccbb630c47af86d417dfa446c0bc1209297e94d41d3e468b2eb989c9b1d50",
+      "bytes": 6371,
+      "role": "tests"
+    },
+    {
+      "source": "tools/finance-hml/prepare-financial-candidate.cjs",
+      "destination": "source/tools/finance-hml/prepare-financial-candidate.cjs",
+      "sha256": "82ab3a002668715fc69d197fb8d9b75c365b51be9e559c9907f50e12afacf0a1",
+      "bytes": 4649,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-hml/prepare-hml-financial-rules.cjs",
+      "destination": "source/tools/finance-hml/prepare-hml-financial-rules.cjs",
+      "sha256": "dd8ddf978eccfde2765d916d1e809f6b614bc079cbbb30caa165e0bce9c3e4d6",
+      "bytes": 5765,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-hml/prepare-seven-functions-v3.cjs",
+      "destination": "source/tools/finance-hml/prepare-seven-functions-v3.cjs",
+      "sha256": "5180fcbc142afd7ec5a27eb47146718bf34f4c29cf0ff18f372b38946fa1d683",
+      "bytes": 4920,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-hml/read-financial-preconditions.cjs",
+      "destination": "source/tools/finance-hml/read-financial-preconditions.cjs",
+      "sha256": "9dbad96167d771fa971dd63c8754aa10e0771387ab6124c038816f7b9cc571e1",
+      "bytes": 6168,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-hml/seven-functions-metadata.cjs",
+      "destination": "source/tools/finance-hml/seven-functions-metadata.cjs",
+      "sha256": "1137d8b4eab37e2a9f06e3939804b86b4e33abb7e12fffd0e105b4b2c2e40612",
+      "bytes": 6763,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-prod/prepare-prod-candidate.cjs",
+      "destination": "source/tools/finance-prod/prepare-prod-candidate.cjs",
+      "sha256": "3518f362dbdeeca7ca354f126e76ef2db593c1c72b153205d331e546d1533732",
+      "bytes": 5779,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-prod/read-deploy-preconditions.cjs",
+      "destination": "source/tools/finance-prod/read-deploy-preconditions.cjs",
+      "sha256": "58b257235582f630ac82537db24dd7b1f5aae3b660cb4e54f4706acd4e2c5049",
+      "bytes": 1789,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-prod/read-prod-metadata.cjs",
+      "destination": "source/tools/finance-prod/read-prod-metadata.cjs",
+      "sha256": "eb93815959d53100455178584a46030310f885ba5b9a4db008f412f729257c57",
+      "bytes": 4259,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-prod/validate-prod-package.cjs",
+      "destination": "source/tools/finance-prod/validate-prod-package.cjs",
+      "sha256": "a1ca326349ca550c49edb722506ae3f84daedad4bec7d538cd0b51f4d3523b12",
+      "bytes": 3030,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/finance-prod/write-executive-report.cjs",
+      "destination": "source/tools/finance-prod/write-executive-report.cjs",
+      "sha256": "eb5e72ea3f04da9516ecffa39c112e6e7befa4c93c2ee58efc2226493fd0d950",
+      "bytes": 22818,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/prepare-prod-offline-recovery.cjs",
+      "destination": "source/tools/prepare-prod-offline-recovery.cjs",
+      "sha256": "f2f333ce765260fda9892d76fcef0b4ecf8f0617dc955c094297e5f7fcd6c948",
+      "bytes": 4632,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/prod-offline-finalize.cjs",
+      "destination": "source/tools/prod-offline-finalize.cjs",
+      "sha256": "7f707d30ff6c5d0dad4ce2e0779a18d7244fa736cd0a3193e80d31c1251af1b7",
+      "bytes": 12636,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/prod-offline-package-check.cjs",
+      "destination": "source/tools/prod-offline-package-check.cjs",
+      "sha256": "3ccfae08f7dfdc3c0c172f1c3a0349e4f0b0188706c30677e67267f3943845cb",
+      "bytes": 2063,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/prod-offline-query-evidence.cjs",
+      "destination": "source/tools/prod-offline-query-evidence.cjs",
+      "sha256": "3ea3f9a15cb463a4d2b8a5e102ec1f12f6f1aa2fffd3926201388fe87d27b88c",
+      "bytes": 2031,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/prod-offline-recovery-logs.cjs",
+      "destination": "source/tools/prod-offline-recovery-logs.cjs",
+      "sha256": "ec1da0ca8b710317fc2d0bb3f09903af502d02f3253c833e2e7aef44c9af5514",
+      "bytes": 2062,
+      "role": "source-and-config"
+    },
+    {
+      "source": "tools/write-prod-offline-reader-gate-report.cjs",
+      "destination": "source/tools/write-prod-offline-reader-gate-report.cjs",
+      "sha256": "cdb3b4278d6240e7c9ea7fbd3ba33792addb1be16e66b0ea63d2875a1ed24cfd",
+      "bytes": 15855,
+      "role": "source-and-config"
+    }
+  ],
+  "sharedOwnerBranch": "preserve/shared-integration-contracts-20261031",
+  "notes": "Versioned development snapshot only, not a claim of production admission or standalone build readiness. Cross-domain dependencies are tracked in the shared resolution report; do not copy divergent shared files into this branch.",
+  "originalRootSourceUnchanged": true,
+  "noDeployAuthorization": true,
+  "pushAllowed": false,
+  "knownWhitespace": []
+}
