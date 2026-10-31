@@ -460,6 +460,41 @@
       "sha256": "cdb3b4278d6240e7c9ea7fbd3ba33792addb1be16e66b0ea63d2875a1ed24cfd",
       "bytes": 15855,
       "role": "source-and-config"
+    },
+    {
+      "source": "functions/backups/storeSnapshotContract.js",
+      "destination": "source/functions/backups/storeSnapshotContract.js",
+      "sha256": "4d7a3a8f8c17720d081d2bafdb8319d8da018bee5bf3f6f8f1ba791d2ee44b28",
+      "bytes": 875,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "functions/backups/storeRestoreTransform.js",
+      "destination": "source/functions/backups/storeRestoreTransform.js",
+      "sha256": "553a68737d2372ce3b379fc6f3005cfcec453ac3f8e1025557c58e8e63167e7f",
+      "bytes": 10074,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "functions/backups/storeSnapshotDecoder.js",
+      "destination": "source/functions/backups/storeSnapshotDecoder.js",
+      "sha256": "74bb5a6dadc4d7f4f87fc027feb260ffa9ff0eb99c29693990e54889dfce46a2",
+      "bytes": 1871,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "functions/catalog/catalogDynamicSections.js",
+      "destination": "source/functions/catalog/catalogDynamicSections.js",
+      "sha256": "b74a0d55d112d9c480383f99a1e6c1ef20044143ec433ac2870352119ba840a7",
+      "bytes": 7302,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "functions/catalog/catalogDynamicCategoryAuthority.js",
+      "destination": "source/functions/catalog/catalogDynamicCategoryAuthority.js",
+      "sha256": "a051c2889f04269a8f7452e9d907f2b66033b43dc5ee7337f18b38667d8ced0c",
+      "bytes": 2277,
+      "role": "unchanged-baseline-dependency"
     }
   ],
   "sharedOwnerBranch": "preserve/shared-integration-contracts-20261031",
@@ -467,5 +502,6 @@
   "originalRootSourceUnchanged": true,
   "noDeployAuthorization": true,
   "pushAllowed": false,
-  "knownWhitespace": []
+  "knownWhitespace": [],
+  "baselineDependencyNote": "Only unchanged HEAD file bytes were added to close existing relative imports; no F7 Git objects imported"
 }
