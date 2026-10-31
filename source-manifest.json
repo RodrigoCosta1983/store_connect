@@ -1,0 +1,288 @@
+{
+  "version": 1,
+  "domain": "shared",
+  "branch": "preserve/shared-integration-contracts-20261031",
+  "status": "local-only-awaiting-selection-and-push-review",
+  "independentHistory": true,
+  "sourceInventoryCount": 894,
+  "sourceFiles": [
+    {
+      "source": "firestore.rules",
+      "destination": "source/firestore.rules",
+      "sha256": "14c69566c4fd87e9f0678ac166cf9ade8cf01c35cca632df3b953cadc0e09b6f",
+      "bytes": 15727,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions-bootstrap/auth/bootstrapStore.js",
+      "destination": "source/functions-bootstrap/auth/bootstrapStore.js",
+      "sha256": "2d4df0a0385ff819f72b5b5df9cfcd1cb130fab3ba6e611ed467e9e91824a491",
+      "bytes": 11457,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions-bootstrap/tests/bootstrapStore.emulator.test.js",
+      "destination": "source/functions-bootstrap/tests/bootstrapStore.emulator.test.js",
+      "sha256": "3cd38c4d642ab319d1a6f1f0bd22e9b1f1d07f6edc79147fc0d0aa14d2ea2bd7",
+      "bytes": 3937,
+      "role": "tests"
+    },
+    {
+      "source": "functions/index.js",
+      "destination": "source/functions/index.js",
+      "sha256": "90cc9272fa8851c5df55a0b85a8c09d3befc12898525b49e5c2df0bc8c78ccb5",
+      "bytes": 88906,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/app_bootstrap.dart",
+      "destination": "source/lib/app_bootstrap.dart",
+      "sha256": "fe3248fa0a16f9da162c3475eefb364fac75012c82ab7815ca6f5153c5c32034",
+      "bytes": 7352,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/models/cart_item_model.dart",
+      "destination": "source/lib/models/cart_item_model.dart",
+      "sha256": "799c1e99a4525cb707405389c320b3f24e69ab0f59ccffbd3bc9e1ca1811ed0b",
+      "bytes": 2663,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/models/product_model.dart",
+      "destination": "source/lib/models/product_model.dart",
+      "sha256": "573ba2c71d45918f1b3c66ee307bed5937a01f9b7ad0f0b461363a0ad98dc137",
+      "bytes": 1572,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/models/sale_order_model.dart",
+      "destination": "source/lib/models/sale_order_model.dart",
+      "sha256": "b1b99cecac011c7e1ee54a7becb259eb5fd9de018a4ff1dd60b8cdcda4654fc3",
+      "bytes": 3528,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/providers/cart_provider.dart",
+      "destination": "source/lib/providers/cart_provider.dart",
+      "sha256": "7b5d1a2bb36e0ddfb6b2049dc97d617be6aca1c30cdccf598583365915ab9840",
+      "bytes": 4632,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/providers/sales_provider.dart",
+      "destination": "source/lib/providers/sales_provider.dart",
+      "sha256": "7817e94bf4f0be0fc11fa36e611ddc99aa7cbd5e0339dd3303a230f4560e3861",
+      "bytes": 11168,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/screens/auth/auth_gate.dart",
+      "destination": "source/lib/screens/auth/auth_gate.dart",
+      "sha256": "b1a3d2a0d7d4e3d1d62161a2a909a8c43b5a1a606b4fb6d6899de532e21079eb",
+      "bytes": 16120,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/screens/auth/login_screen.dart",
+      "destination": "source/lib/screens/auth/login_screen.dart",
+      "sha256": "bf3b0a2b847163faeca710702a64c48758c27c7457bf431afd05c77b502a1ccf",
+      "bytes": 20303,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/screens/auth/register_screen.dart",
+      "destination": "source/lib/screens/auth/register_screen.dart",
+      "sha256": "0d4bea2c70990ae155ee30e683ec606d4b54c78728c389f56d27f8f3cd82dba5",
+      "bytes": 15055,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/screens/cart/cart_screen.dart",
+      "destination": "source/lib/screens/cart/cart_screen.dart",
+      "sha256": "5e265870093a1ff7142058f53afcaa529b790cfb6e000f714b7a130f002260c8",
+      "bytes": 18814,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/screens/sales/new_sale_screen.dart",
+      "destination": "source/lib/screens/sales/new_sale_screen.dart",
+      "sha256": "19d5ee4934704905782662e79d4b469b8772bd94426e8493bc6f74a931e0c594",
+      "bytes": 70860,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/screens/settings_screen.dart",
+      "destination": "source/lib/screens/settings_screen.dart",
+      "sha256": "f112388d3b91ec00f5d3f40168eb0e4d662c545e8ad85b38fc46c8e2cad12f0e",
+      "bytes": 55480,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/widgets/app_drawer.dart",
+      "destination": "source/lib/widgets/app_drawer.dart",
+      "sha256": "38695798f92a81debec0d466f6b69a2ea96d4f17246e71c830e59ce9cdaccd0f",
+      "bytes": 12189,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/widgets/order_item_widget.dart",
+      "destination": "source/lib/widgets/order_item_widget.dart",
+      "sha256": "b0592783ed99fe6d14ad04d6791e51c155cc55b06199de15272a6295b658c0c3",
+      "bytes": 21515,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/widgets/payment_options_sheet.dart",
+      "destination": "source/lib/widgets/payment_options_sheet.dart",
+      "sha256": "5057fe997c12c988487f35fa969945c1330b703da74d317240354df31bf8d907",
+      "bytes": 42299,
+      "role": "source-and-config"
+    },
+    {
+      "source": "pubspec.lock",
+      "destination": "source/pubspec.lock",
+      "sha256": "00222efda04c56ec1f9d36e9e7c1e555a9da8e66987b95249f662c33c242cf77",
+      "bytes": 47134,
+      "role": "source-and-config"
+    },
+    {
+      "source": "pubspec.yaml",
+      "destination": "source/pubspec.yaml",
+      "sha256": "1bebbcb6e25705f59dda2bc4213c79ea8e3ad5028d88eef7e9225ff0db4ac4a0",
+      "bytes": 5421,
+      "role": "source-and-config"
+    },
+    {
+      "source": "test/auth_gate_first_login_test.dart",
+      "destination": "source/test/auth_gate_first_login_test.dart",
+      "sha256": "fa922a416cc62f07bfff3cc8f22651837c99f227e0753df3e7d78a90680e4dcf",
+      "bytes": 5691,
+      "role": "tests"
+    },
+    {
+      "source": "test/widget_test.dart",
+      "destination": "source/test/widget_test.dart",
+      "sha256": "d64863986edfb018dbc13197114a18368f6401bb0d18e53553cd354d17aa0833",
+      "bytes": 2034,
+      "role": "tests"
+    },
+    {
+      "source": "functions/contracts/productCommercialC5.js",
+      "destination": "source/functions/contracts/productCommercialC5.js",
+      "sha256": "7667407c54b4db2f944f2956c1d06cb752b2e046b43b09c88a6e0176054bc0f1",
+      "bytes": 6549,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/contracts/productCommercialPersistenceC5.js",
+      "destination": "source/functions/contracts/productCommercialPersistenceC5.js",
+      "sha256": "72cb39dcfe55b1d0e25d00434a22588d88870aa1a574ef257d1b419fb1b7f39d",
+      "bytes": 5327,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/contracts/productEligibilityC5.js",
+      "destination": "source/functions/contracts/productEligibilityC5.js",
+      "sha256": "7481fb1ca77d7064ef16f2b57625a544be594179cd5af06073e7cdcd8997eb2d",
+      "bytes": 10001,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/contracts/productVariantsV1.js",
+      "destination": "source/functions/contracts/productVariantsV1.js",
+      "sha256": "4ce0871c166da77b0b3f0bb3e3a2157cdc727d82b009543c72c47985e9aa8d96",
+      "bytes": 10961,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/tests/security/consolidationFinancialFields.test.mjs",
+      "destination": "source/functions/tests/security/consolidationFinancialFields.test.mjs",
+      "sha256": "f5b99dce828d618e0052e54a75a5c9672930647bd27f75ec2ffc3002815fb593",
+      "bytes": 1863,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/security/hmlFinancialReservedFields.emulator.test.mjs",
+      "destination": "source/functions/tests/security/hmlFinancialReservedFields.emulator.test.mjs",
+      "sha256": "482676883a9cd61d8b2e42ae89b4bf56696d7f55c7cbe6e4a5b8e4ec753e3d44",
+      "bytes": 4885,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/security/productCodeRules.test.mjs",
+      "destination": "source/functions/tests/security/productCodeRules.test.mjs",
+      "sha256": "27cccb12e165088f4d1c2a93ef0f0d8a77bf71992a782b2a70f3485a5e258105",
+      "bytes": 4071,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/security/productStructuralRulesC5.test.mjs",
+      "destination": "source/functions/tests/security/productStructuralRulesC5.test.mjs",
+      "sha256": "f2fbbb1e724530459ab9df9376b41b69a59a7c2d4fe56bc10bc1d32e2cbea0ea",
+      "bytes": 10433,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/security/salesCashAuthorizationRules.test.mjs",
+      "destination": "source/functions/tests/security/salesCashAuthorizationRules.test.mjs",
+      "sha256": "175b8b46e65f9e20e89aab922466c0224c8176c91aab65ff219fdc7f2caf8ef9",
+      "bytes": 9643,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/security/storeWriterAdmissionRules.test.mjs",
+      "destination": "source/functions/tests/security/storeWriterAdmissionRules.test.mjs",
+      "sha256": "6aa6856cecf8e4a343fc78a8d35defdf4e536c6de27467a6571d9d16c21bc6be",
+      "bytes": 7287,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/security/writerAdmissionResidualRules.test.mjs",
+      "destination": "source/functions/tests/security/writerAdmissionResidualRules.test.mjs",
+      "sha256": "892626974b8f5d60b92b4c4f8fc4a781e1f9a1f1036bd68c702cdba960851753",
+      "bytes": 2174,
+      "role": "tests"
+    },
+    {
+      "source": "lib/firebase/web_app_check_cache_stub.dart",
+      "destination": "source/lib/firebase/web_app_check_cache_stub.dart",
+      "sha256": "4ee6360ca0fe1e64f9d02e3f7d3a095740a61e38166c418f457a17b960104498",
+      "bytes": 40,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/firebase/web_app_check_cache_web.dart",
+      "destination": "source/lib/firebase/web_app_check_cache_web.dart",
+      "sha256": "e648e046eb527f627a708e330d10da2229fe2bc86368002a4483a29d13ccf19f",
+      "bytes": 644,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/firebase/web_app_check_policy.dart",
+      "destination": "source/lib/firebase/web_app_check_policy.dart",
+      "sha256": "3dc701a1b4d0aeb84b089b1c9ea13b084ed874122caecd3ef65813a9d30f3063",
+      "bytes": 943,
+      "role": "source-and-config"
+    },
+    {
+      "source": "test/web_app_check_policy_test.dart",
+      "destination": "source/test/web_app_check_policy_test.dart",
+      "sha256": "ac17b8e06b6d2ffc0d2d61e4f3d94b748601d7666611d8f6583735a431da2ab9",
+      "bytes": 2152,
+      "role": "tests"
+    }
+  ],
+  "sharedOwnerBranch": "preserve/shared-integration-contracts-20261031",
+  "notes": "Single owner for all 19 mixed files and shared contracts/security tests. Whole-file bytes are preserved; the directed review maps responsibilities without cutting callbacks or changing architecture. This is current DEVELOPMENT integration, not the published Web or canonical financial package.",
+  "originalRootSourceUnchanged": true,
+  "noDeployAuthorization": true,
+  "pushAllowed": false,
+  "knownWhitespace": [
+    "source/firestore.rules:29: trailing whitespace.",
+    "source/firestore.rules:30: trailing whitespace.",
+    "source/firestore.rules:74: trailing whitespace.",
+    "source/firestore.rules:145: trailing whitespace.",
+    "source/firestore.rules:213: trailing whitespace."
+  ]
+}
