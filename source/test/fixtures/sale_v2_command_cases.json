@@ -1,0 +1,30 @@
+{
+  "base": {
+    "schemaVersion": 2, "requestId": "r", "saleId": "r",
+    "scope": {"projectId": "demo-f9-b07c", "uid": "u", "storeId": "s"},
+    "origin": "online", "saleKind": "instant",
+    "items": [{"productId": "p", "quantity": 1, "expectedUnitPriceCents": 29}],
+    "expectedTotalCents": 29, "paymentMethod": "PIX"
+  },
+  "cases": [
+    {"name": "absent optionals normalize to null", "patch": {}, "valid": true},
+    {"name": "ECMAScript ID whitespace parity", "patch": {"requestId": "\u0085r", "saleId": "\u0085r"}, "valid": true},
+    {"name": "notes preserved exactly", "patch": {"notes": "  original\n", "customerId": "c"}, "valid": true},
+    {"name": "item order normalized", "patch": {"items": [{"productId": "z", "quantity": 2, "expectedUnitPriceCents": 10}, {"productId": "a", "quantity": 3, "expectedUnitPriceCents": 3}]}, "valid": true},
+    {"name": "unicode product ID", "patch": {"items": [{"productId": "produto-😀", "quantity": 1, "expectedUnitPriceCents": 29}]}, "valid": true},
+    {"name": "different aliases", "patch": {"saleId": "other"}, "valid": false},
+    {"name": "unknown field", "patch": {"isPaid": true}, "valid": false},
+    {"name": "no trimming payment", "patch": {"paymentMethod": " PIX "}, "valid": false},
+    {"name": "offline forbidden", "patch": {"origin": "offline"}, "valid": false},
+    {"name": "total mismatch", "patch": {"expectedTotalCents": 30}, "valid": false},
+    {"name": "string total", "patch": {"expectedTotalCents": "29"}, "valid": false},
+    {"name": "empty items", "patch": {"items": []}, "valid": false},
+    {"name": "duplicate product", "patch": {"items": [{"productId": "p", "quantity": 1, "expectedUnitPriceCents": 10}, {"productId": "p", "quantity": 1, "expectedUnitPriceCents": 19}]}, "valid": false},
+    {"name": "reserved ID", "patch": {"requestId": "__r__", "saleId": "__r__"}, "valid": false},
+    {"name": "scope extra field", "patch": {"scope": {"projectId": "demo-f9-b07c", "uid": "u", "storeId": "s", "role": "admin"}}, "valid": false},
+    {"name": "unsafe integer", "patch": {"expectedTotalCents": 9007199254740992}, "valid": false},
+    {"name": "overflow multiply", "patch": {"items": [{"productId": "p", "quantity": 9007199254740991, "expectedUnitPriceCents": 2}]}, "valid": false},
+    {"name": "zero amount valid", "patch": {"items": [{"productId": "p", "quantity": 1, "expectedUnitPriceCents": 0}], "expectedTotalCents": 0}, "valid": true},
+    {"name": "fractional units", "patch": {"items": [{"productId": "p", "quantity": 0.5, "expectedUnitPriceCents": 58}]}, "valid": false}
+  ]
+}

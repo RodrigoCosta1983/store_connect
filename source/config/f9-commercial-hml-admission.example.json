@@ -1,0 +1,12 @@
+{
+  "projectId": "store-connect-hml",
+  "operatorUid": "REPLACE_WITH_REGISTERED_BACKEND_OPERATOR_UID",
+  "command": {
+    "storeId": "REPLACE_WITH_SYNTHETIC_HML_STORE_ID",
+    "requestId": "REPLACE_WITH_STABLE_TRANSITION_ID",
+    "expectedEpoch": 2,
+    "mode": "authoritative",
+    "reason": "REPLACE_WITH_REVIEWED_HML_DRAIN_JUSTIFICATION",
+    "evidenceId": "REPLACE_WITH_REVIEWED_EVIDENCE_ID"
+  }
+}
