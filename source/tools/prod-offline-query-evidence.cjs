@@ -1,0 +1,10 @@
+"use strict";
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{spawnSync}=require('node:child_process');
+const project='store-connect-app',folder=path.resolve(__dirname,'../build/prod-offline-diagnostic-20261026'),file=path.join(folder,'evidence.json'),r=JSON.parse(fs.readFileSync(file)),ids=r.operations.map(o=>o.id);
+const t=spawnSync('gcloud.cmd',['auth','print-access-token','--project='+project,'--quiet'],{shell:true,encoding:'utf8',windowsHide:true,timeout:30000});assert.equal(t.status,0);let token=t.stdout.trim();
+(async()=>{r.failedQueryDiagnosis=[];for(const [collection,field] of [['sales','localSaleId'],['auditLogs','result.requestId']]){
+ const body={structuredQuery:{from:[{collectionId:collection,allDescendants:true}],select:{fields:[{fieldPath:field}]},where:{fieldFilter:{field:{fieldPath:field},op:'IN',value:{arrayValue:{values:ids.map(stringValue=>({stringValue}))}}}},limit:10}};
+ const x=await fetch(`https://firestore.googleapis.com/v1/projects/${project}/databases/(default)/documents:runQuery`,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json','x-goog-user-project':project},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)}),data=await x.json().catch(()=>null);
+ const error=Array.isArray(data)?data.find(row=>row.error)?.error:data?.error;
+ const message=String(error?.message||'');r.failedQueryDiagnosis.push({collection,field,http:x.status,responseIsArray:Array.isArray(data),errorCode:error?.code||null,errorStatus:error?.status||null,indexRequired:/index/i.test(message),safeErrorMessage:message.replace(/https?:\/\/\S+/g,'[URL omitted]').replace(/[A-Za-z0-9_.+-]+@[A-Za-z0-9.-]+/g,'[email masked]'),documentMatches:x.ok&&Array.isArray(data)?data.filter(row=>row.document).length:null});
+ }} )().catch(()=>{r.queryDiagnosisError='READ_FAILED';process.exitCode=1;}).finally(()=>{token='';fs.writeFileSync(file,JSON.stringify(r,null,2)+'\n');console.log(JSON.stringify(r.failedQueryDiagnosis,null,2));});
