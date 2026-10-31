@@ -1,0 +1,338 @@
+{
+  "version": 1,
+  "domain": "asaas_dev",
+  "branch": "preserve/asaas-development-20261031",
+  "status": "local-only-awaiting-selection-and-push-review",
+  "independentHistory": true,
+  "sourceInventoryCount": 894,
+  "sourceFiles": [
+    {
+      "source": "docs/financeiro/P4_INADIMPLENCIA_E_RECONCILIACAO_ASAAS.md",
+      "destination": "source/docs/financeiro/P4_INADIMPLENCIA_E_RECONCILIACAO_ASAAS.md",
+      "sha256": "52a01af399b53281b819c4094125e74dde78b14511b2f4cf6e2fbe40abca9247",
+      "bytes": 33201,
+      "role": "documentation"
+    },
+    {
+      "source": "docs/financeiro/P5_PREPARACAO_PRODUCAO_ASAAS.md",
+      "destination": "source/docs/financeiro/P5_PREPARACAO_PRODUCAO_ASAAS.md",
+      "sha256": "aa86a0121fd142963e9eb885e31c0f7303bd58f4861fab1deabac178d1799936",
+      "bytes": 39354,
+      "role": "documentation"
+    },
+    {
+      "source": "functions/financeiro/asaasConfig.js",
+      "destination": "source/functions/financeiro/asaasConfig.js",
+      "sha256": "ce43c0caa2d7fe1d9af600dae1477d216cdd6ab025e0b29c3ee87900f324be56",
+      "bytes": 1243,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/asaasSecrets.js",
+      "destination": "source/functions/financeiro/asaasSecrets.js",
+      "sha256": "0d46984e17b53cac51093d32f559c64aeceb98090fc313d10de36f2efc371d7f",
+      "bytes": 1335,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/asaasWebhook.js",
+      "destination": "source/functions/financeiro/asaasWebhook.js",
+      "sha256": "da8280cf58a11c2845d1c6fdc82ea4bdbe5b1bb50ee296c96cabfa0e18de6b71",
+      "bytes": 36340,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/expireTrials.js",
+      "destination": "source/functions/financeiro/expireTrials.js",
+      "sha256": "8d5ad06f75bb7c070abe96ded5847e19e6d52f8575b5b5021ff4aec6afd9691c",
+      "bytes": 9727,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/faturas.js",
+      "destination": "source/functions/financeiro/faturas.js",
+      "sha256": "0b548a0cb28c5bece565cf23c0df49e6038ad524b09485fcc4b6b030db8c5184",
+      "bytes": 12976,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/reconcileAsaasBilling.js",
+      "destination": "source/functions/financeiro/reconcileAsaasBilling.js",
+      "sha256": "40747f384deefd1020b6c2052f22711e52b5cde5c4d818a98e205a6b833562a8",
+      "bytes": 16372,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/subscriptionPricing.js",
+      "destination": "source/functions/financeiro/subscriptionPricing.js",
+      "sha256": "769117ce43c7fd40e719ce1087b6ace7581f1407b2e4ced3f12e325451554c43",
+      "bytes": 21606,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/tests/financeiro/asaasConfig.test.js",
+      "destination": "source/functions/tests/financeiro/asaasConfig.test.js",
+      "sha256": "f6554e6d9de1e1dba360512c8f61d7a153b12819af7b6970f2648818840f9e89",
+      "bytes": 4050,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/asaasSecrets.test.js",
+      "destination": "source/functions/tests/financeiro/asaasSecrets.test.js",
+      "sha256": "5454d549719b2c1b92b9851302c27e168fa1dd70e1789500815da84daee5adfa",
+      "bytes": 12837,
+      "role": "tests"
+    },
+    {
+      "source": "lib/screens/finance/invoices_screen.dart",
+      "destination": "source/lib/screens/finance/invoices_screen.dart",
+      "sha256": "2788e4d89ca96b71208a5a16dd8ade50f33e502207d9344f398c69d867d4560d",
+      "bytes": 32570,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/screens/subscription_screen.dart",
+      "destination": "source/lib/screens/subscription_screen.dart",
+      "sha256": "031a4c21ed75813e0f84d7ed291507e9893245fc049b1952c60eddf5728b9abc",
+      "bytes": 20818,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/asaasBindingOrigin.js",
+      "destination": "source/functions/financeiro/asaasBindingOrigin.js",
+      "sha256": "0c9c041bf8cdb7e6ed0b4e2cfe183930c5b7f7f63f419e0c60bc663c7cfa9331",
+      "bytes": 2110,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/asaasCompleteList.js",
+      "destination": "source/functions/financeiro/asaasCompleteList.js",
+      "sha256": "00b2b57612da078de6b90a36cd75bb334a31ac9692676145e71d2b32aead2261",
+      "bytes": 2217,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/asaasDurableWebhook.js",
+      "destination": "source/functions/financeiro/asaasDurableWebhook.js",
+      "sha256": "837a45244392c5582e2e358ea15c76730836772032b89bbbf9e680872ac677b9",
+      "bytes": 5426,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/asaasWebhookAuth.js",
+      "destination": "source/functions/financeiro/asaasWebhookAuth.js",
+      "sha256": "bf3a73efbecdb7b1159878628278fc22c49678943ae44ae898fa41d7958fae17",
+      "bytes": 814,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/asaasWebhookLedger.js",
+      "destination": "source/functions/financeiro/asaasWebhookLedger.js",
+      "sha256": "5bb1da9ec021b3bffa1ffddb9acc9dd35f41f29d0742305326890bb1a4dc4b6c",
+      "bytes": 12932,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/asaasWebhookLedgerScanner.js",
+      "destination": "source/functions/financeiro/asaasWebhookLedgerScanner.js",
+      "sha256": "7e2f87021e2e49528c425f5dbb9d3b3ca8439af97a27a0e5594ad31e5094e839",
+      "bytes": 4920,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/asaasWebhookLocalProcessor.js",
+      "destination": "source/functions/financeiro/asaasWebhookLocalProcessor.js",
+      "sha256": "26df1a07c6e12b9d8f4047eb84afbec422038591c3024b7bd0d98d6922897e6f",
+      "bytes": 9964,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/billingReadPolicy.js",
+      "destination": "source/functions/financeiro/billingReadPolicy.js",
+      "sha256": "7300381a680e1708d81b71b47e9166de7755299dd21442c9c1573aa1b71a9937",
+      "bytes": 767,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/financialStatusPolicy.js",
+      "destination": "source/functions/financeiro/financialStatusPolicy.js",
+      "sha256": "8a8a79b7bb200a0ce8728009c1da433aab184897fe1db4cc3ceac110f3dfeeda",
+      "bytes": 640,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/prod/asaasProductionConfig.js",
+      "destination": "source/functions/financeiro/prod/asaasProductionConfig.js",
+      "sha256": "87ca7a3eebd9ef45c250e548343ba3d8d5f839480696c8c8a364e3ecb1c9836e",
+      "bytes": 1838,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/prod/endpoints.js",
+      "destination": "source/functions/financeiro/prod/endpoints.js",
+      "sha256": "623c349505cc02d5dcf8fd128e6f0ab6c819393f51609b79be87c082e5a27e5b",
+      "bytes": 2683,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/prod/planCatalog.js",
+      "destination": "source/functions/financeiro/prod/planCatalog.js",
+      "sha256": "b973eccdf5e084c2165320f012374732aa0d8a281107c6606ebcf0f96e148c85",
+      "bytes": 337,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/prod/productionFinance.js",
+      "destination": "source/functions/financeiro/prod/productionFinance.js",
+      "sha256": "228f0bc9a9269b2fd76ad739b6cc86b3ae3c7cd89011a357e9a5cb37a7b69954",
+      "bytes": 26988,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/reconcileFinancialState.js",
+      "destination": "source/functions/financeiro/reconcileFinancialState.js",
+      "sha256": "cb5833323c02201179c975ec83aa6b39511a6b5b85968b62fc45ba4eaea65480",
+      "bytes": 3771,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/reviewSubscriptionAttempt.js",
+      "destination": "source/functions/financeiro/reviewSubscriptionAttempt.js",
+      "sha256": "cfe101fd5ab805952e0211abbadd5197ea320d4435c66384742838e37b2e668c",
+      "bytes": 4615,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/storeFinancialAdmission.js",
+      "destination": "source/functions/financeiro/storeFinancialAdmission.js",
+      "sha256": "f92cada1ef8d111399f4538bbc773caa7d0859c992ee50a81e792bb07bb5089c",
+      "bytes": 2682,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/subscriptionAttempt.js",
+      "destination": "source/functions/financeiro/subscriptionAttempt.js",
+      "sha256": "8cc0d7831fd4301527f6e2765dab3b5ec49a3e41b5544c74b3863ffd5b98587c",
+      "bytes": 8237,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/financeiro/subscriptionPriceSyncPolicy.js",
+      "destination": "source/functions/financeiro/subscriptionPriceSyncPolicy.js",
+      "sha256": "b3b3d9f1acb10eb68c5f076896a0c882fe453d016ffb8dadc7062203f536dc1f",
+      "bytes": 635,
+      "role": "source-and-config"
+    },
+    {
+      "source": "functions/tests/financeiro/asaasA1OfflineGuard.cjs",
+      "destination": "source/functions/tests/financeiro/asaasA1OfflineGuard.cjs",
+      "sha256": "9da2b9fc5f4d7a2dbc251260514ac2bb6bf4460b31b271d97953c5d460d0f2df",
+      "bytes": 880,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/asaasA1Security.test.js",
+      "destination": "source/functions/tests/financeiro/asaasA1Security.test.js",
+      "sha256": "fa2ebbf95121a762db314c2e78d4c41a920cd4bee33a81bacdd07949ffcf22a7",
+      "bytes": 10147,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/asaasCompleteList.test.js",
+      "destination": "source/functions/tests/financeiro/asaasCompleteList.test.js",
+      "sha256": "21c7b5e2aed00039d4986611a88f52242be048f37ab67c054c9ea683f7b64b69",
+      "bytes": 3780,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/billingReadConsolidation.test.js",
+      "destination": "source/functions/tests/financeiro/billingReadConsolidation.test.js",
+      "sha256": "2dd7a8a5339c638ae482d3ad09463f889234d477a1c6de47cc556e3f53a10d0e",
+      "bytes": 6391,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/financialGates.emulator.test.js",
+      "destination": "source/functions/tests/financeiro/financialGates.emulator.test.js",
+      "sha256": "12db6f33565a9b11d8c260d9e447c55860dd0358cf49fdf0b056f203874dce63",
+      "bytes": 14666,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/p264FinancialAdmission.emulator.test.js",
+      "destination": "source/functions/tests/financeiro/p264FinancialAdmission.emulator.test.js",
+      "sha256": "6f1068e8bc48490640ce98705b0f0351b8d581cde1a76a52e6c50d108cde7de5",
+      "bytes": 4602,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/p264FinancialSafety.test.js",
+      "destination": "source/functions/tests/financeiro/p264FinancialSafety.test.js",
+      "sha256": "1d901a08dd11bbf1903fd0cd4b76a464c00c47618f909f956cba63fcb66b980c",
+      "bytes": 17785,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/productionFinance.emulator.test.js",
+      "destination": "source/functions/tests/financeiro/productionFinance.emulator.test.js",
+      "sha256": "cdf212b2794f696b81a51d9b776a58dd4c9fd91b65c6c3648d1e064ad8a65c88",
+      "bytes": 18386,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/productionFinancialRulesB2.emulator.test.js",
+      "destination": "source/functions/tests/financeiro/productionFinancialRulesB2.emulator.test.js",
+      "sha256": "3e87e3e616a75154075ee316ed7dc409fba806d143b57a92d464d7788f9f2730",
+      "bytes": 6894,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/productionLoopbackGuard.cjs",
+      "destination": "source/functions/tests/financeiro/productionLoopbackGuard.cjs",
+      "sha256": "91918a85932899d9ef121aaacc45dfa2b2d0463fa3d4a42a413f1613858ac4f6",
+      "bytes": 1286,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/productionRules.emulator.test.js",
+      "destination": "source/functions/tests/financeiro/productionRules.emulator.test.js",
+      "sha256": "53f4da06837f7d23d710dc07523d95ff22e2e6030c42d08777038e07b02fb6b3",
+      "bytes": 1857,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/subscriptionReview.emulator.test.js",
+      "destination": "source/functions/tests/financeiro/subscriptionReview.emulator.test.js",
+      "sha256": "ae1f724cf48dbf1ab592d2f85e387982a268a95d77d7b7a0d854be8bb06017fa",
+      "bytes": 5778,
+      "role": "tests"
+    },
+    {
+      "source": "functions/tests/financeiro/subscriptionStateReadOnly.test.js",
+      "destination": "source/functions/tests/financeiro/subscriptionStateReadOnly.test.js",
+      "sha256": "054c565143e0ddd83f20f622ed556198dfed846583033fcd16c61ddc7c7918a2",
+      "bytes": 2553,
+      "role": "tests"
+    },
+    {
+      "source": "lib/services/subscription_billing_access.dart",
+      "destination": "source/lib/services/subscription_billing_access.dart",
+      "sha256": "80f939083adcf27d248e65cdff2cd2d5f747dd82302238144c352a1971c08b71",
+      "bytes": 5796,
+      "role": "source-and-config"
+    },
+    {
+      "source": "test/subscription_billing_access_test.dart",
+      "destination": "source/test/subscription_billing_access_test.dart",
+      "sha256": "ad9f6e42dac2cf70400c8663096cc894c96f96607a17244156d01d9004c8e548",
+      "bytes": 10917,
+      "role": "tests"
+    }
+  ],
+  "sharedOwnerBranch": "preserve/shared-integration-contracts-20261031",
+  "notes": "Versioned development snapshot only, not a claim of production admission or standalone build readiness. Cross-domain dependencies are tracked in the shared resolution report; do not copy divergent shared files into this branch.",
+  "originalRootSourceUnchanged": true,
+  "noDeployAuthorization": true,
+  "pushAllowed": false,
+  "knownWhitespace": []
+}
