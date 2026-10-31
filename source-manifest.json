@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "domain": "asaas_prod",
+  "branch": "release/asaas-prod-operational-20261030",
+  "status": "local-only-awaiting-selection-and-push-review",
+  "independentHistory": true,
+  "sourceInventoryCount": 894,
+  "sourceFiles": [
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/.gitignore",
+      "destination": ".gitignore",
+      "sha256": "c0abec4e4228ea3741ea5ed8b945c261d0196dfa922b7ad26d130a2184530899",
+      "bytes": 42,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/asaasBindingOrigin.js",
+      "destination": "functions/financeiro/asaasBindingOrigin.js",
+      "sha256": "0c9c041bf8cdb7e6ed0b4e2cfe183930c5b7f7f63f419e0c60bc663c7cfa9331",
+      "bytes": 2110,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/asaasCompleteList.js",
+      "destination": "functions/financeiro/asaasCompleteList.js",
+      "sha256": "00b2b57612da078de6b90a36cd75bb334a31ac9692676145e71d2b32aead2261",
+      "bytes": 2217,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/asaasConfig.js",
+      "destination": "functions/financeiro/asaasConfig.js",
+      "sha256": "8831b0bce8169e4f4c27d91af3ef9b90b9744064dceac4a4dbb30224de02218a",
+      "bytes": 787,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/asaasSecrets.js",
+      "destination": "functions/financeiro/asaasSecrets.js",
+      "sha256": "0d46984e17b53cac51093d32f559c64aeceb98090fc313d10de36f2efc371d7f",
+      "bytes": 1335,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/asaasWebhook.js",
+      "destination": "functions/financeiro/asaasWebhook.js",
+      "sha256": "3d1d6ac6905df6209253fb9dbb9acb7e8adcd3fc4dc3ee3404396babff6fb686",
+      "bytes": 36335,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/asaasWebhookAuth.js",
+      "destination": "functions/financeiro/asaasWebhookAuth.js",
+      "sha256": "bf3a73efbecdb7b1159878628278fc22c49678943ae44ae898fa41d7958fae17",
+      "bytes": 814,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/billingReadPolicy.js",
+      "destination": "functions/financeiro/billingReadPolicy.js",
+      "sha256": "7300381a680e1708d81b71b47e9166de7755299dd21442c9c1573aa1b71a9937",
+      "bytes": 767,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/faturas.js",
+      "destination": "functions/financeiro/faturas.js",
+      "sha256": "bd3694e5a8eb270b03f404ce969aefd69b25b36171363c98c7003ef49136b94f",
+      "bytes": 12981,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/provider.js",
+      "destination": "functions/financeiro/provider.js",
+      "sha256": "dd6a9d3bbf0d43f115f553f0ddb76d568c7e1a8feb31df1d43b8d4606e351be0",
+      "bytes": 1566,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/reconcileAsaasBilling.js",
+      "destination": "functions/financeiro/reconcileAsaasBilling.js",
+      "sha256": "da812b87e0c17e777c961a4c9094223ed248b46d43f183fd332ff4dfce87fa67",
+      "bytes": 16159,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/storeFinancialAdmission.js",
+      "destination": "functions/financeiro/storeFinancialAdmission.js",
+      "sha256": "68b805c228823e38560dd81c4f6083c5015ea9d5e2b956f3b177b7b6c154a68d",
+      "bytes": 3271,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/subscriptionAttempt.js",
+      "destination": "functions/financeiro/subscriptionAttempt.js",
+      "sha256": "814c79ff094307192db21f68e28e7710650ad28c5d77e09fa1cd42530d8e352a",
+      "bytes": 8304,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/subscriptionLegacyRegistry.js",
+      "destination": "functions/financeiro/subscriptionLegacyRegistry.js",
+      "sha256": "3b76b9933e0c1e379709d1ec817647f004a092c67b83db785200a29661d281df",
+      "bytes": 5987,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/subscriptionPriceSyncPolicy.js",
+      "destination": "functions/financeiro/subscriptionPriceSyncPolicy.js",
+      "sha256": "b3b3d9f1acb10eb68c5f076896a0c882fe453d016ffb8dadc7062203f536dc1f",
+      "bytes": 635,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/financeiro/subscriptionPricing.js",
+      "destination": "functions/financeiro/subscriptionPricing.js",
+      "sha256": "04e5efb1fc86744dd57b6e260b390749463e9ec96be94bf3fb8c604775214b4c",
+      "bytes": 21569,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/index.js",
+      "destination": "functions/index.js",
+      "sha256": "174e7039026841233f43efc2da912a61a20f6987e7ee274aa88d6f5d115b7e31",
+      "bytes": 2673,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/legacyCore.js",
+      "destination": "functions/legacyCore.js",
+      "sha256": "0537b7840c4d8dc346f9d73e836817711b5726be59b45e28be76c8e8966ea162",
+      "bytes": 67784,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/package-lock.json",
+      "destination": "functions/package-lock.json",
+      "sha256": "9b1e4d9df61c81fb8d9c8b505a3ff304f81385b97a3821ae78d4926f9946c8e6",
+      "bytes": 174447,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/package.json",
+      "destination": "functions/package.json",
+      "sha256": "4c85c54f9404d87a769d822f7a2cc66a776c1e80c529f161f26b4a28ee49818e",
+      "bytes": 371,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/publicContract.js",
+      "destination": "functions/publicContract.js",
+      "sha256": "fbcf472eb2b0a11ea2fa6581a268808c72a1e89f11ed8835679c4a6ae2455f96",
+      "bytes": 3143,
+      "role": "source-and-config"
+    },
+    {
+      "source": "deploy/asaas-prod-operacional-20261030/functions/webhookScope.js",
+      "destination": "functions/webhookScope.js",
+      "sha256": "13e8ce5a40e50efa61e6ca45d89cecd235ffdc0b60807ee97e00c0add23d7ae4",
+      "bytes": 3706,
+      "role": "source-and-config"
+    },
+    {
+      "source": "Existing approved emulator fixture; only two import-root paths relocated",
+      "destination": "tests/finance-general.emulator.test.cjs",
+      "sha256": "0f7fd28e21137070221bc6d5341a3a11ab108441f1b1b4ce0e33edcb67ce3606",
+      "bytes": 29523,
+      "role": "tests",
+      "adaptation": "Two path declarations only; financial assertions unchanged; suite not rerun"
+    }
+  ],
+  "sharedOwnerBranch": "preserve/shared-integration-contracts-20261031",
+  "notes": "Canonical operational package; root financial development modules are intentionally separate. Source digests match the published manifest. The existing 40-case emulator fixture has only two import roots relocated; Node syntax check passed; tests were not rerun.",
+  "originalRootSourceUnchanged": true,
+  "noDeployAuthorization": true,
+  "pushAllowed": false,
+  "knownWhitespace": []
+}
