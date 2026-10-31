@@ -1,0 +1,10 @@
+'use strict';
+// Offline integrity check. Never authenticates or deploys.
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'..'),app=path.join(root,'app'),manifest=JSON.parse(fs.readFileSync(path.join(root,'source-manifest.json')));
+const problems=[];
+const patterns=[['asaas-token',/\$aact_[A-Za-z0-9_$-]{30,}/],['github-token',/(?:gh[pousr]_[A-Za-z0-9]{25,}|github_pat_[A-Za-z0-9_]{30,})/],['oauth-token',/ya29\.[A-Za-z0-9_-]{25,}/],['service-account',/"private_key"\s*:\s*"[^"\r\n]{40,}/]];
+const forbidden=/(^|\/)(?:\.env(?:\.|$)|node_modules|\.dart_tool|build|\.firebase|\.gradle|backups?)(\/|$)|\.(?:zip|apk|aab|sqlite|db|log|jsonl|jks|keystore|pem|p12)$/i;
+for(const file of manifest.sourceFiles){assert.ok(!forbidden.test(file.path),'Unexpected source file category');const full=path.resolve(app,file.path);assert.ok(full.startsWith(app+path.sep),'Source path escapes app');const bytes=fs.readFileSync(full);assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),file.sha256,'Source mismatch: '+file.path);if(bytes.includes(0))continue;const text=bytes.toString('utf8');for(const[type,re]of patterns)if(re.test(text))problems.push({path:file.path,type});if(file.path.endsWith('.dart'))for(const directive of text.matchAll(/(?:^|\n)\s*(?:import|export|part(?!\s+of\b))\s+([^;]+);/g))for(const q of directive[1].matchAll(/['"]([^'"]+)['"]/g)){const uri=q[1];if(uri.startsWith('dart:')||uri.startsWith('package:')&&!uri.startsWith('package:store_connect/'))continue;const dependency=uri.startsWith('package:store_connect/')?path.join(app,'lib',uri.slice(22)):path.resolve(path.dirname(full),uri);assert.ok(fs.existsSync(dependency),'Missing internal import: '+file.path);}}
+assert.equal(problems.length,0,'Potential secret in selected sources');
+console.log(JSON.stringify({verifiedFiles:manifest.sourceFiles.length,sourceHashesMatch:true,internalImportsPresent:true,selectedContentSecretFindings:problems.length,inheritedHistorySanitized:false,remotePushAllowed:false,networkRequests:0,buildsOrFunctionalTestsRepeated:0},null,2));
