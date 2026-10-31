@@ -271,6 +271,83 @@
       "sha256": "ac17b8e06b6d2ffc0d2d61e4f3d94b748601d7666611d8f6583735a431da2ab9",
       "bytes": 2152,
       "role": "tests"
+    },
+    {
+      "source": "lib/firebase/app_environment.dart",
+      "destination": "source/lib/firebase/app_environment.dart",
+      "sha256": "4e16f6ce7a1af0279f253c21e3d3793760609fe6c10da11799c7f6109347de49",
+      "bytes": 1983,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "lib/services/google_sign_in_configuration.dart",
+      "destination": "source/lib/services/google_sign_in_configuration.dart",
+      "sha256": "c673056f034849401f590c0f8769dbb68488a020e5f2aef456284894e871ed43",
+      "bytes": 1249,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "lib/firebase/firebase_bootstrap.dart",
+      "destination": "source/lib/firebase/firebase_bootstrap.dart",
+      "sha256": "ae8fd958118ee2e0317e631f78a8ef0a0e51604f852ef8d9243a4fb1496ce99b",
+      "bytes": 1633,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "lib/firebase/firebase_options_hml.dart",
+      "destination": "source/lib/firebase/firebase_options_hml.dart",
+      "sha256": "bfac9d5a44e765635a8e1c7b3abf5cbe4c44d2d5ad7c5937ff364379d91ded37",
+      "bytes": 788,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "lib/firebase/firebase_options_prod.dart",
+      "destination": "source/lib/firebase/firebase_options_prod.dart",
+      "sha256": "f2d603bf4512922796fc29500db8513562ade0abe5df34c72cf646e36292c34b",
+      "bytes": 824,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "lib/firebase_options.dart",
+      "destination": "source/lib/firebase_options.dart",
+      "sha256": "ef71f7758dfd34a42582eb9b90d3136ff6d8de04b4c836c77e0623f4cdbfa275",
+      "bytes": 274,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "lib/main.dart",
+      "destination": "source/lib/main.dart",
+      "sha256": "239917f23306458c99dde4981f44b7fa842705c4f87c417de8cc12947a9b0fd1",
+      "bytes": 218,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "lib/screens/management/widgets/catalog_dynamic_section_card.dart",
+      "destination": "source/lib/screens/management/widgets/catalog_dynamic_section_card.dart",
+      "sha256": "0ea3e9a8de7a3f8a5738819cc07cbf18759dbc7f1b3f1fd0d57831234c69d7b8",
+      "bytes": 2100,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "lib/screens/management/widgets/catalog_preview_button.dart",
+      "destination": "source/lib/screens/management/widgets/catalog_preview_button.dart",
+      "sha256": "d293bfa46ec0b5cc50589700058365c5b5b860a02cf282d5e470e0229c180fc6",
+      "bytes": 2149,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "lib/screens/management/widgets/catalog_configuration_dialog.dart",
+      "destination": "source/lib/screens/management/widgets/catalog_configuration_dialog.dart",
+      "sha256": "ec8f638e7dbb3d6bbf5222d0e70aed79f61b9f144ff1261795f6c4f6b27f24a3",
+      "bytes": 1335,
+      "role": "unchanged-baseline-dependency"
+    },
+    {
+      "source": "functions-bootstrap/index.js",
+      "destination": "source/functions-bootstrap/index.js",
+      "sha256": "2e2fb68ec7b0bfa9cd6b480f59fbdebf2f5a56d066552fc03126db9cf2d99217",
+      "bytes": 189,
+      "role": "unchanged-baseline-dependency"
     }
   ],
   "sharedOwnerBranch": "preserve/shared-integration-contracts-20261031",
@@ -284,5 +361,6 @@
     "source/firestore.rules:74: trailing whitespace.",
     "source/firestore.rules:145: trailing whitespace.",
     "source/firestore.rules:213: trailing whitespace."
-  ]
+  ],
+  "baselineDependencyNote": "Only unchanged HEAD file bytes were added to close existing relative imports; no F7 Git objects imported"
 }
