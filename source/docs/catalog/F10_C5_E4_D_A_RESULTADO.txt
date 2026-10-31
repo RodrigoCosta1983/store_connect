@@ -1,0 +1,473 @@
+STORE&CONNECT — F10-C5-E4-D-A
+CONTRATO DE PROTEÇÃO DA SINCRONIZAÇÃO OFFLINE
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+CONDIÇÃO FINAL: CONTRATO PROPOSTO.
+Não é aprovação das decisões pendentes nem autorização de implementação E4-D-B.
+
+1. BASE E ESCOPO
+
+Lidos AGENTS.md, CURRENT_WORK.md histórico, E4-A/E4-C, inventário F9/A5 B06,
+syncOfflineSale.js integral, productEligibilityC5.js, repositório/serviço offline,
+schema SQLite e testes diretamente relacionados. Reaproveitados S03–S05/M04–M06
+e contrato de recuperação do B06, sem reconstruir inventário global.
+Nome real do método cliente: OfflineSalesSyncService._syncOneSale, linha 144;
+o nome _syncSingleSale do mapa E4-A não corresponde ao símbolo atual.
+
+Somente este documento é criado. Não alterados código, testes, Rules, contratos,
+SQLite, fixtures, impressão, recibos comerciais, NFC-e ou caixa. Nenhum teste/
+Emulator necessário para diagnóstico: o comportamento está explícito nas fontes
+e nos testes de caracterização existentes. Não atribuir resultados históricos
+como execução desta etapa. Não houve consulta remota ou documentação externa.
+
+2. DIAGNÓSTICO EXATO DO PROTOCOLO ATUAL
+
+2.1 Identidade e origem da intenção
+OfflineSalesRepository.createLocalSaleId/_generateLocalSaleId gera
+offline_<micros do relógio>_<8 bytes aleatórios em hex>; IDs fornecidos também
+são aceitos. Esse formato não prova autoria, ambiente ou data. No mobile,
+PaymentOptionsSheet._handleInstantSale:267 gera ID antes da tentativa online;
+fallback reutiliza o mesmo ID e grava PendingSales, inclusive se a transação
+online já confirmou mas a resposta se perdeu. Nova invocação de UI gera outro
+ID: deduplicar pelo ID não deduplica a intenção humana entre chamadas distintas.
+
+PendingSales tem PK localId; servidor usa stores/{storeId}/sales/{localSaleId}.
+Identidade remota efetiva = projeto de execução + storeId + localSaleId.
+SQLite store_connect_local/schemaVersion=1 tem PK só localId, não essa tupla.
+insertOrIgnore preserva linha anterior sem comparar conteúdo, loja ou origem.
+saveSale é helper alternativo sem validação de saldo; caminho operacional
+fallback usa validateStockAndSaveSale com transação SQLite/cache menos reservas.
+Validação local de cada linha também não agrega duplicatas da própria intenção.
+
+2.2 Entrada e normalização (syncOfflineSale.js:171–357,586–699)
+Auth é exigida antes de processar payload. storeId/localSaleId/paymentMethod
+devem resultar em strings não vazias após trim; notes/cliente também trim.
+products deve ser array não vazio; cada item gera apenas productId/name/quantity/
+price. Quantidade usa Number coercivo e Number.isInteger positivo; não é
+contrato de inteiro seguro. Preço aceita Number finito >=0 e arredonda por
+Math.round(n*100)/100. Total é normalizado e comparado com soma com tolerância
+>0.01; precisão binária pode tornar diferenças intuitivas de um centavo inválidas.
+Não impor regras monetárias V2 ou mudar tolerância por este bloco.
+createdAt ISO vira Timestamp; ausente/vazio vira now; inválido rejeita.
+variantId e outros campos desconhecidos são atualmente descartados por projeção.
+Não há rejeição explícita de productId duplicado nem limite contratual de itens.
+O normalizador roda ANTES da leitura de replay: payload malformado não chega
+ao replay mesmo se S já existir. Isso é parte da compatibilidade atual.
+
+2.3 Auth e replay (715–831)
+Na transação: lê loja existente; compara store.ownerId com auth.uid; exige
+subscriptionStatus active/trial/overdue (normalizado); depois lê S pelo ID.
+Não usa users.role/accessStatus para autorizar sync. Funcionário admin de users
+não vira owner. Revogação de perfil não é gate próprio deste endpoint; troca
+de owner/assinatura pode impedir também replay. Não transplantar auth V1/V2.
+
+Se S existe: existing.localSaleId normalizado não vazio e diferente do ID
+recebido gera already-exists. Se igual OU ausente/vazio, retorna alreadyProcessed
+sem ler P/CP, sem baixa, sem auditoria e sem regravar S. Não compara itens,
+preços, total, cliente, pagamento, createdAt, ator, origem ou hash de comando.
+Assim payload DIFERENTE, mas válido na normalização anterior, recebe replay.
+Venda online no mesmo path e documento antigo sem localSaleId também podem
+ser reconhecidos. Esse comportamento atende fallback, mas não comprova conteúdo.
+Não existe receipt novo/hash durável nem resultado terminal de rejeição.
+
+Resposta: success, localSaleId, serverSaleId, alreadyProcessed,
+shouldRequestNfce, archivedProductsAccepted. No replay, a última contagem é 0,
+pois archivedProductsAtSync do retorno interno é []; isso NÃO apaga a trilha
+persistida. shouldRequestNfce deriva da loja ATUAL mesmo no replay: não é
+resultado histórico congelado. Não alterar shape/semântica fiscal nesta etapa.
+
+2.4 Novo efeito (835–1176)
+Lê P de cada item e verifica existência/arquivamento. canonicalName atual serve
+para mensagem e auditoria de arquivado, não substitui name do item salvo.
+Map por productId guarda snapshot; depois escreve por LINHA original.
+Manual: saldo atual Number inteiro, compara com quantidade da linha e usa
+increment negativo. FIFO: filtra lotes com quantidade >0, ordena validade
+convertida para ms, remove consumidos e preserva mapas sobreviventes; grava
+quantidade=soma e lotes. Empates/validades inválidas seguem helper atual.
+Não é validação integral de consistência B05; não modernizar em silêncio.
+
+S e todas as baixas estão na mesma transação; leitura de S e transaction.create
+serializam tentativas do mesmo ID. Arquivado aceito gera um A especial na mesma
+transação. Não escreve productCodes, CP, CF ou recebimentos/parcelas independentes.
+Admin SDK não passa por Firestore Rules; E4-B não protege este novo efeito.
+
+2.5 História monetária/comercial
+S guarda products NORMALIZADOS recebidos, total normalizado, createdAt do
+dispositivo, notes/cliente/paymentMethod normalizados, isPaid=true,
+syncOrigin=offline, syncedBy=uid que sincronizou, syncedAt servidor e trilha
+de arquivados. Não lê cliente atual nem preço atual para repricing. Nome do
+cliente e nome/preço do item são snapshots do comando, não cadastro atual.
+Campos desconhecidos dos itens não são preservados pelo normalizador atual:
+preservar backlog bruto NÃO significa que o servidor já salve todos seus bytes.
+Não adicionar snapshots de custo ou custo zero por inferência.
+paymentMethod só precisa ser não vazio: enviar A prazo ainda grava isPaid=true
+e ignora installments. É defeito conhecido, não autorização de fiado offline.
+
+2.6 Arquivamento
+Se isArchived===true: archivedAt deve ser conversível a milissegundos válidos;
+createdAt da intenção <= archivedAt permite sync, inclusive igualdade, com
+containsArchivedProductsAtSync/archivedProductsAtSync e A especial. Se intenção
+é posterior ou archivedAt inválido/ausente, rejeita sem commit.
+Se produto não está atualmente marcado true, não reconstrói ciclos passados
+de arquivar/restaurar. createdAt dispositivo e parsing legado não provam data
+criptograficamente; fallback pode persistir horário posterior ao commit online.
+Jamais substituir política por “sempre bloquear arquivado”, nem aplicar gate
+sale/stock ativo que invalide a exceção histórica contratada.
+
+2.7 Fila, resposta perdida e reinício
+app_database.dart:68–101: localId/storeId/payload/datas/status/tentativas/erros/
+serverSaleId; faltam uid de origem, projectId, versão de protocolo e hash.
+Consultas waiting/reservas não filtram loja/usuário/projeto; reservas somam por
+productId, incluindo pending/syncing/failed. São locais, não lease/saldo global.
+_syncOneSale envia payload da linha com sessão/projeto atuais. recoverInterruptedSyncs
+volta syncing->pending; _isSyncing só impede duplicidade na mesma instância.
+
+Sucesso com serverSaleId não vazio é seguido de refresh Source.server dos P;
+só depois marca synced e libera reserva local. Refresh falho mantém failed/
+reserva mesmo com commit remoto confirmado. Retry envia MESMO ID. Falha de
+rede interrompe rodada; demais failed voltam a ser elegíveis para futuras
+rodadas. Não existe estado desconhecido/suspenso separado nesse schema.
+Depois de synced, NFC-e é chamada best effort; falha fiscal não reabre venda.
+Crash entre synced e pedido fiscal pode deixar emissão pendente, sem rollback.
+
+3. CONTRATOS HISTÓRICOS OBRIGATÓRIOS
+
+H01 — Não trocar ID/protocolo nem recriar venda para resolver timeout, falha
+de refresh, restart ou erro. Preservar linha, payload original, createdAt e
+reserva local até reconciliação; não excluir/resetar/reinserir fila.
+
+H02 — Depois de commit, estado remoto persistido é autoridade do fato comercial.
+Timeout/failed local não é prova de rollback. Replay existente reconhece o path
+legado, não equivalência do conteúdo. Documento S pode ter pagamentos/fiscal
+posteriores; não comparar S inteiro com pedido como prova do payload original,
+nem reescrever S para fazê-lo coincidir. Sem hash histórico não inventar receipt.
+Se owner/assinatura impedem replay, resultado continua pendente de reconciliação;
+isso não autoriza nova baixa. Uma leitura inexistente isolada também não prova
+que requisição em voo nunca confirmará; retry deve preservar mesma identidade.
+
+H03 — Replay histórico mantém ordem auth/loja/owner/assinatura/normalização
+legada e retorna antes de novos gates de tipo/CP/duplicatas. Nem produto apagado,
+perfil novo, pai atual ou catálogo atual invalidam fato já sincronizado.
+Fortalecer conferência de conteúdo do replay ou liberar replay com assinatura
+inativa são contratos separados; não implementar incidentalmente em E4-D-B.
+
+H04 — Novo efeito não reprifica: mantém quantidade, preço/nome históricos de
+cada item, cliente, pagamento, notas, data e total segundo a normalização antiga.
+Não substituir por cadastro atual, não agregar linhas com preços diferentes,
+não retirar itens “problemáticos” e confirmar o restante. Sem recebimento/CF
+novo, sem restauração de estado fiscal, sem NFC-e dentro da transação.
+
+H05 — Arquivado segue exatamente <= archivedAt atual válido e auditoria;
+relógio não prova autoria/época. Longo período offline não cria expiração/TTL
+novo por inferência: ID/payload/reserva permanecem. Estoque é o atual no commit;
+se não basta, sem commit parcial e pendência preservada. Mudança de categoria,
+nome/preço ou cliente atual não deve reescrever snapshot; exclusão do produto,
+conversão em pai/variante ou CP incompatível exige reconciliação, não remapeamento.
+
+H06 — storeId da linha é destino alegado, auth atual identifica sincronizador,
+syncedBy é esse sincronizador; nenhum desses dados prova autor original.
+Não preencher uid/projectId ausentes com sessão atual, nem deduzir origem por
+prefixo offline_, cache, createdAt ou papel atual. Não há garantia retrospectiva
+de origem em toda linha legada. A barreira backend não consegue resolver isso
+sozinha sem evidência adicional; não afirmar isolamento de fila resolvido.
+
+H07 — Linhas com contexto conhecido incompatível não devem ser reenviadas
+automaticamente sob outra loja/usuário/projeto. Linhas sem contexto suficiente
+devem ser preservadas para reconciliação explícita, sem atribuição automática.
+Suspensão/UX/particionamento ainda NÃO existem no cliente atual; criar tais
+estados requer etapa separada de persistência/adapter, não patch secreto do writer.
+Mesmo owner pode ser owner em dois projetos: owner-only não prova projeto de origem.
+
+4. C5: O QUE ESTÁ CONTRATADO E O QUE FALTA
+
+evaluateProductEligibility aceita protocol=legacyV1 e operation=offline, mas
+devolve blocked/offline-history-context-required para simples sem perfil/dinheiro
+F10, depois das checagens estruturais. Não há resultado compatible de offline
+que autorize este sync. legacyV2/offline não está na matriz permitida; futureV3
+não está implementado para esse uso. observeHistoricalItem apenas observa
+histórico, sem autorização de novo efeito. inspection/read só inspeciona estrutura.
+
+Portanto não é permitido: trocar operação offline por sale/cadastral/read para
+obter sucesso; ignorar offline-history-context-required; apagar isArchived ou
+trocar preço atual por preço do payload num snapshot fictício para passar gate;
+tratar observação/ausência de CP como prova de autorização offline histórica.
+
+PROPOSTA P01, A APROVAR: política ESPECÍFICA de novo efeito offline legado no
+serviço, com contrato explícito independente do resultado não autorizativo C5.
+Deve exigir cumulativamente: contexto admitido conforme decisão D02; identidade
+simples atual estruturalmente válida; ausência das quatro autoridades monetárias
+F10 de topo e de CP/current; produto existente; política histórica H04/H05;
+estoque/FIFO válidos e suficientes; itens únicos; auth/loja e venda ausente.
+O resultado offline-history-context-required continua sendo “falta autorização
+offline neste classificador”, NUNCA “compatible”. A política específica só pode
+autorizar se seu próprio contrato for aprovado e implementado/testado como tal.
+
+Arquitetura para P01 deve ser escolhida ANTES do código: política local ao writer
+que reutilize checagem C5 não autorizativa como componente e acrescente contexto
+histórico explícito, OU extensão contratual dedicada ao domínio em etapa própria.
+Não escolher a segunda alterando classificador congelado durante E4-D-B sem
+autorização; não duplicar kindOf informalmente nem criar exceção por reason solto.
+Uma guard que permite tudo ao receber offline-history-context-required seria
+um contorno, não implementação de P01. Sem decisão D01, E4-D-B deve PARAR.
+
+Projeção futura deve preservar por presença própria os dez campos atuais:
+productKind/variantSchemaVersion/productId/variantId/attributes/attributeDefinitions/
+priceCents/costCents/commercial/commercialProfiles e snapshot real CP/current,
+incluindo null/vazio/parcial/SDK/NaN; sem serializar metadados legados inteiros.
+Arquivamento/data e saldo/lotes vêm do snapshot real para política histórica,
+não de projeção que apague estado. Preço atual não é autoridade do preço pactuado.
+Pai com somente attributeDefinitions também bloqueia; V real aninhada não é
+endereçada como P simples. Identificador variantId bruto próprio, inclusive
+null, não pode ser descartado antes de avaliar NOVO efeito; replay legado
+continua com sua normalização antiga, sem conferir produto atual.
+
+5. CLASSES DE RESULTADO PROPOSTAS (SEM NOVO PROTOCOLO DE RECEIPT)
+
+R1 Replay reconhecido legado: S existe e passa condições antigas; sem novos
+efeitos. Não afirma igualdade de payload/autoria nem devolve novo receipt.
+R2 Novo simples/contexto admitido: só confirma após política P01 completa e
+commit atômico; preserva formato de resposta/dados legados.
+R3 Contexto ambíguo: nenhum novo efeito automático; preservar para reconciliação.
+R4 Pai/variante/marcadores/CP incompatíveis: sem novo efeito; não converter,
+remapear item ou reinterpretar preço. Mesmo preço igual não torna CP legado.
+R5 productId repetido após trim: proposta de rejeição antes do primeiro write
+e DEPOIS do replay, independentemente de saldo; sem fundir linhas ou total.
+R6 Erro de transporte/internal/deadline/refresh: resultado remoto desconhecido
+ou commit conhecido com cache pendente; nunca registrar rollback por dedução.
+
+Terminalidade: o endpoint atual não persiste rejeições. Erro de domínio/input/
+owner/saldo pode provar “esta tentativa não comitou” quando conhecido do handler,
+mas não sela localSaleId nem prova ausência de commit de chamada anterior ou
+concorrente. Não marcar ID definitivamente rejeitado nem liberar reserva por
+classificação de erro apenas. Não gerar detalhes persistedRejection/receipt novo.
+failed atual é retentável, não unknown/terminal. Adaptação de retry/suspensão
+precisa contrato cliente próprio; guardar erro legível não cria novo estado.
+
+6. DUPLICATAS: POLÍTICA RECOMENDADA, NÃO IMPLEMENTADA
+
+Com duas linhas p,q=3 cada e saldo manual 5, ambas comparam 3<=5 no mesmo
+snapshot; dois increments podem resultar -1. Com FIFO 5 e linhas 1+1, dois patches
+calculados do mesmo array podem terminar em 4 e S declarar 2 vendidas.
+O segundo caso tem teste de caracterização real existente; o primeiro é dedução
+estática, não execução nesta etapa. Duplicatas sobrevivem à projeção normalizada.
+
+Recomendação D03: recusar toda repetição de productId normalizado em novo efeito,
+inclusive saldo suficiente/mesmo preço; erro invalid-argument sem commit.
+Não agregar silenciosamente nem escolher preço/metadata de uma linha. Replays
+de vendas antigas com duplicatas permanecem reconhecidos sem nova baixa.
+Linhas pendentes duplicadas continuam intactas aguardando reconciliação; isso
+altera aceitação de novo efeito e precisa aprovação explícita de compatibilidade.
+Alternativa de agregar SOMENTE demanda para baixa, preservando linhas S, é
+tecnicamente possível, mas exige contrato de overflow/ordem/FIFO e maior escopo;
+não é a recomendação mínima e não foi escolhida por este relatório.
+
+7. TESTES EXISTENTES — REUSAR, NÃO DUPLICAR INVENTÁRIO
+
+E1 functions/tests/sales/salesWritersCharacterization.emulator.test.js:
+12 testes atuais, fontes inspecionadas, NÃO executados nesta etapa.
+- manual/preço/data/ausência de CF e custo;
+- resposta perdida + replay sem reescrever pagamento/fiscal/história;
+- ID reutilizado com payload divergente aceito;
+- owner-only e assinatura bloqueando replay;
+- A prazo forçado pago/parcelas ignoradas;
+- FIFO preservando metadata/nanos persistidos;
+- insuficiência sem commit;
+- duas chamadas idênticas concorrentes baixam uma vez;
+- arquivado antes/depois com uma auditoria no replay;
+- S sem localSaleId aceito sem comparar conteúdo;
+- coerção/tolerância monetária binária;
+- duplicata FIFO perde uma baixa (expectativa explicita defeito atual).
+
+E2 functions/tests/products/productMutationV2.emulator.test.js:
+casos “actual syncOfflineSale FIFO invalidates old edit baseline...” e
+“actual callable sale racing with a stock adjustment...”, aproximadamente
+446 e 463. Exercitam handler S03 real, FIFO/metadata/replay e corrida com ajuste
+CAS V2, preservando preço histórico. Não reexecutar toda suíte sem necessidade;
+selecionar casos pertinentes por nome ou justificar arquivo completo em E4-D-B.
+
+E3 test/sales_backlog_characterization_test.dart:
+um teste SQLite temporário real: preserva payload/createdAt/PK insertOrIgnore,
+recupera syncing, confirma ausência uid/projectId e reserva cruzando lojas;
+fecha/reabre arquivo sintético para verificar persistência. Não comprova
+orquestração inteira do OfflineSalesSyncService nem isolamento resolvido.
+
+E4 test/sales_writers_characterization_test.dart:
+caracteriza checkout S01/fiado/recebimentos, inclusive resposta perdida/retry UI;
+não é suíte dedicada do sync service. B07-C/confirmSaleV2 e ledgers novos não
+substituem provas do backlog legado. Não encontrada suíte dedicada de
+OfflineSalesSyncService por buscas dirigidas; cobertura futura deve usar o
+serviço real com callable/Firestore simulados, sem duplicar backend em fake.
+
+8. MATRIZ MÍNIMA PARA E4-D-B E ETAPAS CLIENTE DEPENDENTES
+
+ID | Cenário e prova | Reuso/lacuna
+T01 | Simples legítimo com histórico preço!=atual; manter itens/quantidades,
+    | cliente/pagamento/data/total, baixa única e zero CF/recebimento/NFC-e
+    | no writer | Reusar E1 manual; ampliar P01 e preço atual inválido/alterado.
+T02 | Replay após pai/variante/CP/perfil inválido, produto removido e saldo
+    | mudado; S/fiscal/pagamentos/updateTimes/A/R intactos | Ampliar E1 replay.
+T03 | Mesmo ID com payload divergente válido e S sem localSaleId continua
+    | replay legado; ID interno diferente continua conflito; entrada inválida
+    | ainda falha antes de replay | Reusar E1 e acrescentar conflito/precedência.
+T04 | Pai completo, só definitions, parciais/null/vazios/SDK/NaN, mistura de
+    | identidade, variantId bruto null/undefined/string; nenhum novo efeito
+    | | Novo dirigido; CP vazio/presente/malformado e quatro dinheiros topo.
+T05 | Arquivado: intenção antes/igual/depois; data inválida/ausente; preserva
+    | política atual inclusive parser/fallback now caracterizados; uma A
+    | somente após commit, replay não repete | Ampliar E1 arquivado.
+T06 | Duplicatas após trim: manual saldo5/3+3 e FIFO saldo5/1+1, suficiente ou
+    | insuficiente; novo efeito recusa sem writes; venda antiga duplicada
+    | faz replay | Expectativa atual defeituosa E1 exige atualização explícita
+    | autorizada para novo efeito, não afrouxamento silencioso.
+T07 | FIFO multilote, esgotado/sobrevivente, datas empate/nanos inválidas,
+    | metadata SDK e soma consistente; sem reconstruir lote antigo pelo
+    | relógio da intenção | Reusar E1 FIFO/E2; diferenças B05 só caracterizar.
+T08 | Mesmo ID concorrente igual/divergente: um create/uma baixa, replay sem
+    | sobrescrever; IDs distintos concorrendo por saldo não fazem negativo
+    | | Reusar E1 idêntico; ampliar corrida diferente e E2 ajuste.
+T09 | Segundo item bloqueado/sem saldo ou erro forçado precommit: snapshots
+    | completos P/S/CP/A/R/CF e updateTime intactos | Ampliar rollback E1;
+    | falha injetada em harness, não endpoint/flag de aplicação.
+T10 | Commit + resposta perdida; retry após tipo mudar não baixa; falha no
+    | refresh conserva reserva/ID e depois permite synced | E1 backend + novo
+    | teste serviço real com transporte/refresh simulados, etapa cliente própria.
+T11 | Restart syncing->pending, mesmo ID/payload/data/reserva; crash após
+    | synced não gera nova venda para tentar fiscal | Reusar E3 + lacuna serviço.
+T12 | Troca loja/usuário/projeto com pendência; contextos divergentes ou sem
+    | autoria não são reatribuídos/apagados/reenviados cegamente | E3 já prova
+    | defeito; implementação de isolamento não cabe só no writer, gate próprio.
+T13 | Meses offline: preço/nome/cliente/categoria mudaram, sem TTL/reprice;
+    | simples permanece elegível, pai/CP/saldo insuficiente suspende novo efeito
+    | | Novo dirigido após D01/D02/D04, sem inventar expiração.
+T14 | Auth ausente, outro owner, users admin sem ownership, assinatura cada
+    | status e replay sob mudança owner/assinatura | Reusar E1, ampliar matriz;
+    | não importar role/revogação V2 por inferência.
+T15 | Vendas com pagamentos/fiscal posteriores permanecem intocadas em replay;
+    | zero CF/recebimento extra; fiscal best effort falho não reabre venda
+    | | E1 + serviço; não prova exactly-once externo da NFC-e em toda falha.
+T16 | IDs inválidos/numéricos/strings coercivas/total tolerância e campos extras
+    | não mudam incidentalmente; variantId não some em NOVO efeito | Node e
+    | E1; endurecimento extra de schema requer decisão, não extensão escondida.
+
+Node futuro: política offline aprovada (domínio/contexto/preço histórico/
+arquivamento/duplicatas), normalização/replay legado e testes existentes puros
+C5 que comprovam offline-history-context-required inalterado. Se helper não for
+separado, testar por fronteira de serviço sem copiar implementação no teste.
+Emulator futuro: demo-*, loopback, fixtures sintéticas, JDK21 de sessão, Admin
+somente local. Um arquivo/gate por vez, inspecionar resultado antes do seguinte,
+manter Promise.all das corridas; falha obrigatória -> registrar e parar.
+Testes cliente SQLite/serviço só quando escopo correspondente for autorizado.
+Nenhuma suíte citada foi executada ou alterada nesta E4-D-A.
+
+9. DECISÕES EXPLÍCITAS ANTES DA IMPLEMENTAÇÃO
+
+D01 — Aprovar política offline P01 e sua fronteira arquitetural. Hoje não há
+contrato positivo em C5 para offline. Recomenda-se política dedicada e testável
+no serviço, sem alterar classifier congelado ou fingir sucesso por reason.
+Se exigir extensão do contrato puro, nova autorização/etapa antes de E4-D-B.
+
+D02 — Definir admissão do backlog sem uid/projectId original. Opção restrita
+backend-only pode conservar owner-only como autorização do SINCRONIZADOR e não
+alegar autoria, mas não impede envio sob projeto errado com mesmos IDs/owner.
+Exigir prova de origem de toda linha antiga agora impede parte legítima sem
+possibilidade de reconstrução automática. Recomenda-se manter contrato remoto
+de owner, tratar lacuna como reconciliação/isolamento cliente em etapa própria,
+e não declarar comercialmente resolvido enquanto não houver esse fluxo.
+Escolha entre aceitar risco legado restrito ou suspender linhas ambíguas precisa
+decisão expressa; nenhum campo obrigatório novo de uid/projeto pode ser imposto
+a cliente antigo silenciosamente. Não há garantia retroativa perfeita.
+
+D03 — Aprovar rejeição de productId duplicado somente em novo efeito, com
+pendências intactas e replay preservado, em vez de agregação automática.
+
+D04 — Aprovar suspensão de NOVO efeito quando produto atual virou pai/variante/
+CP mesmo que intenção fosse legítima simples antes. Não há histórico estrutural
+assinado que autorize baixar outra entidade. Preferir reconciliação explícita
+sem venda parcial, estoque redistribuído ou substituição de productId.
+
+D05 — Manter replay divergente/sem localSaleId e assinatura antes de replay
+neste bloco, como compatibilidade existente, sem prometer equivalência. Resolver
+conteúdo/replay sem assinatura em contrato futuro separado, sem receipt novo.
+
+D06 — Confirmar que não haverá mudança de tolerância/preço/coerção/data/enum
+pagamento em E4-D-B. Fiado offline continua não contratado; corrigir A prazo
+forçado paid é etapa comercial própria, não gate estrutural incidental.
+
+D07 — Autorizar separadamente adaptação cliente de unknown/suspensão/escopo
+se necessária para impedir retry automático de linhas ambíguas. Não criar
+schema/estado novo em E4-D-B backend-only sob pretexto de resolver D02.
+
+10. PROPOSTA MÍNIMA E4-D-B E CAMPOS
+
+Somente após resolver D01–D06 aplicáveis; D07 condiciona qualquer escopo cliente.
+Envelope legado mantido: storeId/localSaleId/products[{productId,name,quantity,
+price}]/totalAmount/paymentMethod/notes/customerId/customerName/createdAt.
+Nenhum campo persistido novo obrigatório, nenhum receipt, hash retroativo,
+localId alternativo ou migração. Contexto efetivamente disponível no backend:
+projeto de execução, auth.uid do sincronizador, loja owner/assinatura e snapshots
+P/CP atuais. Isso NÃO preenche evidência ausente de origem, conforme D02.
+
+Arquivos candidatos autorizáveis em novo pedido:
+- functions/sales/syncOfflineSale.js: novo efeito somente;
+- novo teste dirigido functions/tests/sales/syncOfflineSaleEligibilityC5.emulator.test.js;
+- teste Node dedicado em functions/tests/sales/;
+- salesWritersCharacterization.emulator.test.js somente expectativa explicitamente
+  aprovada de duplicata nova; preservar casos de replay/contrato legado;
+- helper local de política offline APENAS se D01 escolher/exigir extração com
+  arquivo previamente nomeado no pedido; não alterar contratos puros por tabela;
+- relatório E4-D-B. Cliente/SQLite/Rules/index/recibos/NFC-e/CF fora desse patch.
+
+Ordem proposta:
+1 Auth e normalização básica antigas, com acesso preservado aos itens brutos
+  para validação posterior de variantId; não tornar validação nova pré-replay.
+2 Transação: loja/owner/assinatura -> S existente -> replay legado antes de
+  ler produto/CP ou aplicar novos gates de identidade/duplicidade.
+3 S ausente: identidade bruta e duplicatas de IDs normalizados, depois todos
+  P/CP reais na mesma transação; todas as leituras antes de qualquer escrita.
+4 Aplicar política offline aprovada, identidade/representação, histórico de
+  arquivamento e validações antigas de saldo/FIFO/preços pactuados. Guard puro
+  de leitura nunca é suficiente para autorizar o commit por si só.
+5 Preparar baixa uma vez por produto único; transaction.update P + create S
+  + A especial se cabível, mesmo commit. Zero CF/receipt/efeito fiscal novo.
+6 Resposta original e client refresh/synced/fiscal posterior permanecem conforme
+  contrato atual; novos estados cliente exigem outro bloco.
+
+Condição de parada: decisão pendente; incompatibilidade de replay/owner/preço/
+arquivo/fila; necessidade de required fields novos em cliente antigo; necessidade
+de V3/receipt/migração/schema; efeito parcial; teste obrigatório falho; diff
+fora do escopo. Preservar patch válido e documentar BLOQUEADO, sem afrouxar
+teste/regra ou mudar protocolo para “passar”. Não ativar automaticamente.
+
+11. RISCOS COMPROVADOS, HIPÓTESES E BLOQUEADORES
+
+Comprovados por fonte/teste existente: novo efeito ignora estrutura/CP;
+normalização descarta variantId; replay divergente/sem localSaleId aceito;
+duplicata FIFO perde baixa; fila sem uid/projeto/isolamento; failed inclui
+possível commit; preço histórico e arquivo baseados em relógio; owner/assinatura
+bloqueiam replay; efeitos fiscais posteriores separados. Não são testes novos.
+Manual negativo por duplicatas é dedução do código. Pai efetivamente vendido
+em produção, troca real de projeto, usuário malicioso e abuso de relógio NÃO
+foram observados; são cenários condicionais, não incidentes confirmados.
+
+E4-B/C/E1/E2/E3 não fecham sync nem corrigem fila. Rules não contêm Admin.
+Retenção COD permanece intacta, sync não escreve reservas; scans/carga e
+histórico apagado anteriormente não são reparados por este contrato.
+F10 integral antes da primeira loja; F10-D/V3 pendente, sem protocolo novo
+antecipado. Restore de backup continua bloqueado; transporte C4 adiado pela D.
+
+12. VERIFICAÇÃO E ENCERRAMENTO
+
+Branch/HEAD/status conferidos. Manifesto SHA256 dos arquivos Git existentes
+capturado em memória antes da escrita: os 658 arquivos preexistentes ficaram
+idênticos na comparação final, sem adição além deste relatório. Único artefato
+autorizado: docs/catalog/F10_C5_E4_D_A_RESULTADO.txt. Fontes/testes/contratos/
+Rules/configurações e todo trabalho local anterior preservados.
+Checks: inspeção estática, revisão do relatório e whitespace/Git. Não houve
+execução Node/Flutter/Emulator, instalação, HML/PROD, deploy, commit, push,
+migração, backfill, reset, restore, stash ou clean.
+
+CONDIÇÃO FINAL: CONTRATO PROPOSTO, com D01–D07 expressamente pendentes conforme
+escopo. E4-D-B não iniciada; contrato proposto não equivale a validação local
+da futura barreira nem aprovação de decisões comerciais/compatibilidade.
+Resumo exibido no terminal. PARADA APÓS F10-C5-E4-D-A.

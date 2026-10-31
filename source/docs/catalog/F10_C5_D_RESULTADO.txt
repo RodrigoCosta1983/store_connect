@@ -1,0 +1,244 @@
+STORE&CONNECT — F10-C5-D
+POLÍTICA DE ELEGIBILIDADE E CONTRATOS DE BARREIRA V1/V2/V3
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+Resultado: validadores puros implementados e testados, SEM barreira instalada.
+Nenhum writer, Rule, checkout, receipt, normalizador ou ledger foi alterado.
+
+1. BASE E ESCOPO
+Lidos C5-C transição/resultado, C5-B persistência, instruções/contexto ativo
+e contratos reais de identidade/snapshot F10-B, C5-A/B, F9 createProduct e
+productMutationContract, saleV2Contract, C1/C2 e comando C3. Trechos críticos
+de C5-C relidos após truncamento da primeira saída. CURRENT_WORK é histórico
+F7; esta solicitação delimita a etapa vigente. Sem auditoria global.
+Estado local extenso anterior é esperado e foi preservado integralmente.
+
+2. CONTRATOS IMPLEMENTADOS
+functions/contracts/productEligibilityC5.js, sem Firebase, I/O ou escritor.
+Importa apenas DTOs/projeções puros existentes e a conversão estrita de preço
+do saleV2Contract; não importa o serviço confirmSaleV2 nem inicializa SDK.
+
+evaluateProductEligibility(input): envelope estrito com protocol, operation,
+scope={projectId,storeId}, identity={productId,variantId}, entity e commercial.
+Snapshots seguem C5-B: exists/data/updateTime ou exists:false. parent opcional
+contém scope, identity e os dois snapshots do pai. Contexto é declaração para
+validação local, NÃO autenticação de loja ou proveniência dos snapshots.
+Ausência de commercial não é permitida como atalho: o chamador deve fornecer
+explicitamente snapshot inexistente ou existente. Não aceita trusted/flags ou
+preço esperado do cliente como autoridade. Inputs/envelopes malformados lançam
+TypeError; combinações/domínios incompatíveis retornam blocked com reason.
+
+Resultado é imutável, com status compatible|blocked, check=pure-domain-only,
+protocol/operation e identidade F10-B preservados. Compatible significa apenas
+que passou a barreira local de domínio indicada por reason; NÃO significa
+autorizado, vendável globalmente, schema completo validado ou commit confirmado.
+Outros validadores existentes de comando, estoque, fiscal, perfil, combinação,
+COD, baselines, limites e transação continuam obrigatórios em integração futura.
+Não existe serializer de comando, patch, transform, novo status B2-A ou prova B1.
+
+legacyItemIdentityBarrier({productId,variantId?}): guarda de identidade do item
+antigo antes de normalização. Qualquer presença de variantId, inclusive null
+ou undefined explícito, é rejeitada; não remove o campo para fazê-lo passar.
+Sem variantId, devolve identidade local com variantId=null, sem reescrever o
+comando original. A entrada é somente a vista estrita de identidade: se um
+adaptador futuro extrair essa vista, DEVE preservar a presença de variantId
+do item bruto; nunca construir apenas productId e esconder variante recebida.
+O normalizador integral original do comando continua sendo executado à parte.
+
+observeHistoricalItem({protocol,item}): observação imutável de item V1/V2
+histórico/backlog, preservando preço original, unidade, quantidade, campos
+desconhecidos e nanos em dados JSON-like. Não recebe estado atual, não converte,
+não reprecifica, não valida total, não aprova replay nem reexecuta backlog.
+Retorna check=historical-observation-only, diferente do gate de novo efeito.
+Identidade variante em item antigo é rejeitada, sem descartá-la. Valor legado
+monetário inválido pode ser observado historicamente, sem se tornar elegível
+para uma nova venda. Não representa aprovação de emissão fiscal/financeira.
+
+3. MATRIZ DE ELEGIBILIDADE LOCAL
+L = compatible somente para domínio; B = blocked. Nenhuma linha instala
+proteção real. Operações não listadas no protocolo são bloqueadas.
+
+Tipos: legacySimple = ausência dos DOIS discriminadores, sem formato de
+variante escondido; simple = productKind=simple/variantSchemaVersion=1;
+variantParent = pai v1; variant = tupla não null e productId vinculado/v1,
+sem productKind/variantId redundante no dado da variante. IDs seguem F10-B.
+Discriminador parcial, null, versão desconhecida, identidade divergente ou
+tentativa de demover variante removendo seu discriminator bloqueiam o domínio.
+
+Protocolo/operação             Simples legado  Simples v1  Pai v1  Variante
+inspection/read               L               L           L       L
+legacyV1/read,cadastral        L               L           B       B
+legacyV2/read,cadastral        L               L           B       B
+legacyV1 ou V2/stock           L*              L*          B       B
+legacyV1/sale,fiado,catalog    L**             L**         B       B
+legacyV1/import               L**             L**         B       B
+legacyV2/sale                 L***            L***        B       B
+legacyV1/offline,fiscal        B pendente de contexto histórico para TODOS
+legacyV2/fiado,offline,...     B operação não suportada, sem extensão implícita
+f10C3/stock                   B               B           B       L****
+futureV3/read                 L*****          L*****      L*****  L*****
+futureV3/sale                 B               B           B       B******
+futureV3/cadastral,import,
+ fiado,offline,catalog,fiscal  B contrato de operação futura pendente para TODOS
+Histórico V1/V2                Observação separada, sem usar preço/tipo atuais
+
+*: simples no domínio legado, sem perfil comercial presente e sem fontes
+novas no topo; ativo; não exige preço atual. Não valida saldo/lotes/motivo/CAS.
+**: além do domínio e ativo, price presente Number finito >=0, rejeita -0;
+costPrice ausente/null permanece desconhecido e não vira zero. Valor de custo
+presente não null deve ser Number finito >=0 e não -0. Política de rounding
+V1 não foi substituída: fração como 1.005 é somente compatível com seu domínio
+numérico antigo, não declaração de validade em todo writer/catálogo/fiscal.
+Import significa gate de tipo/unidade do candidato simples, não autorização
+para atualizar entidade existente nem substituição de createProductContract.
+Não implementa criação: snapshot de entidade ausente bloqueia este avaliador.
+***: conversão estrita e roundtrip oficiais saleV2Contract.priceCents também
+devem passar (0.29 passa; 1.005 falha). Comando/total/multiplicação não são
+normalizados novamente pelo gate e continuam sujeitos aos contratos existentes.
+****: variante ativa e pai v1 ativo, identidades/scope iguais; preço/perfil
+não determina o domínio de estoque C3. Estoque, combinações, reservas/COD,
+autorização e baselines continuam sendo validados pelo C3 real. Perfil ausente
+ou comercial inválido não é autorização para estoque nem impede por si só
+essa classificação estrutural; snapshot DTO malformado sempre é rejeitado.
+*****: perfil comercial C5-B válido e autoridade monetária única; para variante
+exige pai válido/ativo e perfil-base válido, mesmo com override. Pode ler
+variante arquivada sem vender; leitura de pai arquivado é distinta de venda.
+Simple com perfil é representável para leitura C5, sem liberar rollout/escrita
+V3 simples. Para observação sem perfil/arquivo/preço use inspection/read.
+******: pai nunca vendável. Variante com preço efetivo positivo válido apenas
+recebe priceCandidate e reason=v3-confirmation-contract-pending, status blocked.
+Nenhum ramo desta implementação retorna compatible para sale V3.
+
+4. PREÇO, ARQUIVAMENTO E FALHA FECHADA
+Gate legado recusa presença de perfil comercial mesmo se vazio/desconhecido
+ou com centavos iguais; não aplica prioridade nem dual read. priceCents,
+costCents, commercial ou commercialProfiles no topo bloqueiam operações fora
+de inspection. Não interpreta esses campos como schema aprovado novo.
+Leitura/cadastro legado é separada de venda: permite inspeção/correção de
+preço inválido, sem conferir licença para gravar; parâmetros reais do patch
+continuam sujeitos aos validadores F9. Ajuste de estoque é independente de
+preço, mas exige domínio correto e estado ativo para novo efeito.
+Arquivo ausente é ativo somente em simples legado; entidades v1 usadas em
+novo efeito exigem isArchived=false explícito. Null/string não significam
+false. inspection/read preserva distinção e não decide ativação.
+
+V3: perfis pai/variante inexistentes, null/inválidos, não versionados ou com
+scope/vínculo divergente não geram preço. Sem parent-context não há herança.
+Perfil existente com campo omitido/inherit resolve base; null do campo é
+não resolvido. Override exige centavos seguros. Preço positivo pode ser
+candidato apenas, nunca autoridade de checkout. Price/costPrice misturados
+com perfil em pai ou variante bloqueiam leitura monetária; snapshot continua
+sem migração. Valor zero explícito V3 retorna free-sale-policy-pending; não
+é confundido com ausência. Zero explícito legado continua representável
+pelo domínio legado, sem nova regra comercial ou fiscal.
+Override sem preço-base válido segue base-price-policy-pending; não escolhe
+silenciosamente uma das alternativas ainda abertas em C5-C.
+Mesmo com candidato positivo, confirmação V3 continua bloqueada: ainda falta
+quote/revisões coerentes, transação, descontos, snapshot da venda e receipt V3.
+Não existe flag authorized/trusted no input; não é possível provar autorização
+real com estes validadores puros ou entregar preço autorizado por um boolean.
+Dois snapshots individualmente válidos não provam leitura coerente concorrente.
+
+5. TESTES EXECUTADOS
+Criado functions/tests/products/productEligibilityC5.test.js: 22 testes novos.
+Matriz de tipos/protocolos/identidades; tentativa de venda de pai com preço;
+variante em antigo e remoção de ID/discriminator; preços ausentes/null/zero/
+inválidos; V2 estrito; custo desconhecido; perfil misto/ausente/inválido;
+herança/override e gaps; scope/pai divergente; arquivo; estoque C3 separado;
+históricos imutáveis; normalização/hash V2 preservados; input/comando inválido.
+Suíte isolada passou 22/22. Após ajuste para preservar custo null desconhecido,
+executado conjunto final em Node v22.23.2:
+
+node --test --test-reporter=spec
+ functions/tests/products/productEligibilityC5.test.js
+ functions/tests/products/productCommercialPersistenceC5.test.js
+ functions/tests/products/productCommercialC5.test.js
+ functions/tests/products/productVariantsV1.test.js
+ functions/tests/products/productMutationContract.test.js
+ functions/tests/products/createProductContract.test.js
+ functions/tests/products/updateProductContract.test.js
+ functions/tests/sales/saleV2Contract.test.js
+ functions/tests/sales/saleV2ClientFixtures.test.js
+
+Resultado: 118/118 testes/subtestes aprovados, zero falhas/skips/cancelamentos.
+createProductContract reportou adicionalmente 82 checks internos aprovados;
+o runner contabiliza esse arquivo como um subteste, não somar duplamente.
+Checks de sintaxe Node dos dois novos JS, revisão de diff e whitespace.
+Sem Emulator, Flutter ou teste de proteção real dos writers: nenhum deles
+consome o módulo novo. NÃO declarar V1/V2/Rules protegidos por estes testes.
+Regressões C1/C2/C3 dependentes de Emulator não repetidas: serviços inalterados
+e sem import do módulo; regressão pura F10-B/comercial e F9/venda executada.
+
+6. PONTOS EXATOS DE INTEGRAÇÃO FUTURA — NÃO IMPLEMENTADOS
+- updateProduct.js: após receipt/replay e leitura current, antes de
+  prepareCodeChange e transaction.update; validar entidade/autoridade antiga.
+- productMutationV2.js: mutation, após snapshot/CAS e antes de prepare,
+  para cadastral e stock. Recusar pai/perfil incompatível sem alterar receipt,
+  normalizador ou transformar unknown em nova intenção.
+- createProduct.js/createProductContract/importação: gate de domínio simples,
+  sem novo perfil ou discriminator no comando F9; não inserir perfil via import.
+- productEditState.js:project: não esconder kind e entregar pai como simples
+  editável; projeção antiga deve bloquear domínio incompatível explicitamente.
+- archiveProduct/restoreProduct/setProductCategories: contratar domínio e
+  lifecycle apropriados antes de reutilizar operação antiga em pai/variante.
+- confirmSaleV2.js: loop de products antes de priceCents/stock; rejeitar pai
+  mesmo se payload não menciona variante e houver price válido no cadastro.
+- syncOfflineSale.js: preservar lookup/replay já confirmado; checar domínio
+  no caminho de novo efeito antes de baixa. Preço do backlog não é preço V3;
+  offline-history-context-required não pode ser instalado como bloqueio cego
+  de todo backlog. Usar o contrato histórico existente e decisão específica.
+- payment_options_sheet/confirm_fiado_dialog/SalesProvider.addOrder: não basta
+  guarda Flutter; proteger novos efeitos no servidor e nas Rules. Nenhum if
+  operacional foi acrescentado por esta etapa.
+- createCatalog.js: exclusão servidor na seleção/listagem/submit antigos;
+  catálogo continua sem venda/reserva, sem aceitar preço do navegador.
+- emitirNfce.js: contrato histórico/fiscal antes de variante; fiscal-context
+  pending deste gate atual não deve bloquear recibo antigo por estado de hoje.
+- firestore.rules products (:186/:206): proteger estado anterior/posterior,
+  kind/versão/autoridade, demover pai e injetar preço; read precisa estratégia
+  de queries/clientes antigos, pois Rules não filtram consulta ampla.
+- Rules sales (:118/:128/:137): impedir novos efeitos monetários fabricados
+  e reescrita de histórico, preservando pagamentos/parcelas/caixa autorizados.
+- Rules wildcard (:375): manter exclusão products e testar sobreposição com
+  matches futuros de variantes/perfis; Admin exige guarda independente.
+- V3 futuro: validar tupla, atores/perfis/combinação/COD/estoque, ler revisões
+  de pai/variante e dois comerciais na confirmação, comparar expectativas e
+  persistir snapshot/total/receipt pelo contrato F10-D ainda não implementado.
+
+7. DEPENDÊNCIAS E CRITÉRIOS PARA AUTORIZAR CORTE LEGADO
+F9/A5 B01–B07-C permanece intacto; corte B07-D/posteriores não foi concluído
+por C5-D. C1/C2/C3 e seus hashes/receipts/versionamento continuam intactos.
+F10-D depende de contrato de confirmação monetária por tupla, identidade da
+intenção, totais seguros, estoque atômico e apresentação histórica versionada.
+Pendentes: rollout/query de clientes antigos, venda gratuita, base obrigatória,
+custo desconhecido obrigatório ou opcional no novo checkout, descontos,
+fiado/offline de variantes, barcode/índices e exceções fiscais auditáveis.
+
+Antes de autorizar integração/corte, exigir:
+1) Aprovação de comportamento por writer e erros novos, sem mudar replay
+   conhecido, hashes congelados ou ledger. Histórico não depende do estado atual.
+2) Plano de rollout/queries/clientes antigos e proteção de tipo/autoridade
+   transacional, incluindo perfil existente ou inexistente; sem dual write.
+3) Emulator demo comprovando guards instaladas em Admin E Rules: pai/variante,
+   manipulação de estado anterior/posterior, usuário/loja/revogação e concorrência.
+4) Regressão efetiva de checkout simples, backlog/replay e recebíveis/fiado/
+   caixa que dependem de writes diretos; não cortar todos os fluxos cegamente.
+5) Aprovar V3 e leitores/relatórios/PDF/fiscal antes de expor novas vendas;
+   backup/exportação versionado de perfis/variantes sem liberar restore.
+6) Revisão dos diffs e autorização explícita de etapa operacional. Deploy,
+   produção e corte remoto continuam dependentes de autorização imediata própria.
+Nenhum resultado compatible ou priceCandidate aqui substitui esses gates.
+
+8. ARQUIVOS E PRESERVAÇÃO
+Criados somente:
+- functions/contracts/productEligibilityC5.js
+- functions/tests/products/productEligibilityC5.test.js
+- docs/catalog/F10_C5_D_RESULTADO.txt
+Manifesto inicial SHA256 dos 633 arquivos não ignorados preexistentes em
+TEMP/f10-c5-d-manifest.json; conferência final sem divergências. Helper no TEMP.
+Nenhum arquivo preexistente editado; writers, Rules/index, checkout, fiscal,
+fiado/offline/UI, contratos, receipts e ledger anteriores preservados.
+Sem HML/PROD, instalação, commit, push, deploy, migração, reset, restore,
+stash ou clean. Restore de backup permanece bloqueado.
+Alternativa D mantida; transporte C4 não retomado. Parada após F10-C5-D.

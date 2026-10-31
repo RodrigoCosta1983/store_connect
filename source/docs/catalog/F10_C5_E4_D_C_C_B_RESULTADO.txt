@@ -1,0 +1,437 @@
+STORE&CONNECT — F10-C5-E4-D-C-C-B
+CONTRATO DE TRANSIÇÃO SEGURA DO WRITER S01
+Data: 17/10/2026
+DECISÃO FINAL: CONTRATO PROPOSTO. Nenhuma alternativa ativada.
+
+1. ESCOPO E BASE
+
+Somente análise/documentação. P01–P08 aprovadas conforme pedido atual;
+isso não aprova automaticamente os contratos novos T01–T08 deste relatório.
+Branch: feat/f7-intelligent-catalog.
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154.
+Working tree F9/F10 e recibo 80 mm aceitos integralmente como base autorizada.
+CURRENT_WORK é histórico F7; o pedido atual delimita esta etapa F10.
+
+Inspecionados AGENTS/CURRENT_WORK; relatórios C-A, C-B-R2, C-C-A;
+PaymentOptionsSheet._handleInstantSale/_saveInstantSaleOffline, geração de ID,
+NewSaleScreen/gatilhos, OfflineSalesRepository, OfflineSalesSyncService,
+AppDatabase v1/v2, OfflineSalePreparation; syncOfflineSale, confirmSaleV2,
+saleV2Contract, SaleMutationCommand/Api/Ledger e stores nativo/factory;
+firestore.rules e firebase.json; bootstrap Firebase; contratos/resultados
+F9/B07-A/B/C e plano F9_A5_TRANSICAO_WRITERS.
+Caracterizações S01/S02/S06/S07, fake Firestore, S03 Emulator, casos V2
+Emulator e SQLite local foram lidos. Não houve execução de testes nesta etapa.
+49/49 R2 e 70/70 C-C-A são resultados anteriores, não novas validações.
+
+Fontes técnicas primárias consultadas (documentação pública, sem HML/PROD):
+https://firebase.google.com/docs/firestore/manage-data/transactions
+Transações são atômicas, callback pode repetir por conflito e falham offline.
+https://firebase.google.com/docs/firestore/security/get-started
+SDKs servidor não são contidos pelas Rules destinadas aos clientes.
+https://firebase.google.com/docs/firestore/security/rules-structure
+Um allow verdadeiro em qualquer match aplicável autoriza a operação.
+https://firebase.google.com/docs/rules/manage-deploy
+Publicação de Rules tem propagação; não deve ser tomada como corte instantâneo.
+As consequências arquiteturais abaixo são inferências destes contratos e do
+código local. Não afirmam estado implantado, cancelamento específico de SDK
+ou certificação operacional.
+
+2. DIAGNÓSTICO EXATO DO S01
+
+PaymentOptionsSheet:259 inicia _handleInstantSale. _isLoading protege somente
+a instância da tela. Na linha 267 nasce um ID por invocação: Web usa doc().id;
+não-Web usa createLocalSaleId, com relógio e aleatoriedade. Antes da rede há
+ID em memória, mas não intenção durável nem snapshot/contexto congelados.
+Leitura Source.server da loja ocorre antes de runTransaction:326. Dentro do
+callback lê produtos, prepara baixa manual/FIFO e transaction.set da venda.
+Não há transaction.get da venda, receipt ou coordenação de exclusividade.
+CartProvider e widget são relidos durante trabalho assíncrono/reexecuções;
+uid/projeto/target originais não são persistidos. Após sucesso cart.clear,
+fiscal opcional e pop não verificam geração da sessão/carrinho original.
+
+Não existe .timeout explícito envolvendo S01 no trecho atual. O problema não
+é um timeout Dart atualmente configurado ali. Trata-se de transporte/SDK,
+resposta perdida, operação já aceita pelo servidor ou timeout que venha a ser
+introduzido. Um limite de espera local não é protocolo de cancelamento remoto.
+Dispose, troca de conta/tela e expiração de claim tampouco são esse protocolo.
+Não afirmar que toda exceção significa commit nem que toda exceção é ambígua:
+classificar a tentativa conforme evidência; na falta dela, conservar unknown.
+Transação que falha efetivamente offline não equivale a batch offline enfileirado.
+
+catch com erro de rede reconhecido chama fallback no não-Web, passando mesmo ID,
+mas snapshot/data são coletados depois. O fallback lê cache, valida saldo contra
+reservas v1 e insere; então limpa carrinho. insertOrIgnore não informa conflito
+de conteúdo. Erro genérico oferece Snackbar que chama _handleInstantSale de novo,
+gerando OUTRO ID. Este segundo caminho já reproduz dupla venda/baixa no fake
+após resposta perdida. Não é preciso haver S03 para esse defeito ocorrer.
+
+S03: syncOfflineSale lê loja, exige owner e assinatura permitida, lê sales/ID
+ANTES de novos efeitos. S existente retorna alreadyProcessed e não baixa.
+localSaleId existente e não vazio divergente é rejeitado; ausente/vazio é aceito
+historicamente. Conteúdo válido divergente não é comparado no replay. Garante
+exclusão por path entre execuções deste writer; não autoria/payload do legado.
+Retorna success/localSaleId/serverSaleId/alreadyProcessed, não receipt V2.
+S03 é writer, nunca consulta read-only. No index atual S03 está exportado;
+confirmSaleV2 e getSaleMutationResultV1 não estão.
+
+Interleavings relevantes:
+I1 S01 comita, resposta perde, S03 observa S: S03 não baixa novamente, mas prova
+   apenas reconhecimento de identidade. Retry S01 com NOVO ID ainda duplica.
+I2 S01 começou, S03 lê S ausente e comita antes: S01 pode sofrer conflito nos
+   produtos e reexecutar callback. Sem ler S, seu algoritmo volta a preparar
+   baixa. Serializar conflitos de estoque não deduplica a intenção comercial.
+I3 Ambos leem S ausente num protocolo novo: só seria seguro se TODOS escritores
+   lessem/criassem a mesma barreira atômica e comparassem o comando original.
+I4 Query lê ausência enquanto S01/servidor ainda trabalha: ausência observada
+   é instantânea; não exclui commit posterior. Reenviar por outro writer é inseguro.
+
+Nuance obrigatória das Rules LOCAIS: sales/update proíbe alterar storeId,
+createdAt, localSaleId e syncOrigin. S01 set usa createdAt novo e online; S03
+usa sua origem/data. Portanto uma sobrescrita tardia concreta pode ser NEGADA,
+abortando também a baixa nessa transação. Não está provado por fake que I2
+produz dupla baixa sob estas Rules. Não presumir Rules publicadas iguais.
+Essa proteção parcial não implementa identidade estável, comparação de comando
+ou coordenação universal; não corrige retry com ID novo. A evidência atual é
+de algoritmo incompatível, defeito de retry demonstrado e corrida mista ainda
+sem teste integrado com Rules, não de dupla baixa inevitável em todo cenário.
+
+3. O QUE PODE DISTINGUIR RESULTADOS
+
+Para operação futura: receipt servidor autenticado, associado a protocolo,
+projeto/loja/ID/ator/hash canônico, criado atomicamente com venda/baixa, e consulta
+read-only que retorna resultado desse mesmo comando. Confirmação deve sobreviver
+a alterações posteriores de pagamento/fiscal sem regravar snapshot comercial.
+Para legado: resposta íntegra vinculada à tentativa ou documento observado
+podem ser evidência limitada. Não reconstruir receipt, ator ou conteúdo perdido.
+Nenhum receipt local, hash local, claim expirado, documento ausente ou usuário
+logado hoje comprova cancelamento/origem/rollback da operação antiga.
+
+V2 atual já cria receipt em auditLogs/sale-v2-hash(ID), com requestHash/actorUid,
+resultado confirmed ou rejected, na mesma transação. Consulta exige comando
+completo, autoriza perfil/loja/ator e não escreve. S sem receipt dá conflito;
+ausência dá not-recorded/definitive:false. Autorização precede receipt; assinatura
+barra efeito novo, mas não oculta receipt válido. Parte das falhas C5 é NÃO
+terminal e não cria rejected. Não converter todo failed-precondition em rejeição.
+
+Ledger B07-C preserva comando/ID por intentKey, CAS e estados duráveis. Seu send
+em unknown pode consultar e reenviar o comando V2 idêntico após not-recorded e
+lease local livre. Segurança desse desenho vem da deduplicação REMOTA entre
+execuções V2, mesmo que a primeira ainda comite; não de provar rollback.
+Este comportamento não se aplica a PendingSales/S01. P04 exige suspensão
+conservadora do unknown legado. Não ligar esse retry automaticamente ao checkout
+ou à fila F10; política de recuperação V2 precisa aprovação distinta T06.
+
+4. ALTERNATIVAS
+
+A — Manter S01 e criar ponte de coordenação.
+Versão realmente segura exige mudar S01 e S03 para ler/criar a mesma barreira
+transacional, identidade persistente e comando imutável; origem/ator/hash,
+consulta de resultado e Rules que impeçam escritores antigos de contornar isso.
+Lock SQLite ou ler S antes da transação não bastam. Gate remoto só no início
+de uma chamada também não basta: deve participar da transação dos efeitos.
+Vantagem: pode preservar preço/data/formato existentes mediante contrato explícito.
+Limitação: dois implementadores de baixa/FIFO, preço, autorização e prova; Rules
+complexas para cliente participar da barreira sem falsificar evidência.
+Receipt escrito pelo cliente não pode adquirir a confiança de receipt Admin.
+Compatibilidade: binário S01 antigo não lê barreira; precisa ser bloqueado no
+servidor. Não há ponte retroativa para operação antiga já em voo. Mesma janela
+de corte da alternativa B, com maior superfície de invariantes duplicados.
+Custo alto; risco alto de coordenação incompleta. Não recomendada como destino.
+
+B — Substituir progressivamente S01 por writer autoritativo recuperável.
+Recomendada. Usar contrato V2 como base para NOVAS instantâneas ONLINE, mediante
+conclusão B07-D e gates abaixo. Somente backend baixa estoque/cria venda; resultado
+autoritativo e idempotência por mesma identidade/comando. Sem fallback para S03.
+Progressão por blocos e lojas em modo controlado, não por escolher outro writer
+após erro. Uma intenção tem um protocolo e um armazenamento proprietário.
+Vantagens: menor número de writers comerciais, regra única de baixa/receipt e
+consulta sem efeitos; o núcleo existente reduz trabalho de contrato.
+Limitações: V2 está local-only, origin online/instant, preço atual em centavos,
+expectativa de preço validada, nome/cliente do servidor. Não equivale ao acordo
+offline S03 de preço/data históricos e arquivamento posterior. Não mover backlog.
+Custo médio/alto inicial (corte, UI, autorização, segurança e operação), menor
+custo de manter idempotência do que dois writers de baixa coordenados.
+Continuidade offline e fiado não vêm de graça; permanecerão desativados no
+domínio cortado até solução própria ou aceite explícito de indisponibilidade.
+
+C — Contenção conservadora sem substituição imediata.
+Fechar novas vendas/sync no domínio, preservar pendências/reservas, oferecer
+somente leitura/reconciliação contratada. Após uma tentativa S01 possivelmente
+enviada, não disponibilizar retry comercial/fallback. Não resolve resposta
+perdida antiga, mas evita criar segundo envio a partir dela.
+Só é garantia se o bloqueio também atingir clientes antigos e writers Admin;
+mero flag UI protege apenas clientes cooperativos. Custo funcional menor,
+custo operacional alto pela interrupção; alternativa de contenção/rollback,
+não arquitetura final. Não há alternativa de zero downtime comprovada aqui.
+
+5. ARQUITETURA PREFERENCIAL E INVARIANTES
+
+Escolher B com contenção C no corte. Garantia pretendida: no máximo um conjunto
+de efeitos comerciais por identidade/comando autorizado, dentro do protocolo
+fenced. Não prometer exactly-once global nem detectar duas vendas humanas iguais
+com IDs distintos. Conteúdo igual não significa mesma intenção.
+
+Fluxo futuro online:
+checkout/intentKey durável -> reserva de ID/comando/contexto -> commit local ->
+claim CAS -> somente writer V2 -> receipt remoto atômico -> confirmação durável ->
+refresh contextual/finalização local -> efeitos externos separados já contratados.
+Nenhum ramo de erro chama S01 ou S03. Falha de disco antes da rede bloqueia envio;
+falha após commit remoto conserva incerteza e a mesma identidade.
+Unknown não gera outra intenção. Callbacks ficam vinculados ao registro original;
+não limpam outro carrinho, iniciam fiscal ou navegam em outra sessão.
+Confirmação válida pode ser anexada ao contexto original via CAS sem regressão;
+erro tardio não reabre confirmed. Mudança de ida e volta exige geração de sessão
+(ABA), além de comparar projeto/uid/loja/target. Backend autoriza a identidade
+autenticada da chamada; cliente não consegue cancelar efeito já autorizado.
+
+Uma nova intenção online usa o ledger B07-C como candidato de proprietário, após
+contrato B07-D de intentKey/ciclo de UI. NÃO duplicá-la em PendingSales para
+reenvio S03. F10 PendingSales v2 continua proprietário de seu legado/quarentena.
+OfflineSalePreparation C-C-A é preparação isolada F10, não adaptador pronto V2;
+não converter automaticamente seu JSON/REAL/createdAt para comando online.
+Dois ledgers não podem assumir responsabilidade comercial pela mesma intenção.
+
+6. CORTE SEM JANELA DE DUPLA ESCRITA — PROPOSTA, NÃO EXECUÇÃO
+
+Escopo mínimo de contenção recomendado: loja inteira para novas vendas/baixas
+diretas enquanto o corte estiver aberto, abrangendo dispositivos/abas/versões.
+Uma flag enviada pelo cliente, número de build ou prefixo de ID não é fence.
+Planejar documento/epoch de controle backend-only, com allow explícito e exclusão
+de matches genéricos; campo novo em store hoje não listado como sensível pode
+ser editável pelo cliente. Schema/path e permissões requerem T03.
+
+Ordem futura com gates de saída, cada ação remota dependendo de autorização:
+1) Inventariar clientes, ferramentas Admin, S02, ajustes/restores e writers
+   externos no domínio; mapear pendências em voo sem expor/reatribuir payload.
+   Preparar cliente compatível e pacote de contenção antes de começar a janela.
+2) Manter V2 não habilitado. Suspender entrada de novas operações e proteger
+   no servidor novas escritas antigas. Rules futuras negam create direto de
+   sales e alteração direta de quantidade/lotes no domínio cortado. Para
+   proteção integral do domínio, aplicar corte products do plano F9 quando
+   suas dependências estiverem prontas. Não basta negar só sales/update.
+   Changes em snapshot comercial protegido/receipts não ficam permitidas por
+   sales/update amplo. Recebimentos só continuam sob whitelist revisada/testada;
+   caso contrário suspender também, sem reimplementar finanças nesta etapa.
+3) S03/Admin não obedece Rules: instalar gate transacional por modo/epoch em
+   todos os handlers que podem criar efeito antigo. Após autenticação e replay
+   permitido, gate deve negar EFEITO NOVO legado antes da baixa. Replay histórico
+   conserva semântica e autorização existentes; se precisar outra semântica de
+   consulta, criar contrato read-only próprio. Não ampliar owner-only implicitamente.
+4) Tratar revisões antigas de Functions já executando: atualizar código não
+   cancela invocação anterior. Registrar versões ativas e comprovar encerramento
+   ou contenção efetiva de TODAS execuções sem fence antes de abrir V2. Handler
+   antigo lê loja, mas ignora campo novo: conflito/retry não o torna seguro.
+   Instrumentação, controle de admissão e procedimento de drenagem precisam
+   contrato operacional; se não houver prova suficiente, continuar fechado.
+5) Confirmar fence cliente efetivo e propagação de Rules, rejeição real de
+   commits tardios/antigos e ausência de Admin inseguro em voo. Esperar N segundos,
+   claim expirar, deploy terminar ou uma sondagem isolada passar não basta.
+   Commit antigo já ocorrido pode ter resposta pendente: mantê-lo como evidência
+   antiga/unknown, não recriar carrinho em V2. Não exigimos que silêncio seja
+   prova de ausência; exigimos não admitir novo efeito não fenced no domínio.
+6) Classificar pendências pré-corte sem conversão automática. Ativar somente
+   novas instantâneas V2 em clientes compatíveis quando modo exclusivo estiver
+   efetivo. Backend verifica modo/epoch na MESMA transação dos efeitos novos;
+   alteração de modo deve conflitar com execução que o leu. Receipt/replay já
+   admitido não depende do estado comercial mutável, respeitada autorização.
+7) Monitorar e conter em caso de falha. Rollback fecha novos efeitos, preserva
+   leitura/consulta/replay autorizados e reservas. Não reabre Rules/S01/S03
+   inseguro nem usa restore de backup para desfazer efeitos.
+
+S02/fiado também cria sales e escreve quantidade diretamente. Não existe corte
+forte geral de products/sales que preserve S02 inalterado e continue alegando
+exclusividade backend. Aprovar pausa desses modos ou concluir sua transição
+contratada fora desta etapa antes da liberação. Candidatos de estoques/cadastro
+F9 também precisam do plano de corte, não de exceção permissiva nas Rules.
+
+7. HISTÓRICO, OFFLINE E PLATAFORMAS
+
+Histórico sales e receipts preservados; não regravar documentos, preços, datas,
+pagamentos/fiscal. IDs antigos continuam IDs antigos, sem receipt V2 retroativo.
+Não usar hash de conteúdo como nova identidade nem atribuir ator pelo login.
+Backlog pending/failed/syncing antigo sem origem permanece suspenso/unknown;
+synced histórico não se reabre. Unknown retém reservas por domínio físico
+projeto/target/loja, inclusive entre usuários. Ausência/carregamento não é zero.
+Confirmação comercial durável não libera reserva antes de refresh útil completo
+e finalização SQLite atômica admitida; refresh falho não reenvia writer.
+
+Uma consulta legado futura pode retornar observed/absent/ambiguous e evidência
+limitada, nunca confirmedV2. Sem origem comprovada, não procurar ID por projetos
+por tentativa. Replay S03 limitado não prova conteúdo nem exclusividade S01.
+Mesmo após fence, ausência não autoriza converter pendência antiga em V2: é
+necessário contrato de decisão/evidência específico, mantendo identidade.
+P04/P07 não autorizam descarte, confirmação forçada ou liberar reserva incerta.
+
+Android: PendingSales SQLite v2 ainda é isolado; singleton operacional é v1.
+Ativação exige ensaio aditivo/corte de binários antigos e política de rollback.
+Propor inicialmente online V2 sem prometer fechamento offline. Admissão de NOVAS
+vendas offline exige contrato de preço/data/arquivamento/autorização offline,
+estoque/reservas e writer autoritativo correspondente, não origin:'online' fictício.
+Não copiar vendas aceitas offline para ledger online, nem criar segundo writer.
+
+Web em Windows: é plataforma Web, sem fallback offline atual. Pode usar ledger
+IndexedDB já isolado B07-C para durabilidade de tentativa ONLINE; isso não é
+offline Web nem licença para vender sem rede. Eviction/quota/aba/crash exigem
+política: perda de armazenamento impede gerar novo ID presumindo inexistência.
+Mais de uma aba precisa retomar intentKey estável; hash igual não mescla vendas
+humanas distintas. Sem storage durável, falhar antes da rede.
+
+Windows nativo: bootstrap atual rejeita não-Web/não-Android explicitamente em
+initializeEnvironmentFirebase. kIsWeb=false no checkout não prova suporte Windows.
+Testes SQLite no host Windows não certificam checkout/Firebase Windows.
+Não habilitar plataforma ou fila Windows incidentalmente; requer contrato próprio.
+
+8. DEPENDÊNCIAS E CONTRATOS A APROVAR
+
+T01 Escolher B e escopo inicial instantâneo ONLINE; excluir fallback S03 para
+    nova intenção V2. Definir aceite de pausa offline/fiado no domínio cortado.
+T02 Concluir B07-D: intentKey durável recuperável desde checkout, uma identidade
+    por intenção, retorno à UI, candidato conflitante preservado após crash,
+    revisão explícita de comando rejeitado sem alterar o comando original.
+T03 Definir modo/epoch/path backend-only, matriz Rules completa (incluindo
+    matches sobrepostos), gates Admin, drenagem verificável e rollback fechado.
+    Sem definição operacional de drenagem, o corte continua bloqueado.
+T04 Homologar matriz V2 de roles/revogação/loja e prova privada de resultado.
+    Roles V2 não equivalem a owner-only S03. auditLogs tem read de toda loja nas
+    Rules locais: endpoint privado não torna receipt invisível via leitura
+    direta. Aprovar se hash/resultado podem ser vistos na loja, restringir leitura
+    de receipts com compatibilidade de auditoria, ou contratar namespace próprio.
+T05 Confirmar compatibilidade de preço/nome/cliente atuais versus snapshot local,
+    centavos sem arredondamento silencioso, limites D14 e bloqueios F10/C5
+    (pai/variante/perfil incompatível). Não implementar variantes/V3 ou mudar preço
+    de venda já pactuada offline para satisfazer o writer online.
+T06 Política de unknown V2: inicialmente consulta sem reenvio automático. Se
+    futuramente admitir retry V2 exato, exigir exclusividade remota comprovada,
+    mesmo comando/ID e autorização separada; not-recorded continua não definitivo.
+    PendingSales/S01 unknown nunca herda esse mecanismo automaticamente.
+T07 Contrato read-only/procedimento legado, autorização do conciliador, evidências
+    e acesso sem vazamento entre contas; sem receipt retroativo/forçar confirmação.
+T08 Rollout por plataforma/loja, coexistência de binários, Android físico,
+    persistência/contexto SDK e geração ABA. Futuro offline tem contrato próprio;
+    nenhum de T01–T08 autoriza deploy, migração ou acesso remoto por si só.
+
+F9/B07-D não concluído: falta vínculo do carrinho/intentKey, UX de retomada e
+conflito, ponte de contexto e adaptação segura ao lifecycle. B07-B/C continuam
+demo/loopback, sem E2E HTTP/Auth/Rules completo e sem autorização operacional.
+Ledger não inclui target/endpoints no SaleMutationScope atual: ambiente efetivo
+precisa isolamento adicional no storage/adaptador sem mudar hash existente
+incidentalmente. SaleMutationApi só aceita localhost/127.0.0.1 demo; Android
+físico não é liberado trocando host para 10.0.2.2 fora de contrato.
+F10: reservas/consumidores e finalização não estão operacionais; preparação
+C-C-A não resolve ABA/coerência SDK/candidato durável conflitante. Gates C5
+exigem produtos elegíveis e não admitem reinterpretar parent/variant como legado.
+F9 corte geral depende de S02, ajustes/cadastro e writers externos inventariados.
+Restore bloqueado; C4 adiado; finanças/fiscal fora da implementação proposta.
+
+9. FUTURA IMPLEMENTAÇÃO EM BLOCOS PEQUENOS
+
+Bloco 1 — Aprovar T01–T08 e fixtures de transição, só documentação/test plan.
+Saída: matriz por domínio/plataforma/modo, contrato de drenagem e evidência;
+nenhuma pendência antiga elegível por inferência. Parar em divergência financeira.
+
+Bloco 2 — Completar B07-D local isolado: intentKey/contexto/geração de sessão,
+retomada de UI e snapshot durável antes da primeira rede, protocolo único;
+transportes falsos, nada ativado. Saída: falhas de disco/ABA/crash/conflito
+preservam intenção e impedem novo ID/envio indevido.
+
+Bloco 3 — Contratar e implementar localmente controle de modo/epoch, gates
+transacionais nos Admin relevantes e Rules candidatas; query legado separada
+se T07 aprovado. Não alterar semântica de replay histórico por conveniência.
+Saída: Emulator prova fence e corridas; Admin testado além de Rules.
+
+Bloco 4 — Adapter checkout V2 local desativado. Substituição de ramo, nunca
+fallback alternativo; integração UI/reserva/finalização por protocolo, sem
+migrar PendingSales ou fiscal. Saída: fluxos antes/depois e dados históricos
+compatíveis, unknown suspenso, nenhum caminho alcança S01/S03 para novo comando.
+
+Bloco 5 — Ensaio integrado sintético do corte, carga limitada D14, Auth real
+local/Rules/HTTP, duas conexões/abas e persistência real. Android físico em
+ambiente de testes próprio quando contratado. Saída: matriz abaixo sem perdas,
+duplicações ou liberações indevidas; procedimento de contenção ensaiado.
+
+Bloco 6 — Plano operacional revisável, auditoria final F9 e liberação por gates.
+Qualquer HML/PROD, deploy, publicação ou migração exige pedido/autorizações
+imediatos específicos. Esta proposta não inicia esse bloco nem os anteriores.
+
+10. MATRIZ DE TESTE E CRITÉRIOS DE LIBERAÇÃO
+
+M01 Mesmo ID/comando concorrente V2: uma baixa/venda/receipt; ambos recebem
+    resultado coerente. ID igual com conteúdo/ator distinto: conflito sem efeitos.
+M02 S01 pausado antes do commit, S03 concorrente, todas ordens de interleaving;
+    aplicar Rules locais/candidatas, não só fake. Registrar rejeição atômica ou
+    efeito, demonstrando limite da proteção createdAt/syncOrigin existente.
+M03 Após fence efetivo, cliente antigo tenta sales/create, set/update protegido,
+    baixa manual/FIFO e batch S02: todos negados atomicamente. Nenhum match
+    genérico libera products/sales/controle/receipt. Leitura autorizada preservada.
+M04 Admin S03 sem S após corte: gate recusa; S existente autorizado: replay
+    histórico não regrava estoque/venda/auditoria. Handler antigo já em voo
+    não pode permanecer admitido quando V2 abre. Prova de drenagem é gate próprio.
+M05 Gate muda entre leitura e commit: transação nova conflita/reavalia e não
+    escreve no modo proibido. Gate somente pré-chamada deve falhar o teste.
+M06 Timeout antes/depois do commit: mesma identidade durável, unknown conservado;
+    query ausente enquanto chamada comita depois não cria outro writer. Consulta
+    falha/malformada/denied continua suspensa. Nunca S03 como query.
+M07 Falha local antes de persistir/claim: zero rede; após commit remoto antes
+    de confirmar localmente: reabertura recupera resultado sem segundo débito.
+M08 Mesma intenção após retry/reabertura mantém ID, intentKey, comando e protocolo;
+    duas intenções legítimas iguais não são mescladas por conteúdo.
+M09 Troca projeto/target/loja/uid e ABA em cada await: suspende UI/envio posterior,
+    evidência tardia só no registro original; erro tardio não regride confirmação.
+M10 SQLite/IndexedDB: duas conexões/abas, claim vivo/expirado, disco/quota falhos,
+    crash e perda de storage. Expiração não equivale a rollback/estoque livre.
+M11 Reservas por domínio físico entre usuários, isolamento entre lojas/projetos;
+    unknown/quarentena retêm compromisso; refresh parcial/falho conserva reserva;
+    confirmação persistida jamais reenvia venda por falha de refresh/finalização.
+M12 Legado: synced, failed, syncing, sem origem, sem localSaleId remoto, arquivado
+    após ocorrência, divergência de payload. Preservação literal, sem conversão
+    de receipt/preço/data/autor e sem descarte para tornar indicadores verdes.
+M13 Auth/Rules/HTTP local: revogado/troca loja, consulta privada versus auditLogs,
+    owner S03 versus roles V2, assinatura antes/depois do commit; nenhuma promoção
+    implícita de permissões. Receipt válido precede estado mutável sob contrato.
+M14 Compatibilidade comercial C5/preços centavos/FIFO metadados e nanos, estoque
+    insuficiente em segundo produto sem parcial; customer/name e total histórico.
+    Payments/fiscal posteriores sobrevivem replay sem emissão duplicada.
+M15 Web não aceita venda offline; Windows nativo continua bloqueado; Android
+    precisa persistência/ciclo real. Regressões financeiras dependentes de Rules
+    passam ou modos ficam explicitamente suspensos, sem implementar fiado aqui.
+M16 Rollback de app/backend não reabre writer inseguro, não elimina pendências,
+    não restaura dados reais nem remove receipts. Fence preservado durante falha.
+
+Usar testes dirigidos existentes como base e acrescentar os casos de integração
+que eles não cobrem. Fake S01 não aplica Rules/contenção SDK; Emulator handler
+com auth sintética não certifica E2E callable. Flutter 3.32.6 --no-pub e JDK21
+quando houver futura execução Emulator; nenhum teste global por rotina.
+Critério técnico: M01–M16 aplicáveis aprovados, diffs limitados, nenhuma perda/
+segunda baixa/liberação incerta, exclusividade efetiva demonstrada. Critério
+operacional adicional: contratos aprovados, corte/drenagem/rollback verificáveis,
+dependências S02/F9/F10 resolvidas ou suspensas e autorizações remotas próprias.
+Se um gate não puder ser provado, manter novas escritas fechadas; não contornar
+com Rules permissivas, outra identidade ou syncOfflineSale.
+
+11. RISCOS REMANESCENTES E ENCERRAMENTO
+
+Não conhecemos estado remoto, clientes distribuídos, invocações Admin ativas ou
+origem de filas reais. Conteúdo/ator históricos podem ser irrecuperáveis.
+Perda de storage pode perder identidade; vendas humanas duplicadas com IDs novos
+não são deduplicáveis por receipt. Indisponibilidade pode ser necessária.
+Fiado/recebimentos e eventuais ferramentas externas impedem corte silencioso.
+Sem ensaio, não há prova de drenagem, propagação de Rules, Android físico ou
+compatibilidade operacional de preço/roles. Nenhuma dessas lacunas é escondida
+pelos testes históricos aprovados. Arquitetura pode ser proposta sem estar liberada.
+
+Único arquivo criado: docs/catalog/F10_C5_E4_D_C_C_B_RESULTADO.txt.
+Código/Rules/SQLite/checkout/recibos não modificados, formatados ou executados.
+Manifesto SHA256 anterior: %TEMP%\store_connect_C_C_B_baseline.json, 672 arquivos.
+Comparação final: 672 arquivos preexistentes idênticos, zero alterações/remoções;
+único acréscimo este relatório. Branch/HEAD preservados.
+Recibo 80 mm SHA256 inicial/final confirmado:
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9
+Validação documental final: manifesto, git diff --check e status/HEAD conferidos;
+zero whitespace final no relatório. Avisos LF/CRLF locais sem erro de diff.
+Resumo exibido no terminal. Testes funcionais não executados por ser etapa documental.
+Sem deploy, commit, push, migração, restore, reset, stash, clean, instalação,
+consulta de dados/serviços HML/PROD ou implementação automática.
+
+CONTRATO PROPOSTO — alternativa B, com contenção C e gates explícitos.
+Integração operacional permanece bloqueada até aprovação e provas indicadas.
+PARADA APÓS F10-C5-E4-D-C-C-B.

@@ -1,0 +1,223 @@
+STORE&CONNECT — F10-C2 — REGISTRO PARCIAL / AGUARDANDO FONTE DAS DECISÕES
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+
+Etapa não concluída. Nenhuma reserva C2 implementada nesta execução.
+
+ARQUIVOS CRIADOS
+- docs/catalog/F10_DECISOES_APROVADAS.md
+- docs/catalog/F10_C2_RESULTADO.txt
+Nenhum arquivo preexistente foi editado nesta execução.
+
+AUDITORIA DIRIGIDA
+Lidos AGENTS.md, CURRENT_WORK.md, F10_ARQUITETURA_CONTRATOS.md,
+F10_C1_RESULTADO.txt, productVariantsV1.js, productVariantsC1.js,
+productCodeReservation.js e testes existentes de COD/C1.
+CURRENT_WORK registra etapa histórica; não foi usado para desfazer F9/F10.
+O adendo C1 confirma implementação e validação posteriores à tentativa
+inicial bloqueada. Não foram recriadas etapas anteriores.
+
+DECISÕES DOCUMENTADAS
+C02, C05 e C07 registradas conforme o pedido atual.
+C01/C03/C04/C06/C08/C09 registradas como aprovadas, sem inventar conteúdo.
+A seção 10 de F10-A contém alternativas, F10-B registra decisões abertas e
+o adendo C1 informa que o conteúdo detalhado não está nos documentos locais.
+Solicitada ao usuário a fonte dessas seis decisões para transcrição fiel.
+A primeira tarefa (registro completo antes de implementar) permanece pendente.
+
+CONTRATO COD OBSERVADO
+normalizeCod F9: trim/uppercase, máximo 40 caracteres normalizados.
+codeRef: stores/{storeId}/productCodes/{sha256 UTF-8 do COD normalizado}.
+Owner product/variant e interpretação legada sem ownerType já existem.
+Criação F9 permite ausência, exige string quando presente, rejeita null.
+O helper isolado aceita null/undefined; não confundir com contrato de entrada.
+
+LIMITAÇÃO F9
+prepareCodeChange apaga a reserva antiga na troca de COD; teste F9 comprova
+reutilização posterior. Isso impede afirmar retenção histórica global.
+Nenhum writer antigo ou Rule foi alterado. Isolamento local e bloqueio de
+troca/liberação F10 permanecem necessários, conforme escopo solicitado.
+
+TRANSAÇÕES / CONCORRÊNCIA / IDEMPOTÊNCIA
+C1 existente conserva transação, autorização, baseline e receipts f10-c1.
+Nenhuma mudança de schema/namespace/comando persistido foi feita.
+Garantias C2 ainda não implementadas nem testadas nesta execução.
+
+VALIDAÇÃO
+Auditoria global não executada. Testes de runtime/Emulator e regressões F9,
+F10-B e F10-C1 não executados nesta execução: implementação aguarda registro
+fiel das decisões. Não reutilizar resultados históricos como testes atuais.
+Revisão dos dois documentos e git diff --check executados separadamente.
+
+PENDÊNCIAS
+Recuperar texto aprovado das seis decisões; completar documentação; retomar
+implementação local C2 e suíte dirigida solicitada, preservando receipts C1.
+F10-C3: estoque/lotes permanece fora desta execução e não foi iniciado.
+
+PRESERVAÇÃO
+Trabalho local preexistente preservado. Sem commit, push, deploy, instalação,
+HML/PROD, alteração de secrets, reset/restore/stash/clean ou ativação remota.
+Restore de backup continua bloqueado. Resumo exibido no terminal.
+
+======================================================================
+CONTINUAÇÃO EFETIVA — F10-C2
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+
+O registro parcial acima permanece integralmente como histórico. Rodrigo
+forneceu o texto aprovado das decisões faltantes e autorizou a continuação.
+Esta seção registra a implementação local posterior; não reabre F10-A/B/C1.
+
+1. ARQUIVOS
+Modificados nesta continuação:
+- docs/catalog/F10_DECISOES_APROVADAS.md
+- functions/products/productVariantsC1.js
+- docs/catalog/F10_C2_RESULTADO.txt (somente acréscimo desta execução).
+Criados nesta continuação:
+- functions/products/productVariantCodesC2.js
+- functions/tests/products/productVariantsC2.emulator.test.js
+Nenhuma alteração de Dart, Rules, index, writers V1/V2 ou restore.
+
+2. DECISÕES E CONTRATO
+Documento complementar contém C01–C09 aprovadas em 16/10/2026: preço-base
+com preço próprio opcional; COD opcional único; imagem herdada/própria;
+barcode independente e ambiguidade; combinações explícitas; arquivamento
+com retenção; limites técnicos provisórios; custo/fiscal herdados com
+exceções explícitas e mínimo individual; conversão somente explícita/segura.
+Detalhes ainda indefinidos permanecem sem implementação ou inferência.
+C05 mantém combinações parciais/vazias bloqueadas. C07 não homologa tetos
+comerciais. Estoque inicial segue zero e lotes vazios, conforme C1.
+
+Entradas locais aditivas createProductC2/createVariantC2 no serviço C1.
+createProductC1/createVariantC1 continuam rejeitando COD, como originalmente.
+Ausência permitida, null/undefined explícito e tipos não string rejeitados.
+normalizeCod oficial F9 aplica trim/uppercase, limite de 40 após normalizar;
+inclui expansão Unicode do uppercase, sem regras novas de caracteres.
+F9 createProductContract aceita vazio/espaços e omite cod normalizado vazio.
+C2 conserva essa persistência (sem reserva), mas mantém a string fornecida
+no comando do receipt, distinguindo vazio, espaços e ausência. COD preenchido
+é canônico no item/reserva; comando conserva a string original fornecida.
+Assim, mudar a representação textual do COD com mesmo requestId conflita;
+não há coerção nem descarte silencioso de intenção na identidade C2.
+
+3. RESERVAS E ATOMICIDADE
+Namespace F9: stores/{storeId}/productCodes/{sha256(COD canônico UTF-8)}.
+Reserva product: cod, ownerType=product, productId, variantId=null.
+Reserva variant: cod, ownerType=variant, productId, variantId próprio.
+reservationOwner F9 reconhece legado sem ownerType somente em memória.
+Criação não adota reserva ocupada, mesmo se órfã ou com owner coincidente;
+legado nunca é migrado/regravado. Reserva malformada bloqueia a operação.
+Scan transacional preserva produtos legados sem reserva, ativos/arquivados,
+e examina variantes em todos os produtos da loja. Variante com COD sem
+reserva íntegra bloqueia novas reservas até revisão; não há reparo automático.
+
+Todas as leituras precedem writes. Reserva COD, item, receipt e, para variante,
+reserva de combinação/atualização do pai pertencem ao mesmo commit Firestore.
+Concorrentes disputam o mesmo documento de COD. Só uma intenção incompatível
+vence; falhas não deixam item, índice, receipt ou alteração parcial do pai.
+Autorização/revogação/vínculo/loja são relidos na transação. Guardas C1 de
+IDs, scope, parent ativo, baseline exato e combinação canônica preservadas.
+
+4. RECEIPTS E COMPATIBILIDADE
+Sem alteração de schemaVersion=1, namespace ou identidade C1:
+auditLogs/f10-c1-SHA256([uid,requestId]), sob a loja.
+Operações persistidas continuam createProductC1/createVariantC1.
+Comandos sem COD preservam a canonicalização e defaults C1. A extensão COD
+é opcional nas novas entradas locais; não foi criado namespace paralelo.
+Replay C1 via C2 retorna resultado anterior antes de estado mutável, sem
+regravar receipt; autorização continua obrigatória. Mesmo requestId com
+outro comando/operação conflita, sem efeitos. Replay C2 de COD não tenta
+recuperar ou recriar índices se o estado atual mudou.
+F9 normalizador/namespace/ownership/writers/receipts preservados integralmente.
+
+5. TESTES DESTA CONTINUAÇÃO
+Somente dados sintéticos, Firestore Emulator demo-store-connect-f10-c2,
+loopback. Java 25.0.3 já instalado em Android Studio/jbr, JAVA_HOME/PATH apenas
+do processo. Sem instalação nem alteração permanente do Java do Windows.
+CLI inicialmente falhou com EPERM ao ler firebase-tools.json no sandbox;
+execução do Emulator foi repetida com autorização de ferramenta.
+
+Primeiro comando:
+firebase.cmd emulators:exec --config firebase.json
+  --project demo-store-connect-f10-c2 --only firestore
+  "node --test --test-reporter=spec --test-concurrency=1
+   functions/tests/products/productVariantsC2.emulator.test.js
+   functions/tests/products/productVariantsC1.emulator.test.js
+   functions/tests/products/productVariantsV1.test.js
+   functions/tests/products/productCodeAtomic.emulator.test.js
+   functions/tests/products/createProduct.emulator.test.js"
+Resultado: 56 testes do runner aprovados, zero falhas/skip: 22 C2, 14 C1,
+18 F10-B e dois arquivos F9 com runners internos (64 criação, 37 COD e
+15 pares de corridas). Não somar runners internos como contagem do node:test.
+
+C2 cobre nove cruzamentos concorrentes entre simple/variantParent/variant;
+arquivados contra todos os tipos; ausência/vazio/espaços; normalização/limites
+e entradas inválidas; reservas legadas sem regravação; produto legado sem
+índice; reserva malformada/órfã e variante sem índice; F9 x F10 em ambos os
+sentidos e corrida por tipo; replay de receipts C1 após arquivamento; replay
+C2 concorrente; colisão de requestId com intenções diferentes; autorização,
+revogação, scope/lojas; rollback integral/retry; bloqueios C1 com COD e guarda
+demo/loopback. Nenhum consumidor comercial foi ativado para exercitar C2.
+
+O primeiro teste de revogação durante transação passou, mas demorou 72,7s:
+aguardava write concorrente mantendo lock pessimista, provocando timeout
+de lock e retry no Emulator. Diagnóstico: desenho do teste, sem falha de
+comportamento do serviço. Ajustado para iniciar revogação concorrente sem
+aguardá-la dentro do lock: aceita a ordem serial válida (commit autorizado
+antes da revogação ou recusa após revogação), valida atomicidade e exige
+replay posterior permission-denied. Validação final registrada abaixo.
+
+Segundo comando (mesmo emulators:exec/config/projeto local):
+  "node --test --test-reporter=spec --test-concurrency=1
+   functions/tests/products/productVariantsC2.emulator.test.js
+   functions/tests/products/productMutationV2.emulator.test.js
+   functions/tests/security/productCodeRules.test.mjs"
+Resultado final: 60/60 aprovados, zero falhas/skip: 22 C2, 32 V2, 6 Rules.
+O teste ajustado de revogação concorrente passou em 140,6ms. Mensagens
+PERMISSION_DENIED do SDK nas Rules são rejeições esperadas/assertFails;
+nenhuma Rule remota foi consultada ou modificada. Apenas Rules locais foram
+carregadas em projeto demo-f9-cod-rules da suíte existente. Ambos os comandos
+do CLI encerraram com código zero e desligaram o Emulator normalmente.
+
+Testes puros adicionais: createProductContract 82/82; updateProductContract
+8/8; saleV2Contract + saleV2ClientFixtures 24/24, incluindo bytes/hash B07-C.
+Somados aos 18 F10-B acima, os 42 testes Node dirigidos do checkpoint B
+passaram. Flutter não repetido: nenhum arquivo Dart/ledger foi alterado.
+Checks node --check dos três JS C2 e whitespace/BOM próprios aprovados.
+
+6. LIMITES DE SEGURANÇA E ATIVAÇÃO
+Serviço somente local demo-* com SDK loopback efetivo, sem onCall/index.
+Nenhum novo handler operacional publicado/exportado. Testes Admin não
+comprovam Rules cliente; testes locais de Rules são regressão dirigida.
+F9 prepareCodeChange ainda libera reserva antiga em troca/remoção de COD;
+testes F9 confirmam reutilização posterior. NÃO existe garantia global de
+retenção histórica. Não é possível reconstruir códigos históricos já
+liberados. Writers antigos/Rules sem barreira também impedem declarar
+integridade comercial global de pais/variantes.
+Nenhuma operação de alteração/liberação COD foi implementada no F10.
+Futura troca segura exige contrato de retenção e revisão coordenada dos
+writers/barreiras, com aprovação específica. Ativação comercial bloqueada.
+Varredura local tem custo proporcional a produtos/variantes/reservas; não
+houve teste de carga, auditoria global ou homologação de escala. Sem limites
+comerciais novos. Nenhum catálogo/checkout/venda/fiado/UI integrado.
+
+7. PRESERVAÇÃO E PRÓXIMOS PASSOS
+Manifesto SHA256 de 583 arquivos preexistentes verificado: somente os arquivos
+previstos desta continuação foram alterados. Dois paths de imagens escapados
+pelo Git não entraram no manifesto inicial; não foram editados. Não se declara
+hash integral de todos os arquivos do repositório. HEAD/branch preservados.
+F9/A5 B01–B07-C, F10-A/B e testes C1 existentes permanecem preservados.
+Restore de backup continua bloqueado integralmente.
+Pendências C3: contrato e implementação local de estoque/lotes por variante,
+operações e baselines próprios, atomicidade/concorrência/idempotência e
+regressões F9/C1/C2. Nenhuma implementação C3/C4 nesta execução.
+Sem commit, push, deploy, migração, HML/PROD, instalação, secrets ou
+reset/restore/stash/clean. Parada ao concluir C2, sem ativação remota.
+
+8. CONCLUSÃO LOCAL
+F10-C2 implementado e validado localmente. git diff --check e revisão dos
+diffs/whitespace dos arquivos novos aprovados. Registro parcial anterior
+preservado como prefixo integral deste relatório. Resumo exibido no terminal.
+Nenhuma garantia comercial global declarada; gates acima permanecem abertos.

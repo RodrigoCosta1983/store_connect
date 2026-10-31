@@ -1,0 +1,128 @@
+STORE&CONNECT — F10-C5-E1-R1
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+RESULTADO: BLOQUEADO POR INCOMPATIBILIDADE COM REJEIÇÃO TERMINAL B07-B.
+Patch candidato preservado localmente para revisão; NÃO aprovado para integração.
+
+1. AUDITORIA E ARQUIVOS
+Lidos AGENTS.md, CURRENT_WORK (histórico), relatórios E1, D e D1,
+relatório B07-B, serviço completo, normalizador/hash V2, elegibilidade C5-D/D1,
+persistência C5-B e testes reais existentes. Trabalho local anterior preservado.
+Modificados somente:
+- functions/sales/confirmSaleV2.js
+- functions/tests/sales/confirmSaleV2.emulator.test.js
+Criado este relatório. Manifesto SHA256 inicial no TEMP:
+f10-e1-r1-baseline.json, 639 arquivos; comparação final identificou somente
+os dois arquivos acima, demais 637 preexistentes idênticos.
+
+2. PONTO EXATO DA BARREIRA CANDIDATA
+parse: presença própria bruta de variantId antes de contract.normalize,
+inclusive null/undefined explícitos, rejeitada sem alterar entrada.
+Transação: autorização usuário/loja/papel/revogação, receipt/replay, sale
+preexistente, queryOnly e assinatura continuam anteriores à guarda de produto.
+No loop de produtos, após tx.get(product), tx.get de
+products/{productId}/commercialProfiles/current e evaluateProductEligibility
+com legacyV2/sale. Identidade usa ref.id e loja autorizada, não dados de perfil
+ou existência declarados pelo cliente. Adaptador mantém todos os campos e
+marcadores, inclusive attributeDefinitions/attributes/productId/productKind/
+variantSchemaVersion, e adapta Timestamp recursivamente para seconds/nanos.
+Produto real permanece intacto para preço/estoque/FIFO.
+EligibilityBlocked é HttpsError failed-precondition excluído do catch terminal.
+Mecanismo comprovado nos novos testes: sem receipt, query not-recorded não
+definitivo; correção sintética permite reenviar a mesma identidade congelada.
+Todas as leituras executadas/preparações antecedem qualquer escrita; abortos
+de domínio não enfileiram venda/estoque/receipt. A forma/hash do comando,
+requestId, schema de receipt/sale e processamento de FIFO não foram editados.
+
+3. TESTES NODE REALMENTE EXECUTADOS
+node --test --test-reporter=spec com:
+functions/tests/products/productEligibilityC5.test.js
+functions/tests/sales/confirmSaleV2EligibilityBlocker.test.js
+functions/tests/products/productCommercialPersistenceC5.test.js
+functions/tests/products/productCommercialC5.test.js
+functions/tests/products/productVariantsV1.test.js
+functions/tests/products/productMutationContract.test.js
+functions/tests/products/createProductContract.test.js
+functions/tests/products/updateProductContract.test.js
+functions/tests/sales/saleV2Contract.test.js
+functions/tests/sales/saleV2ClientFixtures.test.js
+Resultado: 124/124, zero falhas/skips/cancelamentos, Node 22.23.2.
+node --check do serviço e do teste Emulator: exit 0.
+git diff --check: exit 0; avisos LF/CRLF preexistentes do ambiente.
+
+4. EMULATOR REALMENTE EXECUTADO
+JDK 21 existente build/f9-tools-jdk21/jdk-21.0.12.1+1, somente ambiente
+do processo. Sem instalação. firebase.ps1 bloqueado por ExecutionPolicy;
+usado firebase.cmd, sem alterar política. Primeiro acesso CLI teve EPERM
+na configuração local; execução repetida com aprovação de sandbox.
+
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e1-r1
+ --only firestore "node --test --test-reporter=spec
+ functions/tests/sales/confirmSaleV2.emulator.test.js
+ functions/tests/sales/salesWritersCharacterization.emulator.test.js
+ functions/tests/products/productMutationV2.emulator.test.js
+ functions/tests/products/productEditState.emulator.test.js"
+Comando real em uma linha. Resultado INICIAL: 98/98, zero falhas/skips.
+82 regressões B07-B/produtos/caracterização e 16 testes C5 novos.
+Handlers .run, Admin SDK e Firestore real em loopback, dados sintéticos.
+Não é certificação de tokens Auth, transporte HTTP ou Rules de cliente.
+Emulator encerrado pelo CLI; nenhum acesso HML/PROD.
+
+Comprovado nessa matriz:
+- venda simples válida e FIFO com metadados/Timestamps preservados;
+- replay confirmed e rejected original após preço/tipo/perfil vazio mudarem,
+  sem atualização de receipt/produto; histórico financeiro/fiscal preservado;
+- pai explícito e pai sem discriminadores com definitions bloqueados;
+- definitions null, tipo parcial, versão parcial, simple inconsistente,
+  variante, dinheiro novo no topo e custo inválido bloqueados;
+- variantId bruto null/undefined/string/false/zero bloqueados sem mutação;
+- perfil real vazio ou preenchido bloqueado, também com arquivo/preço inválido;
+- novos bloqueios C5 sem sale/receipt e sem mudança de estoque/updateTime;
+- erro de domínio no segundo item não baixa FIFO do primeiro;
+- arquivo, preço fracionário/conflitante e estoque inválido mantiveram
+  rejeições terminais antigas nos casos da matriz inicial;
+- autorização, revogação, isolamento, concorrência de IDs e saldo,
+  conflito com ajuste e falha precommit protegidos nas regressões executadas.
+
+5. INCOMPATIBILIDADE ENCONTRADA E PARADA
+Na revisão da fronteira SDK/JSON-like, acrescentado caso obrigatório adicional
+para preço NaN, valor realmente aceito pelo Firestore. Execução dirigida:
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e1-r1
+ --only firestore "node --test --test-reporter=spec --test-name-pattern=NaN
+ functions/tests/sales/confirmSaleV2.emulator.test.js"
+Resultado: 0/1 aprovado, 1 falha, exit 1. Falha NÃO ocultada nem expectativa
+alterada para aceitar o comportamento incorreto. Matriz final NÃO está verde.
+
+Esperado pelo fluxo histórico B07-B inspecionado: contract.priceCents(NaN)
+falha e gera rejected/invalid-current-price terminal com receipt.
+Obtido no patch: copy de snapshot C5-B recusa número não finito antes de
+evaluate chegar à política de preço; catch devolve EligibilityBlocked com
+reason=invalid-eligibility-snapshot sem receipt. Stack no serviço, linha 153.
+O teste para na exceção, portanto não se alega que suas asserções posteriores
+de estado/receipt/replay tenham executado. A transação lança antes das escritas.
+Os 98 resultados anteriores continuam reais, mas não certificam esta lacuna.
+
+Isso altera o protocolo terminal de uma rejeição histórica e impede aprovar
+o patch conforme restrições E1-R1. Nenhum bypass, regra duplicada, mudança em
+C5-B/D/D1 ou expansão de escopo foi tentado após a reprodução. Implementação
+parada; serviço candidato e teste vermelho preservados, sem restaurar backup
+ou descartar trabalho. Serviço continua local-only e fora do index.
+
+6. LIMITES E CONDIÇÃO PARA PRÓXIMA INTEGRAÇÃO F9/F10
+Necessário decidir/autorizar tratamento dirigido da fronteira snapshot
+Firestore versus DTO JSON-like sem perder os resultados terminais B07-B.
+O adaptador atual só adapta objetos JSON-like e Timestamp: outros valores
+nativos Firestore e números não finitos requerem análise explícita de
+compatibilidade; não declarar suporte universal a documentos históricos.
+Revalidar NaN e demais números não finitos/valores SDK pertinentes, perfil
+presente e marcadores combinados, e repetir matriz completa após correção.
+Só então avaliar aprovação da barreira local e uma próxima integração.
+
+Remoção TOTAL dos discriminadores/marcadores continua indistinguível de
+simples legado pelo snapshot atual; precisa de proteção estado anterior/
+posterior em writers/Rules, fora desta etapa. Futuros cortes permanecem
+BLOQUEADOS. Não libera checkout, outros writers, ledger, transporte C4,
+restore, endpoints remotos ou produção. C1/C2/C3 e autenticação inalterados.
+Nenhum commit/push/deploy/migração/instalação/reset/restore/stash/clean.
+Sem avanço automático. PARADA APÓS E1-R1 BLOQUEADA.

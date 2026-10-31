@@ -1,0 +1,189 @@
+STORE&CONNECT — F10-C5-E2-A
+BARREIRA DE ELEGIBILIDADE NO adjustProductStockV1
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+RESULTADO: BARREIRA LOCAL INSTALADA E VALIDADA NO ESCOPO DESCRITO.
+Zero falhas funcionais nos testes executados. Sem ativação remota.
+
+1. INSPEÇÃO E CONTRATO PRESERVADO
+Lidos AGENTS.md, CURRENT_WORK histórico, resultados C5-E1-R2 e D1, contrato
+productEligibilityC5 e projeção C5-B, productMutationV2 integral, normalizador
+productMutationContract, productMutationResult, productMutationScope, relatório
+B05, documentação B01/B02/B03 e testes backend existentes correspondentes.
+Branch/HEAD/status conferidos antes de editar. Trabalho anterior reconhecido
+e preservado. Serviço era untracked: delta revisado com git --no-pager diff
+--no-index contra cópia inicial no TEMP, sem restauração.
+
+Fluxo real preservado:
+- autenticação inicial, normalização do comando original e hash canônico;
+- autorização transacional do usuário, papel, revogação e loja existente;
+- assertMutationScope, receipt por operação/loja/ator/requestId;
+- receipt conhecido confirma replay ou devolve rejeição persistida original;
+  identidade divergente mantém request-id-reused;
+- novo efeito lê produto e exige CAS de updateTime exato;
+- preparo de estoque, seguido de escritas de produto e receipt atômicos.
+Sem alteração em requestId, hash, baseline, timestamps persistidos ou formato
+dos receipts antigos. Não há inferência de tipo a partir de preço do cliente.
+
+2. LOCAL EXATO E ISOLAMENTO DA BARREIRA
+Somente a operação adjustProductStockV1 recebe validator-wrapper e preparo
+transacional de domínio novos, no final de productMutationV2.js (linha 262).
+Guarda bruta Object.hasOwn(data, variantId) antes do normalizador: recusa null,
+undefined explícito e propriedade não enumerável sem removê-la do comando.
+Demais regras continuam no contrato original, que não foi editado.
+
+Dentro do preparo de ajuste, APÓS receipt/replay e CAS e ANTES de stock:
+- transaction.get do commercialProfiles/current real do próprio produto;
+- evaluateProductEligibility com legacyV2/stock, projeto Admin, loja autorizada,
+  ID do snapshot real e variantId=null; nunca perfil/identidade do cliente;
+- snapshot projetado contém exatamente dependências atuais de stock C5-D/D1:
+  productKind, variantSchemaVersion, productId, variantId, attributes,
+  attributeDefinitions, priceCents, costCents, commercial, commercialProfiles,
+  isArchived. Presença própria e valores mantidos, inclusive null/inválidos;
+- perfil presente usa dados/updateTime reais; ausente somente se leitura real
+  informar ausência. Perfil vazio também bloqueia; SDK incompatível falha fechado;
+- price/costPrice e metadados alheios ao domínio NÃO são dependências stock.
+  Não são convertidos, corrigidos ou apresentados como preços válidos.
+  Estoque/lotes/FIFO/metadados continuam no snapshot real do preparador F9.
+
+StockEligibilityBlocked é HttpsError failed-precondition. O único acréscimo
+ao catch compartilhado (linha 224) exige simultaneamente:
+operation === adjustProductStockV1 E instanceof StockEligibilityBlocked.
+Só esses novos bloqueios escapam sem receipt terminal. Efeito isolável ao
+caminho de ajuste, sem editar o comportamento cadastral nem trocar códigos
+por erros artificiais de permissão/transporte. Não alterados helpers externos.
+Import C5 feito exclusivamente no preparo de estoque.
+
+Para simples arquivado, C5 retorna entity-not-active; se isArchived===true,
+o preparador F9 original emite archived-product-stock-immutable como antes:
+terminal com scope, sem receipt para comando legado sem scope. Pai/perfil/
+estrutura inválida arquivados continuam bloqueios de domínio não terminais.
+CAS conserva precedência: baseline obsoleto ainda produz a rejeição histórica
+product-version-conflict, antes de alcançar a nova guarda. Não é nova rejeição
+de domínio. Receipts rejeitados já existentes são resolvidos antes de tudo isso.
+
+Todas as leituras e preparações executadas antecedem as escritas. Bloqueio C5
+não altera produto, lotes, receipts, movimentações ou timestamps. Não escreve
+perfil, COD, ledger, venda, caixa, fiscal ou baselines.
+
+3. ARQUIVOS E PRESERVAÇÃO
+Modificado:
+- functions/products/productMutationV2.js
+Criados:
+- functions/tests/products/adjustProductStockEligibilityC5.emulator.test.js
+- docs/catalog/F10_C5_E2_A_RESULTADO.txt
+Manifesto TEMP/f10-e2-a-baseline.json de 642 arquivos preexistentes:
+somente productMutationV2.js divergiu; demais 641 idênticos por SHA256.
+Cópia inicial TEMP/f10-e2-a-service-before.js usada apenas para revisão.
+Corpos das funções cadastral e stock comparados textualmente: idênticos.
+Declaração/validator de updateProductV2 e demais regras cadastrais intactos.
+Relatórios e patch E1-R2, contratos C5/F9, outros writers, Rules/index, Flutter,
+serviços C1/C2/C3 e ledger preservados. Nenhum formatador amplo executado.
+
+4. TESTES DIRIGIDOS FIRESTORE EMULATOR — NOVA EXECUÇÃO
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e2-a
+ --only firestore "node --test --test-reporter=spec
+ functions/tests/products/adjustProductStockEligibilityC5.emulator.test.js"
+Comando real em uma linha: 48/48, zero falhas/skips/cancelamentos, exit 0.
+
+38 casos (19 scoped e 19 unscoped) comprovam bloqueio não terminal sem mudanças
+no estado integral observado da loja/produto/perfil, incluindo updateTime:
+- pai explícito, sem kind, sem versão ou sem ambos com definitions;
+- variante, variante sem discriminador e attributes remanescente;
+- simple parcial/misturado, variantId persistido e definitions null;
+- marcador SDK e número não finito em marcador;
+- isArchived inválido, dinheiro novo no topo;
+- perfil vazio, preenchido ou com SDK incompatível;
+- pai arquivado.
+Todos mantêm consulta not-recorded/definitive=false, comando intacto e nenhum
+receipt novo. Estado compara coleções existentes da loja e perfil do produto.
+
+Demais dez testes:
+- simples manual válido preserva dados, comando, hash normalizado original
+  e receipt da operação;
+- três testes para NaN, Infinity e -Infinity, cada um executando os QUATRO
+  modos: setManualQuantity, convertToLots, editLots e convertToManual;
+  preço/custo inválidos não impedem estoque legítimo, nem são substituídos;
+  metadados SDK (GeoPoint/Reference/bytes/NaN), datas e nanos de lote mantidos;
+- variantId bruto null/undefined/string, enumerável ou não: invalid-argument
+  sem apagar propriedade ou criar receipt;
+- replay confirmado após mudança de tipo e perfil, apesar de CAS obsoleto,
+  preserva resultado e todo o estado posterior;
+- arquivado scoped mantém rejeição terminal e replay após tipo/perfil mudar;
+  unscoped mantém erro histórico sem receipt;
+- duas chamadas concorrentes da mesma identidade aplicam uma vez; identidades
+  distintas com baseline comum têm um vencedor e conflito CAS terminal antigo;
+- papéis operacionais, escopo/loja, revogação e autenticação continuam ativos;
+- caminho cadastral continua aceitando seu comportamento preexistente em pai
+  com perfil e mantendo rejeição terminal scoped de CAS. Isso é evidência de
+  NÃO integração de C5 em cadastro, não aprovação dessa lacuna de domínio.
+Loops internos/modos não são somados novamente à contagem de testes.
+
+5. REGRESSÕES BACKEND DIRETAMENTE AFETADAS — NOVA EXECUÇÃO
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e2-a
+ --only firestore "node --test --test-reporter=spec
+ functions/tests/products/productMutationV2.emulator.test.js
+ functions/tests/products/productEditState.emulator.test.js"
+Comando real em uma linha: 46/46, zero falhas/skips/cancelamentos, exit 0.
+32 mutations/estoque + 14 B01/B02: receipt/consulta/replay, rejeições scoped,
+legacy unscoped, revogação, isolamento, CAS exato, quatro modos, metadados de
+lotes e concorrência com venda/ajuste. Edição cadastral, COD/categorias/fiscal,
+no-op, falha precommit e autorização mantêm seus resultados anteriores.
+syncOfflineSale é executado como regressão existente com dados sintéticos;
+nenhum writer de venda foi modificado nem sua segurança geral certificada.
+Não repetidas suítes globais, Rules, Flutter ou catálogo não afetadas.
+
+6. CONTRATOS NODE DIRETAMENTE RELACIONADOS — NOVA EXECUÇÃO
+node --test --test-reporter=spec
+ functions/tests/products/productEligibilityC5.test.js
+ functions/tests/products/productCommercialPersistenceC5.test.js
+ functions/tests/products/productCommercialC5.test.js
+ functions/tests/products/productMutationContract.test.js
+ functions/tests/products/updateProductContract.test.js
+80/80, zero falhas/skips/cancelamentos, exit 0, Node 22.23.2.
+Inclui os testes D1 de presença de marcadores/definitions, estruturas parciais,
+legado válido e limite da remoção total, e a independência de preço em stock.
+Total efetivo E2-A: 80 Node + 48 Emulator dirigido + 46 Emulator regressões =
+174 testes executados, todos aprovados; 94 deles no Emulator. Nenhum teste
+histórico reapresentado como nova execução.
+
+7. AMBIENTE, DIFF E CHECKS
+Emulator Firestore real no projeto demo-f10-e2-a; loopback exigido nos arquivos
+de testes, Admin inicializado com o mesmo projeto, dados sintéticos isolados
+por UUID. Handlers .run com auth injetada; não é teste de token Auth/HTTP real.
+JDK21/CLI/JAR/dependências já existentes; JAVA_HOME/PATH só no processo:
+build/f9-tools-jdk21/jdk-21.0.12.1+1. CLI executado com aprovação de sandbox
+para acesso à configuração existente. Nenhuma instalação ou alteração do Java
+do Windows. Emulator encerrado pelo CLI em ambas execuções.
+node --check do serviço e teste novo: aprovado.
+git diff --check, revisão do delta no-index e whitespace dos arquivos novos:
+aprovados. Avisos LF/CRLF do ambiente não são mudança ampla de formatação.
+Branch/HEAD/status e manifesto de preservação conferidos ao final.
+
+8. LIMITES E PRÓXIMOS GATES
+Barreira validada exclusivamente no caminho local adjustProductStockV1 e nos
+casos executados. Preserva B05/F9: stock não exige preço de venda, CAS e
+idempotência mantêm o contrato e o processamento de lotes original.
+As novas recusas de domínio não selam intenção como rejeição terminal.
+Não foi criado resultado definitivo novo para o ledger. Consulta sem receipt
+continua not-recorded não definitivo; não autoriza gerar outro ID por timeout.
+
+Remoção TOTAL de todos os marcadores pode tornar o snapshot indistinguível de
+simples legado. Essa lacuna exige transições de estado e Rules em etapa própria;
+nenhum histórico/flag de confiança foi inventado para inferir origem.
+Lista projetada deve acompanhar futuras alterações das dependências C5-D/D1;
+todos os marcadores e campos exigidos pela política stock atual são mantidos.
+SDK incompatível em campo de domínio/perfil falha fechado; SDK de metadados
+fora do domínio permanece no estoque real. Não há suporte a estoque variante
+por este writer nem liberação de perfil comercial novo no protocolo legado.
+
+Não certifica Rules/segurança de cliente, Auth/HTTP real, carga/dispositivos,
+produção ou todos os writers F9. updateProductV2 permanece sem nova barreira C5.
+Próximo gate requer autorização específica para outra operação; não avançar
+para cadastro, writers antigos, Rules ou cortes. C4 segue adiado, alternativa D.
+Restore permanece bloqueado. Futuros cortes e remoção total de marcadores
+continuam bloqueados até contratos/proteções próprios.
+Sem HML/PROD, deploy, commit, push, migração, instalação, reset, restore, stash
+ou clean. Nenhum trabalho local anterior descartado.
+Relatório exportado e resumo exibido no terminal. PARADA APÓS E2-A.

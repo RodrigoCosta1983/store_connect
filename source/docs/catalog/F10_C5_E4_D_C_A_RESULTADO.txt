@@ -1,0 +1,530 @@
+STORE&CONNECT — F10-C5-E4-D-C-A
+CONTRATO DE RECONCILIAÇÃO E ISOLAMENTO DA FILA OFFLINE FLUTTER/SQLITE
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+CONDIÇÃO FINAL: CONTRATO PROPOSTO; implementação e ativação NÃO autorizadas aqui.
+
+1. ESCOPO, BASE E EVIDÊNCIA
+
+Inspeção dirigida e documentação somente. Reaproveitados inventários S01/S03–S05,
+M04–M06 e contratos F9/B06 e B07-A/C; sem auditoria global. D01–D07 do pedido
+E4-D estão aprovadas; decisões novas P01–P08 abaixo ainda precisam aprovação.
+
+Lidos AGENTS/CURRENT_WORK histórico; E4-D-A e E4-D-B-R1; repositório offline,
+serviço, app_database.dart e partes geradas de schema; PaymentOptionsSheet,
+NewSaleScreen, CartScreen, consumidor de reservas CartItemWidget; bootstrap
+Firebase/ambiente e trecho de AuthGate; backend syncOfflineSale e consulta V2;
+sales_backlog_characterization_test.dart, caracterização de writers S01 e
+relatório B06; relatório B07-C, SaleMutationApi e casos de ledger diretamente
+relacionados (timeout, escopo, claim, falha de persistência e reabertura).
+
+Resultados E4-D-B/R1 são HISTÓRICOS: 33/33 Node e 22/22 Emulator. Não repetidos.
+Nenhum teste, Emulator, Flutter, migração ou acesso remoto executado aqui.
+Não há evidência nova de Android físico, estado implantado ou dados de loja.
+
+2. CICLO REAL ATUAL — NOMES E CHAMADAS
+
+2.1 Criação, identidade e origem
+PaymentOptionsSheet._handleInstantSale:259 usa _isLoading por instância.
+Na linha 267 gera localSaleId ANTES da rede: mobile chama
+OfflineSalesRepository.createLocalSaleId/_generateLocalSaleId; formato
+offline_<micros>_<8 bytes aleatórios hex>. Web gera ID de documento sales.
+Formato/aleatoriedade/relógio não provam autoria ou origem. Retry pelo Snackbar
+chama novamente _handleInstantSale:501 e gera OUTRO ID, defeito caracterizado
+em sales_writers_characterization_test.dart. Não corrigir checkout nesta etapa.
+
+storeId vem de widget.storeId: NewSaleScreen -> CartScreen -> PaymentOptionsSheet.
+AuthGate obtém loja do documento users do usuário autenticado e a passa à
+navegação. Isso fornece contexto corrente, não evidência da fila antiga.
+Bootstrap valida projectId/appId/flavor do FirebaseApp para Android/Web;
+AppConfiguration impede trocar ambiente no mesmo processo. Essa barreira
+não grava a origem da fila e não prova projeto em execução anterior.
+Repositório e tabela não recebem/gravam uid nem projectId. Serviços usam
+FirebaseFunctions.instance e FirebaseFirestore.instance correntes; auth é a
+sessão do SDK na chamada, não o autor original persistido.
+
+2.2 Online e fallback
+S01 lê loja Source.server e faz transação cliente: lê P, baixa manual/FIFO e
+transaction.set de S no path com localSaleId. NÃO lê S como barreira de replay.
+Preço/nome/cliente vêm do carrinho e createdAt é Timestamp.now no callback.
+Após sucesso limpa carrinho e tenta NFC-e separadamente.
+Na falha considerada de rede, mobile chama _saveInstantSaleOffline:586 com
+MESMO ID. Web não enfileira: informa indisponibilidade do modo offline.
+Fallback lê loja e estoque Source.cache, valida assinatura conhecida e chama
+validateStockAndSaveSale:637. Relê carrinho nesse momento; não existe snapshot
+durável anterior à primeira tentativa online. createdAt local nasce no fallback,
+não necessariamente no instante da intenção original/commit online perdido.
+Portanto contexto novo capturado APENAS no fallback não prova origem do envio
+online anterior se a sessão/carrinho mudou durante os awaits.
+
+2.3 Persistência e reservas atuais
+OfflineSalesRepository.saveSale:120 insere sem validar saldo; uso alternativo
+encontrado no teste, não no fallback operacional. validateStockAndSaveSale:154
+usa transação Drift: consulta reservas de TODAS as lojas/usuários/projetos,
+soma por productId e compara cada linha com cache menos reservas. Duplicatas
+da própria intenção não são agregadas nessa validação local.
+productsJson=jsonEncode(products), total REAL, cliente/método/notas em colunas;
+notas/cliente normalizados por trim e vazio -> null; createdAt=DateTime.now.
+insertPendingSale usa insertOrIgnore: conflito de localId preserva a linha
+anterior, sem comparar contexto/payload e sem informar divergência ao caller.
+Depois do Future de inserção o fallback limpa o carrinho e anuncia venda salva.
+Essa combinação pode anunciar a intenção nova sem ela ter sido inserida.
+
+app_database.dart:68–101: schemaVersion=1; store_connect_local; PendingSales
+com PK SOMENTE localId. Colunas: localId/storeId/totalAmount/productsJson/
+paymentMethod/notes/customerId/customerName/createdAt/syncedAt/status/
+syncAttempts/lastSyncError/serverSaleId. Não há índice explícito adicional no
+schema Dart/gerado inspecionado, unicidade por escopo, hash, claim ou origem.
+Precisão/representação de DateTime existente devem ser preservadas pela migração;
+não reconstruir instantes a partir do relógio atual nem ampliar precisão perdida.
+
+Queries waiting/watch/count: pending OU failed, ordem createdAt ASC; não incluem
+syncing. Reservas: pending OU syncing OU failed, também sem filtros de contexto.
+_calculateReservedQuantities soma por productId; payload corrompido pode lançar
+erro ao decodificar o conjunto, não há quarentena por linha.
+CartItemWidget:71–135 usa watchReservedQuantitiesByProduct sem escopo e subtrai
+do estoque do produto da loja corrente. initialData={} pode exibir saldo sem
+reservas antes da carga. A validação transacional local é a segunda barreira.
+Qualquer estado novo exige revisar queries explicitamente: enum nova sozinha
+poderia retirar reserva silenciosamente.
+
+2.4 Gatilhos e claim atual
+NewSaleScreen.initState:154 cria repo/serviço só se !kIsWeb; Web contador=0.
+_startConnectivityMonitoring dispara _syncPendingOfflineSales ao nascer online
+e na transição OFFLINE -> ONLINE. Não há monitor próprio no serviço.
+_syncPendingOfflineSales:254 usa flags da tela/serviço e chama syncPendingSales.
+dispose cancela listener; não cancela requisição remota já iniciada.
+Serviço:85 recupera TODOS syncing -> pending em cada rodada e lista waiting.
+_syncOneSale é o nome REAL, linha 144; não _syncSingleSale.
+markAsSyncing ocorre antes do try: UPDATE por localId, incrementa tentativas,
+sem CAS de estado, token, lease ou resultado de linhas afetadas verificado.
+_isSyncing protege uma instância; não protege outra tela/serviço/conexão.
+Recuperação indiscriminada pode reabrir trabalho de instância ainda viva.
+
+2.5 Envio, confirmação, refresh e fiscal
+_syncOneSale envia syncOfflineSale com storeId/localSaleId/total/products/
+paymentMethod/notes/customerId/customerName/createdAt UTC ISO da linha.
+Não envia uid/projectId, não compara com loja ativa nem verifica FirebaseApps
+coincidentes dos serviços injetados. Mesma linha usa mesmo ID nos retries.
+Valida apenas success==true e serverSaleId convertido em string não vazia.
+Não verifica igualdade dos IDs nem usa alreadyProcessed para classificar prova.
+Backend responde success/localSaleId/serverSaleId/alreadyProcessed/
+shouldRequestNfce/archivedProductsAccepted; não existe status confirmed legado.
+
+Após resposta positiva chama _refreshProductStocksFromServer:238, uma leitura
+Source.server por productId distinto. Não exige snapshot.exists no helper.
+Somente depois markAsSynced grava status/syncedAt/serverSaleId; reservas somem
+por filtro. Se refresh ou gravação local falhar, catch marca failed e perde a
+distinção durável entre commit comprovado e resultado desconhecido. Pode haver
+cache parcialmente atualizado e reserva integral, conservador mas indiscriminado.
+Falha de markAsSyncing fora do try aborta a rodada; falha ao marcar failed também
+pode escapar. Não há estado persistido independente para confirmação/refresh.
+
+FirebaseFunctionsException unavailable/deadline-exceeded/network-request-failed
+marca failed e interrompe rodada; outros erros marcam failed e seguem. Todo
+failed volta à próxima rodada; erro de validação não é terminal no protocolo.
+No reinício syncing -> pending, sem saber se o commit remoto ocorreu.
+
+Depois de synced, shouldRequestNfce chama _requestNfceBestEffort:264. Erro fiscal
+é capturado e NÃO reabre venda. Crash entre synced e fiscal pode deixar emissão
+pendente; não existe outbox fiscal durável nesse fluxo. Não reconstruir aqui.
+getLocalHistory enumera todas as linhas. deleteLocalSale:263 existe no banco,
+mas nenhum caller em lib/test encontrado no rastreamento dirigido. Não há
+limpeza/TTL automática identificada. Não transformar esse helper em reconciliação.
+
+3. O QUE O BACKEND EXISTENTE PROVA — E O QUE NÃO PROVA
+
+syncOfflineSale mantém auth/loja/owner/assinatura ANTES de replay. S existente
+retorna antes dos novos gates; ID local ausente/vazio é aceito e payload válido
+divergente não é comparado. Não há hash/receipt retroativo ou rejeição terminal.
+S ausente pode causar NOVO COMMIT: chamar esse endpoint não é consulta read-only.
+E4-D-B protege novos efeitos e idempotência entre chamadas desse writer no mesmo
+projeto/loja/ID; não cria autoria retrospectiva ou equivalência de conteúdo.
+
+Resposta positiva de chamada íntegra, vinculada ao contexto capturado da chamada,
+prova reconhecimento comercial da identidade remota conforme contrato legado.
+alreadyProcessed=false indica commit por aquela execução; true indica replay
+do path, NÃO prova payload/autor original. Deve registrar esse nível de evidência
+sem inventar receipt ou declarar igualdade criptográfica.
+Leitura autorizada Source.server de S prova documento observado nesse destino;
+não prova autoria da linha nem equivalência. Não comparar S inteiro após
+pagamentos/fiscal. Ausência isolada não prova que operação em voo nunca comitará.
+Auth/assinatura negadas podem impedir também replay; não autorizam descartar fila.
+
+getSaleMutationResultV1 pertence ao protocolo confirmSaleV2/B07-B, local-only,
+não exportado como solução operacional do legado. Exige comando V2, receipt e
+ator; S sem receipt V2 gera identity-conflict. Não pode reconciliar PendingSales
+convertendo seus preços, comandos ou IDs. B07-C inspira CAS/unknown/escopo,
+mas seu rejected terminal e not-recorded NÃO existem no endpoint offline atual.
+Não reutilizar seu namespace, banco ou ledger para absorver filas antigas.
+
+Risco adicional de limite: S01 pode estar em voo com o mesmo ID do fallback.
+S01 usa set sem ler S; um retry sync bem-sucedido não prova que S01 não executará
+ou não sobrescreverá S depois. Claim SQLite não controla essa transação cliente.
+Logo exclusividade/idempotência do writer S03 NÃO prova recuperação segura de
+TODOS os fallbacks online. É necessário contrato separado de ponte/corte S01,
+não presumir cancelamento por timeout, troca de tela ou expiração de lease.
+
+4. MODELO DE ORIGEM/CONTEXTO PROPOSTO — P01
+
+Vínculo imutável da intenção futura: target(projectId e ambiente/endpoints
+verificáveis), originStoreId, originUid se realmente capturado, localId,
+snapshot comercial original e createdAt original. Não persistir credenciais.
+Projeto vem de FirebaseApp efetivamente usado, validado contra bootstrap;
+Auth/Functions/Firestore devem pertencer ao mesmo app/target. Nome do app ou
+label hml/prod sozinho não basta. Em testes distinguir também destino Emulator
+de destino remoto, mesmo que projectId coincida. AppId pode ser evidência auxiliar,
+não substituto arbitrário de projectId nem chave que separe o mesmo estoque.
+
+originUid vem de FirebaseAuth do MESMO app no instante de criação/preparo, com
+checagem de estabilidade de sessão/loja/target durante a persistência. É evidência
+local de observação do ator, não lease offline/atestação servidor. Sem uid real,
+não inventar autor: registro fica incompleto/suspenso. Auth backend continua igual.
+Futuro envio exige activeScope == origem completa; autorização corrente backend
+continua obrigatória. Owner atual nunca preenche originUid de linha antiga.
+
+Capturar somente no save fallback é insuficiente para afirmar o contexto de um
+envio online anterior. Para intenção nova operacionalmente comprovada, contexto,
+ID e snapshot devem ser duráveis ANTES da primeira rede e reutilizados pelo
+fallback. Isso exige ponto de integração mínimo futuro em PaymentOptionsSheet,
+com autorização própria; NÃO refazer checkout nem ativar B07-C nesta documentação.
+Sem essa integração, os novos fallbacks também devem ter evidência parcial e
+priorOnlineAttempt=possible, em vez de receber rótulo fictício de origem completa.
+
+Matriz A–F (classes podem se combinar; E/F são resultado, A–D são contexto):
+A Nova comprovada: contexto capturado antes da rede e comando congelado;
+  persistir e preparar; enviar só com escopo compatível e caminho elegível.
+B Conhecida compatível: retomar MESMA identidade/payload; checar claim e estado
+  remoto antes da operação permitida; não herdar autor da sessão por conveniência.
+C Conhecida incompatível: suspender qualquer nova rede; preservar tudo; retorno
+  ao mesmo contexto comprovado pode retirar suspensão, sem apagar unknown.
+D Histórica insuficiente: suspensão ambígua; storeId existente é destino alegado,
+  uid/projectId continuam ausentes; não autoatribuir após login/migração.
+E Confirmada: evidência e destino remotos persistidos; nunca reenviar writer;
+  finalizar refresh/local apenas no contexto apropriado. Mudança de sessão não
+  apaga confirmação nem a transfere para outra identidade.
+F Desconhecida: timeout/crash/resposta inválida; manter ID/payload/reserva e
+  reconciliar; não tratar ausência/erro como rollback.
+
+Casos C/D permanecem visíveis como pendências suspensas, com motivo e ação de
+reconciliação, sem expor payload de outra conta a usuário não autorizado. Contador
+operacional do escopo e aviso de pendências isoladas são distintos; não esconder
+linha porque saiu da lista de autoenvio. Política de acesso à UI requer P07.
+
+5. ESTADOS DURÁVEIS PROPOSTOS — P02/P03
+
+Evitar enum única que perca evidência ao suspender. Usar três eixos:
+- remotePhase: pending, claimed, unknown, validationBlocked, remoteConfirmed.
+- contextGate: compatible, incompatible, ambiguous, integrityBlocked.
+- localPhase: held, refreshPending, finalized.
+Esses nomes são propostos; nenhum existe hoje além dos quatro status legados.
+claim e confirmação têm versão/CAS. Estado efetivo synced exige
+remoteConfirmed + finalized; suspensão não regride remoteConfirmed.
+validationBlocked é falha conhecida DA TENTATIVA sem receipt terminal,
+não rejected definitivo. Campo separado previousUncertainty conserva unknown
+de tentativa anterior quando tentativa posterior retorna erro de domínio.
+
+Transições permitidas:
+1) Persistência de origem/ID/payload e pending/held no mesmo commit SQLite.
+   Sem commit durável não há envio ou aviso de fila gravada.
+2) pending compatible -> claimed via UPDATE condicional/CAS de versão e token;
+   só vencedor envia. Gravar tentativa/claim antes de rede. Incompatibilidade
+   descoberta antes da chamada suspende sem rede; não edita comando.
+3) claimed -> remoteConfirmed/refreshPending quando resposta íntegra e vinculada
+   ao target/identidade for persistida. Validar success booleano, localSaleId e
+   serverSaleId iguais ao ID esperado e alreadyProcessed booleano; formato
+   incompatível vira unknown. Não fabricar status confirmed no retorno remoto.
+4) claimed -> unknown em transporte, resposta inválida, internal ambíguo ou crash.
+   Mesmo falha ao persistir confirmação deixa claimed recuperável como unknown.
+5) claimed -> validationBlocked em erro conhecido pré-commit dessa tentativa;
+   manter possível incerteza anterior/concorrente. Sem liberação de reserva.
+   Produto pai/perfil, duplicata e intenção arquivada incompatível aguardam
+   reconciliação; não editar/filtrar/mesclar linhas para tentar fazê-las passar.
+6) remoteConfirmed/refreshPending -> finalized após refresh de todos produtos
+   e finalização SQLite atômica. Falha de refresh/gravação repete só finalização,
+   preserva confirmação; NUNCA volta a enviar venda ou vira failed genérico.
+7) contexto muda: atualizar gate e impedir nova rede do contexto antigo. Resposta
+   já em voo pode registrar evidência APENAS na linha/contexto original via CAS;
+   não deve iniciar refresh/fiscal no novo contexto. Erro tardio não regride prova.
+8) unknown -> confirmação/reconciliação somente por evidência apropriada (seção 6).
+   validationBlocked não retorna automaticamente a pending por reposição de estoque;
+   política de retry contextual deve ser aprovada e conservar o mesmo comando/ID.
+
+Crash/dupla instância: token aleatório de claim + versão de registro, operação e
+prazo duráveis; claim obtido em transação SQLite e verificação de rowsAffected.
+Reabertura não faz UPDATE global syncing -> pending. Claim vivo é respeitado;
+claim expirado permite tomar coordenação da RECONCILIAÇÃO, não presumir rollback.
+Se não é possível provar que rede não começou, claimed recupera como unknown.
+Prazo é disponibilidade local, não lock remoto/lease de estoque. Token de fencing
+local impede callbacks antigos de regredir estado. Confirmação tardia válida pode
+ser incorporada por CAS após reler a mesma identidade, sem ressuscitar envio.
+Transações locais nunca permanecem abertas esperando rede. Flags UI são auxiliares.
+
+6. RECONCILIAÇÃO, EVIDÊNCIA E DECISÕES NECESSÁRIAS — P04
+
+Recomendação conservadora para primeira implementação: unknown não chama
+automaticamente syncOfflineSale como se fosse consulta. Endpoint pode criar S
+ausente; chamada sob contexto apenas suposto viola D02/D07. Escopo compatível
+é necessário, mas não resolve payload divergente nem S01 antigo em voo.
+
+Com contratos atuais:
+- Resposta positiva de tentativa rastreada íntegra pode ser persistida como
+  reconhecimento da identidade legado; false/true guardados sem inventar hash.
+- Para replay true, registrar evidenceLevel=legacyIdentityAcknowledged; não
+  declarar originalContentVerified. Auto-finalização só com origem completa,
+  vínculo local único imutável e sem conflito conhecido, sob aceitação explícita
+  desse nível legado (P04). Colisão/payload divergente bloqueia finalização.
+- Resposta false comprova commit daquela execução, mas não corrige concorrência
+  de S01 anterior. Guarda priorOnlineAttempt e possível conflito para revisão.
+- Leitura autorizada de S pode fornecer remoteObserved, sem mutar. Ausência,
+  denied, offline cache, assinatura bloqueada ou erro deixam unknown/suspenso.
+- Linhas D não podem consultar projetos por tentativa/adivinhação para buscar ID.
+  Evidência externa verificável pode ser anexada separadamente; não substitui
+  campos de origem desconhecidos pelo login do conciliador.
+
+Novo contrato necessário para recuperação automática completa:
+consulta read-only legado com autorização/target/identidade definidos e nível
+de evidência explícito, sem efeitos, sem receipt retroativo, sem comparação de
+sales inteiro e sem afirmar ausência definitiva. Isso ainda NÃO prova conteúdo
+histórico ausente ou autoria apagada. Política de retomada de S ausente e ponte
+com S01 em voo exige decisão adicional/corte coordenado ou novo protocolo para
+intenções futuras. Não alterar backend validado incidentalmente neste bloco.
+
+É possível contratar retry exato S03 de intenção comprovadamente exclusiva desse
+writer usando sua idempotência, sem tratar leitura ausente como prova de rollback;
+mas exige evidência de exclusividade e decisão expressa. Backlog/fallback atual
+não satisfaz essa condição por padrão. Sem decisão, fica unknown preservado.
+Confirmação humana pode registrar uma decisão operacional aprovada separada;
+nunca vira prova técnica da origem nem autoriza recriar venda sob outro ID.
+
+7. RESERVAS E FINALIZAÇÃO LOCAL — P05
+
+Reserva é conservadora, local, não distribuída. Guardar origem e manter held em
+pending/claimed/unknown/validationBlocked/suspensão/refreshPending. Nenhum erro,
+timeout, lease expirada ou alteração de enum libera quantidade automaticamente.
+Reserva só deixa de afetar saldo após prova comercial admitida + refresh útil
+de todos os produtos do MESMO projeto/loja e commit de finalized. Finalização
+repetida é idempotente; guarda serverSaleId e evidência sem modificar S remoto.
+
+Particionar AUTORIZAÇÃO DE ENVIO por target/projectId/storeId/uid; particionar
+ESTOQUE por target/projectId/storeId/productId. Reservas de outro uid com origem
+conhecida na mesma loja/projeto ainda comprometem o mesmo estoque e não podem
+sumir ao trocar login; não expor seu conteúdo ao outro usuário. Não subtrair
+reservas de loja/projeto comprovadamente diferentes só porque productId coincide.
+
+Legado sem projectId/uid: manter reserva original no compartimento de quarentena,
+sem atribuí-la ao contexto ativo. Se pode corresponder ao mesmo storeId/estoque
+e não há atribuição verificável, marcar disponibilidade offline como incerta e
+bloquear novo fechamento offline desse escopo potencialmente afetado; não ignorar
+quantidades nem somar cegamente todos projetos. storeId/payload inválido exige
+quarentena com abrangência conservadora, potencialmente todo fechamento offline
+da instalação até revisão. É proposta de regra operacional, precisa P05 aprovado.
+
+Não usar initialData={} como saldo pronto: enquanto reservas/quarentena não
+carregarem, checkout offline indisponível. Conferência transacional final continua
+obrigatória. Payload malformado não pode fazer todo conjunto desaparecer do stream.
+Refresh parcial mantém reserva integral; pode haver subdisponibilidade temporária,
+mas não liberação artificial. Produto remoto inexistente não é refresh utilizável:
+manter barreira de disponibilidade/reconciliação, sem recriar/remapear produto.
+Falha fiscal posterior jamais altera remoteConfirmed/finalized ou reserva.
+Crash no intervalo fiscal permanece pendência fiscal separada, sem outbox nova aqui.
+
+8. PERSISTÊNCIA SQLITE E MIGRAÇÃO MÍNIMA PROPOSTA — P06
+
+Migração necessária para garantia durável; schemaVersion continua 1 NESTA ETAPA.
+Recomendação: extensão ADITIVA da tabela PendingSales, mantendo PK localId e
+todas as colunas/valores antigos; evita reconstrução/cópia para novo ledger.
+Não mudar unidade monetária, JSON, datas, ordenação semântica ou protocolo.
+
+Novos campos opcionais para compatibilidade:
+- originProjectId, originUid, originTargetJson e originEvidenceKind/version;
+  storeId existente é preservado, distinguindo destino alegado de origem provada.
+- remotePhase, contextGate, localPhase, stateVersion;
+- claimToken, claimOwner, claimExpiresAt, attemptStartedAt;
+- priorOnlineAttempt (unknown/possible/provenAbsent) e previousUncertainty;
+- remoteEvidenceJson (target, IDs, tipo de resposta/replay, nível de prova,
+  instante observado, tentativa associada); remoteConfirmedAt;
+- reconciliationReasonCode, refreshCompletedAt e localFinalizedAt;
+- snapshotVersion e digest local opcional dos campos históricos congelados.
+Campos ausentes nunca equivalem a contexto compatível ou pending enviável.
+Não guardar tokens, secrets, erro remoto bruto ou conteúdo de outra conta em logs.
+Digest é integridade local, não receipt/assinatura/autoria servidor; calcular
+posteriormente sobre bytes antigos não cria prova retrospectiva de origem.
+
+Não é obrigatório duplicar payload inteiro em coluna nova: productsJson e
+campos comerciais existentes formam snapshot imutável; createdAt permanece
+literalmente como persistido. Novas intenções futuras devem congelá-los juntos,
+inclusive serialização UTC enviada. Leituras retornam cópias independentes;
+mutação do carrinho não altera comando persistido. Flags de estado não alteram
+preço/nome/cliente/método/notas/total. Nenhuma rejeição modifica a intenção.
+
+PK localId global retida como opção mínima: mesmo ID em outro contexto ou com
+outro payload retorna CONFLITO EXPLÍCITO e não sucesso/insertOrIgnore. Intenção
+anterior intacta; candidato divergente não pode limpar carrinho ou ser perdido:
+produtor mantém candidato durável anterior à rede/registro de conflito separado
+se já havia efeito possível. Escolher storage de candidato antes de implementar
+essa ponte; não gerar novo ID como recuperação. Não aceitar silenciosamente
+duas linhas com mesmo ID. Se for exigido armazenar ambos contextos na fila,
+isso exige decisão de PK composta/rowId e API por tupla em etapa própria.
+Usuário não integra identidade remota: dois uids no mesmo projeto/loja/ID são
+conflito, não duas vendas independentes.
+
+Índices futuros não destrutivos: contexto/phase/createdAt/localId para fila;
+contexto estoque/estado para reservas; claimExpiresAt para recuperação. Ordem
+determinística createdAt ASC, localId como desempate, sem alterar bytes da data.
+Não declarar índice atual que não consta do schema. Transições usam PK+versão+
+token/estado esperado. Falha de atualização/zero rows não equivale a sucesso.
+
+Migração v1->versão a aprovar: transação Drift/SQLite única adiciona colunas
+nullable/índices e valida contagem/PK/bytes/status originais antes do commit.
+Mapeamento de estados fica no novo envelope/campos, sem apagar status antigo:
+pending antigo -> ambíguo/held; failed antigo -> unknown + ambíguo (pode ter
+comitado); syncing antigo -> unknown + ambíguo; synced antigo -> histórico de
+conclusão legado, preservado como tal, sem receipt fabricado ou reenviar.
+Se synced antigo sem evidência suficiente precisar revisão, apenas sinalizar
+revisão histórica; não reabrir venda ou recriar reserva já liberada automaticamente.
+Linhas desconhecidas/corrompidas preservadas e quarentenadas, nunca puladas/deletadas.
+Não preencher origem a partir de build corrente, owner, prefixo ou relógio.
+
+Crash antes do commit da migração: rollback transacional, v1 íntegra, nenhum
+envio; reabertura reaplica migração de modo controlado. Erro de migração bloqueia
+fila/fechamento offline, sem fallback em memória ou banco vazio. Após commit:
+novo app lê extensão; não prometer downgrade para binário v1, que ignoraria
+campos e reenviaria linhas antigas. Implantação exige barrar escritor antigo
+concorrente e decidir rollback de APP sem downgrade destrutivo de schema.
+Não fornecer restore de backup como mecanismo de rollback; continua bloqueado.
+
+Android: uso operacional SQLite/Drift; testes existentes são host SQLite, não
+kill físico/certificação Android. Prever testes de atualização/abertura/duas
+conexões em arquivo sintético e ensaio Android em bloco próprio autorizado.
+Web: PendingSales NÃO inicializada pelo fluxo atual; NÃO criar IndexedDB/offline
+Web nesta etapa. B07-C Web é outro banco/protocolo, não substituto dessa fila.
+Teste Web pertinente é manter bloqueio explícito e não inicializar SQLite.
+
+9. MATRIZ DIRIGIDA FUTURA (NÃO EXECUTADA)
+
+01 Nova intenção com origem completa: snapshot antes da rede; projeto/loja/uid
+   corretos; uma identidade, uma reserva e finalização apenas após prova/refresh.
+02 Troca loja: sem envio do destino anterior; reserva não contamina outra loja.
+03 Troca usuário: suspende envio, preserva origem; reserva física mesma loja
+   permanece sem expor payload; volta de usuário não troca autor.
+04 Troca projectId/target: sem redirecionamento; apps/endpoints incoerentes falham.
+05 Legado uid/projectId ausente: migra sem atribuição; suspensão visível e sem rede.
+06 Mesmo localId/contextos diferentes: conflito explícito, linha original intacta,
+   candidato não descartado, sem aviso falso de venda salva/novo ID automático.
+07 Mesmo localId/payload diferente: conflito e bloqueio, sem alterar original;
+   mesmo payload/contexto retoma linha, sem incrementar intenção comercial.
+08 Fechar/reabrir SQLite: bytes de payload/datas/origem/evidência/reserva idênticos.
+09 Crash claimed: lease vivo respeitado; expirado -> unknown/reconciliação,
+   sem roubar envio vivo nem repetir online writer não idempotente.
+10 Commit remoto + timeout: unknown; mesma identidade; sem afirmar rollback.
+11 Commit + refresh falho: confirmação persistida, refreshPending, reserva held;
+   próximo ciclo só refresh/local, zero chamadas adicionais ao writer.
+12 alreadyProcessed: prova de identidade legado com nível explícito; não prova
+   conteúdo/autor; conflito local/ambiguidade impede autoatribuição/finalização.
+13 S ausente/consulta denied ou falha: unknown; não prova inexistência definitiva;
+   syncOfflineSale não usado como consulta silenciosa de criação possível.
+14 Duas instâncias/conexões: um CAS vence, callbacks vencidos não regridem estado;
+   lease não é exclusão distribuída de rede ou prova de rollback.
+15 Suspensa: continua enumerável/autorizada e reservada após restart/upgrade;
+   não desaparece dos indicadores globais de pendência isolada.
+16 Unknown: conserva reserva; quarentena ambígua bloqueia fechamento afetado;
+   UI não assume zero antes de carregar reservas.
+17 Confirmação + finalização: write local idempotente; erro de disco não anuncia
+   sucesso durável; refresh parcial não libera parte da reserva.
+18 Falha fiscal/crash após finalized: não reabre venda/estoque ou cria novo ID;
+   apenas preserva limitação da etapa fiscal independente.
+19 Android/SQLite real sintético; Web só testa que fluxo segue sem fila offline;
+   nenhuma equivalência artificial com IndexedDB B07-C.
+20 Regressões dirigidas: identidade/replay/S03, FIFO/metadados, concorrência e
+   preservação de outros bancos/ledgers; não repetir suítes globais.
+Adicionais obrigatórios: migração com erro/crash e linhas malformadas; saída de
+conta durante await; confirmação tardia; estoque mesmo projeto/loja outro uid;
+payload original antes do online/fallback e risco S01 em voo no mesmo path.
+
+10. BLOCOS DE IMPLEMENTAÇÃO FUTURA — SOMENTE PROPOSTOS
+
+E4-D-C-B — Persistência/identidade/estados, inicialmente sem autoenvio novo.
+Arquivos candidatos: app_database.dart e gerado app_database.g.dart,
+offline_sales_repository.dart; testes novos de contrato/migração/claims SQLite
+e ajuste dirigido de sales_backlog_characterization_test.dart. Não modificar
+ledgers B07-C/produto. Dependências: P01–P03/P05–P06, SDK/codegen já disponível,
+estratégia de compatibilidade do caller e bloqueio de binário antigo.
+Entrega: migração aditiva sem perda, consultas de visibilidade/reserva corretas,
+CAS e conflitos explícitos, sem ativar sync incompatível. Não introduzir estados
+que caller antigo possa ignorar: usar gate integrado/desabilitado até C-C.
+Parar se requerer perda de dados, novo banco sem ponte, mudança de PK não aprovada,
+geração que altere arquivos fora do escopo, ou adaptação obrigatória não contratada.
+
+E4-D-C-C — Orquestração/reconciliação e conexão mínima de contexto.
+Arquivos candidatos: offline_sales_sync_service.dart, new_sale_screen.dart,
+offline_sales_repository.dart e interfaces de contexto local se justificadas;
+cart_item_widget.dart para reserva por domínio e disponibilidade incerta.
+PaymentOptionsSheet SOMENTE para captura durável de contexto/ID/snapshot antes
+da primeira rede se P08 aprovado; sem reescrever checkout/fiscal/fiado.
+Testes novos de serviço com transportes/contexto/cache injetados, inclusive
+timeout pós-commit, refresh/disco falhos, trocas de escopo e callbacks tardios.
+Dependências: B aprovado, P04/P07/P08 e contrato de reconciliação suficiente.
+Sem consulta remota legado aprovada, implementar suspensão segura/registro de
+evidência, sem alegar recuperação automática completa nem ativação comercial.
+Parar se precisar alterar syncOfflineSale/backend, autorizar outro ator,
+fabricar receipt, migrar PendingSales para V2 ou corrigir S01 além do combinado.
+Uma consulta read-only nova/ponte S01 exige contrato separado antes desse trecho.
+
+E4-D-C-D — Integração e liberação dos gates LOCAIS pertinentes.
+Arquivos: testes de persistência/serviço/indicadores/reservas e relatórios;
+nenhum novo writer. Sequência: contrato puro -> SQLite sintético real -> serviço
+com falhas controladas -> integração contexto/fluxo -> regressões backend mínimas
+somente se dependência nova justificar; parar no primeiro gate falho.
+Reusar sales_backlog_characterization_test.dart com novas expectativas apenas
+para mudanças explicitamente aprovadas; manter documentação dos defeitos antigos.
+Selecionar testes de identidade/replay e FIFO diretamente afetados, sem suíte
+global F9 ou Emulator repetida por rotina. Web não ganha offline por teste.
+Critérios: matriz 01–20 relevante passa, perdas/dupla baixa/reatribuição zero
+nos casos, diff/manifesto corretos, limitações físicas/remotas explícitas.
+Sem homologação real automática, deploy ou liberação comercial inferida.
+
+11. DECISÕES PENDENTES, DISTINTAS DE D01–D07 JÁ APROVADAS
+
+P01 Aprovar escopo imutável e evidência anterior à rede, FirebaseApp/target
+    coerentes; uid desconhecido suspende, sem inferência retrospectiva.
+P02 Aprovar eixos remote/context/local e reconhecimento legado por nível de
+    evidência, preservando histórico/status antigo e falhas não terminais.
+P03 Aprovar CAS/claim/versionamento e unknown no crash, sem recovery global.
+P04 Aprovar política de evidência/retry: recomendação suspende unknown por padrão;
+    definir aceitação de replay legado para finalização de origem comprovada e
+    contratar consulta read-only/ponte S01 para recuperação automática completa.
+    Não existe hoje prova remota suficiente para reconciliar todo legado ambíguo.
+P05 Aprovar reservas por domínio físico projeto/loja, inclusive outros uids, e
+    bloqueio conservador de fechamento offline na ambiguidade; definir UX.
+P06 Aprovar migração aditiva/PK localId global com conflito explícito e proteção
+    de candidato; se exigir colisões coexistentes, decidir PK composta à parte;
+    aprovar estratégia de atualização/rollback de app sem escritor antigo ativo.
+P07 Definir responsável/procedimento e autorização de reconciliação legada,
+    acesso à lista isolada, evidências anexáveis e comunicação ao operador.
+    Não autorizar descarte, compensação financeira ou reatribuição por um clique.
+P08 Autorizar escopo mínimo futuro de captura no produtor e consumidor de reservas;
+    sem isso B/C podem ser infraestrutura isolada, mas não resolver ponta a ponta.
+
+12. BLOQUEADORES COMERCIAIS E ENCERRAMENTO
+
+Backend validado não prova origem da SQLite. Permanecem bloqueadores comerciais:
+fila sem isolamento implementado; contexto antigo irrecuperável automaticamente;
+consulta legado/ponte S01 insuficiente; snapshot não durável antes da rede;
+claims/status/reserva/finalização ainda antigos; UX/procedimento não aprovado;
+corte/coexistência de binários antigos; testes Android físico, carga, segurança
+e efeitos fiscais externos fora das provas locais. Perda/eviction do arquivo
+não permite gerar outra identidade presumindo ausência de venda remota.
+
+Recibo comercial/impressão, DANFE/NFC-e, caixa/recebimentos, fiado, checkout e
+ledgers existentes não foram modificados ou reconstruídos. Restore de backup
+permanece bloqueado; transporte C4 adiado. Nenhum secret ou dado real utilizado.
+Sem instalação, migração/backfill/limpeza/reset, HML/PROD, deploy, commit, push,
+restore, stash ou clean. Único arquivo criado é este relatório.
+Manifesto SHA256 confirmou os 664 arquivos preexistentes idênticos, sem remoções
+ou alterações; único acréscimo este relatório. Branch/HEAD preservados.
+git diff --check e verificação whitespace do arquivo novo aprovados (avisos
+LF/CRLF locais). Resumo exibido no terminal.
+CONTRATO PROPOSTO; decisões novas pendentes. PARADA após E4-D-C-A.
+Nenhuma implementação Flutter/SQLite iniciada.

@@ -1,0 +1,132 @@
+STORE&CONNECT — F10-C5-E1
+PRIMEIRA INTEGRAÇÃO REAL DE BARREIRA NO confirmSaleV2
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+RESULTADO: BLOQUEADO. BARREIRA NÃO INSTALADA NEM VALIDADA NO EMULATOR.
+
+1. INSPEÇÃO DO FLUXO REAL
+Lidos instruções/contexto ativo, C5-D contrato/implementação e testes,
+confirmSaleV2.js integralmente, saleV2Contract, suíte B07-B Emulator e
+configuração local de testes. Branch/status/HEAD conferidos antes de editar.
+Trabalho local extenso anterior reconhecido e preservado.
+
+Ordem atual confirmSaleV2.execute:
+- localOnly exige projeto demo e host Emulator loopback compatível com app;
+- exige auth, normaliza comando via parse/contract.normalize e calcula hash;
+- transação autoriza ator, loja, papel e revogação;
+- lê receipt e devolve replay conhecido antes de revalidar produto/preço;
+- verifica sale existente e queryOnly; assinatura somente para novos efeitos;
+- lê cliente opcional e produtos, verifica arquivo, preço/expectativa, nome,
+  saldo/lotes/FIFO e compatibilidade do total com formato monetário histórico;
+- failed-precondition de negócio vira resultado rejected terminal persistido;
+- só então baixa estoque/cria sale e receipt, ou cria apenas receipt rejected.
+Não existe leitura atual de commercialProfiles/current nem guarda de tipo.
+Normalizador atual já rejeita chaves extras em item V2, inclusive variantId;
+uma integração teria de verificar presença bruta antes de qualquer projeção,
+sem mudar o comando/hash congelados ou esconder undefined explícito.
+
+2. PONTO CANDIDATO E MOTIVO DA PARADA
+Ponto candidato: após receipt/replay, durante leitura transacional de cada
+produto, antes de stock/prepared e antes de qualquer escrita. Perfil real
+deveria ser lido em ref.collection('commercialProfiles').doc('current')
+pela própria tx, jamais usando exists:false declarado ou presumido.
+Novo bloqueio de domínio precisaria sair sem receipt, separado do catch
+terminal aprovado B07-B; erros antigos de preço/estoque/arquivo manteriam
+seus resultados. Replay conhecido continuaria anterior à guarda de estado.
+
+Foi elaborado um patch local inicial no serviço com reutilização C5-D,
+guarda bruta de variantId, leitura real do perfil e erro não terminal.
+Na revisão, identificado bloqueador de classificação antes de qualquer
+execução desse serviço modificado. O patch desta etapa foi integralmente
+retirado por patch inverso; nenhum git restore/reset ou restore de backup.
+Conferência SHA256 comprova que confirmSaleV2.js voltou exatamente ao conteúdo
+preexistente e que TODOS os 636 arquivos anteriores continuam idênticos.
+O serviço modificado não foi executado e nenhuma venda/fixture remota foi criada.
+
+Bloqueador concreto em productEligibilityC5.kindOf:
+- pai v1 com productKind=variantParent é rejeitado no protocolo legacyV2;
+- removendo AMBOS productKind e variantSchemaVersion, mas preservando
+  attributeDefinitions, price=0.29, quantidade=5 e isArchived=false,
+  o validador o classifica como legacySimple e retorna compatible para sale;
+- o ramo legacySimple só procura productId/attributes/variantId como indícios
+  de variante; attributeDefinitions remanescente não é considerado.
+Logo a regra de E1 de recusar tentativa de demover tipo não fica coberta pela
+reutilização literal do contrato puro. Filtrar attributeDefinitions na projeção
+também esconderia o indício e não corrigiria a garantia.
+
+Corrigir isso requer revisar C5-D e sua compatibilidade legada, ou duplicar
+uma regra no serviço. A autorização restringe alterações ao serviço/testes
+e proíbe duplicar regras/bypass; não foi modificado o contrato C5-D.
+Também não se inventou marcador de confiança ou consulta de receipt histórico
+para reconstruir tipo. Remoção de TODOS os indícios não pode ser distinguida
+de simples legado apenas pelo snapshot atual: garantia geral exige barreiras
+de estado anterior/posterior nos writers/Rules, fora do escopo E1.
+
+3. PROVA EXECUTADA
+Novo teste diagnóstico puro:
+functions/tests/sales/confirmSaleV2EligibilityBlocker.test.js
+Comando:
+node --test --test-reporter=spec
+  functions/tests/sales/confirmSaleV2EligibilityBlocker.test.js
+Resultado: 1/1 aprovado, zero falhas/skips/cancelamentos (Node v22.23.2).
+O teste comprova a DEFICIÊNCIA atual: pai explícito blocked; documento com
+discriminadores removidos compatible/legacy-money-domain-only/legacySimple.
+Não é teste de proteção aprovada nem alteração de expectativa para aceitar
+regra de negócio incorreta. Seu comentário/nome/asserções registram bloqueio,
+e ele deverá ser revisto quando houver correção autorizada de C5-D.
+Não importa confirmSaleV2, não inicializa Firebase e não realiza I/O remoto.
+Preço, atributos e entrada sintéticos permanecem imutáveis na avaliação.
+node --check do serviço preexistente e do novo teste; revisão do diff e
+git diff --check. Manifesto final sem divergência em arquivos preexistentes.
+
+4. TESTES NÃO EXECUTADOS E LIMITE DO RESULTADO
+Nenhum teste Firestore Emulator executado nesta E1: a condição obrigatória
+de parar ao encontrar incompatibilidade contratual ocorreu antes da integração.
+A instalação tem JAR Firestore v1.22.0, Firebase CLI e JDK21 informado no
+projeto; disponibilidade de infraestrutura não resolve o bloqueador lógico.
+Não iniciado Emulator nem feito acesso HML/PROD. Não se alegam resultados
+Emulator, auth E2E ou proteção instalada com base no teste puro.
+Não executada novamente a suíte B07-B nem os testes C5-D de regressão:
+serviço/contratos finais inalterados e sem integração para validar.
+Resultados anteriores são históricos, não recontados como testes E1.
+
+Permanecem NÃO comprovados nesta E1: venda legítima com barreira integrada,
+perfil real vazio/presente bloqueando, variante/arquivo/preço inválido sem
+efeito, replays após mudança de perfil, isolamento/auth e concorrência com
+leitura real de perfil. A suíte existente foi inspecionada, não executada.
+Nenhum caso operacional novo foi bloqueado por esta etapa: serviço final
+continua anterior. Somente o diagnóstico da lacuna foi reproduzido.
+
+5. COMPATIBILIDADE E SITUAÇÃO DOS WRITERS
+Hash, normalização, receipt, namespace, schema histórico, FIFO, preço legado,
+resultado de replay e serviço inteiro preservados byte a byte. Isso prova
+preservação de arquivos, NÃO uma nova validação comportamental do B07-B.
+Demais writers F9 V1/V2, Rules/index, Flutter, checkout, fiado, offline,
+fiscal, catálogo, C1/C2/C3 e ledgers não receberam nenhuma alteração.
+Suas lacunas já mapeadas em C5-C/D permanecem; não houve corte operacional.
+confirmSaleV2 continua local-only e ausente do index. Sem endpoint novo.
+Transporte C4 permanece adiado pela alternativa D. Restore continua bloqueado.
+
+6. PRÓXIMA ETAPA RECOMENDADA
+Antes de outra integração, autorizar revisão dirigida do contrato puro C5-D:
+definir tratamento de attributeDefinitions/indícios de pai em simples legado,
+testar demover tipo e documentar limite de inferência a partir de snapshot.
+Essa revisão não deve reescrever dados legados ou concluir proteção contra
+writers que removam todos os indícios. Preservar leitura histórica separada.
+Depois, retomar E1 no mesmo serviço, sem outros writers: guarda bruta,
+perfil real em transação, domínio de leitura/venda e rejeição não terminal;
+executar TODA a matriz Emulator solicitada mais regressões B07-B/C5-D antes
+de declarar barreira instalada/validada. Ainda não recomendar corte V1/Rules
+nem integração checkout até gates próprios aprovados.
+
+7. ARQUIVOS E PRESERVAÇÃO
+Criados somente ao final:
+- functions/tests/sales/confirmSaleV2EligibilityBlocker.test.js
+- docs/catalog/F10_C5_E1_RESULTADO.txt
+Nenhum arquivo preexistente permanece modificado por E1.
+Manifesto TEMP/f10-c5-e1-manifest.json: 636 arquivos anteriores, zero divergências.
+Helpers/baseline de revisão somente no TEMP; nenhum backup foi restaurado.
+Sem commit/push/deploy/migração/instalação/reset/restore/stash/clean.
+Nenhum ambiente remoto alterado, nenhum dado real acessado.
+Parada após documentação de E1 BLOQUEADA; sem avançar para outros writers/Rules.

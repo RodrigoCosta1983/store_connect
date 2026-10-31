@@ -1,0 +1,212 @@
+STORE&CONNECT — F10-C5-E4-B
+PROTEÇÃO DE IDENTIDADE E CAMPOS ESTRUTURAIS NAS FIRESTORE RULES
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+DECISÃO FINAL: VALIDADO LOCALMENTE, no escopo das Rules e matrizes executadas.
+
+1. INSPEÇÃO E PRESERVAÇÃO
+
+Conferidos branch/status/HEAD, AGENTS.md e CURRENT_WORK.md histórico.
+Lidos E4-A, productEligibilityC5.js, decisões F10 e Rules locais; inspecionados
+os harnesses existentes productCodeRules.test.mjs, firestoreTaxonomyRules.test.mjs
+e firestoreCatalogRequestsRules.test.mjs. Não reconstruído inventário global.
+O classificador kindOf usa seis marcadores de identidade/estrutura; o gate
+ambiguousMoney verifica quatro autoridades monetárias adicionais de topo.
+Lista confirmada exatamente como solicitada, sem campo novo por suposição.
+isArchived e price/costPrice continuam com suas políticas anteriores: este
+bloco não congela dinheiro legado nem saldo utilizado pelo checkout F9.
+As decisões antigas sobre liberação COD no documento histórico não prevalecem
+sobre E3-B-R2; nenhuma implementação E1/E2/E3 foi reaberta.
+
+Working tree já continha alterações locais extensas. Manifesto SHA256 em
+memória de 651 arquivos existentes comparáveis identificou somente
+firestore.rules como arquivo preexistente alterado nesta etapa. Outros 650
+ficaram idênticos. Limite do manifesto: dois caminhos de imagens com nomes
+escapados por git ls-files produziram Test-Path inválido e não entraram nos
+hashes; não foram abertos/editados por esta etapa. Logs ignorados do CLI não
+integram esse inventário. O manifesto não é certificação de todos os arquivos
+ignorados/dependências. Branch e HEAD preservados.
+
+2. REGRA IMPLEMENTADA E ARQUIVOS
+
+Único arquivo funcional modificado: firestore.rules.
+Local: match /stores/{storeId}/products/{productId}, iniciado na linha 186;
+allow update na linha 206; affectedKeys().hasAny na lista linhas 220–238.
+Acrescentados exatamente dez nomes à blacklist já existente:
+  productKind
+  variantSchemaVersion
+  productId
+  variantId
+  attributes
+  attributeDefinitions
+  priceCents
+  costCents
+  commercial
+  commercialProfiles
+
+Expressão preservada:
+  !request.resource.data.diff(resource.data).affectedKeys().hasAny([...])
+
+O diff é entre estado atual e estado resultante, não apenas payload enviado.
+affectedKeys cobre chaves adicionadas, removidas e de valor alterado. Mudanças
+em folhas de mapas alteram sua chave de topo. Portanto update parcial, merge,
+transform e replacement set não escapam se produzirem alteração protegida.
+Presença null é diferente de ausência; não é preciso desserializar/validar
+um marcador histórico para torná-lo imutável. Valores iguais não contam como
+alteração e não geram falsa rejeição. Delete de campo já ausente ou transform
+que não mude valor não cria mudança de identidade e não precisa ser proibido
+pelo nome da operação; a regra protege os efeitos efetivos.
+
+Mantidas integralmente as condições anteriores de auth, perfil, vínculo exato
+de loja, existência de loja, papel operacional normalizado e revogação.
+Read/create/delete e todos os demais matches ficaram iguais ao baseline.
+Comparação textual normalizada contra Rules de início confirmou que o delta
+da sessão contém somente os dez nomes e a vírgula necessária após archiveReason.
+O diff contra HEAD inclui trabalho anterior e não deve ser atribuído a E4-B.
+
+Teste novo: functions/tests/security/productStructuralRulesC5.test.mjs.
+Documento novo: docs/catalog/F10_C5_E4_B_RESULTADO.txt.
+Nenhum teste existente, writer, index, Flutter, DTO, ledger, contrato,
+configuração, fixture externa ou serviço C1/C2/C3 foi modificado.
+
+3. AMBIENTE E EXECUÇÃO
+
+Harness real @firebase/rules-unit-testing, igual ao padrão das suítes existentes;
+Firestore Emulator real, SDK Firebase cliente, regras carregadas do arquivo
+local, autenticação simulada controlada, seeds com Rules desabilitadas apenas
+no harness e dados sintéticos. Não usa Admin para provar permissão cliente.
+Sem credenciais reais, HML/PROD ou serviços comerciais.
+
+Endpoint exigido pelos testes: FIRESTORE_EMULATOR_HOST loopback com porta.
+Projeto dirigido: demo-f10-e4b-rules. Os dois testes antigos mantiveram seus
+IDs demo-taxonomy-rules e demo-f9-cod-rules; não foram editados para a execução.
+Todos apontaram para o mesmo Emulator loopback, em arquivos sequenciais.
+CLI iniciado com --project demo-f10-e4b-rules --only firestore.
+JDK21 existente: build/f9-tools-jdk21/jdk-21.0.12.1+1;
+JAVA_HOME/PATH ajustados somente no processo. Node 22.23.2; SDK cliente no
+log 12.19.0. Sem instalação de dependências nem Java permanente.
+
+Primeiro CLI em sandbox falhou antes dos testes com EPERM ao ler
+configstore/firebase-tools.json. Comando repetido com aprovação de sandbox;
+isso não foi falha de teste obrigatório nem motivo para alterar regra.
+As duas execuções efetivas abaixo terminaram exit 0; CLI encerrou Emulator.
+
+Gate 1, primeiro e inspecionado antes de iniciar regressões:
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e4b-rules
+ --only firestore "node --test --test-concurrency=1 --test-reporter=spec
+ functions/tests/security/productStructuralRulesC5.test.mjs"
+Comando real em uma linha. Resultado: 32/32, zero falhas/skips/cancelamentos;
+duração do runner: 28179.4917 ms.
+
+Gate 2, após sucesso do gate 1:
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e4b-rules
+ --only firestore "node --test --test-concurrency=1 --test-reporter=spec
+ functions/tests/security/firestoreTaxonomyRules.test.mjs
+ functions/tests/security/productCodeRules.test.mjs"
+Comando real em uma linha. Resultado: 281/281, zero falhas/skips/cancelamentos;
+duração do runner: 50814.7576 ms. Taxonomia/autorização: 275; COD: 6.
+
+Total novo E4-B: 313 testes aprovados em três arquivos. Loops por campos,
+valores, papéis e operações não foram somados novamente como testes extras.
+Nenhuma falha obrigatória ocorreu. Não executados suítes globais, Flutter,
+backend C5/E1/E2/E3 ou catálogo não afetado; resultados históricos não somados.
+node --check do novo .mjs aprovado; git diff --check aprovado, com avisos
+LF/CRLF preexistentes/locais. Revisado delta da Rules e conteúdo do teste novo.
+Logs de PERMISSION_DENIED/evaluation error em tentativas negadas são saídas
+do SDK/Emulator, não foram suprimidos nos testes. O helper dirigido exige
+especificamente permission-denied; operações legítimas e leituras de estado
+também foram verificadas para evitar aceitar indisponibilidade como proteção.
+
+4. MATRIZ DE SEGURANÇA EXECUTADA
+
+A — Updates simples legítimos: PASS para admin/gerente/operador/caixa/vendedor.
+Incremento de quantidade, preço e replacement preservando marcadores passam;
+transação com quantidade/lotes+S e batch legado quantidade+S também passam.
+Regressão antiga exercita payload cadastral/fiscal e carrinhos de 12 produtos.
+
+B — Adição: PASS. Cada um dos dez campos ausentes é recusado por updateDoc;
+merge de cada campo com null também é recusado em todos os papéis operacionais.
+
+C — Remoção individual: PASS. deleteField de cada campo presente recusado;
+replacement omitindo somente cada campo também recusado, nos cinco papéis.
+
+D — Remoção total: PASS. deleteField simultâneo dos dez campos e replacement
+sem todos eles recusados. Pai efetivo apenas com productKind=variantParent,
+variantSchemaVersion e attributeDefinitions, sem dinheiro novo, também não
+pode perder todos os marcadores por deleteField/replacement.
+
+E — Históricos malformados: PASS. Para cada um dos dez campos, valores null,
+string vazia, mapa vazio, array vazio, mapa parcial, array parcial e número
+continuam protegidos contra mudança, deleteField e replacement que os omite.
+Null->valor e valor->null negados; envio do mesmo valor com saldo permitido
+passa. Estado final completo é comparado por leitor com Rules desabilitadas.
+
+F — Bypasses: PASS. Update parcial de attributes.color e commercial.priceCents,
+delete de folhas attributes/commercialProfiles e transforms increment/arrayUnion
+que mudem campos protegidos são negados. Merge e replacement já cobertos.
+Tentativas negadas preservam snapshots completos; não basta contar rejeições.
+
+G — Igualdade: PASS. Campos protegidos idênticos no replacement e updates com
+valor histórico idêntico não bloqueiam alteração simples permitida de saldo.
+Documentos sem marcador e com productKind=simple também cobertos. O fixture
+com todos os marcadores é propositalmente misto para testar imutabilidade,
+não representa aprovação dessa estrutura pelo domínio C5.
+
+H/I/J — Outra loja, papel desconhecido, revogado normalizado, perfil ausente
+e não autenticado: PASS, sem alteração sequer de quantidade permitida ao
+usuário correto. Regressores antigos ampliam matriz de tipos de role/status,
+claims insuficientes, normalização e revogação após primeira escrita.
+
+K — Create/delete produto: PASS, negados nos cinco papéis operacionais.
+
+L — Subcoleções: PASS. variants, variantCombinations, commercialProfiles/current
+do produto e da variante continuam sem allow cliente para get/list/create/
+update/delete. Não foi criado match nem permissão descendente.
+
+M — productCodes e auditLogs: PASS. Create/update/delete negados em ambos;
+read/list de reservas negados. Leitura de auditLogs pela própria loja continua
+permitida, conforme regra anterior: auditoria não era read-denied.
+
+N — COD, taxonomia e arquivamento: PASS para adição/mudança/remoção de todos
+os oito campos já protegidos, com payload igual preservado permitido.
+Regressões COD cobrem índices/descendentes/arquivados e pré-checagem por query.
+
+O — Regressões diretamente relacionadas: PASS 281/281 sem alterar expectativas.
+Não há compatibilidade quebrada demonstrada que exija contrato/adapters/Flutter.
+
+5. LIMITES E PRÓXIMOS GATES
+
+Esta proteção impede transições diretas de cliente que apaguem ou forjem
+marcadores/autoridades de topo. Não repara documentos que já perderam identidade
+antes dela, não converte produtos e não usa tombstone/namespace novo.
+
+products.update continua permitindo quantidade/lotes e campos comerciais
+legados não protegidos, para preservar o F9 ainda operacional. NÃO há gate
+de elegibilidade C5 geral nas Rules: um pai com marcadores mantidos pode ainda
+sofrer baixa/alteração por caminhos legados. O teste de igualdade com marcadores
+mantidos confirma essa limitação de propósito, não prova venda de pai segura.
+
+Rules não restringem Admin SDK. updateProduct V1 ainda precisa E4-C e o sync
+legado precisa de sua etapa com contrato histórico. Guards E1/E2 e retenção
+E3 permanecem intactos, mas não fecham todos os writers do sistema.
+
+sales.create/update NÃO foram alterados. Continuam os riscos E4-A de criação
+direta sem gate C5/baixa/receipt e reescrita de itens, identidades, valores e
+histórico, pois a proteção atual de update cobre somente os quatro campos
+anteriores. Recibo A imutável não torna S imutável.
+
+E4-G continua necessário para corte coordenado de writes diretos e proteção
+histórica, após integração operacional F9, fiado/recebimentos e preservação de
+backlog/reconciliação. Não antecipar esse corte neste patch. F10-D/V3 pendente;
+F10 completo antes da primeira loja; validação local não libera ativação.
+Restore de backup permanece bloqueado; C4 adiado pela alternativa D.
+Não há certificação de Rules implantadas, dispositivos ou segurança remota.
+
+6. ENCERRAMENTO
+
+DECISÃO FINAL: VALIDADO LOCALMENTE.
+Alterações limitadas a Rules de products.update, teste dirigido e relatório.
+Sem deploy, HML/PROD, commit, push, instalação, migração, reset, restore,
+stash ou clean. Nenhuma próxima etapa executada automaticamente.
+Resumo exibido no terminal. PARADA APÓS F10-C5-E4-B.

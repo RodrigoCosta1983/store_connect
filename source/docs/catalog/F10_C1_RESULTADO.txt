@@ -1,0 +1,186 @@
+STORE&CONNECT — F10-C1 — BLOQUEADO POR AMBIENTE
+Data: 16/10/2026
+
+F10-C1 não implementado nem validado.
+
+O helper de execução falhou antes de iniciar comandos em duas tentativas,
+incluindo tentativa com login=false e diretório de trabalho explícito.
+Erro: orchestrator_helper_launch_failed; setup refresh failed to launch helper;
+codex-windows-sandbox-setup.exe; caminho não encontrado (os error 3).
+
+Não foi possível conferir branch, HEAD, status, reler os arquivos atuais,
+executar Node ou iniciar Firestore Emulator. Nenhuma leitura do repositório
+foi concluída nesta execução. Não se afirma integridade por hashes nem
+compatibilidade validada com F9/F10-B nesta etapa.
+
+Conforme a restrição expressa do pedido, nenhuma ampliação de permissões
+foi solicitada. Nenhum handler, adapter ou teste C1 foi criado.
+Único arquivo criado: docs/catalog/F10_C1_RESULTADO.txt.
+
+Contratos, concorrência, idempotência e atomicidade C1: pendentes de
+implementação e testes; nenhuma garantia nova entregue.
+Testes executados: nenhum. Exibição no terminal indisponível pelo mesmo erro.
+
+C01–C09 recebidas como direção funcional aprovada. Permanecem as restrições
+C1: handlers somente demo-* com host loopback, sem export no index, criação
+sem COD, estoque zero e sem lotes; sem integração operacional, overrides
+fiscais, conversões, baixa de estoque ou emissão fiscal.
+
+Bloqueador imediato: restaurar o funcionamento do helper de execução dentro
+das permissões atuais. Depois, retomar C1 com conferência Git, leitura dos
+contratos atuais e testes dirigidos no Emulator; não reiniciar F10-A/B.
+C2 depende da conclusão validada de C1 e de autorização própria.
+
+Sem commit, push, deploy, alteração remota, migração, instalação,
+reset/restore/stash/clean ou reabilitação de restore de backups.
+C2/C3/C4 não iniciados. Parada por bloqueio de ambiente, sem ativação remota.
+
+======================================================================
+NOVA EXECUÇÃO — F10-C1 IMPLEMENTADO E VALIDADO LOCALMENTE
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+
+O registro acima descreve exclusivamente a tentativa anterior. Foi mantido
+integralmente como histórico. Esta seção registra a retomada e prevalece
+quanto ao resultado atual do C1. F10-A/B não foram recriados.
+
+1. ARQUIVOS DESTA EXECUÇÃO
+Criados:
+- functions/products/productVariantsC1.js
+- functions/tests/products/productVariantsC1.emulator.test.js
+Modificado:
+- docs/catalog/F10_C1_RESULTADO.txt (acréscimo deste resultado).
+Nenhum writer V1/V2, Rule, integração, contrato F10-B ou index foi modificado.
+O CLI gerou logs locais ignorados pelo Git durante os testes.
+
+2. IMPLEMENTAÇÃO
+Serviço Node local, sem onCall/handler publicado e sem export em index.js:
+- createProductC1(db, request): criação inicial simple ou variantParent.
+- createVariantC1(db, request): criação inicial de variante sob o pai.
+- readProductC1(db, request): leitura autorizada do produto ou pai+variante.
+Reutiliza productDto, VariantParentDto, VariantDto, ItemIdentityDto e a
+canonicalização F10-B. Persistência usa variantSchemaVersion=1; comando usa
+schemaVersion=1. IDs de produto/variante/request são fornecidos congelados
+pela intenção, nunca derivados de nome, COD ou posição.
+
+Envelope de criação: schemaVersion, requestId, scope, productId e product;
+na variante, variantId, expectedProductUpdateTime e variant substituem product.
+scope contém projectId/uid/storeId e é somente asserção contra o servidor.
+product permite productKind/name/attributeDefinitions conforme tipo;
+variant permite attributes e name opcional. quantidade=0 e lotes=[] podem
+ser enviados explicitamente; o servidor persiste sempre zero/lista vazia.
+COD, inclusive null/vazio, e estoque inicial não zero/lotes não vazios são
+rejeitados explicitamente. Demais campos fora da allowlist são rejeitados.
+Preço, custo, imagem, fiscal, categorias e barcode não são criados por C1;
+não são inferidos, herdados nem preenchidos com valores comerciais fictícios.
+
+Adaptador Firestore projeta Timestamp em seconds string/nanoseconds exatos;
+Reference em path/projectId/databaseId, bytes em base64 e GeoPoint em
+latitude/longitude. Objetos SDK não suportados rejeitam sem coerção.
+createdAt/updatedAt ficam em metadata no envelope versionado; updateTime
+autoritativo é retornado separadamente. Legado conserva ausência/null e
+campos desconhecidos representáveis, sem adicionar discriminator ou gravar.
+Estoque legado inválido não é reparado: stock() mantém a validação F10-B.
+Pai sempre retorna isSellable=false, independentemente de preço/saldo.
+DTO isSellable de simples/variante indica tipo, não elegibilidade comercial.
+
+3. SEGURANÇA, IDEMPOTÊNCIA E CONCORRÊNCIA
+Toda entrada de serviço exige projeto SDK demo-* e host de Emulator loopback,
+porta válida e transporte SDK local sem SSL. A guarda verifica também
+servicePath/port efetivos do SDK; env forjado sozinho não libera acesso remoto.
+Essa verificação depende dos settings internos da versão instalada do SDK;
+upgrade requer regressão e deve falhar fechado se a representação mudar.
+
+Autorização, revogação, vínculo users/store e existência da loja são relidos
+dentro da mesma transação, inclusive no replay e nas leituras. Papéis seguem
+F9: admin/gerente/operador/caixa/vendedor. Loja nunca vem só do payload.
+Receipt em auditLogs/f10-c1-SHA256([uid,requestId]), segregado por caminho da
+loja, sem tocar namespaces/hashes F9. Mesmo comando/operação retorna resultado
+anterior antes do estado mutável; comando divergente ou operação diferente
+com a mesma identidade conflita. Falhas transitórias não selam rejeição.
+
+Criação da variante exige baseline exato do pai ativo e do tipo correto.
+Vínculo productId e atributos/valores são revalidados contra esse snapshot.
+Combinação canônica tem reserva em products/{productId}/variantCombinations/
+SHA256(combinationKey), contendo vínculo/assinatura/variantId. Reserva, folha,
+atualização do pai e receipt são gravados na mesma transação. Criação simples
+ou do pai também é atômica com seu receipt. Todas as leituras precedem writes.
+Query transacional das irmãs inclui arquivadas e detecta duplicata mesmo sem
+índice; dados inválidos ou reserva ocupada bloqueiam, sem reparo automático.
+Atualização do pai serializa criações e invalida baselines antigos. Cada
+comando é atômico; uma sequência pai+várias variantes não é uma única operação.
+
+4. TESTES E AMBIENTE
+Somente Firestore Emulator, projeto demo-store-connect-f10-c1, dados sintéticos.
+Comando: firebase.cmd emulators:exec --config firebase.json
+  --project demo-store-connect-f10-c1 --only firestore
+  "node --test --test-reporter=spec --test-concurrency=1
+   functions/tests/products/productVariantsC1.emulator.test.js
+   functions/tests/products/productMutationV2.emulator.test.js
+   functions/tests/products/productEditState.emulator.test.js
+   functions/tests/products/productCodeAtomic.emulator.test.js
+   functions/tests/sales/confirmSaleV2.emulator.test.js"
+Resultado final: 85 testes do runner aprovados, zero falhas/skip.
+Inclui 14 testes C1, 14 leitura/recuperação, 32 mutação V2, 24 venda V2 e
+o arquivo COD, cujo runner interno aprovou 37 cenários e 15 pares de corridas.
+
+C1 cobre criação/leitura, legado sem regravação, precisão temporal, atributos,
+ordem canônica, rename estável, pai não vendável, IDs existentes, pai simples/
+arquivado, baseline obsoleto, duplicação concorrente e arquivada, índice ausente,
+reserva órfã, replay concorrente/identidade divergente, autenticação/revogação,
+escopo/isolamento entre lojas, rollback após preparar todas as escritas e
+retry, rejeição de COD/estoque e bloqueio fora de Emulator demo/loopback.
+
+Testes puros: 42/42 aprovados (productVariantsV1.test.js,
+saleV2Contract.test.js e saleV2ClientFixtures.test.js). Bytes/hash V2 preservados.
+node --check dos dois JS C1 e git diff --check aprovados; arquivos novos
+também revisados com diff --no-index e verificação própria de whitespace.
+Nenhum Dart alterado; testes Flutter não repetidos nesta etapa.
+
+Ocorrências resolvidas desta retomada:
+- firebase.ps1 bloqueado por ExecutionPolicy: usado firebase.cmd, sem mudar
+  política do Windows.
+- CLI no sandbox: EPERM ao ler .config/configstore/firebase-tools.json;
+  execução local do Emulator realizada com a aprovação de ferramenta.
+- JDK 21 documentado não existe na máquina atual; Java padrão é 17 e o CLI
+  recusou iniciar. Usado Java 25.0.3 já instalado no Android Studio, somente
+  em JAVA_HOME/PATH do processo. Sem instalar dependências/configuração global.
+- Primeira rodada C1: 1/12 passou e 11 falharam pela guarda que consultava
+  settings.host removido pelo SDK. Corrigida para servicePath/port; rodada
+  seguinte 12/12 passou e rodada final ampliada aprovou todos os 14 C1.
+
+5. PRESERVAÇÃO E LIMITES
+SHA256 inicial/final de 579 arquivos preexistentes não ignorados, excluindo
+somente este relatório: todos idênticos. Inclui trabalho F9/A5 B01–B07-C,
+F10-A/B, Rules, index, writers, contratos/receipts/fixtures e arquivos Flutter.
+Branch/HEAD mantidos. Alterações existentes do usuário foram preservadas.
+Restore de backup continua bloqueado integralmente; nenhum fluxo reativado.
+
+C01–C09 são recebidas como aprovadas conforme o pedido. Os documentos locais
+F10-A/B ainda registram alternativas, sem texto detalhado das escolhas.
+Combinações parciais/vazias permanecem explicitamente bloqueadas em C1;
+habilitá-las depende do conteúdo aprovado C05, sem inferir regra comercial.
+Limites defensivos deste serviço local: 10 atributos, 100 valores/atributo,
+200 variantes/pai incluindo arquivadas, nome até 200 e requestId até 128
+caracteres. Não representam homologação dos limites comerciais C07.
+
+Não existe garantia global de que writers antigos/Rules impeçam venda ou
+alteração do pai: esses arquivos foram preservados por restrição expressa.
+Pai não vendável é garantido pelo DTO C1; materialização operacional continua
+bloqueada até guardas/barreira F9 e Rules próprias aprovadas e testadas.
+Testes Admin não certificam permissões de SDK cliente. Não há endpoint remoto,
+UI, checkout, fiado, catálogo público, venda ou migração integrados ao C1.
+
+6. PENDÊNCIAS PARA F10-C2
+- COD-base/COD variante usando normalização, namespace e ownership F9, com
+  política aprovada C02 e testes de concorrência entre todos os tipos.
+- Preservar receipt/IDs/baselines C1; não alterar comandos desconhecidos.
+- Consultar o texto das decisões aprovadas quando a regra dependente entrar
+  no escopo, inclusive C05/C07; nenhuma decisão foi reaberta por esta entrega.
+- Estoque/lotes e operações de ciclo de vida pertencem a C2/C3 conforme
+  contrato da etapa; não foram antecipados. Guardas operacionais permanecem gate.
+
+Relatório exportado neste .txt e exibido integralmente no terminal.
+Sem commit, push, deploy, migração, HML/PROD, instalação, reset/restore/stash/
+clean ou alteração de secrets. C2/C3/C4 não iniciados. Parada após F10-C1.

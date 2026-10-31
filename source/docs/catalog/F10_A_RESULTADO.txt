@@ -1,0 +1,53 @@
+STORE&CONNECT — F10-A — RESULTADO
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+
+Entrega documental:
+- docs/catalog/F10_ARQUITETURA_CONTRATOS.md
+- docs/catalog/F10_A_RESULTADO.txt
+
+Requisitos confirmados: variantes opcionais; simples/legados válidos;
+atributos flexíveis; Produto > Variante opcional > Lote opcional;
+COD-base e COD vendável por variante, unicidade por loja; estoque independente;
+integração integral; concorrência, idempotência e auditoria F9 preservadas.
+
+Arquitetura proposta: variants como subcoleção do produto, IDs estáveis,
+atributos/valores com IDs próprios, pai não vendável, saldo/lotes por variante.
+Ausência de discriminator no legado significa simples sem regravação.
+COD usa o mesmo SHA256/normalização F9 e ownership product/variant com
+productId/variantId; reservas legadas interpretadas sem migração.
+
+Contratos: endpoints aditivos e baselines exatos, receipts atômicos; vendas
+V3 por tupla productId/variantId, sem mudar hashes/receipts/ledger V2.
+Guardas contra writers antigos e identidade cruzada são gates obrigatórios.
+Conversão de tipo explícita, sem redistribuir saldo nem reescrever histórico.
+
+Impactos F9: updateProductV2/adjustProductStockV1/confirmSaleV2 e legados
+mapeados, sem alterações. B01–B07-C preservados; B07-D e posteriores pendentes.
+CURRENT_WORK antigo identificado; contratos e código locais recentes usados.
+Não encontrado documento F10 dedicado anterior; preparação de ownership e
+restrições de restore recuperadas dos documentos F9 existentes.
+
+Pendências: preços, preenchimento COD, imagens, barcode, combinações,
+variantes desativadas/offline anterior, limites/membership, custo/fiscal e
+conversão. Alternativas propostas não são decisões comerciais aprovadas.
+
+Ordem: F10-B modelo/contratos; C cadastro/COD/estoque; D carrinho/venda V3;
+E catálogo; F fiado/offline/fiscal/relatórios/importação/backup; G regressão e
+homologações. Critérios objetivos e testes por etapa no documento principal.
+
+Riscos: venda indevida do pai por legado, disputa de COD, reuso entre
+protocolos, pendências offline na conversão, backup incompleto e contenção.
+Restore de backup continua bloqueado; nenhuma reabilitação proposta como
+condição automática do F10. Testes futuros: contratos, Emulator, Rules,
+concorrência/replay/crash, Flutter, catálogo, financeiro/offline/fiscal e carga.
+
+Validação documental: referências e contratos locais revisados. Nenhuma
+suíte funcional executada nesta etapa, pois não houve alteração de código.
+Preservação aprovada: 575 arquivos preexistentes com manifesto SHA256 idêntico: 074645517BAEED6EC7A4DB7E21405D483291AD6480B703FED575AD73D4054939.
+git diff --check aprovado; dois arquivos novos sem whitespace final e UTF-8 sem BOM.
+Branch e HEAD preservados; status contém apenas os dois novos documentos além do trabalho anterior.
+
+Sem commit, push, deploy, ativação remota, migração ou acesso Firebase HML/PROD.
+Somente os dois documentos acima foram criados. F10-B não iniciado.

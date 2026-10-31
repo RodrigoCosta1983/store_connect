@@ -1,0 +1,277 @@
+STORE&CONNECT — F10/C4-B — LEITURA E PREPARAÇÃO DA PERSISTÊNCIA — 01
+Data: 18/10/2026
+
+ESTADO FINAL: VALIDADO LOCALMENTE para estados de apresentação e recusas.
+LEITURA AUTORITATIVA OPERACIONAL E SALVAR VARIANTES: BLOQUEADOS.
+Não se declara C4-B completamente integrado ou persistência real.
+
+1. BASELINE INICIAL E FINAL
+
+Branch inicial/final: feat/f7-intelligent-catalog.
+HEAD inicial/final: 30f4f8db2a4a59d21696fde3d673144aded31154.
+Recebidos 24 arquivos rastreados modificados e extenso trabalho não rastreado
+F9/F10. Essas alterações eram preexistentes e foram preservadas.
+AGENTS.md e docs/codex/CURRENT_WORK.md consultados; CURRENT_WORK registra
+checkpoint histórico F7 e não substitui o escopo atual autorizado pelo pedido.
+Lidos os contratos/decisões F10, resultados C1/C2, contrato C3, relatório
+F10_C4_A_UI_01_RESULTADO.txt, contrato B2-A e bloqueios B2-B2-A/A1.
+Os adendos posteriores de C1/C2 foram considerados, sem apagar suas primeiras
+tentativas bloqueadas. Nenhuma etapa anterior foi reimplementada.
+
+Antes de editar, foram registrados hashes dos arquivos existentes, estado
+Git e cópias integrais .before dos arquivos candidatos em build/f10-c4b01.
+Baseline de fontes: source-baseline.json, 772 arquivos não ignorados.
+Baseline adicional: baseline.json, incluindo evidências ignoradas pertinentes
+em build/f9*, build/f10*, build/b4*, docs, scripts e test.
+Na primeira coleta o quoting padrão do Git impediu interpretar dois nomes
+acentuados; antes de qualquer patch, a coleta de fontes foi repetida com
+core.quotepath=false. A união das duas coletas contém 17.531 arquivos.
+Não se afirma cobertura de todos os caches ignorados da máquina.
+
+2. O QUE FOI IMPLEMENTADO E CONECTADO
+
+O MESMO ProductRegistrationDialog operacional continua montando a seção
+ProductVariantsForm. Não foi criada rota ou interface de demonstração paralela.
+O diálogo passa uma porta opcional de apresentação à seção; a rota operacional
+não fornece adaptador nem contexto inventado, portanto mostra leitura indisponível.
+Não houve conexão real ao Node, Firestore, Auth, Functions ou Emulator.
+
+Criado ProductVariantsReadState, que reutiliza VariantB2ReadTransport,
+VariantAuthoritativeResponse, VariantIdentity, VariantLocalAccess e a
+canonicalização existentes. Não define novo DTO, protocolo, writer ou endpoint.
+Sua porta opcional foi exercitada com stub exclusivamente nos testes locais.
+
+Estados distintos implementados:
+- indisponível: nenhum adaptador; não dispara consulta nem produz lista vazia;
+- carregando: consulta local em curso, com indicador visual;
+- acesso negado: resultado específico ou contexto local incompatível;
+- erro: exceção, resposta malformada/inconsistente ou receipt no lugar de estado;
+- inconclusivo: unknown, inclusive entidade ausente; não prova ausência;
+- conflito de identidade: resposta de outro projeto/ator/loja/produto/variante;
+- resposta sem origem autenticada: DTO válido, ainda sem autoridade.
+
+O formulário apresenta mensagens específicas e acessíveis na seção existente.
+Não expõe textos internos de exceções. Nenhum estado libera Salvar.
+As linhas de apresentação preexistentes agora também são identificadas como
+dados sem confirmação de leitura autoritativa, inclusive quando a lista é vazia.
+
+O estado retém o DTO imutável compatível, sem converter segundos/nanos para
+DateTime, mantendo scope, identidade, baselines separados, COD, atributos,
+estoque, lotes, arquivamento e campos desconhecidos. Não copia esse DTO para
+rascunhos editáveis nem o usa para habilitar escrita. Não renderiza estoque
+recebido de origem não autenticada como nova informação autoritativa.
+
+Revalida a asserção local de sessão/escopo/papel antes e depois dos awaits;
+descarta respostas após mudança de sessão/loja/papel, logout ou revogação.
+Geração de leitura impede conclusão antiga de substituir consulta mais nova;
+invalidate e dispose tornam resultados pendentes inaplicáveis.
+Essas verificações são recusas defensivas locais, NÃO autenticação do usuário,
+servidor ou proveniência da resposta. VariantLocalAccess não virou credencial.
+Nenhuma flag trusted, origem confiável fictícia ou bypass foi acrescentado.
+
+3. POR QUE A LEITURA REAL E A AUSÊNCIA COMPROVADA CONTINUAM BLOQUEADAS
+
+Evidências locais:
+- functions/products/productVariantsReadB2A.js:123, readVariantStateB2A;
+  contrato docs/catalog/F10_C4_B2_A_CONTRATO_LOCAL.md, seções Entradas e
+  autoridade, Estado, Resultados e bloqueios.
+  Consulta pai e uma variante opcional de ID conhecido na mesma transação.
+  Omitir variantId lê somente o pai. Isso não enumera suas variantes.
+  Entidade ausente retorna unknown, não uma coleção vazia comprovada.
+- lib/services/variant_authoritative_contract.dart, VariantB2ReadTransport:
+  interface abstrata; readState usa VariantIdentity de variante conhecida.
+  As únicas origens do decoder são unverifiedJson e syntheticFixture.
+  Parsing e status available não fornecem prova autenticada.
+- F10_C4_B2_B2_A_RESULTADO.txt, seções 1/2: transporte bloqueado na fronteira
+  de autenticação. UID do payload, contexto local, loopback e token de Emulator
+  sem prova adequada de origem não substituem autenticação desse canal.
+- F10_C4_B2_B2_A1_RESULTADO.txt, seção 7: sondagem de primitivas/pipe parcial,
+  sem fronteira de confiança completa ou transporte Flutter aprovado.
+
+Não existe contrato aprovado de listagem completa/paginação e prova de término
+que permita afirmar que um pai não tem variantes. Portanto, ausência comprovada
+permanece uma propriedade NÃO DEMONSTRADA; hasProvenEmptyList é sempre false.
+Não foi criado um estado de sucesso vazio alcançável com unknown, falta de
+adaptador, leitura só do pai, timeout ou JSON não verificado.
+Sem adaptador/contexto confiável não foi iniciada leitura operacional.
+
+4. RASTREIO EXATO DE createProductC2/createVariantC2
+
+Backend local existente, sem alteração nesta etapa:
+functions/products/productVariantsC1.js:252–256 exporta as duas funções Node.
+Ambas chamam create(db, operationC1, request, true), definido em :144.
+environment em :38/:145 exige demo-* e SDK efetivo loopback sem SSL.
+authorize reconsulta users/{auth.uid}, papel/revogação, vínculo e loja na
+transação. request.auth presume contexto confiável do chamador local;
+scope do comando é apenas asserção e não pode fornecer essa autoridade.
+Não há export desses serviços em functions/index.js ou handler callable.
+
+Flutter disponível:
+- ProductRegistrationDialog continua usando apenas os writers simples anteriores.
+- ProductMutationApi usa os callables e operações do seu contrato de produto;
+  não oferece createProductC2/createVariantC2 ou transporte B2-A.
+- VariantPreviewSession prepara createVariantC2 em contexto sintético/demo;
+  não constitui um caminho autenticado para a tela operacional.
+- VariantIntentLedger.prepare conserva intenção; claimForFutureTransport
+  persiste unknown por CAS antes de entregar claim. Não implementa transporte.
+- VariantFutureTransport e VariantB2ReadTransport permanecem abstratos.
+- VariantReconciliationPlan.mayCommit permanece false; nenhuma reconciliação
+  sintética foi promovida a confirmação real.
+Não existe hoje uma cadeia Flutter -> transporte autenticado -> C2 autorizada.
+
+Contratos de criação que uma integração futura deverá respeitar:
+createProductC2: schemaVersion=1, requestId, scope {projectId,uid,storeId},
+productId e product {productKind,name,attributeDefinitions quando pai,cod?}.
+createVariantC2: mesmo envelope, substituindo product por variant e incluindo
+variantId e expectedProductUpdateTime exato; variant contém attributes completos,
+name? e cod?. IDs congelados não podem vir do COD, nome ou posição visual.
+Os campos comerciais, imagem/fiscal/categorias do formulário simples não são
+automaticamente admitidos por esse contrato. Estoque inicial segue zero/lotes[].
+
+create em :177 exige baseline corrente do pai ativo; criação da variante
+atualiza o pai e invalida baselines anteriores. Cada variante seguinte exige
+nova leitura; o baseline do receipt não substitui o snapshot do pai.
+Reserva de combinação em variantCombinations/SHA256(combinationKey) e reserva
+COD via productVariantCodesC2.prepareCodeCreation integram a transação do item,
+atualização do pai e receipt. Colisões/órfãos/dados inválidos bloqueiam sem reparo.
+COD usa namespace productCodes e normalização existentes; não é reservado pela UI.
+Ausência, vazio e espaços do COD no comando não podem ser reescritos silenciosamente.
+
+Receipt: stores/{storeId}/auditLogs/f10-c1-SHA256(JSON.stringify([uid,requestId])).
+C2 mantém operation persistida createProductC1/createVariantC1. Replay compara
+operação e comando canônico completos; divergência conflita, sem novo efeito.
+Resultado de criação: schemaVersion, productId, variantId, status=created,
+replayed. Não inclui baselines pós-commit. Sequência pai+variantes não é atômica
+como conjunto; recuperação deve distinguir cada intenção confirmada/desconhecida.
+Timeout ou receipt ausente nunca autoriza gerar nova identidade e reenviar.
+
+5. DECISÕES/GATES PARA HABILITAR SALVAR COM VARIANTES
+
+1) Aprovar a fronteira de transporte e autenticação adequada ao ambiente-alvo,
+   com contexto server-side verificado e proveniência de resposta fora do JSON.
+   O serviço atual é somente demo/loopback: nenhuma autorização operacional
+   HML/PROD pode ser inferida desses serviços ou desta interface.
+2) Aprovar contrato de enumeração autoritativa por loja/pai, com paginação,
+   completude, arquivados, identidade e baselines. Só então permitir vazio provado.
+3) Definir o mapeamento exato dos campos do formulário ao contrato C2, inclusive
+   como tratar campos comerciais ainda fora da allowlist, sem descartá-los nem
+   ampliar o writer implicitamente. Conversão/edição cadastral exigem contratos
+   próprios; C3 de estoque não é uma alternativa.
+4) Aprovar a ponte de criação Flutter para C2 e a intenção durável também para
+   criação do pai; preservar IDs/requestId/comando antes de envio, inclusive
+   omitido/vazio/espaços, e conferir sessão/escopo em cada fronteira assíncrona.
+5) Definir UX/recuperação da sequência parcial pai+variantes: receipt compatível,
+   unknown em quarentena, conflito, reconsulta autoritativa dos baselines e
+   retry da mesma intenção, sem duplicação ou rollback fictício do conjunto.
+6) Validar os gates de integridade/autoridade e compatibilidade legada aplicáveis
+   ao ambiente autorizado, incluindo ownership das reservas COD. Testes locais
+   de C2 não admitem automaticamente writers/dependências ou operação comercial.
+
+São requisitos/decisões pendentes, não implementação ou aprovação nesta entrega.
+Nenhum endpoint, writer alternativo, patch de Rules ou fallback foi criado.
+
+6. ARQUIVOS
+
+Alterados minimamente sobre a base recebida:
+- lib/screens/management/manage_products_screen.dart: import, porta opcional de
+  apresentação e encaminhamento ao componente existente; nenhum writer alterado.
+- lib/widgets/product_variants_form.dart: mensagens/indicador, listener e lifecycle
+  do estado indisponível; rotulagem explícita de linhas sem confirmação.
+
+Criados:
+- lib/services/product_variants_read_state.dart
+- test/product_variants_read_state_test.dart
+- docs/catalog/F10_C4_B_01_RESULTADO.txt
+Evidências novas isoladas em build/f10-c4b01; relatórios anteriores intactos.
+Não foi necessário alterar os testes/validadores/DTOs ou serviços preexistentes.
+
+7. TESTES E RESULTADOS
+
+Flutter 3.32.6 / Dart 3.8.1 confirmado no cache do SDK instalado.
+Comando final, pelo flutter.bat dessa versão:
+flutter test --no-pub
+  test/product_variants_read_state_test.dart
+  test/product_variants_form_draft_test.dart
+  test/product_variants_form_test.dart
+  test/product_registration_variants_test.dart
+  test/product_dialog_retry_test.dart
+  test/variant_authoritative_contract_test.dart
+  test/variant_preview_state_test.dart
+  test/variant_preview_panel_test.dart
+  test/variant_preview_isolation_test.dart
+
+PASS: 63/63 testes distintos, zero falhas/skip, exit 0.
+Log completo: build/f10-c4b01/tests-final.log.
+Distribuição: novos estados/leitura/widgets 19; draft 5; form 3; diálogo real 4;
+retry legado 8; decoder 4; estado preview 12; painel 7; isolamento preview 1.
+Os 19 novos também passaram em rodada inicial, sem somá-los novamente.
+
+Novos casos: loading/negado/erro/unknown no mesmo componente; preservação de
+campos/rascunhos; DTO não sobrescreve entradas editáveis; ausência de adaptador;
+DTO imutável com COD/estoque/arquivo/metadados e nanos exatos; quatro outcomes
+distintos; quatro divergências de identidade (incluindo resposta só do pai);
+cinco mudanças de contexto durante await; recusa antes de transporte, escopo
+incompleto, decoder/IO falhando; supersessão, invalidação e dispose pendentes.
+Variantes recebidas de fonte não autenticada não passam a informação gravada.
+
+Regressões comprovam produto simples com payload anterior, criação/edição e
+retry legados, bloqueio de writer ao habilitar variantes e para pai existente,
+layout móvel/desktop, duplicidade, erros e retenção de entradas.
+Nenhum teste de mock representa commit ou leitura real em Firebase.
+
+flutter analyze --no-pub dos três arquivos estado/widget/test novos ou alterados:
+PASS, sem issues, exit 0. Log: analyze-new.log.
+Análise da tela manage_products_screen.dart: exit 1, 22 infos preexistentes
+em trechos não alterados (imports/style/deprecações); zero erros/warnings.
+Não é análise global aprovada. Mesma contagem do relatório UI/01 preservado.
+Log completo: analyze-screen.log. Não houve refatoração para esconder os avisos.
+git diff --check: PASS; deltas contra os .before revisados.
+
+Ocorrência ambiental: launcher Flutter no sandbox ficou sem saída; interrompida
+somente a própria execução e repetido com acesso autorizado ao cache externo
+do SDK, sempre --no-pub. Não houve instalação ou resolução de dependências.
+
+NÃO EXECUTADO: backend/Emulators, sondagem criptográfica histórica, Firebase
+real, HML/PROD, navegador/dispositivo físico, build Web, Rules, gravação ou
+recuperação reais. Nenhum resultado histórico foi recontado como teste atual.
+
+8. COMPATIBILIDADE E PRESERVAÇÃO
+
+Produto simples continua padrão opcional, sem exigir atributos. O estado de
+leitura aparece na seção de variantes de produto existente; não troca writer,
+payload, baselines ou protocolo de retry simples. Dados em memória permanecem
+até fechar o formulário, sem promessa de armazenamento durável do rascunho.
+Guardas UI/01 de blocksLegacySave e conversão implícita foram conservadas.
+Não se declara barreira global em todas as telas ou writers.
+
+Conferência SHA256: 17.529 de 17.531 arquivos idênticos; somente os dois arquivos
+de interface listados receberam alterações deliberadas. Zero arquivos ausentes.
+Evidência detalhada: build/f10-c4b01/preservation.json. Fontes não ignoradas:
+770 de 772 preservadas byte a byte; as outras duas têm .before e delta revisado.
+O relatório foi criado depois dessa conferência, sem alterar fontes adicionais.
+F9, documentos/evidências anteriores, backend, Rules, FirebaseOptions,
+checkout/carrinho/fiado/offline, pubspec/lock e demais F10 mantêm seus hashes.
+
+Recibo, SHA256 inicial/final obrigatório:
+lib/services/pdf_receipt_service.dart
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9
+
+Sem reset/restore/stash/clean/commit/push/deploy, migração, download ou acesso
+remoto. Branch/HEAD e os 24 rastreados modificados recebidos permanecem.
+
+9. RISCOS RESIDUAIS E PRÓXIMA SUBETAPA
+
+Não há listagem autoritativa nem persistência de variantes nesta tela. A porta
+de leitura é preparação local testada com stub, não adaptador autenticado.
+Mudanças de acesso no processo não são prova de identidade criptográfica.
+Asserções locais e DTOs válidos nunca admitem transporte ou dependências.
+Não há confirmação de lista vazia, intenção durável de criação do pai integrada,
+recuperação real da sequência parcial ou edição cadastral de variantes gravadas.
+
+Recomendação: resolver/aprovar primeiro a fronteira autenticada de leitura e o
+contrato de enumeração completa, depois implementar o adaptador e validá-lo no
+ambiente local especificamente autorizado. O roteiro de Salvar está na seção 5;
+não iniciar writer antes de satisfazer esses requisitos. Nada disso foi iniciado.
+
+ENTREGA LOCAL DELIMITADA CONCLUÍDA; INTEGRAÇÃO REAL BLOQUEADA.
+Parada após F10/C4-B/01, sem início de carrinho, checkout ou outra subetapa.

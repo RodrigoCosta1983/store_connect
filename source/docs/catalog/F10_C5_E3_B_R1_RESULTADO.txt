@@ -1,0 +1,190 @@
+STORE&CONNECT — F10-C5-E3-B-R1
+DIAGNÓSTICO E VALIDAÇÃO SEQUENCIAL DA RETENÇÃO DE COD
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+DECISÃO FINAL: BLOQUEADO.
+RETENÇÃO NÃO PODE SER CONSIDERADA INTEGRALMENTE VALIDADA LOCALMENTE.
+
+1. PRESERVAÇÃO E ESCOPO
+Lidos AGENTS.md, CURRENT_WORK.md (histórico), resultado E3-B, os dois testes
+problemáticos, helper candidato, trecho consumidor da criação e implementação
+local do SDK @google-cloud/firestore 7.11.6. Sem auditoria global.
+Branch, HEAD e status conferidos. Todo o working tree anterior foi preservado.
+Não refeita a implementação. Não alterados helper, writers, contratos, testes,
+fixtures, expectativas, Rules, index.js, Flutter, C1/C2/C3 ou ledger.
+Manifesto inicial: TEMP/f10-e3-b-r1-baseline.json; comparação final confirmou
+ZERO arquivos preexistentes alterados no conjunto de fontes/documentação
+inventariado, excluindo build, logs, dependências e .git.
+Único arquivo de fonte/documentação criado: este relatório.
+
+2. DIAGNÓSTICO DE traceCategoryReads
+Arquivo: functions/tests/products/createProduct.emulator.test.js:1701–1718.
+O array reads é criado fora do callback de runTransaction. Toda repetição do
+callback escreve no mesmo array, inclusive tentativas cujo commit aborta.
+Além disso, transaction.get é substituído dentro de cada tentativa, sem
+restauração por tentativa. O SDK reutiliza o mesmo objeto Transaction no loop:
+uma tentativa posterior pode capturar o wrapper anterior e empilhar wrappers.
+Assim, as contagens misturam tentativas e podem multiplicar registros de uma
+mesma chamada. Não medem exclusivamente as leituras da transação concluída.
+
+Evidência no SDK local (functions/node_modules/@google-cloud/firestore/build/
+src/transaction.js): runTransaction, linhas 390–425, repete runTransactionOnce
+no mesmo this; runTransactionOnce, linhas 434–449, chama updateFunction(this),
+aguarda commit e faz rollback em erro. isRetryableTransactionError, linha 582,
+inclui status 10 ABORTED, entre outros, sujeito ao limite de tentativas.
+O log anterior c/c/c/r/r/r é compatível com esse defeito. Não permite afirmar
+quantas tentativas ocorreram nem quantas leituras houve em cada uma. Por exemplo,
+duas tentativas com wrappers acumulados podem registrar cada path três vezes.
+Não houve telemetria por tentativa na E3-B para reconstruir a sequência exata.
+
+Proposta de correção da instrumentação, NÃO APLICADA:
+- separar registros por invocação do callback;
+- instalar/restaurar transaction.get com finally em cada invocação, evitando
+  wrappers empilhados;
+- após runTransaction resolver com commit bem-sucedido, verificar os registros
+  da última tentativa; manter as tentativas anteriores separadas para diagnóstico;
+- não usar Set/deduplicação para ocultar leituras repetidas dentro da tentativa;
+- preservar as expectativas de paths e testar a instrumentação com retry controlado.
+Alterar a semântica dessa instrumentação exige decisão posterior conforme R1.
+Nenhuma correção foi necessária/aplicada para executar os testes existentes.
+
+3. EXECUÇÃO ISOLADA 1 — CRIAÇÃO: APROVADA
+Somente depois da inspeção, executado um único arquivo no Emulator:
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e3-b-r1
+ --only firestore "node --test --test-concurrency=1 --test-reporter=spec
+ functions/tests/products/createProduct.emulator.test.js"
+Comando real em uma linha. Log: build/f10-e3-b-r1-create.log.
+Resultado novo: 64 verificações aprovadas, zero falhas. Runner conta o arquivo
+como uma entrada: 1/1. Sem skips/cancelamentos. Exit 0.
+Duração do arquivo: 22,125 s; comando completo, incluindo CLI/Emulator: 27,901 s.
+O cenário tree valid: child root passou com a expectativa original inalterada.
+Logo, o erro anterior de contagem não reapareceu nesta execução; isso não elimina
+o defeito de instrumentação nem prova ausência de retries em outros cenários.
+Na E3-B anterior o arquivo durou 46,362 s: comparação apenas contextual,
+não é teste novo nem prova causal de que paralelismo explique toda a diferença.
+O resultado/log e exit foram inspecionados ANTES do próximo comando.
+
+4. EXECUÇÃO ISOLADA 2 — COD ATÔMICO: FALHOU
+Somente após encerrar e aprovar o primeiro arquivo:
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e3-b-r1
+ --only firestore "node --test --test-concurrency=1 --test-reporter=spec
+ functions/tests/products/productCodeAtomic.emulator.test.js"
+Log: build/f10-e3-b-r1-atomic.log.
+Resultado novo completo: 36 cenários aprovados, UM cenário falhou;
+15 pares de corrida aprovados. Runner conta o arquivo como uma entrada falha.
+Sem skips/cancelamentos. Exit 1.
+Duração do arquivo: 94,178 s; comando completo: 100,418 s.
+Não iniciados outros arquivos após a falha. Permitido apenas concluir o arquivo
+já em execução e recolher seu resultado final; sem mudanças nem reexecuções.
+
+O cenário anteriormente afetado por lock timeout, create COD atomically reserves
+hash and normalizes unrestricted characters, PASSOU nesta execução isolada.
+A falha atual é determinística e diferente, no cenário:
+  archived reservation is isolated by store for both create and update
+Arquivo productCodeAtomic.emulator.test.js:357–367, falha na linha 363.
+Sequência do teste:
+- loja A cria/arquiva produto com CA-0001-P-PT;
+- loja B cria outro produto com o mesmo COD (PASSA: isolamento preservado);
+- produto da loja B troca seu COD para FREE;
+- o MESMO produto tenta voltar para CA-0001-P-PT (falha).
+O retorno é already-exists / duplicate-product-cod, originado na nova guarda
+de productCodeReservation.js:82, pois oldCod != newCod e a reserva já existe.
+É exatamente a proibição de reativação histórica pelo proprietário original
+da Opção A. O teste ainda espera sucesso numa operação comercialmente proibida.
+Não é falha de isolamento entre lojas nem prova de reparação necessária no helper.
+É expectativa antiga incompatível com a retenção, que não havia sido ajustada
+na E3-B. R1 exige preservar expectativas e parar: teste NÃO FOI ALTERADO.
+
+Proposta para decisão posterior, NÃO APLICADA: preservar a criação do mesmo COD
+na loja B como prova de isolamento, exigir rejeição do retorno histórico após
+FREE, verificar COD atual FREE e reservas históricas intactas nas duas lojas;
+se necessário, demonstrar atribuição em loja distinta com fixture independente
+que nunca tenha usado aquele COD. Não afrouxar a guarda nem aceitar reativação.
+
+5. LOCKS, RETRIES E INFLUÊNCIA DO PARALELISMO
+O arquivo atômico manteve toda concorrência interna existente: chamadas
+Promise.all/Promise.allSettled, updates simultâneos, archive/update e 15 pares
+create/create, update/update e create/update. --test-concurrency=1 não os serializa.
+Mesmo sem outro arquivo de teste executando, o log do Emulator registrou
+30 avisos WARNING: Operation failed: Transaction lock timeout.
+Cópia preservada: build/f10-e3-b-r1-atomic-firestore.log.
+Stacks apontam ReactiveLockManager.acquireLocks e commitHelper. Os avisos
+demonstram contenção REAL também no isolamento; não se pode atribuir todos os
+locks da E3-B ao paralelismo entre arquivos. Não há correlação por tentativa
+suficiente nesses logs para atribuir cada aviso a um cenário/chamada exatos.
+O SDK admite retry de ABORTED; os cenários de corrida concluídos aprovaram os
+estados finais esperados. Os avisos recuperados não foram contados como novas
+falhas de assert, mas o ABORTED anterior também não foi descartado como inofensivo.
+
+Influência possível da simultaneidade anterior: 12 arquivos compartilhavam o
+Emulator; o arquivo de criação foi mais rápido isolado e suas expectativas
+passaram, assim como a criação de COD antes afetada por ABORTED. Evidência
+compatível com influência de carga, insuficiente para provar causalidade exclusiva.
+Sem tempos por transação, IDs de tentativa e tracing de locks, não é possível
+determinar duração específica/causa completa do ABORTED anterior.
+O helper candidato mantém as leituras anteriores (reservas e scan dos produtos),
+remove uma exclusão e adiciona rejeição de reserva existente; não adicionou
+consultas/esperas. O scan amplo existente continua superfície de contenção.
+Isso é inspeção estática, não benchmark que isole causalmente o efeito do patch.
+Nenhuma alteração funcional ou tentativa de reduzir locks feita nesta retomada.
+
+6. MATRIZ E3-B E COMPATIBILIDADE
+Resultados NOVOS desta R1, sem somar resultados históricos:
+- criação: 64/64;
+- COD atômico: 36/37, com 15 pares de corrida aprovados;
+- total de verificações internas desses runners: 100 aprovadas, uma falha.
+As duas entradas de arquivo do runner não devem ser somadas novamente a isso.
+
+Evidência parcial da matriz original:
+A/B/C/D: criação, troca, remoção e bloqueio de reutilização passaram nos
+cenários existentes V1; reservas anteriores preservadas.
+E: não reativação V1 passou nos cenários E3-B; cenário antigo adicional falhou
+por ainda exigir reativação, conforme diagnóstico acima. V2 não executado nesta R1.
+F: percurso cruzado V2->V1->V2 e V1->V2 NÃO executado nesta R1.
+G: criação/update em lojas distintas passaram em cenários próprios; cenário
+de arquivado em duas lojas permanece vermelho por misturar isolamento e reativação.
+H: legado sem ownerType e arquivamento/restauração de produto passaram nos
+cenários existentes, sem liberar reserva. Não é restore de backup.
+I: replays confirmados F9 V1/criação passaram; replay rejeitado scoped V2 pendente.
+J: corridas V1 e invariantes passaram; CAS V2 e precommit V2 pendentes.
+K: ausente/inconsistente/estrangeira e legado sem índice passaram nos cenários
+existentes; matriz completa V2/órfã no arquivo E3-B não executada.
+L: interação C2 NÃO executada nesta R1.
+M: arquivo dirigido de busca por COD atual sem alias NÃO executado nesta R1.
+N/O: regressões de criação/COD V1 parciais acima; demais F9 V2, E2-A/E2-B,
+C1/C2/C3/B2A NÃO executadas nesta R1.
+
+productCodeRetentionE3B.emulator.test.js NÃO executado: gate da etapa 2 falhou.
+Nenhum grupo da etapa 3 iniciado, nenhum resultado anterior contado como novo.
+Node puro não repetido: nenhum JS/teste/contrato foi alterado nesta R1. O 102/102
+da E3-B é histórico e não constitui execução nova nem substitui testes pendentes.
+Compatibilidade F9: evidência parcial positiva de criação/ownership/replay/V1,
+com expectativa antiga incompatível identificada. Compatibilidade completa NÃO
+validada. Compatibilidade F10-C2: código preservado, runtime não reexecutado;
+não declarar validado com base na inspeção ou resultados de outras etapas.
+
+7. AMBIENTE, VALIDAÇÃO FINAL E ENCERRAMENTO
+JDK21 existente build/f9-tools-jdk21/jdk-21.0.12.1+1; JAVA_HOME/PATH apenas no
+processo. Node 22.23.2, CLI/JAR/dependências já instalados. Emulators exigidos
+em loopback, projeto demo-f10-e3-b-r1, dados sintéticos. Sem HML/PROD.
+Primeira tentativa do CLI bloqueada por EPERM na configuração local, antes
+de iniciar testes; executada novamente com permissão ampliada de sandbox.
+Cada emulators:exec iniciou e encerrou seu Emulator; segundo somente depois
+de conferir resultado e encerramento do primeiro. Sem concorrência entre arquivos.
+git diff --check aprovado (avisos LF/CRLF em trabalho anterior).
+Branch/HEAD preservados; fontes e testes anteriores idênticos ao manifesto R1.
+
+BLOQUEADORES:
+- teste obrigatório atômico falhou por expectativa incompatível com a Opção A;
+- correção da expectativa exige autorização posterior às restrições desta R1;
+- instrumentação de leituras não separa tentativas; proposta registrada sem patch;
+- matriz obrigatória E3-B incompleta; falta executar etapa 3 depois de resolver gate;
+- contenção também existe no isolamento; causa integral do ABORTED anterior
+  não comprovada e garantia de carga/comportamento remoto não estabelecida.
+
+DECISÃO FINAL: BLOQUEADO. Não declarar retenção integralmente validada localmente.
+Nenhum commit, push, deploy, instalação, migração, backfill, recuperação de COD,
+secret real, reset, restore, stash ou clean. Restore de backup continua bloqueado.
+C4 não retomado. Sem avanço para outros writers ou Rules.
+Resumo exibido no terminal. PARADA APÓS F10-C5-E3-B-R1.

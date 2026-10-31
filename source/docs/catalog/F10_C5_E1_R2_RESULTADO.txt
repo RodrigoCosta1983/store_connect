@@ -1,0 +1,188 @@
+STORE&CONNECT — F10-C5-E1-R2
+CORREÇÃO DE COMPATIBILIDADE NaN E REVALIDAÇÃO DA BARREIRA V2
+Conclusão: 17/10/2026 (sessão iniciada em 16/10/2026)
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+RESULTADO: BARREIRA LOCAL VALIDADA NO ESCOPO E MATRIZES ABAIXO.
+Nenhum teste funcional obrigatório falhou nesta R2. Sem liberação remota.
+
+1. DIAGNÓSTICO
+Lidos instruções/contexto, relatório R1 e códigos atuais do serviço,
+productEligibilityC5, productCommercialPersistenceC5 e testes. Branch, HEAD
+e working tree conferidos antes da edição; alterações locais anteriores
+reconhecidas como contexto autorizado e preservadas.
+O serviço é untracked no Git; git diff por caminho não mostra seu conteúdo.
+Para revisar o delta R2, copiadas versões iniciais para TEMP e utilizado
+git --no-pager diff --no-index. Não houve restauração do patch R1.
+
+Causa exata: eligibilitySnapshot R1 encaminhava o documento inteiro para
+C5-B, cuja cópia JSON-like recusa NaN/Infinity/-Infinity e objetos SDK.
+A cópia ocorre antes da classificação C5-D e antes de priceCents do V2.
+Consequência R1: NaN virava EligibilityBlocked sem receipt em vez da rejeição
+terminal histórica invalid-current-price. Metadados alheios ao domínio também
+poderiam impedir uma venda legítima por conter GeoPoint/Reference/bytes.
+
+2. CORREÇÃO MÍNIMA E ORDEM FINAL
+Alterada somente a fronteira do serviço. Não alterados contratos puros,
+normalizador/hash/requestId, schema/namespace de receipt, replay ou writers.
+Após autenticação/autorizações transacionais, receipt/replay, consulta de sale,
+queryOnly, assinatura e leituras reais de produto e commercialProfiles/current:
+
+a) evaluateProductEligibility legacyV2/read recebe uma vista com TODOS os
+campos estruturais/monetários novos que essa política consulta:
+productKind, variantSchemaVersion, productId, variantId, attributes,
+attributeDefinitions, priceCents, costCents, commercial, commercialProfiles.
+Presença própria e valor são preservados, sem truthiness nem substituição.
+Tipo, identidade inconsistente, pai e perfil novo são recusados pela política
+existente, sem duplicar classificação no serviço. read não autoriza uma venda.
+
+b) Validadores históricos de isArchived e contract.priceCents(product.price)
+recebem os dados BRUTOS reais. NaN/Infinity/-Infinity nunca são substituídos
+por zero/null/string/preço do cliente; geram rejected/invalid-current-price
+terminal pelo catch B07-B existente. Arquivo/estado mantêm seus erros antigos.
+
+c) Somente após preço válido, evaluateProductEligibility legacyV2/sale recebe
+a mesma vista estrutural acrescida de isArchived, price e costPrice reais.
+Nenhum novo efeito depende só da aprovação read. Custo inválido e demais
+incompatibilidades de sale continuam não terminais. Seguem expectativa de
+preço, nome, estoque/FIFO e validação do total histórico antes das escritas.
+
+Pontos: structuralFields linha 14; checkEligibility/read linha 165;
+priceCents bruto linha 169; checkEligibility/sale linha 170 de confirmSaleV2.js.
+EligibilityBlocked continua excluído do catch terminal (linha 182).
+Receipt conhecido é resolvido antes do domínio atual (linha 121).
+Guarda bruta de variantId anterior à normalização R1 permanece intacta.
+
+As vistas são projeções explícitas de dependências do domínio, não cópias
+integrais do documento nem alteração persistida. Estoque/lotes, fiscal e
+metadados desconhecidos permanecem nos snapshots reais e no fluxo histórico.
+O perfil comercial vem da leitura transacional real; seu conteúdo é adaptado
+sem projeção. Perfil vazio/presente bloqueia; SDK incompatível no perfil
+falha fechado, sem fabricar ausência. Timestamps selecionados mantêm seconds/
+nanoseconds no adaptador. SDK/não finitos em marcadores não são apagados:
+a fronteira rejeita, em vez de classificar o documento como simples.
+
+3. ARQUIVOS ALTERADOS E PRESERVAÇÃO
+Modificados em relação ao início R2:
+- functions/sales/confirmSaleV2.js
+- functions/tests/sales/confirmSaleV2.emulator.test.js
+Criados:
+- functions/tests/sales/runEligibilityR2Directed.js
+- docs/catalog/F10_C5_E1_R2_RESULTADO.txt
+Runner dirigido usa spawnSync sem shell para selecionar testes com regex.
+Manifesto TEMP/f10-e1-r2-baseline.json: 640 arquivos preexistentes;
+comparação SHA256 identificou somente os dois modificados acima, demais
+638 idênticos, inclusive contratos, Rules, index, outros writers e relatórios.
+Nenhum preço, histórico, COD, baseline ou request real foi editado.
+Dados escritos nos testes são exclusivamente fixtures sintéticas demo.
+
+4. TESTES DIRIGIDOS REAIS — PRIMEIRA ETAPA
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e1-r2
+ --only firestore "node functions/tests/sales/runEligibilityR2Directed.js"
+35/35 aprovados; zero falhas/skips/cancelamentos; exit 0.
+Seleção: R2|NaN.price|Infinity.price|known.confirmed|nonterminal.domain.
+
+Resultados individuais (reexecutados também na matriz final):
+- NaN: PASS, rejected/invalid-current-price, um receipt terminal,
+  produto/updateTime intactos, sem sale, replay após correção preservado.
+- Infinity: PASS, mesma rejeição terminal e garantias.
+- -Infinity: PASS, mesma rejeição terminal e garantias.
+Os três são aceitos pelo armazenamento do Emulator e recusados pelo
+priceCents original, sem arredondamento/coerção ou exceção de domínio.
+- 15 combinações dos três preços com pai explícito, definitions remanescente,
+  variante, tipo parcial e perfil vazio: PASS, bloqueio não terminal,
+  sem sale/receipt/mudança do produto, consulta not-recorded.
+- Rejected por NaN reexecutado após preço Infinity, marcador de pai e perfil
+  com GeoPoint: PASS, resultado original, receipt/updateTime intactos.
+- GeoPoint, DocumentReference, Buffer, Timestamp e NaN em metadados de
+  produto/fiscal/lote: PASS; venda/FIFO válida preserva metadados reais.
+- 24 combinações internas de seis marcadores com NaN/GeoPoint/Reference/bytes:
+  PASS, bloqueadas sem venda/receipt/mutação. Contadas como um teste Node,
+  sem inflar o total por iterações internas.
+- Bloqueios e replays R1 selecionados também passaram nesta nova execução.
+
+Ocorrência de ambiente: primeira tentativa de regex sem runner foi interpretada
+como pipes por cmd.exe. Exit 255 do comando, zero testes executados; corrigido
+com runner Node, sem modificar expectativas ou políticas do sistema.
+Não foi falha funcional nem contabilizada como teste aprovado.
+
+5. MATRIZ EMULATOR INTEGRAL — APÓS DIRIGIDOS VERDES
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e1-r2
+ --only firestore "node --test --test-reporter=spec
+ functions/tests/sales/confirmSaleV2.emulator.test.js
+ functions/tests/sales/salesWritersCharacterization.emulator.test.js
+ functions/tests/products/productMutationV2.emulator.test.js
+ functions/tests/products/productEditState.emulator.test.js"
+Comando real em uma linha: 119/119 aprovados, zero falhas/skips/cancelamentos,
+exit 0. Inclui toda a matriz R1, o teste NaN antes vermelho e novos casos R2.
+São 82 regressões da matriz B07-B, 16 C5 iniciais, três preços não finitos
+e 18 testes R2. Nenhum resultado histórico foi contado como execução nova.
+
+Provas operacionais incluídas: venda simples manual, FIFO/nanos/metadados,
+receipt e replay, falha precommit, autorização/papel/revogação, loja/ator,
+assinatura, concorrência mesma identidade, IDs distintos disputando saldo,
+conflito com ajuste B05 e preservação de pagamentos/fiscal históricos.
+Pai explícito, pai sem discriminadores com definitions, estruturas parciais,
+variante, variantId bruto inclusive undefined, perfil vazio/presente,
+novas fontes monetárias e custo inválido continuam sem efeito de venda/estoque
+ou receipt terminal novo. Segundo item bloqueado não baixa FIFO do primeiro.
+Arquivo, preço inválido/conflitante, estoque/lotes inválidos mantêm os
+resultados terminais antigos para simples no domínio legado suportado.
+Caracterizações de defeitos V1 passam como observações do legado; não significam
+que esses defeitos tenham sido corrigidos ou autorizados para novos cortes.
+
+Autenticidade: projeto demo-f10-e1-r2; os testes e serviço exigem loopback,
+demo-* e projeto Admin coincidente. Firestore Emulator real, handlers .run
+com auth injetada e Admin SDK. CLI/JAR/dependências já existentes; JDK21 de
+build/f9-tools-jdk21/jdk-21.0.12.1+1, JAVA_HOME/PATH só no processo.
+Execuções CLI autorizadas fora do sandbox para acesso à configuração existente.
+Emulator encerrado pelo CLI. Nenhum serviço HML/PROD acessado.
+
+6. NODE PURO E CHECKS
+Nova execução em Node 22.23.2:
+node --test --test-reporter=spec com estes dez arquivos:
+functions/tests/products/productEligibilityC5.test.js
+functions/tests/sales/confirmSaleV2EligibilityBlocker.test.js
+functions/tests/products/productCommercialPersistenceC5.test.js
+functions/tests/products/productCommercialC5.test.js
+functions/tests/products/productVariantsV1.test.js
+functions/tests/products/productMutationContract.test.js
+functions/tests/products/createProductContract.test.js
+functions/tests/products/updateProductContract.test.js
+functions/tests/sales/saleV2Contract.test.js
+functions/tests/sales/saleV2ClientFixtures.test.js
+124/124 aprovados; zero falhas/skips/cancelamentos; exit 0.
+C5-D/D1 e regressão do pai com discriminadores removidos preservados.
+Checks node --check nos três JS R2, diff revisado contra cópias iniciais,
+git diff --check e checks de whitespace dos arquivos autorizados aprovados.
+Avisos LF/CRLF do ambiente não indicam alteração ampla de formatação.
+
+Contagem efetiva R2: 124 testes puros + 35 dirigidos Emulator + 119 Emulator
+integral = 278 execuções de testes. Os 35 dirigidos são repetidos na matriz
+integral: 119 casos Emulator distintos, 154 execuções Emulator; não somar
+como 154 casos distintos. Loops/checks internos não são somados novamente.
+
+7. COMPATIBILIDADE F9, LIMITES E PARADA
+Compatibilidade F9 verificada nas regressões descritas: contrato/hash V2,
+receipts/replays, estoque/FIFO, autorização e concorrência preservados;
+novas restrições C5 aplicam-se exclusivamente a novos efeitos deste serviço.
+Nenhum contrato congelado/política pura foi modificado ou duplicado.
+Não se declara compatibilidade universal de todos os writers/SDKs históricos.
+
+A barreira deste núcleo LOCAL pode ser considerada validada para o escopo
+R2 e casos executados. Isso não libera endpoint remoto, checkout, deploy,
+corte V1, outros writers, Rules, fiado/offline/fiscal ou restore.
+Os testes não certificam tokens Auth reais, transporte HTTP, Rules de clientes,
+carga/limites D14, dispositivos ou produção. Suíte global não foi executada.
+SDK fora do domínio é preservado no fluxo histórico; SDK incompatível nos
+campos de domínio/perfil falha fechado. Não foi criado suporte a perfil novo.
+
+Limite obrigatório: remoção TOTAL de discriminadores e marcadores ainda pode
+produzir snapshot indistinguível de simples legado. Necessita barreiras sobre
+estado anterior/posterior em writers/Rules, em etapa própria autorizada.
+Futuros cortes continuam BLOQUEADOS. A lista de dependências da vista deve
+ser revista se C5-D/D1 passar a consultar novos campos; nenhum marcador atual
+foi omitido. Integração seguinte F9/F10 requer autorização e gates próprios.
+Transporte C4 segue adiado pela alternativa D. Restore continua bloqueado.
+Sem instalação, migração, commit, push, deploy, reset, restore, stash ou clean.
+Parada após exportação e resumo no terminal; não avançar automaticamente.

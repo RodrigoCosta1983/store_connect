@@ -1,0 +1,201 @@
+STORE&CONNECT — F10-C5-E3-B-R2
+CORREÇÃO DIRIGIDA DE TESTE LEGADO E VALIDAÇÃO FINAL DE COD
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+DECISÃO FINAL: VALIDADO LOCALMENTE, NO ESCOPO DA MATRIZ EXECUTADA.
+Não autoriza implantação comercial, outros writers ou Rules.
+
+1. PRESERVAÇÃO E ARQUIVOS
+Conferidos AGENTS.md, CURRENT_WORK.md histórico, resultado R1, branch/HEAD/status
+e cenário atual antes da alteração. Working tree anterior preservado.
+Único arquivo anterior modificado nesta R2:
+  functions/tests/products/productCodeAtomic.emulator.test.js
+Único documento novo:
+  docs/catalog/F10_C5_E3_B_R2_RESULTADO.txt
+Logs operacionais novos em build/f10-e3-b-r2-*.log.
+Manifesto anterior TEMP/f10-e3-b-r2-baseline.json: comparação SHA256 final
+identificou SOMENTE o teste acima como arquivo anterior alterado, excluindo
+build/logs/dependências/.git do inventário de fontes/documentação.
+Nenhum patch funcional. productCodeReservation.js, V1/V2, contratos, C1/C2/C3,
+Rules, index.js, Flutter, ledger, demais testes e fixtures permaneceram idênticos.
+
+2. CORREÇÃO EXATA DO CENÁRIO LEGADO
+Cenário preservado: archived reservation is isolated by store for both create
+and update. Substituída somente a expectativa de sucesso de retorno do mesmo
+produto da loja B ao seu COD histórico CA-0001-P-PT, depois de trocar para FREE.
+Agora exige already-exists / duplicate-product-cod.
+Asserções diretamente adicionadas ao mesmo cenário:
+- criação inicial na loja B com o mesmo COD da loja A continua permitida;
+- troca para FREE mantém updateTime das reservas anteriores em ambas as lojas;
+- snapshots de products, productCodes e auditLogs, incluindo IDs, dados inteiros
+  e updateTime, são iguais antes/depois da tentativa rejeitada nas duas lojas;
+- COD atual da loja B continua FREE, com reserva de seu proprietário correto;
+- mantidas as asserções anteriores de ownership e invariantes nas duas lojas.
+Comparação integral do produto inclui estoque, lotes e identidade; comparação
+de auditLogs impede receipt novo/alterado pela rejeição V1. Nenhuma deduplicação,
+mudança de fixture ou redução de concorrência em outros cenários.
+
+3. AMBIENTE E ORDEM DE EXECUÇÃO
+Todas as execuções são NOVAS desta R2. Nenhum resultado E3-B/R1 contabilizado.
+Firestore Emulator real, projeto demo-f10-e3-b-r2, loopback, dados sintéticos,
+Admin local. JDK21 existente build/f9-tools-jdk21/jdk-21.0.12.1+1;
+JAVA_HOME/PATH ajustados apenas no processo; Node 22.23.2.
+Sem instalação, HML/PROD, credenciais reais ou alteração de Java permanente.
+Primeira tentativa do CLI bloqueada por EPERM na configuração local, antes
+de iniciar testes; repetida com permissão ampliada de sandbox, sem contornar
+o controle. Todas as execuções efetivas abaixo tiveram exit 0.
+
+Formato real dos comandos, em uma linha por execução:
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e3-b-r2
+ --only firestore "node --test --test-concurrency=1 --test-reporter=spec <arquivos>"
+Primeiro gate atômico sozinho; resultado/exit/encerramento inspecionados.
+Depois dirigido E3-B sozinho; resultado/exit/encerramento inspecionados.
+Só então grupos de dois arquivos. Cada grupo concluído/inspecionado antes de
+iniciar o seguinte. --test-concurrency=1 garante arquivos sequenciais, mantendo
+Promise.all/Promise.allSettled e corridas internas. Nenhum arquivo repetido.
+Cada emulators:exec iniciou e encerrou seu Emulator pelo CLI.
+
+4. EMULATOR — RESULTADO INDIVIDUAL, TODOS APROVADOS
+Os nomes abaixo são de functions/tests/products/.
+
+Gate isolado:
+- productCodeAtomic.emulator.test.js: 37/37 cenários; 15 pares de corrida.
+  Log atomic.log; runner 1/1 entrada; duração do arquivo 108,373 s;
+  comando completo 113,995 s. Cenário legado corrigido passou.
+
+Dirigido isolado:
+- productCodeRetentionE3B.emulator.test.js: 7/7; duração do runner 19,216 s.
+  Log retention.log. Todos os casos, inclusive integração real C2, passaram.
+
+Grupo F9 V1, log f9-v1.log, duração 23,935 s:
+- createProduct.emulator.test.js: 64/64 verificações internas (uma entrada
+  de arquivo no runner), incluindo tree valid: child root;
+- updateProductIntegrity.emulator.test.js: 5/5.
+Runner do grupo: 6/6 entradas aprovadas.
+
+Grupo F9 V2, log f9-v2.log, duração 35,958 s:
+- productMutationV2.emulator.test.js: 32/32;
+- productEditState.emulator.test.js: 14/14.
+Runner do grupo: 46/46.
+
+Grupo C5, log c5.log, duração 50,510 s:
+- updateProductEligibilityC5.emulator.test.js: 49/49;
+- adjustProductStockEligibilityC5.emulator.test.js: 48/48.
+Runner do grupo: 97/97; barreiras E2-B/E2-A preservadas.
+
+Grupo C1/C2, log c1-c2.log, duração 65,371 s:
+- productVariantsC1.emulator.test.js: 14/14;
+- productVariantsC2.emulator.test.js: 22/22.
+Runner do grupo: 36/36.
+
+Grupo C3/leitura, log c3-read.log, duração 65,997 s:
+- productVariantsC3.emulator.test.js: 18/18;
+- productVariantsReadB2A.emulator.test.js: 26/26.
+Runner do grupo: 44/44.
+
+Prefixo de todos os logs acima: build/f10-e3-b-r2-.
+TOTAL: 12 arquivos obrigatórios aprovados; zero falhas/skips/cancelamentos.
+Contagem somada dos runners: 237 entradas aprovadas. Atomic e create são scripts
+que o runner conta como uma entrada cada, embora publiquem 37 e 64 cenários
+internos. Substituindo essas duas entradas pelos cenários, são 336 cenários/
+testes aprovados. Não somar 237 com 336 nem contar pares de corrida novamente.
+
+5. MATRIZ ORIGINAL E3-B — COBERTURA CONFIRMADA
+A: criação/reserva inicial, normalização, hash e atomicidade F9/C2 aprovados.
+B/C: troca CAM001->CAM002 e remoção preservam reservas e seus proprietários.
+D: outro produto não consegue reutilizar reserva histórica.
+E: reativação histórica pelo mesmo proprietário bloqueada em V1 e V2;
+   manter COD atual com reserva válida continua permitido.
+F: sequência V2->V1->V2 aprovada, cobrindo transições V2->V1 e V1->V2.
+G: mesmo COD entre lojas permitido; rejeição local não modifica nenhuma loja.
+H: arquivamento e reserva legada sem ownerType preservados sem regravar/migrar.
+I: replay confirmado/rejeitado após mudanças posteriores mantém outcomes;
+   replay conhecido precede revalidação mutável, depois de auth.
+J: mudanças concorrentes, CAS exato e falha precommit sem estado parcial;
+   intenção perdedora não cria reserva; corridas internas mantidas.
+K: reserva ausente, inconsistente, estrangeira, órfã ou do mesmo owner não
+   pode ser reparada/adotada automaticamente; falha fechado conforme caminho.
+L: produto/variante C2 reais não reutilizam histórico F9; namespace compartilhado,
+   legado, ownership e concorrência F9/C2 aprovados.
+M: queries do COD atual retornam a entidade; histórico retido não retorna
+   como alias. Nenhuma alteração em scanner/UI.
+N: regressões cadastrais F9 V1/V2, leitura e barreiras E2-A/E2-B aprovadas.
+O: criação e COD C1/C2, estoque/arquivamento C3 e leitura B2A aprovados.
+Nenhum item obrigatório desta matriz ficou sem execução nesta R2.
+
+6. NODE — NOVA EXECUÇÃO APROVADA
+node --test --test-concurrency=1 --test-reporter=spec, oito arquivos em
+functions/tests/products/:
+updateProductEligibilityC5.test.js, productEligibilityC5.test.js,
+productCommercialPersistenceC5.test.js, productCommercialC5.test.js,
+productMutationContract.test.js, updateProductContract.test.js,
+createProductContract.test.js e productVariantsV1.test.js.
+Log: build/f10-e3-b-r2-node.log.
+Resultado novo: 102/102 entradas aprovadas; zero falhas/skips/cancelamentos,
+exit 0, duração 1,252 s. createProductContract publicou 82 verificações internas
+e é uma entrada de arquivo no runner; não somar novamente como 82 testes extras.
+node --check do teste atômico editado aprovado.
+git diff --check aprovado, com avisos locais LF/CRLF em trabalho preexistente.
+Diff contra HEAD contém trabalho anterior; não atribuí-lo à R2. Revisado o
+bloco autorizado e comparado o inventário SHA256 da sessão.
+
+7. CONCORRÊNCIA, RETRIES E LOCKS
+Logs do Emulator de cada execução copiados antes do grupo seguinte para
+build/f10-e3-b-r2-<grupo>-firestore.log. Ocorrências da mensagem exata
+WARNING: Operation failed: Transaction lock timeout.:
+- atomic: 32;
+- retention: 2;
+- f9-v1: 2;
+- f9-v2: 8;
+- c5: 8;
+- c1-c2: 19;
+- c3-read: 7.
+TOTAL: 78 avisos. São ocorrências de log, não contagem comprovada de callbacks,
+transações únicas ou testes falhos. Não foram ocultadas nem suprimidas.
+Todos os comandos/testes concluíram aprovados; nenhum ABORTED inesperado foi
+retornado como falha de teste. Rejeições CAS/aborted explicitamente esperadas
+continuam verificadas pelas asserções, sem afrouxamento.
+O SDK local permite retry de ABORTED e o Emulator registrou contenção mesmo
+em grupos sequenciais com concorrência interna. Não há tracing por tentativa
+para atribuir cada aviso a chamada específica ou contar retries com precisão.
+
+traceCategoryReads e instrumentação de runTransaction NÃO foram alterados.
+Erro de contagem por retries não reapareceu na criação desta R2. O defeito
+potencial diagnosticado na R1 permanece: array entre tentativas e wrappers
+acumuláveis não distinguem leituras da tentativa concluída. A correção proposta
+na R1 continua não aplicada e exige etapa própria. O teste passou com suas
+expectativas originais, sem Set/deduplicação nem mascaramento.
+A validação sequencial não prova que as falhas anteriores eram irrelevantes,
+não reconstrói sua causa integral e não certifica robustez sob carga/desempenho.
+
+8. PRESERVAÇÃO V1/V2, C2 E LIMITES
+O código funcional candidato da E3-B permanece integralmente preservado.
+Retenção é compartilhada pelo helper de V1/V2: trocar/remover não apaga a
+reserva; reserva histórica existente bloqueia outro owner e o owner original.
+COD ativo continua associado ao campo atual da entidade com reserva válida;
+nenhum status/flag, namespace, identidade ou alias histórico foi criado.
+C2 permanece compatível no escopo testado: reserva ocupada não é adotada,
+mesmo owner/legado/órfã permanecem bloqueados, e variantes compartilham namespace.
+Receipts/hashes/requestId e CAS/updateTime não foram modificados. Regressões
+confirmaram resultados persistidos, replay anterior à revalidação atual,
+auth/scope/revogação e atomicidade entre documentos/índices/receipts.
+
+Garantias/limites pendentes fora da validação local:
+- custo e contenção dos scans; não há certificação de carga ou segurança remota;
+- instrumentação de leituras sensível a retry continua pendência de teste;
+- reservas apagadas antes da política não são reconstruídas;
+- outros writers, Rules e ativação comercial exigem suas próprias etapas;
+- nenhum scanner futuro, fluxo UI/dispositivo ou ambiente remoto certificado;
+- restore de backup permanece bloqueado; transporte C4 continua adiado.
+Não há bloqueador remanescente da execução obrigatória desta R2: todos os gates,
+arquivos de regressão e Node dirigidos foram executados e aprovados.
+Esta conclusão supera o bloqueio de validação E3-B/R1 apenas neste escopo;
+os relatórios anteriores são preservados como registros históricos.
+
+9. ENCERRAMENTO
+DECISÃO FINAL: VALIDADO LOCALMENTE.
+Sem alteração funcional, commit, push, deploy, instalação, migração, backfill,
+recuperação de reservas, HML/PROD, secrets reais, reset, restore, stash ou clean.
+Resumo exibido no terminal. PARADA APÓS F10-C5-E3-B-R2.
+Não avançar automaticamente para outros writers, Rules ou implantação comercial.

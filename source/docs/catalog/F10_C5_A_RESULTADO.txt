@@ -1,0 +1,151 @@
+STORE&CONNECT — F10-C5-A
+CONTRATOS COMERCIAIS DE PRODUTOS E VARIANTES
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+Resultado: contratos puros locais implementados e testes aprovados.
+
+1. BASE INSPECIONADA E ESCOPO
+Conferidos branch/status/HEAD antes de editar. Trabalho local extenso anterior
+é esperado nesta solicitação e foi preservado. CURRENT_WORK é histórico F7;
+esta solicitação e F10_DECISOES_APROVADAS.md definem o escopo vigente.
+Lidos AGENTS, contexto ativo, decisões C01–C09, arquitetura F10, resultado B,
+productVariantsV1 e seus testes, Product Dart, createProductContract,
+updateProductContract, trechos cadastrais/productMutationContract e buscas
+dirigidas nos serviços C1/C3. Sem auditoria global ou integração de serviços.
+
+Campos comprovados: price/costPrice numéricos em unidade monetária legada;
+imageUrl string; barcode opcional string; minimumStock inteiro; fiscal mapa.
+Os campos fiscais permitidos são exatamente os dez encontrados em F9:
+ncm, origem, cfop, unidade, cest, icmsSituacaoTributaria,
+pisSituacaoTributaria, cofinsSituacaoTributaria,
+ibsCbsSituacaoTributaria, ibsCbsClassificacaoTributaria.
+Valores fiscais string/null são estruturais, não validação tributária.
+F10-B observa os campos comerciais como snapshots opacos; não foi modificado.
+
+2. CONTRATOS CRIADOS
+functions/contracts/productCommercialC5.js, Node puro, sem Firebase, I/O,
+dependências novas, consumidores operacionais ou serializador de gravação.
+
+ProductCommercialDto: projeção comercial simples/base com priceCents,
+costCents, imageUrl, fiscal, barcode e minimumStock opcionais. Cada campo
+expõe state=omitted|null|value. Nenhum default persistido ou backfill.
+priceCents/costCents são centavos inteiros seguros >=0; zero é valor explícito.
+Number.MAX_SAFE_INTEGER é permitido; negativos, -0, frações, NaN, Infinity,
+strings e undefined explícito são rejeitados. minimumStock usa a mesma
+validação inteira, mas sua unidade é quantidade, nunca moeda.
+
+VariantCommercialDto: priceCents/costCents/imageUrl/fiscal recebem políticas
+{mode:inherit} ou {mode:override,value:...}. Omitido significa usar a base,
+preservando no DTO a diferença de uma escolha inherit explícita.
+Null é representável, mas permanece source=unresolved na resolução desses
+quatro campos. Nunca significa implicitamente herdar, remover ou valor zero.
+Override exige valor válido não null; somente imagem admite {mode:remove}.
+Isto define uma representação de leitura/configuração, não comandos de edição.
+
+C01: resolveCommercial retorna o valor-base ou override com source=parent
+ou variant e estado de presença preservado. Base ausente/null não inventa
+preço. Não calcula desconto, total, preço de checkout ou disponibilidade.
+
+C03: imagem única herdada, própria ou removida explicitamente. Omissão de
+imagem no pai, null no pai, null não resolvido na variante e remoção explícita
+são diferentes. Texto próprio exige conteúdo não vazio; sem validação de
+host/protocolo, fetch, upload, Storage, limpeza ou lista de imagens.
+Legado imageUrl="" continua preservado no observador, sem reinterpretá-lo.
+
+C08: custo e mapa fiscal herdam integralmente. Override exige reason textual
+não vazia, retida no DTO e resultado para revisão futura. Essa justificativa
+é declaração do chamador, NÃO autorização ou auditoria comprovada. Fiscal
+override substitui a projeção inteira, sem merge automático por folha. Campo
+omitido no mapa próprio não recupera silenciosamente valor do pai; {} é mapa
+explícito vazio; null dentro do mapa é preservado. Overrides fiscais/custo
+continuam sem ativação até contrato de permissões/auditoria/persistência.
+Não há emissão fiscal, alíquota, cálculo, nomenclatura nova ou regra tributária.
+
+minimumStock da variante é individual: ausente/null/inteiro explícito,
+sem herança do minimumStock da base e sem consulta a saldo. O campo no DTO
+base atende produtos simples; no pai de variantes não é distribuído.
+
+C04: barcode próprio opcional, independente de COD, sem herança, conversão
+numérica ou normalização. Zeros iniciais e texto exato são preservados.
+barcodeMatches opera só sobre candidatos fornecidos e identidades F10-B:
+notFound, uniqueInCandidates ou ambiguous, com lista imutável de matches.
+Não há selected nem fallback por COD; identidade duplicada é rejeitada.
+uniqueInCandidates NÃO garante unicidade global. Completude, escopo da loja,
+arquivamento e autorização dos candidatos são obrigações futuras do chamador.
+
+3. COMPATIBILIDADE E SEPARAÇÃO
+observeLegacyCommercial aceita SimpleProductDto F10-B e expõe observações
+price/costPrice/imageUrl/fiscal/barcode/minimumStock, preservando inclusive
+campos fiscais desconhecidos legados, ausência, null, vazio e unidade original.
+Não força legado válido para o contrato novo; não oculta campo inválido nem
+repara dados. O snapshot original, identidade e estoque permanecem intactos.
+legacyMoneyToCents é conversão opt-in estrita do decimal representado pelo
+Number: usa parsing decimal e BigInt, não multiplicação binária/arredondamento.
+0.29 vira 29; 19.99 vira 1999; 1.005 e 0.1+0.2 são rejeitados, assim como
+overflow e notação exponencial. Não recupera precisão já perdida no Number.
+Nenhum consumidor foi ligado a esse conversor e nenhum valor foi migrado.
+
+DTOs copiam mapas antes de congelar recursivamente os níveis suportados;
+não congelam nem modificam input do chamador. Sem objetos SDK ou ciclos.
+Whitelist rejeita campos desconhecidos, símbolos e estruturas incorretas.
+Saldo, quantidade, lotes, receipts, baseline, COD, descontos e múltiplas
+imagens não pertencem a esta projeção. Também são rejeitados nos mapas fiscais
+e nas políticas; edição cadastral não carrega estado operacional.
+Nenhum schemaVersion persistido foi criado; nomes priceCents/costCents são
+contrato em memória, NÃO definição de novos campos Firestore nesta etapa.
+Não há vínculo com receipts C1/C2/C3 nem mudança em hashes, COD ou baselines.
+
+4. TESTES E VALIDAÇÃO
+Criado functions/tests/products/productCommercialC5.test.js: 16 testes.
+Cobertura: herança/override/zero; ausência/null/valor; remoção da imagem;
+inteiros/centavos inválidos e limites seguros; fiscal/custo e justificativa;
+fiscal sem merge; mínimo próprio; separação cadastro/estoque; imutabilidade;
+observação/conversão legado; compatibilidade F10-B; barcode ambíguo/duplicado;
+políticas inválidas e objetos/campos não suportados.
+
+Comando executado com Node v22.23.2:
+node --test functions/tests/products/productCommercialC5.test.js
+  functions/tests/products/productVariantsV1.test.js
+  functions/tests/products/createProductContract.test.js
+  functions/tests/products/productMutationContract.test.js
+  functions/tests/products/updateProductContract.test.js
+Resultado agregado: 54 testes/subtestes Node aprovados, zero falhas/skips.
+createProductContract também reportou seus 82 checks internos aprovados;
+o runner o conta como um arquivo/subteste, não como 82 testes adicionais.
+node --check dos dois JS novos passou. Revisão do diff novo e whitespace.
+Uma tentativa de git diff --check com core.autocrlf=false produziu falsos
+positivos sobre CRLF preexistente; sem correção de arquivos. Repetido o
+git diff --check padrão do repositório e checks --no-index dos novos JS.
+Nenhum teste Emulator/Flutter executado: não há persistência nem alteração
+Dart. Resultados anteriores não foram recontados como validações desta etapa.
+
+5. DECISÕES PENDENTES PARA PERSISTÊNCIA FUTURA
+- Descontos: regras, precedência, arredondamento e limites comerciais.
+- Múltiplas imagens: ordem, imagem principal, remoção, fallback e ciclo Storage.
+- Barcode: normalização/simbologias, unicidade por loja, índice concorrente,
+  arquivados, scanner e tratamento operacional de ambiguidades.
+- Fiscal/custo: permissões reais, controle de exceções, auditoria server-side
+  com antes/depois/ator/motivo e contrato de override por mapa ou por folha.
+- Persistência de null/remove/omitted/inherit: schema e intenção de edição
+  explícitos, CAS e compatibilidade histórica, sem deduzir DELETE de null.
+- Dinheiro legado com mais de duas casas, conversão de histórico e eventual
+  política de arredondamento; nenhum backfill automático autorizado.
+- Validação de URLs/imagens, limites comerciais, obrigatoriedade de preço,
+  vínculo da configuração à identidade/loja e adaptação futura Dart.
+- mínimos ausentes/null e política de alertas; sem fabricar limiar zero.
+Nada disso foi habilitado por flag ou conectado a writer nesta etapa.
+
+6. PRESERVAÇÃO E PARADA
+Criados somente:
+- functions/contracts/productCommercialC5.js
+- functions/tests/products/productCommercialC5.test.js
+- docs/catalog/F10_C5_A_RESULTADO.txt
+Manifesto SHA256 inicial dos 624 arquivos não ignorados preexistentes em
+TEMP/f10-c5-a-manifest.json: conferência final zero divergências.
+Helpers de manifesto somente no TEMP; nenhum arquivo anterior editado.
+F9/A5, F10-B/C1/C2/C3/C4, Rules/index, pubspec/lock e writers preservados.
+Sem Firestore, Auth, Storage, checkout, fiado, offline ou integração comercial.
+Sem commit/push/deploy/migração/instalação/reset/restore/stash/clean.
+Alternativa D mantida; transporte B2-B2 não retomado. Restore bloqueado.
+Parada após C5-A. Persistência e edição operacional exigem etapa posterior.

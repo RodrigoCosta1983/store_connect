@@ -1,0 +1,172 @@
+STORE&CONNECT — F10-C5-E3-A — RETENÇÃO HISTÓRICA DE COD
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+RESULTADO: BLOQUEADO NA INSPEÇÃO; CORREÇÃO NÃO IMPLEMENTADA.
+
+1. ESCOPO E PRESERVAÇÃO
+Conferidos AGENTS.md, CURRENT_WORK.md, branch, HEAD e status inicial.
+O contexto CURRENT_WORK é histórico; não substitui os contratos F9/F10 atuais.
+Working tree já continha extenso trabalho local, incluindo E1-R2/E2-A/E2-B,
+reconhecido como contexto informado e preservado. Nenhum arquivo anterior
+foi editado. Único arquivo criado nesta execução: este relatório.
+Lidos F10_DECISOES_APROVADAS, resultado C2 (inclusive continuação efetiva),
+E2-B (resultado final e registro histórico), F9_CONTRATO_UPDATE_REVISAO,
+F9_A5_V2_IMPLEMENTACAO_LOCAL, resultados F9 B01–B03/B04, código e testes COD.
+
+2. CICLO ATUAL E CONTRATO DE RESERVA
+normalizeCod: trim + uppercase, limite de 40 caracteres normalizados.
+Namespace: stores/{storeId}/productCodes/{sha256(COD normalizado em UTF-8)}.
+Reserva nova product: {cod, ownerType: product, productId, variantId: null}.
+Reserva variant: mesmo namespace, ownerType: variant e variantId próprio.
+reservationOwner interpreta ausência de ownerType como product, aceitando
+variantId ausente como null somente no legado; não migra o documento.
+Não existe flag ativa/histórica nem timestamp de aposentadoria no contrato.
+
+prepareCodeChange lê reserva antiga/nova e produtos da loja na transação.
+O scan inclui produtos arquivados e produtos legados sem índice; não varre
+variantes. Valida cod e ownership; reserva antiga ausente falha sem reparo.
+Reserva nova de outro proprietário rejeita duplicate-product-cod.
+Reserva nova do MESMO produto é aceita, ainda que não seja seu COD atual.
+Closure de escrita apaga reserva antiga se oldCod != newCod e cria a nova
+se ausente. Produto, reserva e receipt são escritos no commit do chamador.
+Troca e remoção atualmente liberam COD; edição sem troca não regrava índice.
+Archive/restore validam oldCod == newCod e conservam o índice existente.
+Arquivar não libera COD; COD de produto arquivado é imutável nos updates.
+Replay conhecido é resolvido antes de reavaliar estado/reservas, após auth.
+
+3. DISTINÇÃO NECESSÁRIA
+COD ativo: valor atual normalizado em products/{id}.cod (ou variants/{id}.cod),
+com reserva íntegra para o mesmo proprietário. Arquivamento não libera reserva.
+COD histórico reservado: reserva íntegra cuja identidade permanece conhecida,
+mas cujo proprietário já não tem esse COD atual. Hoje não há discriminador;
+a distinção exigiria comparar índice com entidade atual. Não equivale a alias.
+COD nunca utilizado: não pode ser comprovado apenas pela ausência de reserva;
+essa ausência também pode decorrer de liberação antiga. Pode-se comprovar
+somente ausência atual de ocupação, após verificações pertinentes de legado.
+Reserva ausente/inconsistente: entidade com COD sem índice, cod do índice
+divergente, ownership inválido/estrangeiro; exige revisão, não reconstrução.
+Reserva órfã não deve ser inferida como histórico legítimo sem contrato.
+
+4. CONSUMIDORES RELEVANTES ENCONTRADOS
+Chamadores diretos de prepareCodeChange:
+- createProduct.js: criação F9; old vazio, novo COD, reserva transacional.
+- updateProduct.js: writer V1 completo; troca/remoção e preservação por omissão.
+- productMutationV2.js/cadastral: updateProductV2; patch/CAS e receipts F9.
+- archiveProduct.js: valida reserva sem trocar e sem executar liberação.
+- restoreProduct.js: valida reserva sem trocar; não é restore de backup.
+
+Outros leitores/contratos do índice:
+- productVariantCodesC2.js/prepareCodeCreation, consumido pelo serviço
+  productVariantsC1.js nas entradas C2: reserva ocupada sempre bloqueia criação,
+  inclusive legado/órfã/mesmo owner; scan inclui variantes e arquivados.
+- productVariantsC3.js/checkCode: valida COD atual e ownership para operações C3.
+- productVariantsReadB2A.js/checkCode: valida o índice do COD atual no DTO local;
+  não resolve um produto a partir de um COD histórico.
+- contracts/productVariantsV1.js: interpretação em memória compatível com F9.
+- backups/storeRestoreEmulator.js: barreira documentada para protocolo que
+  contemple productCodes/variantes; restore de backup continua bloqueado.
+- firestore.rules: productCodes nega leitura/escrita cliente; produtos impedem
+  alteração direta de cod e exclusão física no trecho inspecionado. Admin
+  writers não são contidos por essas Rules.
+- testes productCodeAtomic, productMutationV2, productVariantsC2, E2-B e
+  segurança/restore são consumidores de caracterização/regressão, não scanners.
+
+Leitura/busca/UI:
+- lib/services/product_cod_service.dart: matchesProductSearch usa nome/COD
+  atual; isInUse consulta products.where(cod), não productCodes nem variantes.
+- manage_products_screen.dart: editor V1 usa isInUse como pré-checagem; busca
+  usa matchesProductSearch e exibe COD atual. Pré-checagem não é autoridade.
+- B04/product_cadastral_edit e DTO productEditState: edição com intenção,
+  baseline/CAS e replay; não há resolução histórica por índice.
+- product_import_service.dart: importação chama createProduct; mapeamento
+  inspecionado trabalha barcode independente. Não é consumidor de update V2.
+  Bloqueio autoritativo de reserva permanece no servidor createProduct.
+Não encontrado scanner operacional ou resolvedor COD->produto por productCodes
+nas buscas dirigidas em lib e fontes locais. Referência C04 é decisão de
+produto, não prova de scanner implementado. Não se certifica scanner futuro.
+Reter índice sem alterar products.cod não criaria alias nos leitores encontrados.
+
+5. BLOQUEIO DE COMPATIBILIDADE ENTRE WRITERS
+Representação candidata mínima: conservar índice antigo inalterado e usar
+cod atual da entidade para distinguir ativo/histórico, sem mudar schema.
+Essa representação bloqueia outro owner em F9/C2 enquanto o índice existir.
+Entretanto, NÃO é segura como retenção permanente com os writers atuais:
+1) suponha V2 conservando CAM001 após produto P passar para CAM002;
+2) V1 permite P trocar CAM002 -> CAM001: reserva CAM001 tem mesmo owner P;
+3) V1 permite P trocar/remover CAM001 novamente e DELETA sua reserva;
+4) outro produto pode então usar CAM001.
+São operações V1 válidas pelo código atual. Não dependem de edição manual,
+produção, corrupção, corrida nem leitor hipotético. Também apagam CAM002.
+O teste F9 afirma explicitamente liberação/reutilização; não é só comentário.
+
+Assim, preservar documento exclusivamente em V2 oferece uma garantia limitada
+ao percurso V2, não demonstra compatibilidade do ciclo completo exigido.
+Adicionar status historical no índice não resolve sozinho: V1 ignora esse
+campo e continua aceitando mesmo owner/deletando a reserva na troca seguinte.
+Mudar prepareCodeChange globalmente mudaria criação/update V1 e contratos
+compartilhados fora do escopo. Criar namespace adicional requer schema e
+checagens de outros writers para impedir reutilização, também fora do escopo.
+Conforme gate explícito da ETAPA 1.7, não aplicado patch parcial nem alterado
+qualquer writer/helper/Rule para contornar o bloqueio.
+
+6. IMPACTOS E COMPATIBILIDADE F9/F10-C2
+Produtos simples F9 continuam com comportamento atual, inclusive liberação.
+V2/E2-B mantém sua guarda de elegibilidade; não foi aberto para pais/variantes.
+C2 compartilha namespace e reconhece reservas legadas; criação C2 já bloqueia
+qualquer reserva existente e não transforma histórico em código ativo.
+C3/B2A partem do COD da entidade e validam seu índice, sem busca por histórico.
+Arquivamento/restore do produto preservam índices atuais; não há varredura de
+históricos para apagar, mas também não protegem contra reativação/liberação V1.
+Scanner/busca não devem passar a usar productCodes como alias sem conferir
+cod atual e tratar ambiguidade barcode/COD conforme C04.
+Auth, scope, CAS, requestId/hash, receipts confirmados/rejeitados e replays
+conhecidos não foram alterados. Nenhuma mudança em E1-R2/E2-A/E2-B.
+Compatibilidade aqui é análise estática e preservação do código; NÃO constitui
+nova validação de runtime F9/C2 ou certificação comercial global.
+
+7. TESTES E VALIDAÇÃO DESTA EXECUÇÃO
+Executados: inspeção estática de fontes/contratos/testes, git diff --stat,
+git diff --check (exit 0; avisos locais LF/CRLF), revisão do relatório e
+conferência final de branch/HEAD/status. Sem edição de arquivos anteriores.
+Não executados Node nem Firestore Emulator: gate arquitetural identificado
+na ETAPA 1 impõe registrar e PARAR antes da correção condicional. Nenhum
+resultado histórico de C2/E2-B/F9 foi contado como teste desta E3-A.
+
+Matriz solicitada permanece para implementação posteriormente autorizada:
+- COD inicial, CAM001->CAM002 e remoção: ciclo atual auditado, sem novo teste.
+- Reutilização na mesma loja e COD em lojas distintas: namespace/ownership
+  auditados, sem novo teste de concorrência ou garantia corrigida.
+- Replay após mudança, duas trocas concorrentes e falha precommit: caminhos
+  transacionais/CAS/receipt inspecionados; nenhuma nova execução.
+- Arquivado e legado sem ownerType: validações e testes existentes lidos;
+  nenhuma mudança de representação ou migração.
+- Reserva ausente/inconsistente: rejeição sem reparo observada no código.
+- Compatibilidade simples F9/C2 e regressões E2-B/E2-A: não reexecutadas.
+Não há teste de retenção aprovado nesta etapa nem promessa de correção parcial.
+
+8. OPÇÕES E CRITÉRIOS PARA PRÓXIMA ETAPA
+Opção A: aprovar retenção imutável no namespace atual para TODOS os writers
+que podem liberar/reutilizar, distinguindo ativo pelo COD atual da entidade.
+Definir expressamente reativação pelo mesmo proprietário e owner órfão;
+preservar legado em memória sem backfill e manter leitores sem aliases.
+Opção B: aprovar estado explícito ativo/histórico no schema compartilhado,
+com leitura/validação coordenada de todos os writers; campo sozinho não basta.
+Opção C: autorizar expressamente um experimento V2 com garantia restrita ao
+percurso V2, mantendo o bloqueio comercial global; não equivale à solução C02.
+Nenhuma opção foi escolhida ou implementada automaticamente.
+
+Antes de implementar: aprovar alcance/contrato dos writers V1 e helper comum,
+reativação pelo mesmo owner, inconsistência/órfãos e interpretação histórica.
+Revisar Rules/barreiras separadamente: negação cliente atual não impede Admin
+V1; não presumir que Rules possam corrigir exclusões feitas pelo servidor.
+Depois: testes Node e Emulator demo-* sintéticos de toda a matriz, regressões
+F9/C2/E2-A/E2-B/E1-R2 pertinentes, prova transacional e idempotente e revisão
+de diff. Recuperar reservas já apagadas exige contrato separado; não backfill.
+Restore de backup continua bloqueado. Sem avanço automático para writers/Rules.
+
+9. ENCERRAMENTO
+Único artefato efetivo: docs/catalog/F10_C5_E3_A_RESULTADO.txt (novo).
+Nenhuma instalação, commit, push, deploy, migração, export público, endpoint,
+HML/PROD, secret, reset, restore, stash ou clean. Trabalho anterior preservado.
+Resumo exibido no terminal. PARADA APÓS E3-A BLOQUEADA NA INSPEÇÃO.

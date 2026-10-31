@@ -1,0 +1,276 @@
+STORE&CONNECT — F10/C5-B/01 — CORREÇÃO DELIMITADA DOS WRITERS LEGADOS
+Data: 18/10/2026
+ESTADO FINAL: VALIDADO LOCALMENTE, exclusivamente nos dois caminhos autorizados.
+Sem liberação comercial, exposição de endpoint, deploy ou fechamento geral de F9.
+
+1. CONTEXTO E BASELINE
+
+Branch inicial/final: feat/f7-intelligent-catalog.
+HEAD inicial/final: 30f4f8db2a4a59d21696fde3d673144aded31154.
+Recebidos 24 rastreados modificados e todo o trabalho não rastreado F9/F10.
+Consultados AGENTS.md, CURRENT_WORK.md, contratos de produto/C5 e classificação
+C5-D1, relatório F10_C5_A_01_RESULTADO.txt integral, legacy-boundary.json e o
+diagnóstico original. CURRENT_WORK histórico não substituiu o pedido atual.
+A exceção de escopo foi aplicada somente a updateProduct e adjustProductStockV1.
+
+Antes de editar foram copiadas as versões completas dos dois módulos em .before,
+registrados Git/status e inventariados os arquivos existentes, inclusive ignorados.
+Diretório novo de evidências: build/f10-c5b01. Nada histórico foi sobrescrito.
+Inventário: 56.618 arquivos de trabalho, 56.598 com SHA256, incluindo todas as
+780 fontes rastreadas/não rastreadas não ignoradas. Git interno não é conteúdo
+de trabalho inventariado. Vinte arquivos de perfil Chrome preexistente estavam
+EBUSY; foram registrados por caminho/tamanho/mtime, sem inventar hashes.
+Detalhes e limites da conferência constam na seção 8.
+
+2. FALHA REPRODUZIDA ANTES DA CORREÇÃO
+
+O diagnóstico C5-A permanece intacto: updateProduct e adjustProductStockV1
+aceitavam raiz sem marcadores, apesar de variants/v. Atualizavam saldo raiz
+4 -> 9; updateProduct também gravava COD NEW. A folha permanecia intacta.
+
+Criado teste de regressão com expectativa de failed-precondition sem efeitos.
+Antes do patch foi executado, contra handlers reais .run e Emulator:
+node --test --test-reporter=spec
+ --test-name-pattern="refuses (active variant|orphan combination)"
+ functions/tests/products/productLegacyDescendantsC5B01.emulator.test.js
+Resultado: 0 PASS / 6 FAIL, exit 1, Missing expected rejection.
+Cobriu variante ativa e reserva órfã em updateProduct e estoque com/sem scope.
+Log completo: build/f10-c5b01/before-fix.log.
+As expectativas de recusa não foram enfraquecidas. Os mesmos casos passaram
+após a correção e integram a suíte final.
+
+3. CORREÇÃO EFETIVA
+
+Novo auxiliar interno functions/products/productVariantStructureC5.js:
+hasProductVariantStructure(transaction, productRef).
+Lê variants e variantCombinations do produto da loja já derivada pelo servidor,
+usando transaction.get(collection.limit(1)). Sem filtros por arquivo, campos,
+validade ou versão que pudessem omitir documentos. Qualquer presença é suficiente
+para impedir a mutação: não tenta adivinhar se o descendente é variante válida.
+Sem cache, leitura fora da transação, escrita, entrada de path do cliente ou flag.
+
+Ausência exige QuerySnapshot coerente: empty boolean, size inteiro 0/1,
+docs com comprimento correspondente e concordância entre size/empty.
+Exceção de leitura ou resposta inconclusiva gera unavailable com reason
+variant-structure-read-unavailable. Nunca é convertida em ausência.
+O resultado é do SDK confiável chamado pelo writer, não um DTO JSON público
+ao qual se atribua autenticação ou proveniência.
+
+updateProduct, functions/products/updateProduct.js:
+- autorização/perfil/loja e resolução do receipt precedem o domínio atual;
+- guardas C5 existentes continuam com a mesma precedência e classificação;
+- depois da aprovação C5, a nova verificação usa a MESMA transação/productRef;
+- presença descendente recusa failed-precondition/variant-structure-not-supported;
+- ocorre antes de prepareCodeChange, update e criação de receipt.
+V1 permanece sem introdução de CAS, scope obrigatório ou nova normalização.
+
+adjustProductStockV1, functions/products/productMutationV2.js:
+- callback específico recebe a nova verificação após as guardas C5 existentes;
+- presença lança StockEligibilityBlocked com reason variant-structure-not-supported;
+- essa classe já era excluída do catch de rejeição terminal; não cria receipt;
+- unavailable de leitura também não pertence aos erros terminais existentes;
+- stock(input,snapshot) só é chamado depois da confirmação de ausência.
+O wrapper mutation, updateProductV2, preparador de estoque e classes existentes
+não foram reescritos. Nenhum novo branch de bypass ou resultado persistido.
+
+Cada nova tentativa transacional consulta novamente a estrutura atual.
+No caminho simples sem descendentes há dois reads adicionais; encontrando
+estrutura na primeira coleção, a recusa já é conclusiva e não precisa da segunda.
+O custo é limitado a duas consultas limit(1), sem varredura completa ou índice novo.
+
+4. CONTRATOS PRESERVADOS
+
+Não alterados comandos/allowlists, schemas, hash/canonicalização, namespaces,
+requestId, resultado normal, reservas COD, identidade, baselines e cálculos de
+estoque/lotes. Classificação C5 foi reutilizada antes da prova física adicional.
+Não foram acrescentados marcadores persistidos nem reclassificados documentos.
+
+Replay confirmado é resolvido antes de consultar descendentes: uma intenção
+conhecida retorna seu resultado original mesmo se a estrutura atual mudar,
+sem reexecutar estoque/COD. RequestId com conteúdo divergente continua em conflito.
+Autorização/revogação/vínculo continuam precedendo replay e novas mutações.
+
+Stock mantém a conferência do baseline antes do prepare. Conflito de versão
+e rejeições terminais históricas continuam com seus receipts e replay próprios.
+Recusa nova de estrutura e falha de leitura não selam rejeição, não mudam comando
+e não autorizam novo requestId substituto. Mesmo comando pode ser tentado após
+recuperação de leitura, sujeito a todas as precondições atuais.
+
+Produtos simples legítimos, legados sem discriminator e simple v1 coerente,
+continuam funcionando quando as duas coleções estão vazias. Campos históricos
+inválidos cuja correção V1 era admitida continuam cobertos pelas regressões.
+Descendentes de outra loja com o mesmo productId não bloqueiam a loja atual.
+V1 sem scope continua derivando a loja do perfil atual, como seu contrato exige;
+não foi inventado vínculo de loja adicional no payload V1.
+
+5. TRANSAÇÕES, FALHAS E CONCORRÊNCIA
+
+Reads de estrutura participam da mesma transação que autoriza, lê a raiz,
+prepara/grava COD e estoque e resolve/grava o receipt. Nenhuma escrita de
+produto, reserva ou receipt é preparada por essa guarda.
+
+Testes com Emulator real demonstraram inserção de descendente após leitura da
+raiz e antes da consulta: a operação recusa e não altera a raiz/receipt.
+Inserção concorrente a uma query vazia admite somente a ordem serial válida:
+a operação pode terminar antes da inserção, ou reavaliar e recusar. Depois de
+a inserção confirmar, toda NOVA intenção testada recusa. Não se promete impedir
+que outro writer/Admin crie estrutura inconsistente depois de um commit legítimo.
+
+Instrumentação de teste injeta ABORTED antes do update, após prepare, inicia
+inserção concorrente e permite o retry real do SDK. A nova tentativa consulta
+novamente, encontra a reserva e recusa. Saldo, raiz, receipt e reserva OLD
+(dados/updateTime) permanecem intactos; COD NEW não é criado. Não são hooks
+ou flags disponíveis no código de aplicação.
+
+Falhas de get e snapshots incompletos/contraditórios foram injetados em cada
+coleção. Resultado unavailable, sem persistedRejection, sem escrita parcial;
+recuperar a leitura permitiu o mesmo comando original de produto simples.
+Essa é injeção controlada de falha, não alegação de pane remota real.
+
+6. ARQUIVOS ALTERADOS/CRIADOS
+
+Alterados sobre a base recebida, apenas:
+- functions/products/updateProduct.js: import e guarda antes de COD/update.
+- functions/products/productMutationV2.js: import e guarda somente no callback
+  de adjustProductStockV1. Nenhum novo comportamento em updateProductV2.
+
+Criados:
+- functions/products/productVariantStructureC5.js
+- functions/tests/products/productLegacyDescendantsC5B01.emulator.test.js
+- docs/catalog/F10_C5_B_01_RESULTADO.txt
+
+Artefatos auxiliares novos ficam em build/f10-c5b01. Não foram alterados
+createProduct, C1/C2/C3, Rules, index, FirebaseOptions, Dart, checkout, carrinho,
+pagamento, fiado/offline, dependências, políticas ou gates F9.
+
+7. TESTES E RESULTADOS COMPLETOS
+
+Ambiente existente, sem instalação: Firestore Emulator JAR v1.22.0 e Java do
+Android Studio, iniciados diretamente em loopback, sem CLI, download ou login:
+java -jar <cache>/cloud-firestore-emulator-v1.22.0.jar
+ --host 127.0.0.1 --port 8080 --project_id demo-store-connect-f10-c5b01
+ --single_project_mode true --single_project_mode_error true --rules firestore.rules
+Rules apenas lidas; Admin SDK não certifica permissões de SDK cliente.
+Variáveis apenas do processo: FIRESTORE_EMULATOR_HOST=127.0.0.1:8080,
+GCLOUD_PROJECT=demo-store-connect-f10-c5b01, METADATA_SERVER_DETECTION=none.
+Nenhum Auth/Functions Emulator, endpoint operacional ou acesso HML/PROD.
+O processo próprio foi encerrado ao final; zero listeners em 8080.
+
+VALIDADO LOCALMENTE — 34 novos testes no Emulator:
+productLegacyDescendantsC5B01.emulator.test.js. Três modos: V1 cadastral,
+stock scoped e stock unscoped. Para cada modo: quatro estados de descendentes,
+simples legado/versionado, replay/conflito, falhas de leitura, autorização/loja,
+inserção antes da consulta, corrida com query vazia e retry transacional.
+Caso adicional preserva baseline obsoleto e replay rejected terminal de stock.
+
+Primeira rodada após patch: 34/34 PASS, exit 0, tests-new-first.log.
+Acrescentada conferência de dados/updateTime da reserva OLD no rollback;
+arquivo reexecutado 34/34 PASS, exit 0, 16,863s, tests-new-final.log.
+Não há soma dupla dos mesmos casos entre rodadas.
+
+VALIDADO LOCALMENTE — suíte final Emulator: 315/315, zero falhas/skips/
+cancelados/todo, exit 0, 296,177s. Comando:
+node --test --test-reporter=spec --test-concurrency=1
+ functions/tests/products/productLegacyDescendantsC5B01.emulator.test.js
+ functions/tests/products/productVariantsCompatibilityC5A01.emulator.test.js
+ functions/tests/products/productVariantsC1.emulator.test.js
+ functions/tests/products/productVariantsC2.emulator.test.js
+ functions/tests/products/productVariantsC3.emulator.test.js
+ functions/tests/products/productVariantsReadB2A.emulator.test.js
+ functions/tests/products/productVariantsListB02.emulator.test.js
+ functions/tests/products/updateProductV1EligibilityC5.emulator.test.js
+ functions/tests/products/updateProductEligibilityC5.emulator.test.js
+ functions/tests/products/adjustProductStockEligibilityC5.emulator.test.js
+ functions/tests/products/productMutationV2.emulator.test.js
+ functions/tests/products/updateProductIntegrity.emulator.test.js
+Log integral: build/f10-c5b01/tests-emulator-final.log.
+Inclui os 34 novos e regressões de tipo, CAD/stock, lotes, COD, autorização,
+replay, concorrência/CAS, rollback, metadados SDK, raízes órfãs e leitura F10.
+
+VALIDADO LOCALMENTE — 65/65 casos Node puros, exit 0:
+node --test --test-reporter=spec
+ functions/tests/products/productEligibilityC5.test.js
+ functions/tests/products/productVariantsV1.test.js
+ functions/tests/products/createProductContract.test.js
+ functions/tests/products/updateProductContract.test.js
+ functions/tests/products/productMutationContract.test.js
+Log: tests-pure.log. Os checks internos do runner createProduct não foram
+contados novamente como casos externos do Node. Total distinto final: 380
+(315+65), sem somar reexecuções ou os seis FAIL anteriores ao patch.
+
+Reexecutado o diagnóstico original em cópia com saída NOVA, sem sobrescrever
+build/f10-c5a01/legacy-boundary.json. Resultado exit 0/VALIDADO LOCALMENTE:
+ambos failed-precondition/variant-structure-not-supported; saldo 4 -> 4,
+COD não introduzido e variante intacta. Evidências legacy-boundary-after.json,
+legacy-boundary-after.log e check-legacy-boundary-after.cjs em build/f10-c5b01.
+Esse resultado não é autenticação, receipt ou admissão de transporte.
+
+node --check dos dois writers, auxiliar e teste novo: PASS.
+git diff --check e revisão dos diffs .before: PASS, sem formatação ampla.
+Advertência Java/Netty Unsafe consta do log de inicialização, sem falha funcional.
+Interrupção do próprio processo do Emulator retorna exit 1; testes encerraram 0.
+
+NÃO EXECUTADO: Flutter (nenhum Dart alterado), Rules cliente, transporte HTTP/
+autenticação real, HML/PROD, deploy, carga e homologação comercial. Testes .run
+usam contexto sintético local com banco real do Emulator; não certificam tokens.
+Faults/ABORTED e observação de transações usam wrappers só nos testes; os demais
+reads/writes e corridas usam SDK/Emulator reais, não apenas mocks.
+
+8. PRESERVAÇÃO E LIMITES DA CONFERÊNCIA
+
+Baseline inclui todos os arquivos de trabalho enumeráveis pelo Git, inclusive
+ignorados, exceto artefatos novos desta execução. Vinte arquivos Chrome bloqueados
+têm inventário de metadados, sem prova SHA256: baseline-unreadable.json.
+Nenhuma tentativa de fechar navegador, desbloquear, restaurar ou apagar esses
+arquivos foi feita. Primeira coleta abortou com EBUSY; a coleta com exclusões
+explicitadas terminou ANTES de modificar fontes.
+
+Conferência final ampliada: dos 56.598 hashes iniciais, 56.578 idênticos,
+15 divergentes e cinco ausentes. Duas divergências são os writers autorizados.
+As outras 13 e as cinco ausências estão no perfil ignorado preexistente
+test_emulator/dynamic_sections_e2e/chrome-profile (caches, Safe Browsing,
+Local State, VariationsSeed). A coleta intermediária havia observado sete
+divergências nesse perfil, mostrando sua variação durante a execução.
+Não foram comandos desta execução que escreveram/apagaram nesse perfil;
+nenhum teste Chrome/e2e foi executado. O processo externo responsável não foi
+certificado; não se atribui causa específica sem prova. Vinte metadados dos
+arquivos inicialmente bloqueados permaneceram iguais, sem certificar conteúdo.
+
+A conferência AMPLIADA retornou exit 1: preservação global byte a byte NÃO
+DEMONSTRADA, e não foi rotulada como PASS. Todas essas diferenças constam em
+preservation.json e preservation-final.json, sem esconder caches/ausências.
+
+Fontes do projeto: 780 preexistentes; 778 idênticas e somente os dois writers
+alterados intencionalmente. Zero fontes ausentes. sourcePreservationPass=true
+e nonProfilePreservationPass=true no artefato final. A conferência rápida após
+criar este relatório é exportada em source-preservation-after-report.json.
+F9/F10 preexistentes fora dos dois writers, relatórios/evidências históricos,
+C1/C2/C3, classificadores/contratos/gates, Rules, FirebaseOptions, dependências,
+checkout e todos os arquivos Dart mantêm seus hashes. Os 24 rastreados já
+modificados permanecem como recebidos; os dois writers eram não rastreados.
+
+Recibo SHA256 inicial/final obrigatório:
+lib/services/pdf_receipt_service.dart
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9
+
+Sem reset/restore/stash/clean/commit/push/deploy, instalação ou migração.
+Somente fixtures/operações sintéticas no banco demo local; sem dados HML/PROD.
+
+9. LACUNAS RESTANTES E PARADA
+
+VALIDADO LOCALMENTE: correção da lacuna de descendentes em updateProduct e
+adjustProductStockV1, dentro dos contratos e cenários locais descritos.
+Não é proteção global: updateProductV2 não recebeu esta checagem de descendentes;
+archive/restore e outros writers estão fora da exceção e não foram declarados
+protegidos por associação. O import no módulo compartilhado não muda esse limite.
+Não foi iniciada ampliação para esses caminhos.
+
+Transporte/autenticação/proveniência Flutter, conexão UI e persistência comercial
+de variantes continuam BLOQUEADOS conforme C4. A correção de servidor não admite
+SDK/owner/dependências, nem ativa checkout, fiado ou offline.
+Outro writer/Admin ainda pode criar inconsistência depois de uma ordem serial
+legítima; as duas guardas não são um mecanismo global de proibir toda inserção.
+Escala/custo de consultas adicionais requer avaliação própria antes de rollout.
+
+Entrega encerrada após a exceção F10/C5-B/01. Nenhum F9/B4, F10/D ou outra fase
+foi iniciado. Próximos caminhos exigem escopo/autorização próprios.

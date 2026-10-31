@@ -1,0 +1,217 @@
+STORE&CONNECT — F10-C5-E4-C
+BARREIRA DE ELEGIBILIDADE NO updateProduct V1
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+DECISÃO: VALIDADO LOCALMENTE, no escopo das matrizes executadas.
+
+1. INSPEÇÃO E COMPATIBILIDADE CONTRATUAL
+
+Conferidos AGENTS.md, CURRENT_WORK.md histórico, branch/status/HEAD, E4-A,
+E4-B, E3-B-R2, productEligibilityC5.js, updateProduct.js integral e contratos/
+testes V1 de produto/COD. Working tree já continha trabalho local extenso;
+nenhuma alteração anterior foi descartada ou atribuída a esta etapa.
+
+evaluateProductEligibility já contrata legacyV1/cadastral. Nessa combinação,
+a classificação estrutural e a presença de perfil/segunda autoridade monetária
+são avaliadas antes do retorno cadastral; não exige preço válido de venda,
+estoque vendável nem produto ativo. Não foi criado protocolo ou alterado
+classificador para obter compatibilidade. Não é autorização de venda/estoque
+variante: apenas domínio cadastral simples para este writer legado completo.
+
+V1 normaliza o comando pelo schema comercial fechado de criação, calcula hash
+canônico de {productId, product, codSupplied} e deriva loja do perfil autorizado.
+Auth/perfil/papel/revogação, loja existente e receipt são verificados dentro
+da transação antes de ler estado mutável de produto. Receipt conhecido compatível
+retorna replay; conteúdo diferente mantém already-exists/request-id-reused.
+
+Distinção fundamental: V1 persiste SOMENTE receipts de sucesso. Rejeições V1
+não têm receipt terminal/replay de rejeição persistida. Exigir a criação desse
+tipo de receipt seria alterar o contrato histórico; não foi feito. Uma tentativa
+rejeitada com mesmo comando é reavaliada depois que o estado muda. O teste
+dirigido demonstra isso, inclusive após mudança posterior de tipo/perfil.
+Replays rejeitados scoped de V2 continuam cobertos pela regressão E3-B intacta;
+não foram introduzidos no V1 por analogia.
+
+2. INTEGRAÇÃO EXATA E ARQUIVOS
+
+Único arquivo funcional alterado nesta E4-C:
+  functions/products/updateProduct.js
+
+Pontos da integração:
+- linha 8: import do avaliador C5 já existente;
+- linhas 24–29: antes do normalizador, recusa presença própria de variantId
+  no envelope ou product, inclusive null/undefined/não enumerável. O contrato
+  já recusa entradas enumeráveis fora do schema; a guarda evita perda silenciosa
+  de identidade no normalizador baseado em chaves enumeráveis;
+- linhas 78–100: depois de auth/receipt/replay e produto existente, antes de
+  normalizeCod/prepareCodeChange, leitura transacional de
+  products/{productId}/commercialProfiles/current e avaliação legacyV1/cadastral.
+
+Projeção fiel por presença própria dos dez campos atuais C5-D/D1:
+  productKind, variantSchemaVersion, productId, variantId, attributes,
+  attributeDefinitions, priceCents, costCents, commercial, commercialProfiles.
+Presença null/vazia/SDK/NaN não é apagada ou convertida para ausência.
+updateTime é envelope exato seconds string/nanoseconds, sem truncar para ms;
+isso NÃO é CAS novo. Loja/projeto vêm do contexto servidor, não de payload.
+Perfil presente é passado como snapshot real completo; inválido continua
+bloqueado, não é transformado em perfil ausente.
+
+Não se projeta o documento inteiro via JSON: price, quantidade, fiscal e
+metadados SDK legados não usados no domínio cadastral não precisam passar
+pelo copiador JSON-like C5-B para permitir sua correção/preservação V1.
+O snapshot real continua sendo a fonte de COD e de dados operacionais do V1.
+
+Bloqueio de domínio: HttpsError failed-precondition, mensagem genérica e
+details.reason do domínio; TypeError/RangeError da projeção vira
+invalid-eligibility-snapshot. Não cria receipt, flag persistedRejection,
+auditoria, reserva ou efeito parcial. Erros não relacionados não são ocultados.
+Formato histórico de exceção V1 preservado; nenhuma consulta de resultado nova.
+
+Ordem: perfil -> loja -> receipt/replay -> produto -> perfil comercial -> C5
+-> validações COD/leituras prepareCodeChange -> closure/escritas produto/receipt.
+Todas as leituras transacionais continuam anteriores à primeira escrita.
+O update allowlisted não altera os marcadores nem escreve perfil comercial;
+portanto o comando não cria uma nova representação de domínio no resultado.
+Não muda normalização/hash/requestId/namespace, resposta de sucesso, reserva,
+auth, montagem de lotes ou fiscal.updatedAt do caminho histórico compatível.
+
+Dois testes novos:
+  functions/tests/products/updateProductV1EligibilityC5.test.js
+  functions/tests/products/updateProductV1EligibilityC5.emulator.test.js
+Documento novo: este relatório.
+Nenhum teste anterior ou fixture preexistente foi alterado.
+
+Manifesto SHA256 em memória de 655 arquivos iniciais, com git core.quotepath=false:
+somente updateProduct.js divergente antes do relatório; demais 654 idênticos.
+Inclui Rules, index, helper COD, V2, confirmSaleV2, contratos, Flutter/ledger,
+outros writers e C1/C2/C3. Dois arquivos novos de teste e relatório são o escopo
+aditivo. Logs ignorados do CLI não integram esse inventário de fontes.
+
+3. NODE — EXECUÇÃO NOVA
+
+node --check em updateProduct.js e no teste dirigido Emulator: aprovado.
+node --test --test-concurrency=1 --test-reporter=spec, arquivos sequenciais:
+  updateProductV1EligibilityC5.test.js
+  updateProductContract.test.js
+  createProductContract.test.js
+  productEligibilityC5.test.js
+  productCommercialPersistenceC5.test.js
+  productCommercialC5.test.js
+Todos em functions/tests/products; comando real em uma linha.
+Resultado: 72/72 entradas do runner aprovadas, zero falhas/skips/cancelamentos,
+exit 0; duração 706.985 ms. O script createProductContract publica 82 verificações
+internas e conta como uma entrada do runner; não somar 82 novamente ao total.
+Inclui prova pura de legacyV1/cadastral, rejeição do schema V1 a campos F10,
+regressões de normalização/COD e domínio C5-D/D1/monetário persistente.
+
+4. EMULATOR — EXECUÇÕES NOVAS, ESTRITAMENTE SEQUENCIAIS
+
+Projeto demo-f10-e4c, FIRESTORE_EMULATOR_HOST loopback exigido nos testes,
+Admin com projeto demo, fixtures sintéticas por UUID e handlers .run com auth
+injetada. Não é prova de token Auth real/HTTP nem teste de Firestore Rules.
+JDK21 existente build/f9-tools-jdk21/jdk-21.0.12.1+1; JAVA_HOME/PATH somente
+no processo. Node 22.23.2. Sem instalação nem ambiente remoto.
+CLI executado com aprovação de sandbox necessária à configuração local,
+como já diagnosticado na sessão. Nenhuma execução Emulator falhou.
+
+Formato real de cada comando (uma linha por arquivo):
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e4c
+ --only firestore "node --test --test-concurrency=1 --test-reporter=spec <arquivo>"
+
+Cada arquivo abaixo foi iniciado SOMENTE após inspecionar sucesso/exit e
+encerramento do Emulator anterior; nenhuma regressão foi disparada antecipada.
+Promise.all/Promise.allSettled e corridas internas existentes foram mantidas.
+
+1) updateProductV1EligibilityC5.emulator.test.js: 36/36, zero falhas/skips/
+   cancelamentos, exit 0, duração runner 19239.5644 ms.
+2) updateProductIntegrity.emulator.test.js: 5/5, zero falhas/skips/cancelamentos,
+   exit 0, duração runner 3651.8199 ms.
+3) productCodeRetentionE3B.emulator.test.js: 7/7, zero falhas/skips/cancelamentos,
+   exit 0, duração runner 14335.7247 ms.
+4) productCodeAtomic.emulator.test.js: 37/37 cenários internos, 15 pares de
+   corrida; runner 1/1 entrada de arquivo, zero falhas/skips/cancelamentos,
+   exit 0, duração runner 97120.9907 ms.
+
+Todos sob functions/tests/products. Quatro arquivos aprovados, 49 entradas
+somadas dos runners; ao substituir a entrada única atomic pelos seus 37
+cenários são 85 testes/cenários. Não somar essas duas contagens nem loops
+internos/pares de corrida novamente. Nenhum resultado histórico contabilizado.
+
+Logs operacionais padrão do CLI em firestore-debug.log/firebase-debug.log são
+ignorados e podem ser sobrescritos pelo próximo comando; não foi criado pacote
+de logs por gate. Log da última execução atomic contém 31 ocorrências exatas
+de WARNING: Operation failed: Transaction lock timeout. São avisos recuperados,
+não contagem comprovada de transações/retries; todos os testes passaram.
+Callbacks podem ser repetidos pelo SDK. Sucesso não certifica desempenho/carga e
+não elimina a pendência histórica de instrumentação traceCategoryReads.
+Nenhuma expectativa ou concorrência foi reduzida para obter aprovação.
+
+Não reexecutados E2-A/E2-B: nenhuma dependência compartilhada foi alterada.
+A regressão E3-B usa V2/C2 reais para verificar coexistência diretamente
+afetada pelo novo gate V1; não representa reabertura dessas implementações.
+Sem suítes globais, Flutter, catálogo, Rules, checkout ou sync.
+
+5. COBERTURA E COMPORTAMENTO CONFIRMADO
+
+- Edição simples sem marcadores e simple explícito: sucesso; hash e chave
+  de receipt conferidos contra o normalizador original; comando intacto.
+- Preço histórico NaN/Infinity/-Infinity/string/SDK corrigido por payload V1
+  válido; minimumStock/saldo legados inválidos podem ser substituídos conforme
+  contrato V1 completo. Fiscal null omitido continua null. Sem gate sale.
+- Pai explícito, pai sem discriminadores mas com attributeDefinitions,
+  discriminadores parciais, variante no topo, vínculo/productId/attributes,
+  mistura de identidade, null, SDK e NaN em marcador: bloqueados.
+- Quatro autoridades F10 de topo e commercialProfiles/current presente,
+  vazio ou com dados SDK/NaN: bloqueados sem serem tratados como ausência.
+- Para 22 casos de domínio, snapshots completos de products/productCodes/
+  auditLogs, perfil comercial, loja/usuário e updateTimes são iguais após a
+  rejeição; inclui saldo/lotes/COD e ausência de reserva NEW/receipt novo.
+- Metadados não relacionados GeoPoint/Reference/bytes/Timestamp nanos/NaN e
+  fiscal interno preservados, sem descartar chaves do snapshot real.
+- Replay confirmado após tipo/perfil/COD ficarem incompatíveis devolve replay
+  antes do domínio mutável e não regrava produto/reserva/receipt. Mesmo ID com
+  outro conteúdo mantém request-id-reused sem efeitos.
+- Rejeição C5 V1 não sela intenção: corrigir domínio permite executar o MESMO
+  comando/ID. Rejeição COD antiga não ganha receipt e, após mudança de tipo/
+  perfil, é reavaliada pelo novo domínio sem efeitos. Não alegar replay de
+  rejeição terminal V1, inexistente no contrato.
+- variantId bruto no envelope ou produto, null/undefined/string, enumerável
+  e não enumerável: invalid-argument sem mutação ou receipt.
+- Auth ausente, role inválida, loja inválida/outra loja e revogação bloqueiam;
+  replay não contorna autorização. Cinco papéis operacionais mantêm acesso
+  simples, conforme matriz histórica; storeId não é autoridade cliente.
+- Mesmo comando concorrente: um novo efeito e um replay. Comandos distintos
+  podem ambos confirmar, com último saldo 8 ou 9: AUSÊNCIA DE CAS preservada.
+  Payload antigo após baixa posterior ainda pode sobrescrever quantidade.
+  Esse risco foi caracterizado, NÃO corrigido ou declarado resolvido.
+- Troca/remoção COD preserva updateTime de reservas anteriores; reativação
+  do histórico pelo mesmo owner rejeita duplicate-product-cod sem novo efeito.
+- E3-B verifica sequência V2->V1->V2, legado sem ownerType, namespaces por
+  loja, reservas ausentes/inconsistentes/estrangeiras/órfãs, CAS V2 e C2 real.
+- Atomic verifica criação/edição/COD, concorrência, archive/restore de produto,
+  roles, snapshots/receipts e política fiscal/lotes histórica, sem novos patches.
+
+6. LIMITES, VERIFICAÇÃO E PARADA
+
+git diff --check aprovado (avisos LF/CRLF locais), revisão dirigida dos
+arquivos novos e do trecho V1, branch/HEAD/status conferidos. Diff V1 é
+untracked contra HEAD; não confundir ausência no git diff comum com falta de
+alteração: o manifesto inicial detecta somente esse arquivo preexistente.
+Não há CAS artificial nem proteção global contra editor antigo; dados apagados
+antes das guardas não recuperam proveniência pelo snapshot sozinho.
+Projeção deve acompanhar futuras dependências do classificador; hoje contém
+todos os marcadores/autoridades cadastrais C5. Não faz migração/reparo de dados.
+
+Admin precisa de guards próprios, portanto E4-B não substituía este gate.
+Outros writers legados, Rules de estoque/vendas, checkout, fiado, offline e
+proteção de histórico continuam com seus riscos E4-A e etapas próprias.
+Nenhuma nova segurança comercial global, remote rollout ou ativação F10 é
+autorizada por estes testes. F10 completo antes da primeira loja; F10-D/V3
+pendente. Restore backup bloqueado e C4 adiado pela alternativa D.
+
+DECISÃO FINAL: VALIDADO LOCALMENTE.
+Sem HML/PROD, deploy, commit, push, instalação, migração, backfill, recuperação
+de reservas, reset, restore, stash ou clean. Trabalho anterior preservado.
+Resumo exibido no terminal. PARADA APÓS F10-C5-E4-C.
+Não avançar automaticamente para syncOfflineSale, Rules ou checkout.

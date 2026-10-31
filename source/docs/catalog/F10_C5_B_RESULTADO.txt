@@ -1,0 +1,91 @@
+STORE&CONNECT — F10-C5-B
+SCHEMA DE PERSISTÊNCIA COMERCIAL E COMPATIBILIDADE LEGADA
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+Resultado: proposta documental e projeção local read-only validadas.
+Persistência real, migração e ativação permanecem bloqueadas.
+
+1. BASE INVESTIGADA
+Lidos C5-A resultado/código, decisões C01–C09, instruções/contexto ativo,
+DTOs reais F10-B, contratos F9 createProduct/productMutation, projeção e
+normalizadores C1/C2, validação/update C3 e snapshots B2-A. Inspeção dirigida,
+sem auditoria global. Nenhum código anterior alterado.
+
+2. SCHEMA PROPOSTO
+Detalhes: docs/catalog/F10_C5_B_CONTRATO_PERSISTENCIA.md.
+Documentos separados commercialProfiles/current abaixo de cada produto e
+variante; envelope schemaVersion=1, identity e configuration.
+Não inserir novos campos no topo das entidades: leitores estritos B/C1
+rejeitariam a extensão. Não mudar variantSchemaVersion ou normalizadores.
+Preço/custo em centavos seguros; políticas de herança/override C5-A;
+remoção explícita somente de imagem; barcode e mínimo próprios da variante;
+fiscal limitado aos dez campos comprovados, sem regra tributária nova.
+Ausente, null, inherit, override e remove distintos. Null não vira DELETE.
+Reason de exceção é somente declaração, sem autoridade/auditoria persistida.
+
+3. ADAPTADOR IMPLEMENTADO
+functions/contracts/productCommercialPersistenceC5.js:
+projectCommercialRead recebe contexto e dois snapshots DTO sintéticos.
+Sem SDK, filesystem, rede, reads Firestore, writer ou serialização de escrita.
+Status locais legacyObservation/commercialV1/blocked/unavailable, separados
+de B2-A/B1. Contexto declarado não comprova autorização ou caminho real.
+Snapshot integral copiado/congelado, campos desconhecidos preservados,
+updateTimes independentes e timestamps exatos sem coerção Date/ISO.
+Dados JSON-like inválidos e envelopes incompletos rejeitados explicitamente.
+Versão comercial desconhecida/campos inválidos bloqueiam interpretação,
+mantendo evidência, sem fallback ao legado. Entidade órfã não é legitimada.
+
+4. COMPATIBILIDADE E BLOQUEADORES
+Documento comercial ausente: observa legado exatamente, inclusive null,
+vazio, dinheiro inválido e campos fiscais desconhecidos, sem conversão/default.
+Entidade com price/costPrice coexistindo com documento comercial novo:
+interpretação bloqueada mesmo com valores iguais/null. Sem dupla autoridade,
+precedência silenciosa, exclusão ou migração do legado.
+Adotar centavos em simples F9 exige contrato explícito de transição e
+consumidores novos; não basta criar a subcoleção e preservar leitor antigo.
+Outros campos comerciais de topo são observação, nunca fallback para campos
+novos omitidos/null. Precisam de compatibilidade de consumidores antes de uso.
+Revisão do documento separado não altera updateTime do produto: CAS futuro
+precisa revisar ambos e existência, inclusive pai herdado, transacionalmente.
+Nenhum baseline/receipt/status antigo foi substituído. Timestamps nanos
+completos de observação não são aprovados como baseline F9 automaticamente.
+Conversão por C5-A continua opt-in, estrita, sem uso automático nesta etapa.
+Descontos, barcode global/índices, múltiplas imagens/Storage, exceções fiscais,
+permissões/auditoria, conversão monetária, backup e rollout de consumidores
+continuam exigindo contrato/aprovação antes de escrita. Restore bloqueado.
+
+5. TESTES
+Criado functions/tests/products/productCommercialPersistenceC5.test.js:
+18 testes novos com documentos inteiramente sintéticos em memória.
+Legado simples e C1/C2, ausência/null/valor, unidade e dinheiro inválido,
+coexistência monetária, herança/override, imagens, barcode/ambiguidade,
+mínimo individual, fiscal/custo, identidade, schema desconhecido, snapshot
+órfão/incompleto, campos desconhecidos, nanos, imutabilidade e separação
+de estoque. Objetos SDK-like, getters, ciclos e arrays esparsos rejeitados.
+
+Comando executado em Node v22.23.2:
+node --test --test-reporter=spec
+  functions/tests/products/productCommercialPersistenceC5.test.js
+  functions/tests/products/productCommercialC5.test.js
+  functions/tests/products/productVariantsV1.test.js
+Resultado: 52/52 aprovados, zero falhas, cancelamentos ou skips.
+18 novos + 16 regressões C5-A + 18 regressões F10-B.
+Checks de sintaxe dos dois novos JS, git diff --check padrão e revisão
+dos novos arquivos. Sem Emulator necessário; nenhuma gravação de fixture
+em Firestore. Sem Flutter ou regressão operacional não afetada.
+Testes provam somente contrato/projeção local, não segurança ou commit real.
+
+6. ARQUIVOS CRIADOS E PRESERVAÇÃO
+- functions/contracts/productCommercialPersistenceC5.js
+- functions/tests/products/productCommercialPersistenceC5.test.js
+- docs/catalog/F10_C5_B_CONTRATO_PERSISTENCIA.md
+- docs/catalog/F10_C5_B_RESULTADO.txt
+Nenhum arquivo preexistente editado. Manifesto SHA256 inicial dos 627
+arquivos não ignorados em TEMP/f10-c5-b-manifest.json; conferência final
+sem divergências. Helper de preservação apenas no TEMP.
+F9/A5, F10-B/C1/C2/C3/C4/C5-A, Rules/index, writers e pubspec preservados.
+Sem HML/PROD, Firebase remoto, Storage, checkout, fiado ou offline.
+Sem commit/push/deploy/instalação/migração/reset/restore/stash/clean.
+Transporte C4 não retomado, alternativa D mantida. Restore bloqueado.
+Parada após C5-B: nenhuma etapa de escrita iniciada automaticamente.

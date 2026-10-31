@@ -1,0 +1,179 @@
+STORE&CONNECT — F10-C5-E3-B — RETENÇÃO HISTÓRICA PERMANENTE DE COD
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+DECISÃO FINAL: BLOQUEADO — PATCH LOCAL PRESERVADO, VALIDAÇÃO INCOMPLETA.
+
+1. ESCOPO E ESTADO INICIAL
+Lidos AGENTS.md, CURRENT_WORK.md (registro histórico), E3-A, decisões F10,
+contrato de update F9, implementação local V2 e resultado FINAL E2-B.
+Inspecionados helper, consumidores diretos, adaptador C2, validações C3/B2A,
+busca atual e testes pertinentes. Sem auditoria funcional global.
+Branch e HEAD conferidos antes da alteração. Working tree continha extenso
+trabalho local anterior, coerente com E3-A e expressamente preservado.
+Manifesto SHA256 anterior em TEMP/f10-e3-b-baseline.json; conferência final
+identificou somente os quatro arquivos anteriores alterados abaixo.
+Nenhuma alteração nesta execução em index.js, Rules, Flutter, criação,
+archive/restore, writers V1/V2, contratos congelados ou serviços C1/C2/C3.
+
+2. ARQUIVOS EFETIVAMENTE ALTERADOS NESTA ETAPA
+Anteriores, editados:
+- functions/products/productCodeReservation.js
+- functions/tests/products/productCodeAtomic.emulator.test.js
+- functions/tests/products/productMutationV2.emulator.test.js
+- functions/tests/products/updateProductEligibilityC5.emulator.test.js
+Novos:
+- functions/tests/products/productCodeRetentionE3B.emulator.test.js
+- docs/catalog/F10_C5_E3_B_RESULTADO.txt
+Log local de execução: build/f10-e3-b-emulator.log (fora do código-fonte).
+Não atribuir os demais diffs contra HEAD a esta etapa: já existiam.
+
+3. MUDANÇA EXATA E COORDENAÇÃO DOS WRITERS
+prepareCodeChange:
+- removida a chamada transaction.delete(oldRef) na closure de escrita;
+- reserva nova já existente e do mesmo produto agora também rejeita com o
+  erro existente duplicate-product-cod quando oldCod != newCod;
+- mantidos normalização trim/uppercase, limite 40, SHA256 UTF-8, ownership,
+  interpretação em memória do legado sem ownerType, scans e validações;
+- mantida a criação transacional de reserva nova somente quando ausente;
+- reserva atual ausente/inconsistente/estrangeira continua falhando fechado,
+  sem reconstrução, adoção ou reparação automática.
+Somente essas duas mudanças comportamentais e comentários no helper.
+
+Integração coordenada ocorre no ponto compartilhado já chamado pelos writers:
+updateProduct.js (V1, payload completo, inclusive remoção por vazio) e
+productMutationV2.js/cadastral (V2, set/remove e CAS exato). Nenhum patch
+nos writers foi necessário: ambos executam a mesma closure após suas leituras.
+createProduct.js também usa o helper: reserva ocupada nunca pode ser adotada,
+inclusive em criação/importação pelo fluxo existente. Archive/restore chamam
+o helper com COD inalterado; não liberam reservas. Restore de backup não usado.
+
+4. POLÍTICA IMPLEMENTADA NO PATCH CANDIDATO
+Namespace permanece stores/{storeId}/productCodes/{sha256(COD normalizado)}.
+Troca/remoção conservam integralmente a reserva antiga. Arquivamento não libera.
+COD ativo deriva do COD atual da entidade com reserva válida correspondente;
+índice retido, isoladamente, não torna um COD ativo nem alias.
+Histórico é inferido pela divergência com o COD atual, sem status/flag persistido.
+Proprietário original NÃO pode reativar COD histórico em V1 nem V2.
+Manter COD atual inalterado continua permitido com reserva válida, inclusive
+legada sem ownerType. Outro proprietário também não pode reutilizar o histórico.
+Reservas órfãs permanecem ocupadas; não são adotadas nem declaradas históricas
+legítimas apenas por existirem. Reservas excluídas anteriormente não reconstruídas.
+Nenhuma mudança de identidade, schema, namespace, migração ou backfill.
+
+C2/prepareCodeCreation já rejeita qualquer reserva existente, inclusive legado,
+mesmo owner e órfã: não precisou mudar. C3 e leitura B2A validam a reserva do
+COD atual recebido da entidade; não resolvem histórico como ativo. Busca em
+product_cod_service.dart usa nome/COD atual e consulta products.where(cod),
+não productCodes. Scanner/UI não alterados. Sem certificação de scanner futuro.
+
+5. RECEIPTS, REPLAY E BARREIRAS
+Não alterados requestId, normalização/hash congelados, scope/autorização,
+namespaces de receipts, outcomes confirmados/rejeitados ou ordem de replay.
+Replays conhecidos continuam antes da revalidação do produto/reserva/CAS,
+depois de auth. Replay confirmado não deve reativar o histórico.
+Nova tentativa de reativação recebe o erro de duplicidade já existente.
+V2 scoped mantém seu protocolo terminal de rejeição; V1 e V2 sem scope mantêm
+o tratamento anterior. Não introduzido novo código/razão de erro ou operação.
+CAS, updateTime, estoque, perfis, históricos e atomicidade permanecem nos
+chamadores originais. E1-R2/E2-A/E2-B não foram modificadas.
+Estas são propriedades do patch/inspeção; a regressão completa NÃO foi aprovada.
+
+6. AJUSTES NOS TESTES ANTIGOS
+Alteradas somente expectativas diretamente contraditas pela Opção A:
+- troca/remoção e legado passam a exigir retenção e rejeição de reutilização;
+- replay de criação exige reserva anterior ainda existente;
+- duas mudanças V1 concorrentes conservam três reservas, não apenas a atual;
+- invariante permite reservas históricas, exige owner existente e continua
+  validando unicidade e correspondência de toda reserva ativa;
+- teste V2 com categorias conserva a reserva KEEP;
+- caracterização E2-B da liberação foi explicitamente identificada como
+  superada pela E3-B; preservados estoque, barreira e protocolo do cenário.
+Relatórios históricos E2-B/E3-A e contratos anteriores não foram reescritos.
+
+7. NODE — APROVADO
+Node 22.23.2, node --test --test-reporter=spec, oito arquivos:
+updateProductEligibilityC5.test.js, productEligibilityC5.test.js,
+productCommercialPersistenceC5.test.js, productCommercialC5.test.js,
+productMutationContract.test.js, updateProductContract.test.js,
+createProductContract.test.js e productVariantsV1.test.js.
+Resultado: 102/102 entradas do runner aprovadas; zero falhas/skips/cancelamentos,
+exit 0. createProductContract é contabilizado pelo runner como uma entrada de
+arquivo e publicou suas 82 verificações internas aprovadas; não somar duas vezes.
+node --check aprovado no helper e nos quatro arquivos de testes editados/novos.
+git diff --check aprovado, com avisos locais LF/CRLF em trabalho preexistente.
+
+8. FIRESTORE EMULATOR — FALHOU / INTERROMPIDO, NÃO VALIDADO
+Comando iniciado (uma linha real):
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e3-b
+ --only firestore "node --test --test-reporter=spec
+ functions/tests/products/productCodeRetentionE3B.emulator.test.js
+ functions/tests/products/productCodeAtomic.emulator.test.js
+ functions/tests/products/createProduct.emulator.test.js
+ functions/tests/products/updateProductIntegrity.emulator.test.js
+ functions/tests/products/productMutationV2.emulator.test.js
+ functions/tests/products/productEditState.emulator.test.js
+ functions/tests/products/updateProductEligibilityC5.emulator.test.js
+ functions/tests/products/adjustProductStockEligibilityC5.emulator.test.js
+ functions/tests/products/productVariantsC1.emulator.test.js
+ functions/tests/products/productVariantsC2.emulator.test.js
+ functions/tests/products/productVariantsC3.emulator.test.js
+ functions/tests/products/productVariantsReadB2A.emulator.test.js"
+JDK21 existente build/f9-tools-jdk21/jdk-21.0.12.1+1, JAVA_HOME/PATH só no
+processo. Dependências/CLI/JAR existentes, sem instalação. Projeto demo-* e
+loopback exigidos nos testes; fixtures sintéticas, sem HML/PROD ou Auth real.
+Primeira tentativa bloqueada por EPERM na configuração do CLI, antes de iniciar
+testes. Repetida com permissão ampliada de sandbox; Emulator iniciou normalmente.
+
+Falhas observadas, NÃO corrigidas nem ocultadas:
+1) createProduct.emulator.test.js, tree valid: child root, linha 1756:
+   esperado paths c/r uma vez cada, recebido c/c/c/r/r/r.
+   traceCategoryReads (linhas 1701–1718) acumula reads em array externo entre
+   tentativas de runTransaction. Divergência é compatível com retries da
+   transação sob carga; essa é hipótese apoiada pela instrumentação, não uma
+   regressão descartada como inofensiva. Persistência/asserts anteriores desse
+   cenário passaram. Arquivo anterior não alterado para relaxar expectativa.
+   Resumo do arquivo: 63 verificações aprovadas, uma falha.
+2) productCodeAtomic.emulator.test.js, create COD atomically reserves hash and
+   normalizes unrestricted characters: erro gRPC 10 ABORTED, Transaction lock
+   timeout. O ambiente apresentou contenção transacional na execução conjunta.
+   Não há evidência suficiente para declarar o cenário aprovado.
+
+Conforme critério explícito de Rodrigo, após falhas obrigatórias não houve
+correção/reexecução nem avanço funcional. Execução interrompida com Ctrl+C,
+exit 1; não existe resumo final íntegro do runner.
+Resultados publicados antes da interrupção: 48 testes spec aprovados de E2-A
+e 69 linhas PASS dos runners internos, além das duas falhas acima. Contagens
+parciais, não equivalem a 117 testes completos da matriz e não aprovam E3-B.
+Consulta final de processos/portas, com permissão de sandbox, não encontrou
+listeners 8080/4400 nem processos identificados do Emulator/testes desta etapa.
+
+9. MATRIZ OBRIGATÓRIA E LIMITAÇÃO DA EVIDÊNCIA
+Novo teste E3-B contém sete cenários:
+- A/B/C/D/E/F/G/M: criação F9, CAM001->CAM002, percurso V2->V1->V2,
+  remoção, rejeição por outro owner e pelo mesmo em ambos os writers, lojas
+  distintas, queries por COD atual sem alias e reservas/versionamento intactos;
+- H: legado sem ownerType, manutenção inalterada, remoção e arquivamento;
+- I: replay confirmado/rejeitado após mudança e corrupção sintética posterior;
+- J: dois comandos V2 com mesmo CAS, um vencedor, sem reserva perdedora;
+- K: ausente/inconsistente/estrangeira em V1/V2 e reserva órfã/mesmo owner;
+- L: criação REAL C2 de variante/produto bloqueada por histórico F9.
+Precommit, auth/scope, receipts e demais cenários N/O estão nos arquivos de
+regressão incluídos; expectativas de falha precommit não foram alteradas.
+IMPORTANTE: presença dos testes NÃO é aprovação. O runner não publicou os
+resultados completos do novo arquivo nem das regressões C2/C3/B2A/V1/V2/E2-B
+antes da interrupção. Toda a matriz A–O permanece sem validação integral.
+Há aprovações parciais publicadas (inclusive legado com retenção e 48 E2-A),
+mas não sustentam declaração VALIDADO LOCALMENTE ou compatibilidade completa.
+
+10. ENCERRAMENTO E BLOQUEADORES REMANESCENTES
+Patch mínimo candidato preservado; retenção/rejeição compartilhada implementada,
+mas F10-C5-E3-B está BLOQUEADO por testes obrigatórios com falha e execução
+incompleta. A próxima decisão é sobre retomada da validação e diagnóstico
+da instrumentação/retries/contenção; não executar automaticamente nesta etapa.
+Sem correção de criação/taxonomia, outro writer, Rule ou vulnerabilidade alheia.
+Reservas anteriormente apagadas não recuperadas. Custo/contenção dos scans e
+segurança comercial global não certificados. Restore de backup continua bloqueado;
+transporte C4 não retomado. Nenhum deploy, commit, push, migração, instalação,
+reset, restore, stash, clean, secret real ou alteração de produção.
+Resultado e resumo exibidos no terminal. PARADA APÓS F10-C5-E3-B BLOQUEADO.

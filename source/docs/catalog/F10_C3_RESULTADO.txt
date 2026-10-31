@@ -1,0 +1,200 @@
+STORE&CONNECT — F10-C3 — ESTOQUE, LOTES E ARQUIVAMENTO LOCAL DE VARIANTES
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+
+1. ESCOPO E FONTES
+Lidos AGENTS.md, CURRENT_WORK.md (checkpoint histórico), contratos F10,
+decisões C01–C09 e resultados C1/C2, serviços locais C1/C2, DTO F10-B,
+productMutationContract/productMutationV2, archiveProduct e documentação
+F9_A5_V2_IMPLEMENTACAO_LOCAL. Auditoria dirigida, sem auditoria global.
+Nenhuma etapa anterior foi reconstruída. Nenhuma integração comercial ativada.
+
+2. ARQUIVOS
+Criados:
+- functions/products/productVariantStockC3.js
+- functions/products/productVariantsC3.js
+- functions/tests/products/productVariantsC3.emulator.test.js
+- docs/catalog/F10_C3_CONTRATO_LOCAL.md
+- docs/catalog/F10_C3_RESULTADO.txt
+Modificado:
+- functions/products/productVariantsC1.js: somente exportação de helpers
+  internos locais de guarda/autorização/IDs/scope/canonicalização/validação/hash.
+  Nenhuma lógica, assinatura de criação, comando, receipt ou leitura C1/C2 mudou.
+Writers F9 V1/V2, Rules, index, DTOs, relatórios anteriores e Dart intactos.
+
+3. CONTRATO E OPERAÇÕES
+Contrato completo: docs/catalog/F10_C3_CONTRATO_LOCAL.md.
+Entradas locais adjustVariantStockC3 e archiveVariantC3, recebendo db/request.
+Envelope schemaVersion=1 com requestId, scope obrigatório projectId/uid/storeId,
+productId/variantId, expectedProductUpdateTime, expectedVariantUpdateTime e
+reason não vazio. Ajuste exige stockChange; arquivamento proíbe stockChange.
+IDs e scope seguem C1. Baselines usam expectedTime oficial F9, exatos até
+a precisão do Firestore, sem converter em milissegundos ou avançar token.
+Campos extras, paths arbitrários, patches cadastrais, transforms e estoque
+no arquivamento são rejeitados. Motivo é normalizado por trim conforme F9.
+
+O validador oficial validateAdjustProductStock F9 é reutilizado diretamente.
+Tipos implementados conforme F9 existente:
+- setManualQuantity: estoque manual absoluto, inteiro seguro não negativo.
+- convertToLots: lotes explícitos positivos, validadeMs válida; saldo é soma.
+- editLots: add/update/remove por índice do baseline original, sem índice
+  duplicado/inexistente; zero permitido em lote existente, ordem preservada.
+- convertToManual: quantidade explícita e acknowledgement=true, removendo
+  lotes somente nessa conversão confirmada.
+Remover todos os lotes com editLots rejeita: exige conversão explícita.
+Não há delta implícito, venda, consumo FIFO, transferência, custo, alocação,
+devolução, redistribuição automática ou saldo negativo implementados.
+
+A função stock do writer F9 não é exportada. Para preservá-lo integralmente,
+foi criado adaptador estático local da sua preparação, sem extrair código
+dinamicamente em runtime. Teste diferencial executa os quatro tipos contra
+adjustProductStockV1 real no Emulator e compara quantidade/lotes resultantes.
+Mudança futura em stock F9 exige manter a paridade desse adaptador.
+
+4. INTEGRIDADE E PRESERVAÇÃO
+Pai deve ser variantParent ativo; variante deve ter versão/vínculo e estado
+válidos. Combinação completa/canônica deve ter reserva C1 íntegra. COD presente
+no pai/filha deve estar canônico e ter reserva com ownership F9 correspondente.
+Reserva legada product é interpretada em memória; nada é migrado/regravado.
+Reserva/combinação ausente, malformada ou divergente bloqueia, sem reparo.
+
+Quantidade atual inteira segura não negativa; lotes ausentes são manual,
+null é inválido; lotes presentes exigem quantidades válidas e Timestamp SDK.
+Lista não vazia deve somar exatamente quantidade com soma inteira segura.
+Estoque inválido bloqueia ajuste e arquivamento, sem correção silenciosa.
+Metadados de lotes remanescentes e nanosegundos de validade não alterada são
+preservados. Conversões/remoções explícitas registram o estoque anterior no audit.
+
+C3 valida somente a estrutura autoritativa usada pela operação; não interpreta
+campos comerciais ou metadados desconhecidos. Update pontual preserva esses
+campos, inclusive objetos SDK e mapas desconhecidos. DTOs/leitura C1 não foram
+relaxados: presença de campos novos desconhecidos continua sujeita ao contrato
+estrito do leitor C1; C3 não cria esses campos nem os usa como autoridade.
+Histórico existente/subcoleções, receipts antigos, atributos/IDs, COD e índices
+de combinação não são sobrescritos. Não há set substitutivo ou delete de item.
+
+5. ARQUIVAMENTO
+archiveVariantC3 exige admin conforme archiveProduct F9, mas revalida a permissão
+dentro da transação e no replay. Ajuste segue os cinco papéis F9/C1.
+Arquivamento grava apenas isArchived=true e updatedAt na variante; metadados
+da intenção/ator/motivo/baselines e before/after ficam no receipt auditável.
+Assim, não introduz campos archivedAt/archivedBy incompatíveis com DTO C1.
+Preserva quantidade/lotes/COD/histórico e não inativa irmã. Arquivamento repetido
+com novo requestId válido é no-op com receipt, sem avançar updateTime.
+Variante arquivada recusa ajuste; pai arquivado recusa todos os novos efeitos
+C3, inclusive arquivamento de filha. Replay autorizado precede estado mutável.
+Nenhuma operação de arquivamento do pai, restauração ou conversão de tipo foi
+implementada. O pai permanece não vendável no modelo; C3 não aceita pai como
+alvo, não grava agregado nem usa saldo do pai como estoque da filha.
+
+6. TRANSAÇÕES, CONCORRÊNCIA E IDEMPOTÊNCIA
+Autenticação/revogação/permissão/vínculo/escopo/loja, receipt, snapshots e reservas
+são lidos dentro da transação antes de qualquer escrita. Efeito na variante e
+receipt/auditoria são atômicos. Rollback não deixa saldo, lotes, estado ou token
+alterado parcialmente, nem receipt órfão. Retry usa a mesma intenção.
+Baseline obsoleto retorna aborted, sem receipt de rejeição, seguindo C1/C2.
+No-op grava receipt mas não regrava variante. Efeito real atualiza updatedAt;
+baseline autoritativo continua snapshot.updateTime, não updatedAt.
+
+Ajustes concorrentes da mesma variante com mesmo baseline têm uma intenção
+vencedora; replays iguais retornam um único efeito. Irmãs ajustam estoque
+independentemente sem atualizar pai. Pai é lido na transação: mudança concorrente
+de tipo/estado/atributos serializa com a movimentação, sem snapshot fora do commit.
+Corrida ajuste/arquivamento não permite sobrescrever saldo com baseline antigo.
+
+Receipt compartilhado com C1/C2:
+stores/{storeId}/auditLogs/f10-c1-SHA256([uid,requestId]).
+Mantém schemaVersion=1 e operação/command/result/createdAt; C3 acrescenta audit
+before/after para suas novas operações adjustVariantStockC3/archiveVariantC3.
+Sem namespace paralelo ou escape por operação: criação/ajuste/archive disputam
+a mesma identidade em ambas as direções. Mesmo requestId com operação/comando
+diferente retorna already-exists/request-identity-conflict antes de efeitos.
+Replay reautoriza antes de devolver resultado e não revalida estado mutável,
+não reaplica estoque nem regrava receipt. Falhas não selam rejeições; o contrato
+de rejeição terminal/ledger F9 não foi alterado ou reaproveitado silenciosamente.
+
+7. VALIDAÇÃO E AMBIENTE
+Somente Firestore Emulator demo-store-connect-f10-c3 e dados sintéticos.
+CLI firebase.cmd; Java 25.0.3 existente em Android Studio/jbr, somente ambiente
+do processo; nenhuma instalação/configuração permanente de Java/Windows.
+CLI no sandbox falhou com EPERM ao ler firebase-tools.json; execução local
+repetida com aprovação de ferramenta. Não houve acesso HML/PROD.
+Check inicial encontrou SyntaxError em três callbacks de teste com await em
+arrow não async. Corrigidos os callbacks antes de executar os testes C3.
+Primeira execução isolada: 16/16 C3 aprovados, zero falhas/skip, 35,5s.
+Depois, ampliada cobertura de metadados/no-op/cópia de input e corrigida fixture
+de isolamento para IDs realmente iguais nas duas lojas, antes da suíte final.
+
+Comando final:
+firebase.cmd emulators:exec --config firebase.json
+  --project demo-store-connect-f10-c3 --only firestore
+  "node --test --test-reporter=spec --test-concurrency=1
+   functions/tests/products/productVariantsC3.emulator.test.js
+   functions/tests/products/productVariantsC1.emulator.test.js
+   functions/tests/products/productVariantsC2.emulator.test.js
+   functions/tests/products/productVariantsV1.test.js
+   functions/tests/products/productMutationV2.emulator.test.js
+   functions/tests/products/productCodeAtomic.emulator.test.js"
+
+Testes puros adicionais executados:
+productMutationContract + saleV2Contract + saleV2ClientFixtures: 35/35 aprovados,
+zero falhas/skip. Incluem rejeição de estoque em edição cadastral e paridade
+dos comandos/fixtures/hash B07-C. Nenhum Dart alterado; Flutter não repetido.
+Checks Node dos quatro JS envolvidos e whitespace/BOM próprios aprovados.
+
+8. LIMITES E GATES
+Serviço local sem onCall/handler/index, restrito a demo-* e host/porta SDK
+loopback efetivos sem SSL, reutilizando a guarda C1. Nenhuma operação comercial,
+catálogo, checkout, fiado, offline ou fiscal ativada. Testes Admin não certificam
+Rules cliente, barreiras nos writers antigos ou segurança comercial global.
+F9 ainda libera COD antigo em determinadas trocas/remoções, conforme testes;
+retenção histórica global permanece sem garantia. Writers V1/V2/Rules intactos
+também não asseguram bloqueio global de estoque/venda/edição de pai por fluxos
+antigos. Ativação comercial permanece bloqueada até contratos/barreiras próprios.
+
+Somente ajustes de lotes comprovados no F9 foram implementados. Consumo para
+venda, alocação/seleção de lote, vencimento operacional, custo histórico e novas
+políticas de movimentação exigem contratos específicos; não presumir aprovação
+a partir das quatro intenções cadastrais de estoque. Limites C1/C2 provisórios
+preservados; não houve teste de carga, migração ou promessa de escala comercial.
+Restore de backup permanece integralmente bloqueado.
+
+9. PRESERVAÇÃO E PENDÊNCIAS C4
+Manifesto SHA256 de 587 arquivos preexistentes: único alterado é o serviço
+productVariantsC1.js, com exportação dos helpers internos. Trabalho F9/A5
+B01–B07-C, F10-A/B/C1/C2, Rules/index/writers/contratos/Dart preservado.
+Branch/HEAD mantidos. Sem commit, push, deploy, instalação, migração, secrets,
+HML/PROD, reset/restore/stash/clean ou ativação remota.
+C4 permanece não iniciado: UI/estado por productId+variantId, captura de
+baselines exatos, intenção durável antes da rede, retomada/replay sem avançar
+baseline, conflito entre operações e feedback de arquivamento/no-op precisam
+de contrato/testes próprios. Não ligar UI aos writers antigos como fallback.
+F10-D e restantes F9 continuam pendentes; não absorvidos por esta entrega.
+
+10. RESULTADO FINAL
+F10-C3 concluído e validado localmente.
+Suíte final: 105/105 testes do runner Node aprovados, zero falhas/skip,
+240,0 segundos, CLI exit code zero e Emulator encerrado normalmente.
+Composição: 18 C3 + 14 C1 + 22 C2 + 18 F10-B + 32 V2 + um arquivo COD F9.
+O arquivo COD contém runner interno: 37 cenários e 15 pares de corridas,
+todos aprovados. Esses cenários não são somados novamente aos 105 do runner.
+
+Cobertura C3: estoque independente; disputa do mesmo baseline; replay duplo
+e após alteração/arquivo; tokens pai/variante obsoletos e precisão temporal;
+paridade diferencial F9 dos quatro tipos; integridade, índices, overflow,
+datas, modos e entradas inválidas; arquivo individual com COD/lotes/histórico;
+pai arquivado; corrida ajuste/archive; identidade compartilhada com criação;
+papéis/revogação/loja/scope inclusive replays; rollback integral nas duas
+operações; corrupção de reservas sem reparo; proibição de cadastro/paths;
+guarda demo/loopback; metadados desconhecidos SDK/documento/lote; no-op e
+snapshot de intenção anterior ao primeiro await. F9 puro/V2 também comprovam
+que edição cadastral rejeita estoque e preserva saldo/lotes existentes.
+
+Revisão final: diff do único arquivo preexistente contém apenas exportação
+dos helpers locais; arquivos novos revisados com diff/check e leitura.
+git diff --check, sintaxe Node e whitespace/BOM dos novos artefatos aprovados.
+Manifesto final confirma os 586 outros arquivos preexistentes idênticos;
+cinco arquivos novos pertencem exclusivamente a C3. Branch/HEAD inalterados.
+Resumo exibido no terminal. Relatório completo exportado neste .txt.
+Sem commit, push, deploy ou ativação remota. Parada após C3.

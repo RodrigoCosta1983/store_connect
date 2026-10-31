@@ -1,0 +1,307 @@
+STORE&CONNECT — F10-C5-E2-B — RESULTADO FINAL DA RETOMADA
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+RESULTADO FINAL: BARREIRA CADASTRAL VALIDADA LOCALMENTE NO ESCOPO TESTADO.
+83/83 Node e 143/143 Emulator aprovados nesta retomada; zero falhas/skips.
+O registro BLOQUEADO anterior, preservado mais abaixo, é histórico e foi
+superado pela correção do teste e pela execução nova das regressões pendentes.
+Isso NÃO libera ativação comercial, produção ou corte de writers/Rules.
+
+1. CORREÇÃO E PRESERVAÇÃO NA RETOMADA
+Repetida solicitação interpretada como retomada do patch candidato preservado.
+Branch/HEAD/status, instruções, relatório E2-A, serviço/contratos e relatório
+anterior conferidos. Corrigido SOMENTE o teste de invariância:
+REMOVE_FIELDS é privado; agora as remoções cod/barcode/costPrice são obtidas
+via validateUpdateProductV2({changes:{remove:[...]}}), API pública já existente.
+Mantidas as asserções de disjunção com todos os marcadores C5 e os testes
+negativos para remoção/inclusão de cada marcador. Sem afrouxar comportamento.
+Nenhum contrato foi exportado/modificado; serviço permaneceu inalterado
+durante esta retomada, assim como o fluxo adjustProductStockV1 aprovado.
+
+Manifesto TEMP/f10-e2-b-resume-baseline.json: 647 arquivos; somente o teste
+updateProductEligibilityC5.test.js e este relatório alterados na retomada,
+demais 645 idênticos. Nenhum arquivo novo nesta retomada.
+O conjunto completo da E2-B continua limitado aos arquivos listados abaixo
+no registro inicial: serviço, três arquivos de testes diretamente necessários
+e este relatório. Sem descarte do patch ou trabalho anterior.
+
+2. INTEGRAÇÃO E INVARIANTE FINAL
+Ponto: wrapper updateProductV2 em productMutationV2.js:265; leitura real de
+commercialProfiles/current no preparo transacional após receipt/replay e CAS.
+Reutiliza evaluateProductEligibility(legacyV2,cadastral), sem duplicar tipo.
+Vista mínima preserva productKind, variantSchemaVersion, attributeDefinitions,
+attributes, productId, variantId, priceCents, costCents, commercial e
+commercialProfiles; perfil com dados/updateTime reais ou ausência constatada.
+Preço histórico inválido, fiscal e SDK alheios ao domínio não são gates novos.
+Dados reais continuam disponíveis ao preparador F9 original.
+CadastralEligibilityBlocked é não terminal apenas para updateProductV2;
+condição no catch: operation correspondente E classe específica (linha 228).
+Tratamento de estoque E2-A permanece intacto; nenhuma regra COD alterada.
+
+Teste de invariância agora aprovado: patch congelado não modifica campos da
+vista C5, nem grava perfil. Vista atual e resultante são iguais para todo
+patch admitido pelas allowlists auditadas; tentativas de set/remove/paths
+de marcadores e segunda autoridade monetária são recusadas pelo contrato.
+Não se monta um preço fictício ou documento migrado para validar correção.
+Receipts conhecidos precedem estado mutável; CAS obsoleto mantém prioridade
+e rejeição histórica terminal. Novos bloqueios C5 não criam receipts.
+
+3. NODE — NOVA EXECUÇÃO APÓS CORREÇÃO
+node --test --test-reporter=spec
+ functions/tests/products/updateProductEligibilityC5.test.js
+ functions/tests/products/productEligibilityC5.test.js
+ functions/tests/products/productCommercialPersistenceC5.test.js
+ functions/tests/products/productCommercialC5.test.js
+ functions/tests/products/productMutationContract.test.js
+ functions/tests/products/updateProductContract.test.js
+83/83 aprovados, zero falhas/skips/cancelamentos, exit 0, Node 22.23.2.
+Inclui C5-D/D1, normalização/hash, rejeição de patches estruturais e prova de
+invariância cadastral corrigida. Não contabiliza a tentativa anterior vermelha.
+node --check dos quatro JS E2-B: aprovado.
+
+4. EMULATOR — NOVA EXECUÇÃO INTEGRAL
+Executado SOMENTE depois de inspecionar o resultado Node verde:
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e2-b
+ --only firestore "node --test --test-reporter=spec
+ functions/tests/products/updateProductEligibilityC5.emulator.test.js
+ functions/tests/products/adjustProductStockEligibilityC5.emulator.test.js
+ functions/tests/products/productMutationV2.emulator.test.js
+ functions/tests/products/productEditState.emulator.test.js"
+Comando real em uma linha. 143/143 aprovados, zero falhas/skips/cancelamentos,
+exit 0. São 49 dirigidos E2-B + 48 E2-A + 32 mutations/stock F9 + 14 B01/B02.
+Total da retomada: 226 testes executados, todos aprovados; 143 no Emulator.
+Resultados anteriores não foram somados a esta contagem.
+
+Confirmado nesta execução:
+- simples legítimo e correções de preço NaN/Infinity/-Infinity/string/SDK,
+  mínimo inválido e preservação de fiscal/estoque/metadados históricos;
+- pai explícito ou sem discriminadores com definitions, variante, identidades
+  misturadas, marcadores parciais/inválidos e perfil presente/vazio bloqueados;
+- nenhum produto/updateTime, estoque, perfil ou receipt alterado por novos
+  bloqueios C5; consulta mantém not-recorded não definitivo;
+- replay confirmed/rejected após tipo/perfil mudar, CAS antigo, papéis,
+  revogação, isolamento, concorrência e falhas precommit preservados;
+- regressões backend B03/B04 (edição parcial, fiscal/categorias/COD, no-op,
+  receipts/resultados e rejeições scoped) e B05 (quatro modos/lotes/CAS);
+- barreira E2-A completa verde, inclusive preços não finitos e metadados SDK.
+  Trecho adjustProductStockV1 comparado com início E2-B/E2-A: idêntico.
+  A única adaptação no teste E2-A era seu cenário cadastral final, para a
+  mudança agora autorizada; as verificações de estoque continuam preservadas;
+- COD: troca/remoção ainda libera reserva antiga, inclusive legado; reserva
+  ausente ainda rejeita sem reparação. Caracterização aprovada como evidência
+  da pendência, NÃO como correção ou autorização de ativação comercial.
+
+Ambiente: Firestore Emulator real demo-f10-e2-b e loopback exigidos nos testes;
+fixtures sintéticas por UUID, Admin com mesmo projeto e handlers .run/auth
+injetada. JDK21 build/f9-tools-jdk21/jdk-21.0.12.1+1 e CLI/JAR existentes,
+JAVA_HOME/PATH só no processo; CLI com aprovação de sandbox. Emulator encerrado
+pelo CLI. Sem instalação, produção, tokens Auth reais ou testes HTTP/Rules.
+Não executadas suítes globais nem Flutter/Rules; compatibilidade declarada
+é a das regressões backend diretamente afetadas, não certificação global UI.
+
+5. LIMITES E ENCERRAMENTO FINAL
+Receipts/replay/CAS F9 e barreira E2-A validados nos casos acima. Nenhum novo
+protocolo de variantes/perfil, estoque ou correção COD foi introduzido.
+Pendência histórica COD continua BLOQUEANDO ativação comercial. Remoção TOTAL
+de marcadores por outros writers permanece indistinguível de simples legado
+no snapshot e exige transições de estado/Rules em etapa própria.
+Lista projetada deve acompanhar futuras dependências de C5-D/D1. Não libera
+outros writers, transporte C4 (adiado), restore (bloqueado), migrações ou cortes.
+Sem commit, push, deploy, reset, restore, stash ou clean. Trabalho local anterior
+preservado. Diff/whitespace/status e manifesto revistos; avisos LF/CRLF do
+ambiente sem alteração ampla. Próximo gate exige autorização própria.
+Resumo final exibido no terminal. PARADA APÓS E2-B VALIDADA LOCALMENTE.
+
+=== REGISTRO HISTÓRICO DA TENTATIVA ANTERIOR — SUPERADO PELO RESULTADO ACIMA ===
+
+STORE&CONNECT — F10-C5-E2-B
+BARREIRA CADASTRAL updateProductV2
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+RESULTADO: BLOQUEADO — UM TESTE NODE OBRIGATÓRIO FALHOU.
+Patch candidato preservado; NÃO declarar a integração validada/aprovada.
+
+1. INSPEÇÃO E ESCOPO
+Conferidos branch/HEAD/status, AGENTS.md e CURRENT_WORK histórico. Lidos E2-A,
+productEligibilityC5 D/D1, serviço atual, normalizador cadastral, reservas COD,
+regressões backend F9 e documentação B04/B01–B05 pertinente. Trabalho anterior
+extenso reconhecido como contexto autorizado e preservado.
+
+Ordem real: auth inicial, validate/normalização, hash canônico; transação
+autoriza perfil/papel/revogação/loja, confere scope, resolve receipt/replay;
+sem receipt, lê produto e compara CAS updateTime; prepara cadastro e somente
+depois enfileira reservas COD/produto/receipt. Resultado rejeitado scoped
+persistido continua sendo lançado com persistedRejection=true. Comando
+legado sem scope conserva seu tratamento de erro sem receipt.
+Nenhum normalizador, contrato puro, hash, requestId, schema/namespace de receipt
+ou protocolo histórico foi editado.
+
+2. PONTO EXATO DA INTEGRAÇÃO CANDIDATA
+Wrapper exclusivo de updateProductV2 no final de productMutationV2.js, antes
+da declaração adjustProductStockV1. Guarda própria bruta de variantId antes
+do normalizador, inclusive null/undefined não enumerável, sem remover o campo.
+Após receipt/replay e CAS, preparo cadastral novo:
+- transaction.get de commercialProfiles/current real do próprio produto;
+- evaluateProductEligibility com legacyV2/cadastral;
+- projeto Admin, loja autorizada e ID do snapshot real;
+- projeção de productKind, variantSchemaVersion, productId, variantId,
+  attributes, attributeDefinitions, priceCents, costCents, commercial,
+  commercialProfiles, preservando presença/valores;
+- perfil existe/ausente conforme leitura real; presente usa dados/updateTime
+  reais. Vazio também bloqueia. SDK incompatível em domínio/perfil falha fechado;
+- preço/custo históricos, arquivo, fiscal, estoque e metadados SDK não são
+  dependências de elegibilidade cadastral e permanecem no snapshot F9 real;
+- aprovação chama o cadastral original, sem modificar prepareCodeChange.
+
+CadastralEligibilityBlocked é failed-precondition excluído do catch terminal
+somente quando operation===updateProductV2 E instanceof dessa classe.
+Condição E2-A de StockEligibilityBlocked permaneceu intacta. Novo bloqueio
+cadastral não fabrica receipt terminal; demais erros F9 mantêm o caminho antigo.
+Todos os preparos/leituras executados antecedem qualquer escrita.
+
+3. ESTADO ATUAL E RESULTANTE / PATCH
+Inspeção do contrato congelado: SET_FIELDS = name/price/minimumStock/imageUrl/
+cod/barcode/costPrice; REMOVE_FIELDS = cod/barcode/costPrice. Fiscal só folhas
+permitidas; categorias só ids; derivados F9 são name_lowercase, fiscal.updatedAt
+e projeção categoryIds/categoryId/categoryName. Nenhum desses altera os campos
+da vista C5, escreve perfil comercial ou permite paths arbitrários.
+Assim, pela auditoria do código atual, a vista de domínio antes/depois de um
+patch válido é idêntica: não é necessário fabricar um documento resultante
+nem validar preço histórico para autorizar uma correção cadastral.
+Tentativas explícitas de set/remove de marcadores e campos monetários novos
+foram recusadas pelo contrato original nos testes, sem ampliar allowlist.
+
+Porém o teste Node novo para consolidar a prova de invariância falhou no
+harness. Logo essa análise NÃO é apresentada como teste obrigatório verde.
+Sem alteração de política pura, contratos congelados ou outros writers.
+
+4. ARQUIVOS ALTERADOS E PRESERVADOS
+Modificados em relação ao início E2-B:
+- functions/products/productMutationV2.js
+- functions/tests/products/adjustProductStockEligibilityC5.emulator.test.js
+Criados:
+- functions/tests/products/updateProductEligibilityC5.test.js
+- functions/tests/products/updateProductEligibilityC5.emulator.test.js
+- docs/catalog/F10_C5_E2_B_RESULTADO.txt
+
+No teste E2-A existente, alterado apenas o último cenário CADASTRAL: antes
+esperava sucesso sobre pai/perfil para comprovar ausência da barreira em E2-A;
+agora espera bloqueio sem receipt e verifica CAS terminal em simples separado.
+As demais 47 verificações/testes de estoque não foram editadas. Essa adaptação
+foi feita ANTES da execução, pela nova regra autorizada, não para ocultar falha.
+Suíte E2-A não foi executada nesta etapa, conforme parada abaixo.
+
+Manifesto TEMP/f10-e2-b-baseline.json: 644 arquivos iniciais; somente os dois
+modificados acima divergem por SHA256, demais 642 preexistentes idênticos.
+Cópias TEMP f10-e2-b-service-before.js e f10-e2-b-stock-test-before.js usadas
+apenas para revisão. Nenhum reset/restore/backup restaurado.
+Comparação textual: trecho inteiro const adjustProductStockV1 até fim do
+serviço idêntico; corpos cadastral e stock originais idênticos. Classe/catch
+E2-A intactos; nova condição cadastral não se aplica à operação de estoque.
+Isso é prova de preservação de código, NÃO execução nova de regressão E2-A.
+
+5. NODE EXECUTADO E FALHA OBRIGATÓRIA
+node --check nos quatro JS desta etapa: aprovado.
+node --test --test-reporter=spec com:
+functions/tests/products/updateProductEligibilityC5.test.js
+functions/tests/products/productEligibilityC5.test.js
+functions/tests/products/productCommercialPersistenceC5.test.js
+functions/tests/products/productCommercialC5.test.js
+functions/tests/products/productMutationContract.test.js
+functions/tests/products/updateProductContract.test.js
+Resultado real: 83 testes, 82 aprovados, 1 falha, zero skips/cancelamentos,
+exit 1; Node 22.23.2. Nenhum resultado histórico contabilizado como novo.
+
+Falha: frozen cadastral allowlists cannot change current or resulting C5
+domain fields, linha 13 de updateProductEligibilityC5.test.js.
+TypeError: Cannot read properties of undefined (reading 'filter').
+Causa exata: o teste escrito nesta E2-B presumiu contract.REMOVE_FIELDS
+exportado. A constante existe internamente em productMutationContract.js,
+mas module.exports expõe SET_FIELDS/FISCAL_FIELDS, não REMOVE_FIELDS.
+É erro de construção do TESTE, não evidência de falha de classificação ou
+de tentativa válida de remover marcadores. A análise do serviço/contrato não
+encontrou motivo para alterar a API congelada para corrigir esse teste.
+As outras duas verificações Node novas e os 80 testes existentes passaram.
+
+Regra do pedido: se teste obrigatório falhar, registrar BLOQUEADO e parar.
+Por isso o teste vermelho NÃO foi corrigido/reexecutado nem teve expectativa
+afrouxada; contrato não foi alterado para exportar constante privada.
+Patch candidato e falha permanecem revisáveis no working tree.
+
+6. EMULATOR DIRIGIDO EXECUTADO
+firebase.cmd emulators:exec --config firebase.json --project demo-f10-e2-b
+ --only firestore "node --test --test-reporter=spec
+ functions/tests/products/updateProductEligibilityC5.emulator.test.js"
+Comando real em uma linha: 49/49 aprovados, zero falhas/skips/cancelamentos,
+exit 0. Total efetivo da etapa: 83 Node + 49 Emulator = 132 testes,
+131 aprovados e 1 falha. Loops internos não somados novamente.
+
+Sequenciamento: o comando Emulator foi encaminhado na mesma orquestração
+antes de o resultado Node ser inspecionado. Isso foi um erro de sequência
+do agente. Ao identificar a falha, não foram iniciados outros testes; foi
+apenas coletada a execução já encaminhada. Seu sucesso não remove o bloqueio.
+
+Os 49 dirigidos comprovam no patch candidato:
+- 36 casos de bloqueios (18 scoped e 18 unscoped): pai explícito e definitions
+  sem discriminadores, discriminadores parciais, variante/vínculo/attributes,
+  mistura de identidade, marcadores null/SDK/NaN, dinheiro novo no topo,
+  perfil vazio/presente/SDK e combinações com preço inválido. Nenhum novo
+  receipt ou mudança no estado observado de produto/loja/perfil/updateTime;
+  consulta not-recorded não definitiva e comando intacto;
+- edição simples mantém hash canônico original, lotes, estoque, fiscal e
+  metadados GeoPoint/Reference/bytes/Timestamp/NaN;
+- cinco correções legítimas de preço NaN/Infinity/-Infinity/string/SDK,
+  correção de minimumStock inválido, preservação de fiscal null e até saldo
+  legado inválido, sem usar validação de venda/estoque como gate cadastral;
+- edição de outro campo também permite manter preço histórico inválido;
+- simples arquivado permite correção autorizada; COD arquivado mantém
+  archived-product-cod-immutable terminal scoped;
+- tentativas de patch de marcadores/segunda autoridade recusadas sem efeito;
+- receipt confirmed e rejected/invalid-current-fiscal reexecutados após tipo/
+  perfil mudarem preservam resultado original e estado posterior;
+- CAS antigo ainda precede domínio e retorna product-version-conflict terminal;
+  edições concorrentes de IDs distintos têm um vencedor;
+- autenticação, papéis, revogação, escopo e mudança de loja mantêm proteção;
+- caracterização da pendência COD e falta de reserva, descritas abaixo.
+
+Autenticidade: demo-f10-e2-b, host Firestore loopback exigido no arquivo,
+Admin com mesmo projeto, fixtures sintéticas por UUID. Handlers .run com
+auth injetada; não é prova de token/HTTP real ou Rules de cliente.
+JDK21 existente build/f9-tools-jdk21/jdk-21.0.12.1+1; JAVA_HOME/PATH só no
+processo. CLI existente executado com aprovação de sandbox. Emulator encerrado
+pelo CLI. Nenhuma instalação/acesso HML/PROD ou deploy.
+
+7. COD E ATIVAÇÃO
+prepareCodeChange permanece byte a byte como antes. O teste de caracterização
+reproduziu a pendência: troca/remoção de COD ainda DELETA a reserva antiga
+(inclusive reserva legado sem ownerType) após as validações F9 atuais.
+Isso NÃO foi corrigido, aprovado como retenção histórica ou introduzido por
+esta barreira. Ativação comercial continua bloqueada por essa pendência.
+Reserva antiga ausente continua rejeitando sem reparação silenciosa.
+Não houve regra nova de liberar/reter COD, nem migration/reserva de variantes.
+
+8. REGRESSÕES NÃO EXECUTADAS E PRÓXIMOS GATES
+NÃO executadas nesta E2-B por causa da parada obrigatória:
+- matriz completa productMutationV2.emulator.test.js / productEditState;
+- regressão integral adjustProductStockEligibilityC5 E2-A;
+- demais regressões cadastrais B03/B04 e estoque B05 além dos casos dirigidos
+  explicitamente executados. Não se atribuem seus resultados anteriores à E2-B.
+Não executadas suítes globais, Flutter, Rules ou outros writers.
+git diff --check/revisão delta e whitespace dos arquivos desta etapa aprovados;
+avisos LF/CRLF pertencem ao ambiente.
+
+Retomada exige corrigir apenas o teste que presumiu export inexistente,
+sem modificar/exportar contratos congelados, repetir Node e então executar
+as regressões obrigatórias pendentes. Até isso, E2-B permanece BLOQUEADA.
+Não há certificação atual de compatibilidade cadastral F9 completa ou de
+integridade comportamental E2-A sob a integração candidata.
+
+Remoção TOTAL de todos os marcadores segue indistinguível de simples legado
+pelo snapshot atual e depende de transições de estado/Rules em etapa própria.
+Não protege outros writers nem certifica segurança remota/carga/dispositivos.
+COD histórico continua bloqueador comercial independente. C4 permanece adiado;
+restore de backup segue bloqueado. Não avançar para writers/Rules/cortes.
+Sem commit, push, deploy, migração, instalação, reset, restore, stash ou clean.
+Trabalho anterior preservado. Resumo exibido no terminal. PARADA APÓS E2-B.

@@ -1,0 +1,397 @@
+STORE&CONNECT — F10-C4-B2-B2-A0
+Proposta de fronteira de confiança para integração local Flutter ↔ Node
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+ESTADO: PROPOSTA PARA APROVAÇÃO. NENHUMA IMPLEMENTAÇÃO AUTORIZADA POR ESTE TEXTO.
+
+1. CONCLUSÃO E RECOMENDAÇÃO
+Recomenda-se combinar harness controlado (alternativa A) com capacidade
+efêmera vinculada ao cenário e autenticação criptográfica das respostas
+(alternativa B). Começar pela integração Web em navegador descartável lançado
+pelo runner. Android exige bootstrap e verificador próprios comprovados; fica
+adiado até esses requisitos serem atendidos sem dependências novas ou mudanças
+na aplicação operacional. IPC pode servir ao bootstrap/controle dos processos,
+mas não substitui automaticamente a autenticação do canal Flutter Web.
+
+A identidade autenticada será a de um participante de cenário de teste,
+delegada pelo launcher confiável. NÃO será autenticação de pessoa, conta Firebase
+real ou login comercial. O harness estabelece uid/projectId/storeId no servidor;
+o cliente apenas demonstra posse de capacidade delegada para esse contexto.
+O Auth Emulator pode continuar como fixture, mas seu JWT não participa como
+raiz de confiança. Nenhuma propriedade comercial decorre desse arranjo.
+
+Fallback aprovado apenas como proposta: manter o transporte adiado se bootstrap,
+primitivas ou isolamento não puderem ser demonstrados. B2-A/B2-B1/B1 continuam
+úteis e intactos; unknown continua bloqueado. Não rebaixar a fronteira para
+cumprir um cronograma ou declarar teste integrado aprovado.
+
+2. BASE AUDITADA E DIFERENÇAS ENTRE CONCEITOS
+Consultados AGENTS/CURRENT_WORK, contratos/relatórios B2-A, B2-B1 e B2-B2-A,
+VariantB2ReadTransport, VariantLocalAccess, ledger B1, configuração Emulator
+e harness T6-A4-A2. Branch/HEAD/status conferidos. CURRENT_WORK é histórico F7;
+esta solicitação define o escopo vigente. Trabalho local anterior preservado.
+
+B2-A revalida autorização Firestore em transação, mas exige request.auth de
+chamador confiável. Não valida a origem de um UID vindo de rede.
+B2-B1 distingue DTO estruturalmente válido de prova, sem construtor trusted.
+B1 mantém modo padrão que recusa resultados sintéticos para liberar unknown.
+Diagnóstico anterior demonstrou que a etapa JWT Emulator aceita alg=none;
+verificação de perfil/revogação não acrescenta uma assinatura inexistente.
+
+Quatro propriedades distintas:
+- identidade: qual participante de teste recebeu a capacidade;
+- autorização: qual escopo e quais leituras estão permitidos agora;
+- proveniência/integridade: resposta veio do harness esperado sem adulteração;
+- semântica: resultado corresponde à consulta e às validações B2-A.
+JSON válido, HTTPS isolado, CORS, porta aleatória ou prefixo demo não provam
+essas quatro propriedades em conjunto.
+
+3. MODELO DE AMEAÇA A APROVAR
+Raiz confiável: Rodrigo/runner local, código do launcher/harness/teste revisado,
+binários Node/Flutter/Chrome utilizados, kernel e usuário do OS executando o
+teste. O launcher inicia e controla os processos do cenário e o Emulator demo.
+Dados, perfis e receipts são exclusivamente sintéticos nesse Emulator.
+
+Em escopo: cliente sem capacidade; outra página/origem; participante de outra
+loja; fabricação de UID/role/storeId; JWT Emulator forjado; replay; resposta
+de execução anterior; processo que ocupa porta errada; adulteração de bytes;
+troca de resposta entre consultas; atraso, timeout, desconexão e reinício.
+Um processo hostil sem acesso ao bootstrap/chaves pode causar indisponibilidade,
+mas não deve conseguir fabricar uma resposta autenticada aceita.
+
+Fora da garantia: administrador/root, debugger com acesso à memória, processo
+malicioso do mesmo usuário capaz de ler os handles/memória/arquivos privados,
+comprometimento do launcher, SDK, navegador ou código da página, XSS no cliente
+de teste, Admin malicioso e adulteração direta do Firestore Emulator.
+Emulators não são um enclave seguro contra processos locais privilegiados.
+Se a exigência incluir um atacante do mesmo usuário ou dados do Emulator
+hostis, será necessário isolamento adicional de OS/VM e nova aprovação.
+Assinatura de resposta não detecta dados falsos já inseridos no banco confiado.
+
+Não há promessa de disponibilidade nem de confidencialidade contra observador
+local privilegiado. Dados sintéticos são condição obrigatória. O protocolo
+proposto autentica bytes; não autoriza enviar dados reais por HTTP loopback.
+
+4. ALTERNATIVA A — HARNESS COM IDENTIDADE FIXADA NO SERVIDOR
+Identidade: runner seleciona cenário local allowlisted e entrega configuração
+ao processo Node por handle herdado privado, nunca por rota Flutter. O harness
+associa cada participante ao projeto/UID/loja/época. Não aceita escolha livre de
+UID ou papel em consulta. Papel atual vem do perfil sintético relido por B2-A.
+
+Origem do servidor: relação pai/filho e handles privados autenticam o controle
+entre launcher e Node. Uma conexão HTTP loopback de Flutter, sozinha, NÃO herda
+essa garantia. Precisa do bootstrap/capacidade e assinatura da alternativa B.
+Uma porta ou mensagem ready contendo trusted=true não identifica o servidor.
+
+Fabricação/replay/lojas: identidade escolhida no servidor evita UID arbitrário,
+mas sem capacidade qualquer cliente poderia consumir a identidade de cenário
+privilegiado. Um harness que responde como admin a todo loopback seria um
+intermediário que empresta indevidamente sua autoridade. A isoladamente é
+insuficiente para o objetivo; não recomendar sua ativação isolada.
+
+Revogação/timeout/reinício/adulteração: runner controla encerramento e perfis,
+mas precisa invalidar sessões e autenticar respostas em trânsito. Sem B não
+pode distinguir resposta adulterada de resposta real.
+
+Android/Web: ambos podem chamar um harness em testes; isso não comprova origem.
+Android não compartilha automaticamente o loopback do host. Não abrir bind
+0.0.0.0/LAN para contornar essa diferença; eventual encaminhamento de teste
+deve preservar listener host loopback e bootstrap autenticado.
+
+Ativação comercial: harness fora de lib/ e do index operacional, entrypoint
+exclusivo de testes, sem serviço permanente. Guardas demo/SDK efetivo obrigatórias.
+Complexidade: baixa como executor de cenário; insuficiente como autenticação.
+Impacto: reutiliza B2-A sem mudar normalizadores, writers ou receipts.
+
+5. ALTERNATIVA B — CAPACIDADE EFÊMERA + RESPOSTA ASSINADA
+Identidade: registro server-side em memória associa uma capacidade opaca a
+runId, projectId, uid, storeId, sessionId, sessionEpoch, clientId, permissões
+somente readState/queryReceipt, instante de emissão e expiração.
+O identificador de sessão não é segredo nem evidência por si só.
+O cliente não pode editar o registro nem escolher os seus vínculos.
+ProjectId deve corresponder ao SDK efetivo e ao cenário demo; scope recebido
+é apenas asserção, conferida integralmente contra o registro e o perfil atual.
+
+Material proposto: segredo aleatório de 256 bits por cliente/sessão para HMAC
+de requisições, gerado por CSPRNG, nunca fixo ou reutilizado; par assimétrico
+efêmero de assinatura do servidor por execução. Chave privada de assinatura
+permanece somente no Node. Cliente recebe apenas sua chave de requisição e a
+chave pública de resposta, pelo bootstrap privado. Segredos não vão em URL,
+query string, console, logs, argv, dart-define, assets ou armazenamento durável.
+Não haverá rota anônima que emite capacidade porque o cliente pediu um UID.
+
+Origem do servidor: verificar assinatura com chave pública previamente entregue
+pelo launcher, antes de aceitar conteúdo B2-A. Chave pública baixada do mesmo
+endpoint desconhecido não é pin seguro. TOFU automático e aceitar qualquer
+certificado são recusados. A chave pública não é segredo, mas seu vínculo ao
+processo iniciado deve ter integridade fora do endpoint.
+
+Não usar somente MAC simétrico de respostas como prova de proveniência:
+o cliente teria também a chave que permite fabricar esse MAC. A separação
+proposta usa HMAC para posse de capacidade e assinatura assimétrica para origem
+da resposta. Não impede cliente comprometido de adulterar sua própria memória;
+esse caso está fora do modelo, e o ledger continua sem aceitar DTOs como prova.
+
+Perfil criptográfico proposto: ECDSA P-256/SHA-256 para respostas e HMAC-SHA-256
+para requisições, usando primitivas das plataformas, nunca implementação
+criptográfica própria. Formato de assinatura e importação de chave devem ser
+congelados com vetores interoperáveis antes do transporte (proposta: assinatura
+P1363 r||s de 64 bytes, chave pública SPKI, codificação base64 estrita).
+Não há negociação de algoritmo pelo payload, fallback para none ou algoritmo
+alternativo silencioso. Ausência de primitiva compatível implica bloqueio.
+
+Replay e vínculo completo: envelope externo versionado cobre direção/domínio
+do protocolo, runId, sessionId/epoch/clientId, scope, método, queryId aleatório,
+contador por sessão, deadline e SHA-256 dos bytes UTF-8 exatos do corpo.
+queryId é correlação de leitura, NÃO substitui requestId da intenção.
+O corpo queryReceipt conserva operation original e command completo congelado;
+readState conserva identidade completa solicitada. Não normalizar o original.
+
+O servidor reserva atomicamente contador/queryId antes de executar leitura,
+recusa duplicata e não aceita ampliar escopo por parâmetros. Começar com uma
+consulta em voo por sessão reduz complexidade; concorrência entre clientes
+usa capacidades distintas. Timeout permite nova CONSULTA de leitura somente
+com nova correlação e o mesmo comando original, nunca nova intenção de escrita.
+
+Resposta assinada cobre envelope, digest da consulta original e todos os bytes
+do resultado B2-A, inclusive status/reason, receipt e snapshots. Não assinar
+somente status ou IDs. O cliente exige uma consulta pendente correspondente,
+aceita a resposta uma única vez e descarta assinatura válida de outra consulta,
+outra loja, época, processo ou execução. Alias original C2 não é trocado por C1.
+
+Evitar canonicalização JSON criptográfica improvisada: autenticar bytes
+congelados com framing de comprimentos e domínio versionado; transportar corpo
+como bytes codificados e conferir digest antes do decoder. Formato exato do
+framing/envelope, limites de tamanho e rejeição de JSON ambíguo/duplicado precisam
+de contrato técnico e vetores de teste. O hash local B1 NÃO vira protocolo Admin.
+
+Revogação: registro em memória revogável, época incrementada e consultas pendentes
+canceladas. Conferir sessão antes/depois de cada await e imediatamente antes
+de assinar; cliente confere época antes/depois da verificação assíncrona e do
+decode. UID/loja/papel/revogação Firestore continuam autoritativos em B2-A.
+Adicionar no wrapper uma conferência atual de autorização após a leitura,
+antes da entrega, sem editar B2-A; consulta de archive continua exigindo admin.
+
+Limite de concorrência: revogação de capacidade no harness e emissão da resposta
+devem ter ordem serial explícita. Revogação de perfil Firestore é observada no
+ponto serial da revalidação, não garante impossibilidade de revogação futura
+entre envio e recebimento. Não prometer linearização global entre rede, cliente
+e banco. Nenhuma resposta concede autorização futura ou transição de ledger.
+
+Validade proposta: no máximo 5 minutos por sessão; deadline de leitura até
+30 segundos, limitado pela expiração restante. Valores são proposta aprovada
+somente junto desta arquitetura, não contrato existente. Prazo monotônico no
+servidor; alterar relógio civil não estende sessão. Sem renovação automática.
+Timeout/assinatura inválida/desconexão/ambiguidade invalidam a consulta e mantêm
+unknown. Não converter status íntegro access-denied/conflito em rejected.
+Resposta autenticada válida preserva exatamente os seis status B2-A.
+
+Reinício: perde capacidades, pendências e chave privada; novo runId/época/chaves.
+Cliente antigo não faz reenrolamento pela rede. Só novo bootstrap do launcher.
+Ledger durável reabre a intenção original e mantém unknown; não persistir chaves
+de harness junto à intenção. Revogar capacidade não apaga ou altera intenção.
+
+Android/Web e impacto: B tem maior complexidade, mas separa autenticação de
+DTOs e preserva o serviço B2-A. Package crypto existente atende HMAC/hash;
+não presumir que ele oferece ECDSA. Não foram encontradas dependências diretas
+cryptography/pointycastle. Web pode avaliar Web Crypto com package:web existente;
+Android precisará de primitiva nativa/verificador de testes validado, sem
+modificar MainActivity operacional ou instalar dependência implicitamente.
+
+6. BOOTSTRAP — RAIZ DA GARANTIA, NÃO DETALHE DE IMPLEMENTAÇÃO
+O launcher confiável é quem identifica e inicia os participantes. Deve manter
+um canal privado de controle com Node, confirmar por challenge-response a posse
+da chave do processo filho e só então entregar ao cliente o pin e sua capacidade.
+PID/nome de executável/porta por si só não autenticam um processo, sobretudo
+após reutilização de PID/porta. Dados de bootstrap não vêm do payload Flutter.
+
+Web proposto: Chrome descartável sem extensões/perfil do usuário, criado pelo
+launcher; controle privado herdado do navegador, preferencialmente pipe em vez
+de DevTools TCP aberto. Entrega em memória ao único contexto de teste aprovado,
+antes da primeira consulta. Runner/frame/scripts de teste são parte confiável.
+Não persistir chave em localStorage/IndexedDB, servir chave em rota pública,
+colocar em URL ou registrar expressão de injeção nos logs verbose/CDP.
+Troca de navegação/frame/origem encerra sessão. Se houver postMessage, conferir
+origin, source e targetOrigin exatos; nunca '*' para transportar capacidade.
+CORS/Origin restringem navegador, mas não substituem HMAC para outros clientes.
+
+Esse desenho exige validar que o runner Flutter 3.32.6 consegue manter o
+bootstrap privado e a página correta sem alterar SDK/aplicação. O harness
+existente que descobre DevTools pelo log não é declarado bootstrap seguro
+automaticamente. Se só houver DevTools TCP acessível ou entrega/logs inseguros,
+não emitir capacidade: adiar ou aprovar isolamento adicional do processo.
+Secure context do navegador não equivale a autenticação de processo local.
+
+Android proposto para etapa posterior: somente APK/entrypoint de teste isolado,
+dispositivo/emulador selecionado pelo launcher e sessão ADB previamente
+autorizada, bootstrap por canal de instrumentação/armazenamento privado do
+pacote de teste, sem broadcast/Intent público/argv com segredo.
+Selecionar packageId, assinatura debug esperada e dispositivo explicitamente;
+não tratar serial/UID declarado pelo Flutter como prova. Encaminhamento ADB
+pode dar alcance ao listener loopback do host, mas não autentica resposta.
+Persistência temporária de bootstrap requer ACL/sandbox e eliminação após uso
+em uma futura etapa autorizada; esta etapa não escreve tais arquivos.
+Sem mecanismo demonstrado nessas condições, Android permanece adiado.
+
+7. ALTERNATIVA C — IPC COM IDENTIDADE DO PROCESSO
+Identidade: launcher liga processos filhos por pipes anônimos herdados; acesso
+ao handle específico estabelece participação do processo lançado. Para named
+pipes Windows, exigir ACL restritiva e verificação de peer/handle/token; nome
+aleatório, PID declarado ou ACL padrão não bastam. Não exigir impersonação
+privilegiada sem necessidade; comparar identidade e handles vinculados ao run.
+Autenticar ambos os lados; proteção só no servidor não autentica o servidor
+para o cliente. Sessão/época/desafio continuam necessários.
+
+Replay/lojas: framing, sequência e vínculo a cenário por conexão; canais de
+controle diferentes para cada participante. Nunca selecionar loja por texto
+do cliente. Revogar/fechar handle encerra sessão; reinício exige novos handles.
+Timeout/reposta incompleta mantém unknown; framing íntegro não torna conteúdo
+de um processo não confiável autoritativo. Mesmas limitações de host comprometido.
+
+Android: IPC nativo tem identidades locais ao dispositivo, não ao Node no Windows;
+precisa broker/ponte instrumentada e extensão nativa de testes. Web: browser não
+tem acesso geral a named pipes do OS; seria necessário broker/controle do runner.
+Assim, IPC puro é bom para Node↔launcher/Flutter VM e bootstrap, porém não é
+solução única portátil Flutter Web↔Node/Android↔Node nas condições atuais.
+
+Ativação comercial: binários/entrypoints de testes separados, handles sem
+listener de rede e nenhum import pelo app comercial. Complexidade média para
+VM; alta para Android/Web. Não modifica B2-A/B1, mas exigiria bridges de testes
+ainda ausentes. Não escolher como implementação multiplataforma imediata.
+
+8. ALTERNATIVA D — ADIAR TRANSPORTE
+Identidade/origem: nenhuma nova alegação; não há canal integrado.
+Fabricação/replay/lojas: JSON continua não confiável e não resolve ledger.
+Revogação/timeout/reinício/adulteração: intenção original permanece unknown;
+não inferir rejeição e não criar identidade substituta.
+Modelo: testes locais de DTO/CAS e backend separados demonstram apenas seus
+contratos, sem alegar autenticação ponta a ponta.
+Android/Web: preservar suites existentes; não comprovar canal que não existe.
+Ativação comercial: nenhum artefato novo de transporte. Complexidade baixa,
+impacto nulo nos contratos; custo é adiar cobertura integrada e implementação.
+É a escolha correta se bootstrap seguro ou crypto interoperável não for viável
+sob as restrições. Não invalida os trabalhos B1/B2-A/B2-B1 concluídos.
+
+9. BARREIRAS CONTRA ATIVAÇÃO COMERCIAL ACIDENTAL
+Proposta para A+B: artefatos apenas sob área de testes; sem export de index,
+import operacional, UI, pubspec assets, Hosting, entrypoint comercial ou modo
+release habilitável por flag. Credenciais efêmeras não entram em build permanente.
+Só permitir duas operações de leitura, sem despacho dinâmico para writers.
+
+Antes de I/O: regex demo-* restrita, projeto do SDK igual ao cenário, host
+literal loopback, bind efetivo loopback, Firestore Emulator e configuração
+efetiva servicePath/porta/ssl conferidos conforme B2-A. Recusar redirecionamento,
+proxy de saída, DNS arbitrário, bind genérico e projeto não demo. Configuração
+demo criada pelo launcher, jamais default Firebase PROD/HML.
+
+O launcher controla Emulator e ciclo de vida; proibir fallback remoto, ADC/chaves
+reais, rede externa e import do index operacional. Perda do controle encerra
+harness e revoga sessões. Testes negativos devem comprovar esses bloqueios.
+Como o SDK Admin possui capacidade de escrita, read-only é restrição do caminho
+exposto e auditado, não isolamento por privilégio IAM do Emulator.
+
+Não existe prova absoluta contra ativação após alteração deliberada do código
+ou comprometimento do host. No código revisado, exigir que artefatos comerciais
+nem contenham esse entrypoint e que guardas independentes impeçam seu uso fora
+do cenário; nenhuma flag isolada pode remover as barreiras. Se não verificável,
+não aprovar execução integrada.
+
+10. COMPATIBILIDADE E POLÍTICA DE PROVA
+Envelopes de canal ficam fora dos DTOs/status B2-A. Não acrescentar assinatura
+retroativa a receipts, mudar namespace, comando, COD ou baseline para validar.
+Autenticar exatamente consulta original e resposta; só depois decodificar B2-B1
+e conferir semântica/compatibilidade. Assinatura válida não corrige DTO inválido.
+
+Resultado autenticado de TESTE deve carregar proveniência exclusiva da execução
+demo em wrapper produzido pelo verificador, nunca por campo trusted do JSON.
+Não adicionar setter/factory público que promove fixture a prova. Não converter
+wrapper de teste em VariantLocalResolution e não persistir committed/rejected.
+Não confundir autenticidade do harness com prova comercial Firebase assinada.
+
+VariantB2ReadTransport atual retorna somente DTO e não representa evidência do
+canal: futura integração poderá precisar interface/wrapper específico de teste
+aditivo, mantendo a interface e modo padrão atuais. Esse ajuste exige contrato
+de implementação revisado; nenhuma mudança de Dart está autorizada nesta A0.
+
+Available não prova commit. Confirmed autenticado informa validação B2-A da
+intenção histórica; nesta integração de leitura não libera transição B1.
+Ausência/timeout/acesso negado/conflito/corrupção continuam sem rejected terminal.
+Receipt.updateTime nunca é baseline de produto. Nova intenção continua bloqueada.
+
+11. MATRIZ DE TESTES OBRIGATÓRIA ANTES DE DECLARAR CANAL VALIDADO
+Bootstrap: runner/frame/dispositivo errados; porta ocupada; servidor substituto;
+pin trocado; challenge inválido; DevTools exposto; navegação inesperada;
+capacidade em log/URL/asset/armazenamento; tentativa de reenrolamento remoto.
+
+Criptografia: vetores Node↔Web e, separadamente, Node↔Android; chave/assinatura
+inválidas; bytes alterados em campo conhecido/desconhecido; timestamp preciso;
+Unicode; ordem de arrays; omitido/null/vazio; framing truncado; limites; algoritmo
+none; downgrade; assinatura de uma direção reutilizada na outra; JSON ambíguo.
+
+Capacidade: UID/loja/papel forjados; sessão ausente/expirada/revogada; token
+Emulator fabricado; cliente A tentando loja B; alteração de projeto/epoch;
+replay/duplicata concorrente; digest correto com consulta/cliente errados.
+
+Falhas: timeout antes/depois de resposta; desconexão parcial; revogação em cada
+await; revogação de perfil e capacidade; resposta tardia após timeout;
+reinício Node/Chrome/Android; chave anterior; TTL com relógio civil alterado;
+garantias documentadas de ordem serial, sem prometer revogação retroativa.
+
+Semântica: todos os status B2-A; receipt original/divergente; aliases C1/C2;
+COD exato; baselines pai/variante; entidade alterada/arquivada/ausente após commit;
+mesma intenção recuperada do ledger; fixtures jamais promovidas a committed.
+
+Ambiente: projetos PROD/HML e SDK divergente recusados antes de I/O; hosts
+não loopback, bind LAN, redirecionamento e ausência de Emulator recusados;
+inspeção de tráfego sem saída externa; nenhum writer/receipt alterado pelas
+consultas; nenhum artefato de harness acessível no build operacional.
+
+Regressões: B2-A/C1/C2/C3 pertinentes no Firestore Emulator demo; B1 SQLite e
+IndexedDB; DTOs/C4-A; Flutter 3.32.6 com --no-pub; Web Crypto real no Chrome,
+Android somente após gate próprio. Contorno temporário CanvasKit pode servir
+assets oficiais, nunca interceptar autenticação/respostas para fazer teste passar.
+Não aceitar testes mockados como prova da segurança integrada.
+
+12. DECISÃO QUE EXIGE APROVAÇÃO DE RODRIGO
+Aprovar ou rejeitar a seguinte proposta conjunta antes de implementar:
+1) autenticação exclusivamente de participante sintético delegado pelo launcher,
+   com host/runner/código de teste confiáveis e exclusões do modelo descritas;
+2) A+B: capacidade efêmera por cliente, HMAC de requisição, assinatura assimétrica
+   de resposta com pin entregue fora do endpoint e bootstrap privado obrigatório;
+3) validade máxima proposta de 5 minutos e consulta de até 30 segundos;
+4) primeira implementação limitada a Web, leitura/receipt demo, sem integração
+   visual, escrita ou transição real de ledger; Android exige gate separado;
+5) fallback D se não houver bootstrap ou crypto seguros sob as restrições,
+   sem instalar dependências, alterar SDK ou ampliar confiança implicitamente.
+
+Se Rodrigo exigir resistência a processo adversário do mesmo usuário do OS ou
+Android nesta primeira implementação, a recomendação é D até aprovar isolamento
+adicional/ponte nativa de testes. Não transformar essa exigência em uma chave fixa.
+Este documento não registra aprovação, não cria autorização permanente e não
+autoriza implementar transporte, emitir credenciais ou iniciar servidor.
+
+13. FONTES E VERIFICAÇÃO DESTA ETAPA
+Referências técnicas primárias consultadas (16/10/2026):
+- Node.js Crypto: geração de chaves, HMAC e sign/verify.
+  https://nodejs.org/docs/latest-v22.x/api/crypto.html
+- MDN SubtleCrypto.verify: verificação Web/ECDSA e requisito de secure context.
+  https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/verify
+- MDN postMessage: verificação de origem e targetOrigin específico.
+  https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
+- Android Developers: ADB e autorização de dispositivo de desenvolvimento.
+  https://developer.android.com/tools/adb
+- Microsoft: ACL e direitos de acesso de named pipes.
+  https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights
+Fontes apoiam as primitivas e limitações de plataforma; não demonstram que
+bootstrap/protocolo propostos já funcionam com o runner deste projeto.
+Compatibilidade, encoding e integração permanecem hipóteses a testar.
+
+Criado somente este documento. Nenhum servidor/endpoint/transporte/credencial,
+arquivo Dart/JS ou componente protegido foi implementado/modificado.
+Não executados testes Flutter/Node/Emulator: etapa somente documental, sem
+código novo executável. Resultados anteriores não são recontados como testes A0.
+Validação: revisão do documento, whitespace/UTF-8 sem BOM, git diff --check,
+status/branch/HEAD e resumo no terminal. Sem commit/push/deploy/instalação,
+reset/restore/stash/clean. Restore de backup permanece bloqueado.
+Parada após A0; implementação depende da aprovação arquitetural acima.

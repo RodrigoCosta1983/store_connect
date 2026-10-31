@@ -1,0 +1,242 @@
+STORE&CONNECT — F10/C4-A — INTEGRAÇÃO VISUAL NO CADASTRO — UI/01
+Data: 18/10/2026
+ESTADO: VALIDADO LOCALMENTE no formulário e nos rascunhos.
+PERSISTÊNCIA/EDIÇÃO DE VARIANTES GRAVADAS: BLOQUEADA / NÃO INTEGRADA.
+
+1. ESTADO INICIAL E FINAL
+
+Branch: feat/f7-intelligent-catalog.
+HEAD inicial/final: 30f4f8db2a4a59d21696fde3d673144aded31154.
+Recebidos 24 rastreados modificados e todos os não rastreados F9/F10, incluindo
+implementações e relatórios anteriores. Nenhum trabalho foi descartado.
+AGENTS.md/CURRENT_WORK.md lidos. CURRENT_WORK registra checkpoint histórico F7;
+a solicitação atual delimita exclusivamente F10/C4-A.
+
+Consultados arquitetura/decisões F10, resultados C1/C2/C3 e contrato C3,
+prévia C4-A anterior, contratos de leitura e estado de transporte posterior.
+C1/C2/C3 e a prévia anterior foram reutilizados como base, não reimplementados.
+O relatório F10_C4_A_RESULTADO.txt anterior foi preservado integralmente.
+
+Baseline anterior às edições: build/f10-c4a-ui01/baseline.json, 1.789 entradas
+de hash. Abrange arquivos rastreados/não rastreados não ignorados, evidências
+pertinentes build/b4b* e build/f10*, package_config e metadados de plugins.
+Dois arquivos receberam alterações previstas; os outros 1.787 são idênticos.
+Snapshots integrais dos dois arquivos anteriores foram conservados em .before
+no diretório desta execução, para revisão do delta sem perder a base recebida.
+
+2. DIAGNÓSTICO E LIMITE CONTRATUAL
+
+Cadastro/edição operacional usa o diálogo de manage_products_screen.dart.
+Esse diálogo chamava createProduct/updateProduct para produtos simples; a
+edição local injetada também pode selecionar os editores cadastral/estoque.
+
+Núcleo F10 disponível:
+- productVariantsV1: DTOs, definições, combinações e identidades.
+- productVariantsC1: criação/leitura local; createProductC2/createVariantC2
+  acrescentam COD e reservas C2 sem alterar o protocolo histórico.
+- productVariantsC3: ajuste de estoque e arquivamento, não edição cadastral.
+- VariantPreviewData/VariantPreviewIntent: validação Flutter de combinação e
+  campos cadastrais, identidade e intenção local.
+- VariantAuthoritativeResponse e leitores/transportes abstratos: contratos
+  existentes, sem um writer operacional autorizado para esta interface.
+
+C1/C2/C3 não são endpoints Flutter publicados. C3 declara expressamente que
+edição cadastral F10 não está habilitada. C09 também impede converter produtos
+simples existentes automaticamente. O pedido permite interface local quando a
+persistência depender de bloqueio. Portanto, não foi inventado writer, endpoint,
+baseline, sessão demo, comando ou fallback para tornar o formulário gravável.
+
+3. TELAS E COMPONENTES REALMENTE IMPLEMENTADOS
+
+O diálogo REAL do cadastro agora inclui ProductVariantsForm. Não é nova rota
+de preview: o mesmo diálogo aberto pelo botão Adicionar Produto monta a seção.
+Foi exposto como ProductRegistrationDialog para reutilização e teste direto;
+seus campos simples e writer anteriores permanecem no mesmo componente.
+
+Produto novo sem variantes:
+- Padrão continua simples. Cor/tamanho/modelo não são obrigatórios.
+- Campos, valores, categorias, imagem, fiscal, estoque e fluxo de salvar
+  anteriores permanecem quando variantes estão desabilitadas.
+- Payload simples não ganhou productKind, variants ou definições de atributos.
+- Não houve troca de writer, identidade ou protocolo de retry do produto simples.
+
+Produto novo com variantes, somente rascunho:
+- Chave explícita Produto com variantes no cadastro.
+- Inclusão de atributos flexíveis por nome, como Cor, Tamanho e Modelo, com
+  opções explícitas separadas por vírgula. Sem geração cartesiana.
+- Seletores exigem todos os atributos; aceita nome e COD opcionais da variante.
+- Lista de variantes em rascunho, com combinação/COD e ações Editar/Remover.
+- Edição de rascunho conserva a chave visual. Não altera produto persistido.
+- Recusa combinação parcial, valor desconhecido, combinação duplicada,
+  nome/COD inválido e colisão de COD com o pai/outra linha local.
+- Normalização de COD existente reutilizada para comparação; texto fornecido
+  é preservado no rascunho. Disponibilidade global na loja NÃO é comprovada.
+- Limites locais defensivos existentes: 10 atributos, 100 opções por atributo
+  e 200 variantes. Não foram promovidos a limites comerciais homologados.
+- Não se cadastram saldo/lotes, preço próprio, imagem própria, barcode ou fiscal
+  por variante. Não há quantidade agregada no pai ou defaults comerciais falsos.
+
+Experiência e retenção:
+- Controllers e seleções sobrevivem à alternância do modo e a erros locais.
+- O rascunho não é apagado ao desabilitar variantes; o aviso explica que, nesse
+  modo, o produto será salvo sem variantes.
+- Ao habilitar variantes, os campos legados de estoque/comercial complementar
+  são ocultados para não sugerir saldo do pai ou uma gravação disponível.
+- Salvar fica desabilitado e o próprio handler recusa o modo com variantes
+  antes de validação, precheck COD, upload ou chamada ao writer antigo.
+- A troca de modo fica desabilitada enquanto o salvamento simples está em curso.
+- A seção informa que alterações locais não serão gravadas e se perdem ao fechar.
+  Não foi prometida persistência durável entre sessões.
+
+Produtos existentes:
+- Simples/legados continuam editáveis pelo fluxo anterior. Conversão para
+  variantes está desabilitada, sem redistribuir estoque ou migrar documentos.
+- Pai de variantes ou metadados incompatíveis não podem cair no writer simples
+  deste diálogo. A seleção local de editor simples também é evitada para eles.
+- Definições existentes do pai podem ser apresentadas pelo snapshot recebido.
+- O componente apresenta variantes gravadas quando recebe esses dados para
+  apresentação, incluindo COD, atributos, estoque e arquivamento, somente leitura.
+  Esse caso foi testado com dados injetados, NÃO com leitura Firebase real.
+- A tela operacional ainda NÃO carrega a subcoleção de variantes. Exibe mensagem
+  de leitura indisponível, em vez de fingir uma lista vazia confirmada.
+- Edição cadastral de variantes já gravadas NÃO foi implementada: falta caminho
+  contratual autorizado. Não se usou ajuste C3 ou writer legado como substituto.
+
+4. REUTILIZAÇÃO DO NÚCLEO E ARQUIVOS
+
+Modificados minimamente:
+- lib/screens/management/manage_products_screen.dart
+  Integração da seção, lifecycle do estado de formulário, guardas e exposição
+  do diálogo. Nenhuma formatação global do arquivo ou reescrita do writer.
+- lib/services/variant_preview_state.dart
+  Extraídos os validadores existentes de combinação e campos cadastrais para
+  métodos compartilhados: combinationFor e validateCreationFields. Os métodos
+  anteriores delegam a eles. Não mudou operação, receipt, baseline ou scope.
+
+Criados:
+- lib/services/product_variants_form_draft.dart
+- lib/widgets/product_variants_form.dart
+- test/product_variants_form_draft_test.dart
+- test/product_variants_form_test.dart
+- test/product_registration_variants_test.dart
+- docs/catalog/F10_C4_A_UI_01_RESULTADO.txt
+
+ProductVariantsFormDraft contém somente estado de apresentação com os formatos
+attributeDefinitions/attributes/name/cod existentes. Chaves locais identificam
+linhas de rascunho, NÃO IDs de variantes persistidas. Não cria uma segunda
+arquitetura de variantes ou novos comandos. Não contém scope, baseline,
+ledger, writer, send ou SDK instance.
+normalizeProductCod/validateCreationFields/combinationFor/VariantIdentity são
+reutilizados; ProductCodService não é invocado pelo estado de variantes.
+O fake Firestore de teste existente foi reutilizado sem editar sua fonte.
+
+5. TESTES E RESULTADOS
+
+SDK confirmado no cache: Flutter 3.32.6 / Dart 3.8.1.
+Todos os testes Flutter usam --no-pub. Sem instalação/atualização de dependências.
+
+Novos testes aprovados, 12 casos distintos:
+- product_variants_form_draft_test.dart: 5/5.
+  Simples opcional, retenção de linhas ao alternar, combinação explícita,
+  criação/edição com chave estável, duplicidade, COD local/pai, nome inválido,
+  limites de COD, legado/conversão, dados inválidos e imutabilidade das linhas.
+- product_variants_form_test.dart: 3/3.
+  Adicionar/editar, duplicidade, erro sem perder nome/COD e alternância em
+  390x844 e 1440x900 com texto 1,5x; apresentação somente leitura de variante
+  gravada injetada, com COD/estoque/arquivo. Sem exceção de layout.
+- product_registration_variants_test.dart: 4/4.
+  Diálogo operacional: payload/fluxo simples, chave de variantes bloqueando
+  writer antigo e preservando nome, viewport móvel com erro local e pai
+  existente sem Save/conversão implícita. Canais Firebase simulados.
+
+Regressões relevantes aprovadas, 32 casos distintos:
+- variant_preview_state_test.dart: 12/12.
+- variant_preview_panel_test.dart: 7/7.
+- variant_preview_isolation_test.dart: 1/1.
+- product_dialog_retry_test.dart: 8/8 (criação/edição legadas, resposta perdida,
+  COD existente, erro, resultado incompleto, payload alterado e clique duplo).
+- variant_authoritative_contract_test.dart: 4/4, pois o decoder também usa
+  a validação cadastral compartilhada. Não é implementação de C4-B.
+
+Execuções finais, sem soma dupla dos testes repetidos:
+Suíte conjunta: 43/43 PASS, zero falhas/skip, exit 0. Incluiu 11 testes novos
+e as 32 regressões. Log: build/f10-c4a-ui01/tests-delivery.log.
+Depois, acrescentado um caso para o diálogo REAL em viewport móvel: arquivo
+do diálogo reexecutado 4/4 PASS, sendo três casos repetidos e um novo.
+Log: build/f10-c4a-ui01/dialog-mobile-final.log.
+Total distinto aprovado entre essas rodadas: 12 novos e 32 regressões.
+
+Análise final de seis arquivos (estado compartilhado, dois componentes novos
+e três arquivos de teste): sem issues, exit 0.
+Log: build/f10-c4a-ui01/analyze-final-delivery.log.
+A análise inicial que incluiu a tela antiga retornou exit 1 por 22 infos em
+linhas preexistentes: deprecações/import/style. O registro histórico
+build/f9-b04-analyze-baseline.log também registra 22 issues. Não foram ocultadas
+nem corrigidas por refatoração ampla. Nenhum erro de compilação da tela nova.
+git diff --check e revisão dos deltas contra os snapshots .before: PASS.
+
+Ocorrências intermediárias preservadas:
+- Launcher Flutter no sandbox ficou sem saída; interrompida apenas a própria
+  execução. Repetido com acesso autorizado ao cache do SDK fora do workspace.
+- Primeira rodada nova: 6 PASS / 2 FAIL por helper de scroll/tap ao alternar
+  conteúdo fora da viewport. Corrigido o helper para centralizar e aguardar layout.
+- Uma rodada de regressão teve 33 PASS e duas suítes que não compilaram: await
+  de hide(), que retorna void, e parêntese excedente no teste novo do diálogo.
+  Corrigidos somente esses testes; as expectativas não foram enfraquecidas.
+- Rodadas seguintes: 11/11 e 39/39 PASS. Análise apontou um lint novo de braces;
+  corrigido no arquivo novo antes das execuções finais acima.
+Logs intermediários mantidos em build/f10-c4a-ui01, sem sobrescrever evidências
+históricas. Não há teste falhando ocultado no resultado final desta interface.
+
+6. PROVAS LOCAIS, MOCKS E PERSISTÊNCIA REAL
+
+VALIDADO LOCALMENTE: comportamento de formulário/rascunho, validação, retenção,
+layout, bloqueios de fallback e compatibilidade dos payloads simples testados.
+MOCKS: testes do diálogo usam canais oficiais simulados e fake Firestore local;
+sucesso do createProduct no teste não representa commit em banco real.
+Os testes de apresentação injetam linhas já gravadas para exercitar rendering;
+não demonstram leitura autoritativa ou permissão.
+
+NÃO EXECUTADO: Emulator/backend C1–C3, SDK remoto, HML/PROD, dispositivo físico,
+Chrome real/build Web, deploy ou homologação comercial. Viewports móveis/desktop
+no widget runner não equivalem a testes em Android físico ou navegador real.
+Backend/Rules não foram alterados; suites de backend anteriores não foram
+recontadas como validação desta entrega.
+
+BLOQUEADO: salvar pai/variantes F10 por esse formulário, leitura real da
+subcoleção, editar COD/atributos de variante persistida, verificação global de
+reservas, autorização/contexto real, intenção durável/recovery e transporte
+aprovado. O botão não finge sucesso e não limpa o rascunho por resultado simulado.
+Não há cadastro com variantes completamente integrado/persistente nesta etapa.
+
+7. PRESERVAÇÃO E LIMITAÇÕES
+
+Conferência: 1.787/1.789 entradas de hash idênticas; exatamente duas alterações
+intencionais, correspondendo aos arquivos listados. Nenhum ausente inesperado.
+Evidência: build/f10-c4a-ui01/preservation.json e status/diffs desta execução.
+F9, gates/políticas/relatórios/evidências, backend/Rules, FirebaseOptions,
+checkout/carrinho/pagamento/fiado/offline, pubspec/lock e demais arquivos F10
+recebidos permanecem iguais. O trabalho anterior nos dois arquivos editados foi
+preservado, recebendo somente o delta revisado, com cópia .before disponível.
+
+lib/services/pdf_receipt_service.dart — SHA256 inicial/final:
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9.
+
+Não houve reset/restore/stash/clean/commit/push/deploy, migração, download,
+alteração de dependências, acesso HML/PROD ou writer Firebase adicional.
+Não há garantia global de proteção de variantes por todas as telas/writers:
+a guarda desta entrega vale para o caminho de cadastro inspecionado.
+Rascunhos são em memória e não constituem comando/receipt/estoque autoritativo.
+
+8. PRÓXIMA SUBETAPA DE INTERFACE RECOMENDADA — NÃO INICIADA
+
+Conectar uma leitura autoritativa aprovada para apresentar variantes realmente
+gravadas, com identidade e baseline, sem interpretar ausência de adaptador como
+lista vazia. Persistência deverá usar exclusivamente os caminhos C1–C3 já
+previstos, após satisfazer seus gates de transporte/contexto/durabilidade.
+Edição cadastral de variante persistida exige contrato próprio aprovado; não
+reutilizar ajuste de estoque ou writer simples para isso.
+Somente depois revisar UX de envio/erro/recovery real. Nada disso foi iniciado.
+
+INTERFACE LOCAL VALIDADA; INTEGRAÇÃO PERSISTENTE DE VARIANTES BLOQUEADA.
+PARAR após F10/C4-A UI/01. Não iniciados C4-B, carrinho, checkout ou outra fase.

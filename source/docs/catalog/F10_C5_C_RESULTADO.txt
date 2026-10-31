@@ -1,0 +1,89 @@
+STORE&CONNECT — F10-C5-C
+MAPEAMENTO DE CONSUMIDORES E TRANSIÇÃO MONETÁRIA SEGURA
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+Resultado: inventário dirigido e estratégia recomendada documentados.
+Nenhuma implementação, corte de writer, migração ou ativação realizada.
+
+1. ENTREGA
+docs/catalog/F10_C5_C_TRANSICAO_MONETARIA.md contém inventário por caminho,
+representação, fonte usada, capacidade de escrita e impacto, além de gates,
+matriz futura de testes e fases de liberação.
+Lidos C5-B contrato/resultado, C5-A código, instruções/contexto ativo,
+arquitetura F10, inventário F9/A5 e F8 custo histórico; confirmados pontos
+críticos no código real, sem auditoria global ou acesso remoto.
+
+2. INVENTÁRIO E ACHADOS
+Cadastro/importação/V1/V2 cadastral: price/costPrice em unidade monetária.
+Modelos/carrinho: double, chave por productId, sem variante.
+Checkout ativo instantâneo/fiado: preço/total locais gravados diretamente;
+releitura de estoque não confere autoridade monetária ao preço do carrinho.
+V2 instantâneo local: comando em centavos esperados, relê product.price UM
+no servidor e grava histórico em UM após verificação estrita. Não integrado
+ao checkout ativo, nem exportado no index; não é protocolo de variante.
+Offline: SQLite REAL/productsJson UM; sync conserva preços do backlog,
+arredonda e valida o total internamente, sem resolver perfil C5.
+Catálogo: preço legado e arredondamento; somente productId; solicitação
+pública não é venda/reserva/baixa de estoque.
+Relatórios/PDF/recebíveis: consomem preços/totais/parcelas históricos UM.
+Fiscal: preço/total da sale e fiscal atual por productId; sem variante;
+preço positivo exigido impede presumir gratuidade fiscal pelo DTO C5.
+Custo: cadastro existe, mas snapshots de custo C5 não são capturados pelos
+writers de venda examinados. F8 é planejamento, não lucro implementado.
+Rules: products ainda permite update monetário e sales create direto;
+wildcard recursivo exclui products, não libera automaticamente os perfis
+aninhados. Admin ignora Rules, exigindo guardas próprias.
+
+3. ESTRATÉGIA RECOMENDADA
+Simples legados mantêm UM, sem perfil monetário novo nesta primeira fase.
+Novos pais/variantes usam somente perfil separado C5-B em centavos;
+pai nunca vendável, sem espelho price/costPrice no topo.
+Sem duas fontes ativas, conversão, migração ou reprecificação automática.
+Perfil ausente não é configuração vazia nem preço zero. Null não herda.
+Novo V3 deve revalidar pai/variante e ambos os perfis coerentemente no
+servidor/transação, resolver herança/override, conferir expectativas/revisões
+e calcular totais inteiros seguros. Formato de quote/sale/receipt é decisão
+futura, não alterado neste diagnóstico.
+Históricos e backlog legados preservam conteúdo, IDs, unidades e replays.
+Mudança de cadastro atual não reescreve preço/custo de venda confirmada.
+
+4. BARREIRAS E DEPENDÊNCIAS
+Pontos exatos indicados no documento: current/persisted V1, mutation/prepare
+cadastral e stock V2, create/import/edit-state, confirmSaleV2 antes de
+priceCents/stock, sync antes da baixa mas após replay conhecido, catálogo,
+archive/restore/taxonomia, Rules products/sales e wildcard/perfis futuros.
+Proteção de tipo/versão deve considerar estado anterior/posterior; omitir
+variantId ou remover price não basta para barrar venda/edição do pai.
+Rules não filtram queries amplas antigas: plano de exposição/queries e
+clientes mistos precisa aprovação antes de ativação na mesma coleção.
+F9/A5 corte de writers permanece pendente; C5 não o substitui. F10-D depende
+das barreiras, histórico V3 e preço coerente, não somente do resolver puro.
+Fiado, offline, fiscal e recebíveis exigem gates próprios, sem corte cego.
+Backup v1 não inclui os perfis/variantes; restore permanece bloqueado.
+
+5. PRÓXIMO BLOCO SEGURO E DECISÕES
+Recomenda-se contrato de elegibilidade por domínio e matriz de barreiras
+V1/V2, seguido de validadores puros/testes sintéticos após autorização.
+Não começar por writer comercial, checkout V3 ou migração.
+Decidir rollout de simples/perfis, clientes antigos e Rules, erro/replay,
+obrigatoriedade do preço-base, gratuidade, custo desconhecido, schema de
+venda/projeções, descontos e preço offline. Pendências de barcode global,
+imagens e exceções fiscais continuam sem aprovação adicional implícita.
+Testes necessários estão detalhados no documento: autoridade/unidades,
+concorrência, falha fechada, bypass V1/V2/Rules/Admin, replays/históricos,
+backlog, relatórios/PDF/fiado/fiscal e exportação versionada.
+
+6. VALIDAÇÃO E PRESERVAÇÃO
+Etapa somente leitura/documentação: nenhum teste Node/Flutter/Emulator de
+comportamento executado e nenhum teste novo criado. Resultados C5-A/B não
+são recontados. Matriz futura não representa comprovação operacional.
+Validação documental, revisão do diff novo e git diff --check.
+Manifesto SHA256 inicial de 631 arquivos não ignorados, em
+TEMP/f10-c5-c-manifest.json; conferência final sem divergências.
+Criados somente os dois documentos solicitados. Helper de manifesto no TEMP.
+Nenhum contrato/código/Rules/index/Flutter/receipt/ledger alterado.
+F9/A5 e todas as etapas F10 anteriores preservados integralmente.
+Sem HML/PROD, Firebase remoto, instalação, commit, push, deploy, migração,
+reset, restore, stash ou clean. Alternativa D mantida, transporte não retomado.
+Restore de backup bloqueado. Parada após F10-C5-C.

@@ -1,0 +1,183 @@
+STORE&CONNECT — F10-C4-B2-A — LEITURA AUTORITATIVA E RECEIPTS
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+
+1. ESCOPO E ARQUIVOS
+Criados:
+- functions/products/productVariantsReadB2A.js
+- functions/tests/products/productVariantsReadB2A.emulator.test.js
+- docs/catalog/F10_C4_B2_A_CONTRATO_LOCAL.md
+- docs/catalog/F10_C4_B2_A_RESULTADO.txt
+Modificados minimamente:
+- functions/products/productVariantsC1.js: apenas exportação de command no
+  objeto interno localMutationSupport já existente.
+- functions/products/productVariantsC3.js: apenas exportação de command em
+  localReadSupport, sem mudança de função/assinatura/comportamento anterior.
+Os normalizadores originais são reutilizados para não duplicar protocolos.
+Nenhuma lógica de escrita, formato persistido ou namespace foi modificado.
+
+Lidos contexto AGENTS/CURRENT_WORK, arquitetura F10, relatórios C1/C2/C3,
+contrato C3, resultados B1/B1-W, DTOs e serviços efetivos C1/C2/C3, helpers
+F9 de COD/estoque e interfaces Flutter VariantAuthoritativeReader e
+VariantReceiptReader. CURRENT_WORK contém checkpoint F7 histórico; escopo
+atual segue a solicitação explícita B2-A. Etapas anteriores não reconstruídas.
+
+2. LEITURA AUTORITATIVA
+readVariantStateB2A lê pai ou pai+variante por IDs estáveis e scope completo
+na mesma transação que revalida perfil, papel, revogação e vínculo de loja.
+Devolve snapshot data completo, updateTime preciso seconds string/nanoseconds,
+identidade e parent.isSellable=false. Não cria baseline, saldo agregado ou
+preço efetivo. VariantId omitido solicita pai; null explícito é inválido.
+Valida estrutura/versionamento, combinação completa/canônica, pertencimento,
+índice, estoque/lotes pelas regras oficiais F9/C3 e reservas COD pelo ownership
+F9. Interpreta reserva legada sem ownerType sem migração/regravação.
+Arquivados permanecem legíveis com seus dados; leitura não permite operação.
+Campos desconhecidos, metadados de lotes, omissão/null/valor e tipos SDK
+suportados pelo adaptador C1 são preservados. Timestamps não passam por Date,
+ISO ou milissegundos. O Emulator persiste microsegundos: retorno compara o
+valor realmente armazenado, sem fingir preservar nanos descartados pelo banco.
+O adaptador em memória também foi verificado com nanos não múltiplos de 1000.
+
+3. RECEIPTS E IDENTIDADE
+queryVariantReceiptB2A recebe operation original e command completo congelado.
+Consulta exclusivamente auditLogs/f10-c1-SHA256(JSON.stringify([uid,requestId]))
+da loja autorizada. Sem namespace paralelo, varredura de receipts F9 ou fallback.
+createProductC2/createVariantC2 mapeiam operações persistidas C1. Criações C1
+históricas continuam compatíveis. Defaults do comando persistido de produto
+são validados antes de reconstruir a entrada aceita pelo normalizador C1.
+
+Valida schema/createdAt, operação, comando normalizado completo, scope
+projectId/uid/storeId, requestId, productId/variantId, baselines e resultado.
+Criação não possui requestId no result: a chave e o command estabelecem vínculo.
+C3 exige requestId/changed/replayed=false compatíveis e audit coerente. Ajuste
+reproduz preparação F9 sobre audit.before, comparando after e changed;
+arquivamento valida transição/no-op e motivo. Não reexecuta writer.
+Não transforma retorno de consulta em replay de comando nem altera receipt.
+Resultado confirmado inclui operação original/persistida e receipt com path,
+updateTime e dados. Conflito não expõe receipt/comando da outra intenção.
+
+COD raw permanece exato conforme persistido: omitido, vazio, espaços e texto
+normalizável não são intercambiáveis na identidade C2. Baselines congelados
+não são substituídos pelos atuais. A prova respeita equivalência histórica
+do normalizador: espaços externos de reason C3 e defaults quantidade/lotes
+de criação de produto já eram normalizados pelos writers; os receipts não
+provam distinções de bytes que nunca armazenaram. Isso está documentado.
+
+4. AUTORIZAÇÃO, ATOMICIDADE E RESULTADOS
+Guarda demo-* + host loopback + servicePath/porta/ssl efetivos do SDK antes
+de I/O. Auth é contexto confiável local, como C1/C3; não há endpoint público
+nem verificação remota de tokens. Integração futura deve fornecer contexto
+autenticado, nunca aceitar auth.uid do payload público como autoridade.
+Cada consulta reautoriza, inclusive receipt existente; archive exige admin
+atual. Scope é asserção contra projeto real do SDK e perfil relido no banco.
+Leituras de pai/variante/índice/COD/receipt e autorização são transacionais.
+Não existe create/update/set/delete neste serviço. Concorrência aceita apenas
+ordens seriais válidas; revogação efetivada bloqueia consultas posteriores.
+
+Resultados: available (snapshot), confirmed (receipt compatível),
+identity-conflict, access-denied, inconsistent-state e unknown.
+Entrada inválida gera invalid-argument; ambiente proibido, failed-precondition.
+Ausência de receipt/entidade/loja, timeout, falha de leitura e esgotamento
+transacional permanecem unknown. Falta de resposta também não prova rejeição.
+Nenhum resultado desbloqueia ledger, envia comando, cria requestId ou troca
+identidade. Confirmação independe de estado atual alterado/arquivado/ausente.
+
+5. TESTES E AMBIENTE
+Somente dados sintéticos no Firestore Emulator demo-store-connect-f10-b2-a.
+Host de testes 127.0.0.1/localhost, porta configurada 8080; sem HML/PROD.
+Java já instalado Android Studio/jbr (25.0.3), JAVA_HOME/PATH apenas da sessão;
+sem instalar/atualizar Java ou alterar configuração permanente.
+CLI inicialmente bloqueado pelo sandbox ao ler firebase-tools.json (EPERM).
+Reexecução com autorização de ferramenta, exclusivamente Emulator local.
+
+Primeira execução B2-A: 20 testes, 9 passaram e 11 falharam. Diagnóstico:
+helper object não era exportado pelo contrato F9; substituído por verificação
+local de objeto, sem modificar F9. A assertiva de nanos esperava valor anterior
+à persistência; corrigida para comparar snapshot realmente armazenado e
+acrescentada prova do adaptador em memória. Não houve contorno de comportamento.
+Segunda execução: 20/20 aprovados, zero falhas/skip, CLI exit code zero.
+Depois adicionados seis casos (pai isolado, COD espaços/vazio/omitido, scope
+do receipt divergente, snapshot ausente, timeout pós-autorização e leitura
+concorrente com ajuste), totalizando 26 testes B2-A.
+
+Comando final efetivamente executado:
+firebase.cmd emulators:exec --config firebase.json
+  --project demo-store-connect-f10-b2-a --only firestore
+  "node --test --test-reporter=spec --test-concurrency=1
+   functions/tests/products/productVariantsReadB2A.emulator.test.js
+   functions/tests/products/productVariantsC1.emulator.test.js
+   functions/tests/products/productVariantsC2.emulator.test.js
+   functions/tests/products/productVariantsC3.emulator.test.js
+   functions/tests/products/productVariantsV1.test.js
+   functions/tests/products/productMutationV2.emulator.test.js
+   functions/tests/products/productCodeAtomic.emulator.test.js"
+
+Cobertura nova: receipts reais produzidos por C1/C2/C3; aliases; no-op;
+comando/operação/baseline/identidade divergentes; COD raw; autorização,
+revogação, ausência de auth, isolamento de projeto/ator/loja, archive admin;
+corrupção de envelope/comando/result/audit/índice/reserva; snapshot preciso,
+metadados/tipos SDK, lotes, pai não vendável e arquivados; concorrência de
+consulta/commit/estoque/revogação; falha de writer com ausência de receipt;
+timeout simulado antes e depois da autorização; snapshot da intenção antes
+do primeiro await; queries sem métodos de escrita e updateTimes inalterados.
+Falhas de rede são injetadas localmente, sem contatar endpoints remotos.
+
+Regressões C1/C2/C3 exercitam rollback completo, integridade/reservas,
+concorrência, baselines, replay e autorização; F9 V2 comprova separação
+cadastro/estoque e mantém seus testes sintéticos de vendas/offline apenas
+no Emulator, sem ativar integração. Flutter não repetido: nenhum Dart,
+SQLite/IndexedDB, contrato de ledger ou UI foi alterado. Validações B1 e
+B1-W anteriores permanecem preservadas; nenhuma auditoria global executada.
+
+6. UNKNOWN E LIMITES AINDA BLOQUEADOS
+C1/C2/C3 não gravam receipts de rejeição. Não há evidência para rejeição
+terminal por ausência, nem como distinguir não enviado/em andamento/rejeitado
+sem receipt. Unknown continua bloqueado, inclusive após reinício/timeout.
+Conflito, corrupção e acesso negado não autorizam nova identidade.
+Receipts não contêm baselines pós-commit; updateTime do receipt não substitui
+token de entidade. Nova intenção exige leitura autoritativa futura; original
+permanece imutável. Dados já normalizados não provam bytes não persistidos.
+
+Receipt confirma atomicidade do writer confiável e intenção normalizada;
+não é assinatura criptográfica nem defesa contra Admin malicioso/corrupção
+semanticamente consistente. Testes Admin não certificam Rules cliente ou
+barreiras de writers operacionais. F9 prepareCodeChange ainda libera reservas
+antigas em certas trocas/remoções. Retenção histórica global NÃO resolvida.
+Ativação comercial bloqueada; sem teste de carga ou política nova de lotes.
+
+7. PENDÊNCIAS B2-B E PRESERVAÇÃO
+Definir decoder/prova autoritativa Flutter e mapeamento explícito de todos os
+status, mantendo null/ausência como unknown. VariantLocalResolution B1 é
+simulação e não contém prova real: não usado para conciliação nesta etapa.
+Futura integração deve revalidar sessão/escopo antes e após awaits, usar CAS,
+preservar comando/requestId/tokens e manter unknown/conflito em quarentena.
+Transporte, endpoint, UI e qualquer liberação real de ledger ficam pendentes
+de etapa própria. B2-B não iniciado automaticamente.
+
+Manifesto inicial: 611 arquivos preexistentes não ignorados. Apenas C1/C3
+mudaram com exportações aditivas; removendo esses acréscimos em memória,
+SHA256 coincide exatamente com os dois originais, inclusive formatação.
+Os outros 609 arquivos permanecem idênticos, incluindo F9/A5 B01–B07-C,
+Rules/index, writers legados, Flutter/ledger/testes SQLite/IndexedDB e reports.
+Logs locais ignorados gerados pelo CLI não fazem parte desse manifesto.
+Sem commit/push/deploy/migração/instalação/reset/restore/stash/clean ou acesso
+HML/PROD. Restore de backup permanece bloqueado. Parada obrigatória após B2-A.
+
+8. RESULTADO FINAL
+F10-C4-B2-A implementado e validado localmente.
+Suíte final: 131/131 aprovados, zero falhas/cancelamentos/skip, 280,1 segundos.
+Composição: 26 B2-A + 14 C1 + 22 C2 + 18 C3 + 18 F10-B + 32 V2 + um arquivo
+COD F9. O runner interno desse arquivo aprovou 37 cenários e 15 pares de
+corridas; não somados novamente ao total node:test. CLI exit code zero;
+Emulator encerrado normalmente ao final.
+Checks node --check dos quatro JS envolvidos aprovados. git diff --check
+aprovado; avisos de conversão LF/CRLF referem-se a arquivos preexistentes,
+sem alteração por esta etapa. Whitespace/ausência de BOM dos quatro arquivos
+novos conferidos. Revisão do serviço e dos acréscimos concluída; nenhuma
+referência adicionada a functions/index.js ou ao Flutter.
+Manifesto final confirma os 609 outros arquivos preexistentes idênticos;
+as duas diferenças são exclusivamente exports internos descritos acima.
+Branch e HEAD preservados. Resumo exibido no terminal; relatório completo
+exportado neste arquivo .txt. Sem commit, push, deploy ou ativação remota.
+B2-B não iniciado. Trabalho encerrado após B2-A.

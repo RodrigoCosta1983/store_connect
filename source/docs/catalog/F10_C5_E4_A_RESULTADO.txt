@@ -1,0 +1,518 @@
+STORE&CONNECT — F10-C5-E4-A
+MAPEAMENTO DIRIGIDO DOS WRITERS LEGADOS E BARREIRAS PENDENTES
+Data: 17/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+DECISÃO: diagnóstico concluído; nenhuma correção implementada ou ativada.
+
+1. BASE, ESCOPO E EVIDÊNCIA
+
+Reaproveitados F9_A5_INVENTARIO_WRITERS.md (W01–W15) e
+F9_A5_B06_RESULTADO.txt (S01–S11). Não reconstruído inventário global.
+Lidos AGENTS.md, CURRENT_WORK.md (checkpoint histórico), F7 principal,
+F10_ARQUITETURA_CONTRATOS.md, decisões aprovadas, relatórios E1-R2, E2-A,
+E2-B, E3-A e E3-B-R2; consultado também E3-B-R1 e integração B07-C.
+E3-B-R2 supera as pendências históricas de validação/COD no seu escopo:
+E2-B contém registro antigo BLOQUEADO, mas R2 registra sua regressão aprovada
+(49/49 Emulator e Node dirigido). Não reabrir essa etapa pelo texto antigo.
+Da mesma forma, descrições antigas de exclusão da reserva em W11/E3-A estão
+superadas pelo helper atual e E3-B-R2. Retenção está validada localmente.
+
+Inspeção estática dirigida das fontes abaixo; linhas são da árvore local.
+“Exportado” significa export presente no index local, não deploy comprovado.
+“Comprovado” significa efeito/permissão dedutível do código, sem exploração
+remota nem teste novo. Condições de dados e alcance estão explicitadas.
+Não certifica clientes distribuídos, consoles, ferramentas externas ou Rules
+implantadas. Nenhuma consulta HML/PROD nem alteração funcional foi feita.
+
+Working tree inicial extenso, com alterações rastreadas e não rastreadas das
+etapas informadas, foi preservado. Somente este relatório é entrega nova.
+Manifesto SHA256 em memória dos arquivos Git existentes foi capturado antes
+da escrita para comparação final, excluindo este relatório. Nenhum teste,
+instalação, Emulator, commit, push, deploy, migração, reset, restore, stash
+ou clean executado nesta etapa.
+
+2. LEGENDA DA MATRIZ
+
+Todos os caminhos de domínio ficam sob stores/{storeId}, salvo SQLite local.
+P = products/{productId}; V = P/variants/{variantId}; CP = commercialProfiles/current
+da entidade; S = sales/{saleId}; R = productCodes/{sha256(COD normalizado)};
+A = auditLogs; CF = cash_flow. Receipt é resultado durável de comando,
+não recibo PDF nem simples evento de auditoria.
+Em cada linha: alcance; efeitos/autoridade; identidade e marcadores; COD;
+receipt/replay/CAS/offline; barreira e prova mínima. IDs B06 mantidos.
+
+3. MATRIZ — WRITERS RESTANTES E SUPERFÍCIES DIRETAS
+
+M01 / W02 — updateProduct (V1; não existe export updateProductV1).
+Arquivo/função: functions/products/updateProduct.js:20–94, updateProduct;
+contrato updateProductContract.js -> createProductContract.js.
+Exportado index.js:2345; conectado ao editor por product_update_service.dart:36
+e manage_products_screen.dart:885. Admin SDK, não sujeito às Rules.
+Transação lê perfil/loja, receipt e P atual; escreve cadastro comercial,
+quantidade/lotes/fiscal do payload, R nova quando cabível e A/receipt.
+Sem gate C5 ou leitura CP. Pode modificar estoque/preço de pai explícito ou
+documento de variante copiado no topo como se simples, se demais requisitos
+legados forem válidos. Não cria venda. Variante real aninhada não é endereçada.
+NÃO apaga discriminadores omitidos: transaction.update é patch, não set
+substitutivo. Allowlist de entrada não aceita productKind/variantSchemaVersion/
+attributes/attributeDefinitions/productId interno/variantId. Sobrescreve saldo,
+lotes e campos comerciais aceitos, inclusive depois de uma venda concorrente
+já concluída: transação não equivale a CAS da intenção do editor.
+COD usa helper E3-B atual: histórico retido, mesmo owner não reativa histórico;
+reserva ausente não é reparada. Receipt/hash/replay V1 presentes, auth antes
+do replay; NÃO possui expectedUpdateTime nem ledger operacional durável.
+Falta barreira C5 de novo efeito e posterior corte coordenado do editor V1.
+Teste: pai/perfil/parcial/variante no topo recusados sem P/R/A novos; simples
+compatível e replay antigo após mudança continuam iguais; stock stale
+caracterizado separadamente, sem inventar CAS no contrato congelado V1.
+
+M02 / S01/W09 — PaymentOptionsSheet._handleInstantSale.
+lib/widgets/payment_options_sheet.dart:259,326,339,364,414,424.
+Ativo no checkout Flutter: NewSaleScreen -> CartScreen -> PaymentOptionsSheet.
+SDK cliente/Rules. Transação relê P e valida disponibilidade manual/FIFO;
+escreve quantidade/lotes + set S. Não lê S para replay, não lê CP nem C5;
+preço/nome/total vêm do carrinho. Pai com saldo positivo pode ser vendido como
+simples. Variante real aninhada não é acessada; marcador variante num P de topo
+é ignorado. Não remove marcadores e não escreve R/COD.
+Sem receipt/hash/CAS de intenção; novo ID por invocação pode duplicar venda.
+Fallback mobile conserva ID da chamada, mas novo retry UI gera outro ID.
+Falta migração operacional F9 do checkout e gate de novos efeitos simples;
+guard visual sozinho não fecha acesso direto. Testes: pai/perfil recusado,
+preço revisto explicitamente, resposta perdida sem nova baixa/ID, concorrência,
+FIFO e falha fiscal posterior sem repetir venda. Não ativar núcleo local.
+
+M03 / S02/W10 — ConfirmFiadoDialog._submitFiadoSale.
+lib/widgets/confirm_fiado_dialog.dart:155,220,228,275,287.
+Ativo por _startFiadoProcess em payment_options_sheet.dart; SDK cliente/Rules.
+Batch cria S com cliente/dívida/installments e incrementa P.quantidade negativo.
+Não relê saldo/lotes/estado autoritativo na unidade de escrita, não faz FIFO.
+Pode baixar pai como simples e produzir negativo/divergência com lotes.
+Não alcança V real, não apaga marcadores, não escreve COD/R.
+Sem receipt/replay/CAS; ID novo por envio; não há fiado offline contratado.
+Faltam contrato/backend de fiado e integração própria, não redirecionamento
+cego a confirmSaleV2 (instantâneo). Provas: saldo concorrente, pai/perfil,
+FIFO, identidade estável, rollback, 1–12 parcelas/datas civis, diferença de
+centavos na última parcela; preservar campos consumidos pelos recebíveis.
+
+M04 / S03/W08 — syncOfflineSale.
+functions/sales/syncOfflineSale.js:586,715,787,856,1022,1053,1076,1134;
+export index.js:1892; chamado por offline_sales_sync_service.dart:150.
+Admin. Transação lê owner/loja, S existente e P; baixa quantidade/FIFO e cria
+S; A adicional quando aceita produto arquivado por política histórica.
+Valida estoque atual, mas sem C5/CP/discriminadores. Pai com saldo legado
+pode ser baixado como simples; V real não é endereçada. Não remove marcadores
+nem escreve COD/R. Itens productId duplicados não têm rejeição explícita:
+checagens por linha contra mesmo snapshot podem divergir do efeito agregado
+(saldo manual/FIFO); risco demonstrado estaticamente, não reproduzido aqui.
+Replay por existência/localSaleId, sem hash de conteúdo; não baixa de novo no
+replay. Sem CAS de intenção. Backlog/arquivados/preços pactuados são contrato
+histórico, não venda nova online; isPaid=true não implementa fiado.
+Falta barreira específica para NOVO efeito legado com contexto histórico.
+Não aplicar evaluate(...operation=offline) cegamente: esse domínio retorna
+offline-history-context-required. Preservar replay conhecido antes de novo
+gate mutável, conforme autorização histórica. Testes: replay após tipo mudar
+sem baixa extra; pai/perfil novo bloqueado; duplicados, FIFO, arquivado antes/
+depois, payload divergente caracterizado e sem fabricar receipt retroativo.
+Qualquer mudança no replay/owner/preço histórico exige contrato específico.
+
+M05 / S04 — OfflineSalesRepository.validateStockAndSaveSale / saveSale.
+lib/data/local/offline_sales_repository.dart:120,154,167,233;
+app_database.dart:68,101,155. Ativo mobile via fallback; saveSale é helper
+latente sem chamador operacional encontrado no B06, não declarar removido.
+Transação SQLite valida cache menos reservas e grava PendingSales; saveSale
+alternativo não valida estoque. Não escreve Firestore nem é saldo global.
+Sem identidade variante/C5; pode aceitar intenção de pai presente no cache,
+mas efeito remoto depende de M04. Não apaga marcadores/COD remotos.
+localId estável da chamada; insertOrIgnore não compara payload; sem receipt
+servidor/CAS. Fila/reservas sem filtros uid/projeto/loja suficientes.
+Falta reconciliação/isolamento contratado do backlog; não preencher autoria
+ausente com login atual nem converter linhas antigas em ledger V2.
+Testes: troca conta/loja/projeto, colisão productId, reinício, ID repetido com
+conteúdo diferente, pendências preservadas e reserva liberada só após prova.
+
+M06 / S05 — OfflineSalesSyncService._syncSingleSale / coordenação sync.
+lib/services/offline_sales_sync_service.dart:85,144,150;
+app_database.dart:193–253. Ativo mobile por NewSaleScreen/conectividade.
+Escreve estados SQLite pending/syncing/failed/synced; remoto delegado a M04.
+Sem transação distribuída ou CAS/claim durável entre instâncias; _isSyncing
+é local. Refresh de estoque falho após commit mantém failed/reserva.
+Não muda marcadores/COD; herda risco de pai de M04 e escopo de M05.
+Falta reconciliação de resultado sem nova venda. Testes: commit+refresh falho,
+reinício syncing, múltiplas instâncias, resposta perdida, NFC-e sem reabertura.
+
+M07 / S06 — SalesProvider.receiveCustomerDebtPayment.
+lib/providers/sales_provider.dart:112,142,448,464; ativo via
+CustomerDebtDetailScreen. Cliente/Rules. Transação relê lista de S consultada
+antes dela, atualiza parcelas/resumos e cria CF. Não modifica P/V/estoque/COD.
+Não vende pai como simples nem apaga discriminadores de produto. Preserva
+mapas históricos relidos; não é gate da confirmação comercial anterior.
+Sem identidade durável de pagamento/receipt/replay; transação evita conflito
+da escrita, não repetição da intenção. Sem CAS explícito/offline contratado.
+Falta comando de recebimento independente e regra que limite folhas mutáveis
+da venda. Testes: parcial/integral/cascata, duplo envio, concorrência S07,
+campos desconhecidos preservados, sem novo estoque/caixa retroativo.
+
+M08 / S07 + S08 — markOrderAsPaid / addCashFlowEntry.
+sales_provider.dart:477,482; cash_flow_provider.dart:102,113;
+OrderItemWidget:501–516, ativo condicional para fiado legado sem installments.
+Cliente: update S.isPaid, depois append CF separado. Sem atomicidade conjunta,
+receipt/replay/CAS; falha intermediária pode deixar pagamento sem caixa,
+repetição pode duplicar CF. Não altera produto/marcadores/COD, não vende V.
+Falta adapter de quitação histórica com reconciliação, sem inventar caixa.
+Provas: falha entre chamadas, repetição e histórico parcialmente pago;
+preservar shape CF e não misturar quitação com confirmação de venda.
+
+M09 / S09 — SalesProvider.addOrder.
+lib/providers/sales_provider.dart:24,45. Latente, sem chamador operacional
+encontrado no inventário; SDK cliente, add S com itens do carrinho sem estoque.
+Sem transação/releitura de produto/C5, receipt/replay/CAS; assinatura lida antes.
+Pode registrar pai como simples se invocado; uso atual é hipótese, capacidade
+do writer é comprovada. Não remove marcadores nem escreve COD/R.
+Falta cobertura no gate de sales.create mesmo que products fique fechado.
+Teste: acesso direto cria venda forjada sem baixa hoje; futuro gate deve
+negar criação fora do backend autorizado, sem depender do uso desse helper.
+
+M10 — Superfície direta products.update permitida pelas Rules.
+firestore.rules:186–231; entrada é qualquer cliente autenticado autorizado
+da mesma loja, não uma função Flutter específica. Role operacional e loja
+existente exigidas; não garante acesso revogado às outras coleções.
+Pode alterar quantidade/lotes/preço/custo/fiscal, adicionar/substituir/remover
+productKind, variantSchemaVersion, productId, variantId, attributes e
+attributeDefinitions. Sem transação obrigatória, C5, validação de saldo,
+receipt/replay/CAS ou relação com S. Não há writer Flutter atual comprovado
+apagando esses marcadores, mas a permissão local para fazê-lo é comprovada.
+COD/taxonomia/arquivamento e delete físico são negados; não remove R.
+Falta proteção de transições estruturais e de novos campos monetários; teste
+Rules autenticado deve negar deleteField, replacement set e transforms
+tentando apagar/trocar TODOS os marcadores, mantendo campos protegidos iguais.
+
+M11 — Superfície direta sales.create/update permitida pelas Rules.
+firestore.rules:118–159. Mesmo perfil/loja; create exige storeId correto,
+sem schema/itens/produto/valor/stock/receipt ou papéis/revogação operacionais.
+Update protege SOMENTE storeId, createdAt, localSaleId e syncOrigin.
+Logo products/identidades de itens, totalAmount, pagamento, parcelas e fiscal
+podem ser sobrescritos/removidos diretamente preservando aqueles quatro.
+Pode fabricar venda de pai ou variante como simples ou reescrever histórico;
+não implica baixa de V real. Não modifica COD/P automaticamente.
+Sem transação/receipt/replay/CAS exigidos. Presença de receipt backend em A
+não torna S imutável. Falta corte de creates diretos e allowlist de alterações
+históricas coordenada com M07/M08 e fiscal Admin. Provas Rules de mutação de
+itens/total/identidade negada, pagamentos legítimos preservados no contrato.
+
+4. CAMINHOS JÁ PROTEGIDOS E LIMITES — NÃO REABRIR
+
+P01 — confirmSaleV2 / getSaleMutationResultV1:
+functions/sales/confirmSaleV2.js:40,109,147,197,204–207. Export do módulo,
+SEM export index e com guard Emulator demo/loopback; SaleMutationApi também
+local, sem checkout integrado (B07-C). E1-R2 validado. Novo efeito transacional
+reconsulta entidade/CP e C5; auth/receipt/replay precedem estado mutável.
+Venda simples instantânea apenas; estoque+S+receipt atômicos, sem V3/fiado/
+backlog. Não remove discriminadores nem altera COD; preserva CAS/concorrência
+do contrato de venda (não confundir com expectedUpdateTime cadastral).
+Falta integração F9 operacional, não outra reimplementação de C5 nessa função.
+
+P02 — updateProductV2 / adjustProductStockV1:
+productMutationV2.js:266–322; index.js:2348–2351. Expostos no index local,
+adapters/ledgers novos não substituem automaticamente editor V1 operacional.
+E2-B/E2-A e regressões E3-B-R2: C5 transacional, leitura CP, CAS exato,
+receipts/hash/auth/replay preservados; novos bloqueios C5 não criam terminal
+indevido. Allowlist cadastral não apaga marcadores; stock muda só saldo/lotes.
+Cadastro não deve exigir preço vendável para permitir correção legítima;
+estoque não exige preço de venda. Não transformar read em autorização sale.
+COD cadastral usa retenção E3-B. Sem venda/fiado pelo ajuste de estoque.
+
+P03 — productCodeReservation.prepareCodeChange:
+functions/products/productCodeReservation.js:69 em diante; usado por create,
+V1/V2, archive/restore. Namespace SHA256 único por loja, ownership product/
+variant e legado em memória. Troca/remoção conserva reserva antiga imutável;
+retorno ao histórico bloqueado inclusive mesmo owner. Não é alias de busca.
+Não há writer operacional conhecido apagando reservas após E3-B-R2.
+Reservas apagadas anteriormente não são reconstruídas; scans/custo/carga e
+integridade prévia continuam limites. Admin arbitrário externo não certificado.
+
+P04 — createProduct / importação F9 (W01):
+createProduct.js:314–731 e createProductContract.js:13–36,294;
+index.js:2342; editor e ProductImportService chamam criação, não update de
+existentes. Transação valida contrato fechado, taxonomia, estoque inicial,
+R e receipt; sem marcadores F10 aceitos. Cria simples legado novo, não converte
+P existente. Não remove discriminadores nem vende pai/V. Sem CAS de editor
+porque criação; identidade requestId no diálogo/importador tem limites de
+durabilidade B06. Teste futuro só de regressão de criação/importação e rejeição
+de campos estruturais, sem reabrir COD/ativar importação de variantes.
+
+P05 — C1/C2/C3 locais:
+productVariantsC1.js:createProductC1/createVariantC1/createProductC2/
+createVariantC2; productVariantsC3.js:mutate/adjustVariantStockC3/archiveVariantC3.
+Sem index/onCall comercial; guards Emulator. Escrevem P/V, combination index,
+R C2 e A/receipts; transações com auth, identidade, CAS/replay e reservas.
+C3 valida pai, variante, combinação e COD; altera apenas estoque ou isArchived
+da V, sem conversão simples/venda/remoção de marcadores. Não inventar suporte
+comercial ou gate C5 global a partir dessas provas locais. Perfis monetários
+C5 são contrato/projeção; não foi identificado aqui writer comercial ativo CP.
+
+P06 — archiveProduct / restoreProduct (W06/W07):
+archiveProduct.js:202–239; restoreProduct.js:289–359. Exportados e usados pelo
+Flutter. Transação relê P/valida COD atual, muda só arquivamento e A; não altera
+estoque/discriminadores nem libera R. Sem receipt/CAS de intenção, apenas
+idempotência pelo estado. Não há conversão de tipo; podem arquivar/restaurar
+pai sem cascade, deixando V inacessível pelas operações C3 enquanto pai inativo.
+Isso não prova baixa/venda indevida. Falta contrato explícito de ciclo de vida
+de pai e pendências antes de integração F10; decisão C09 não autoriza conversão.
+Provas mínimas futuras: estoque/R/V intactos, pai inativo bloqueia C3, retry
+antigo após operação inversa caracterizado. Não confundir com backup restore.
+
+P07 — setProductCategories (W05):
+setProductCategories.js:334–646; export/index e editor Flutter. Transação com
+expectedTaxonomy, releitura e auditoria; patch só categoryIds/categoryId/
+categoryName. Não remove marcadores/estoque/COD nem vende. Sem receipt durável
+e CAS geral; no-op e baseline são taxonômicos. Não há bypass estrutural neste
+patch. Regressão futura de preservação de campos, sem refatoração taxonômica.
+upsertCategory/deleteCategory e seed-hml-categories (W12–W14) não gravam P/V/
+saldo/venda por cascade; seed Admin não executado, sem barreira de Rules.
+
+P08 / S10 — emitirNfce, functions/fiscal/emitirNfce.js:
+Admin exportado/chamado pós-venda por checkout e sync. Merge fiscal.nfce em S
+e efeito externo fiscal; não baixa estoque nem cria venda comercial. Replay
+fiscal não é receipt da venda. Preservar snapshot histórico, não revalidar
+produto atual como condição para reemitir fato antigo. Não promete exactly-once
+externo em toda falha. Teste futuro: repetição fiscal sem mudar itens/estoque
+ou confirmação comercial, fora de patch C5 de produto.
+
+P09 / S11/W15 — restoreStoreToEmulator:
+functions/backups/storeRestoreEmulator.js:102,148–158,176. Não exportado no
+index, guard local e RESTORE_EXECUTION_BLOCKED_INTEGRITY antes do commit de
+writes. Builders têm create/overwrite/delete capazes de apagar identidade,
+mas capacidade está BLOQUEADA: bypass ativo por restore NÃO demonstrado.
+createStoreSnapshot é leitura/backup, não writer operacional de produto.
+Não desbloquear, não testar restore real, não criar protocolo novo nesta etapa.
+
+P10 — Catálogo público e solicitações (fronteira comercial, não venda):
+functions/catalog/createCatalog.js:projectDynamicCatalogProduct:159,
+validateCatalogProduct:774, createCatalog:922, updateCatalog:1281,
+getPublicCatalog:2052, submitPublicCatalogSelection:2457 e
+transitionCatalogRequest:1901. Exportados no index local. Admin escreve
+catalogs/items e catalogRequests/items/status/auditoria, não P/V/estoque/S.
+Projeções e submissão revalidam arquivamento, quantidade e preço legado, mas
+não usam C5/CP/identidade variante. Pai com campos legados elegíveis pode ser
+exposto/solicitado como simples; NÃO significa venda/reserva/decremento.
+Não apaga marcadores nem COD/R. Submissão não tem receipt idempotente de venda
+nem CAS/reserva de estoque; transição de solicitação não confirma venda.
+Falta gate de elegibilidade de catálogo separado do gate sale, sem converter
+solicitação histórica em pedido operacional. Bloco futuro próprio, após
+contrato de projeção simples/pai: arquivos autorizáveis createCatalog.js e
+testes catalog dirigidos; testar pai/perfil excluídos de novos efeitos, dados
+históricos preservados e zero writes em estoque/S/R. Parar se exigir catálogo
+V3 ou alterar snapshots/contrato público. Não incluir no patch E4-B/C por
+conveniência; integração comercial F10 permanece bloqueada também aqui.
+
+5. RULES — COBERTURA LOCAL E LIMITES EXATOS
+
+Produtos: create/delete cliente negados. Update exige perfil/loja, loja
+existente, role normalizada permitida e accessStatus não revoked; blacklist
+protege somente COD, taxonomia e arquivamento. Não protege marcadores F10,
+dinheiro, fiscal, quantidade/lotes nem obriga atomicidade com S (M10).
+
+Variantes, variantCombinations e CP aninhados sob products: não há match
+específico de allow para descendentes. Match P simples não cobre subcoleções.
+Catch-all /stores/{storeId}/{subcollection}/{document=**} exclui products,
+logo também não as libera. Resultado local: mutações/leitura cliente desses
+descendentes sem allow; não alegar variantes abertas pelo catch-all.
+CP store-level fora do path contratual seria outra coleção genérica, não
+autoridade comercial da entidade; não confundir com CP aninhado C5.
+
+productCodes e auditLogs têm match recursivo de negação de writes; ambos
+excluídos do catch-all. R também nega read cliente. Não há TTL/liberação
+cliente permitida; nenhuma garantia contra Admin SDK vem dessas Rules.
+
+Vendas: create permissivo, update blacklist de quatro campos, delete negado
+(M11). Recibos A imutáveis não impedem reescrita de S. Fiado/recebimentos
+dependem hoje dessas permissões: corte sem integração pode quebrar operações.
+CF: create exige shape exato description/amount/type/createdAt, valor positivo;
+update/delete negados, mas não há identidade de pagamento/deduplicação exigida.
+catalogRequests recursivo negado ao cliente; backend público segue separado.
+
+Estoque não tem autorização independente: saldo reside em P ou V. P está
+aberto ao update delimitado acima; V não tem allow cliente. Reserva SQLite
+não é documento remoto nem R. Coleções genéricas não excluídas continuam
+permissivas para mesma loja, mas não alteram a conclusão dos paths protegidos.
+
+Essas são Rules do arquivo local modificado preexistente. Não foi consultado
+estado implantado, nem executada suíte de Rules; não declarar exploração
+confirmada em produção. Todos os writers Admin precisam de barreiras próprias.
+
+6. REMOÇÃO TOTAL DE MARCADORES — TRANSIÇÕES E CONSEQUÊNCIAS
+
+Classificador: functions/contracts/productEligibilityC5.js:kindOf.
+Sem productKind/variantSchemaVersion, a presença de productId, attributes,
+variantId OU attributeDefinitions ainda bloqueia legacySimple. Null/vazio
+contam como presença. Apagar somente os dois discriminadores de um pai com
+attributeDefinitions NÃO basta: essa barreira D1 já está validada.
+
+Transição comprovadamente permitida pelas Rules locais de update de P:
+T0: P pai contém productKind=variantParent, variantSchemaVersion=1 e
+attributeDefinitions; pode também ter campos legados price/quantidade/lotes.
+T1: cliente operacional da mesma loja remove TODOS esses marcadores e qualquer
+productId/variantId/attributes de topo; mantém COD/taxonomia/arquivamento.
+Pode usar deleteField ou set de substituição preservando blacklist inteira.
+T2: snapshot sem esses seis campos é classificado legacySimple. A existência
+de variants/variantCombinations em subcoleções não integra kindOf nem os gates
+atuais E1/E2. Rules de P não consultam essas subcoleções para impedir transição.
+T3: sem CP/current e sem priceCents/costCents/commercial/commercialProfiles
+de topo, demais condições legadas válidas permitem novo efeito nos gates
+protegidos. Cliente também pode apagar esses campos de topo pelas Rules.
+
+Condições essenciais: CP/current existente ainda bloqueia E1/E2 e não pode
+ser apagado pelo cliente nas Rules locais; nesse caso remoção dos seis
+marcadores SOZINHA não vence C5. Saldo/preço/arquivo/autorização continuam
+condições da operação. Marcadores ausentes não criam saldo automaticamente,
+mas Rules locais permitem alterar saldo/preço de P. C1 pai sem CP é cenário
+plausível do modelo local, não prova de dados comerciais já implantados.
+
+Variante real em P/variants/V NÃO vira produto de topo só pela remoção de
+campos: identidade de path continua diferente e clientes não têm allow ali.
+Um documento com formato variante já situado em P de topo pode perder todos
+os marcadores por M10 e parecer simples; esse estado inicial não foi demonstrado
+como produzido pelo app. Cópia Admin/restore seria outra transição e depende
+de writer específico; restore atual continua bloqueado.
+
+Writers inspecionados: V1 faz update allowlisted e preserva marcadores;
+V2 faz patch de folhas; checkout/sync/fiado mudam só quantidade/lotes;
+archive/restore e taxonomia são patches restritos. NENHUM deles foi comprovado
+como apagador de todos os marcadores. Apagador concreto disponível é a
+superfície de Rules cliente; overwrite Admin arbitrário é risco externo não
+inventariado/hipotético, não achado de writer operacional novo.
+
+Conclusão: snapshot isolado não recupera proveniência já apagada. Proteger
+transições é necessário; adicionar heurística de varrer filhos a cada gate
+não foi aprovado e não resolveria toda origem desconhecida. Conversão C09
+exige operação explícita segura, sem redistribuição automática ou remoção
+disfarçada dos marcadores. Não criar tombstone/namespace/protocolo sem decisão.
+
+7. PLANO PROPOSTO — BLOCOS PARA AUTORIZAÇÃO FUTURA, NÃO EXECUTADOS
+
+Ordem considera risco direto e dependências; letras não autorizam corte nem
+deploy. Cada bloco termina após relatório/validação dirigida. Falha obrigatória,
+diff inesperado ou conflito de contrato interrompe antes de qualquer avanço.
+
+E4-B — Fechar transições estruturais diretas de P (prioridade crítica).
+Escopo mínimo: impedir cliente de adicionar/remover/substituir discriminadores
+e autoridades monetárias F10 de topo, mantendo operação simples legada atual.
+Arquivos autorizáveis: firestore.rules; teste dirigido novo em
+functions/tests/security/ (reusar harness existente), relatório E4-B.
+Compatibilidade: COD/arquivo/taxonomia/A/R continuam protegidos; saldo simples
+usado pelo checkout atual não é cortado neste bloco. Não liberar descendentes.
+Testes Rules: role/loja/revogação, pai completo/parcial, null/vazio, deleteField,
+replacement set, alteração de cada marcador e remoção total; CP/V/combinações
+negados; simples legítimo continua permitido; fields protegidos intactos.
+Dependência: definir lista exata a partir de C5 atual, sem novo schema.
+Parada: se exigir conversão de tipo/novo protocolo ou quebra operacional,
+registrar decisão necessária; não ampliar allow nem publicar Rules.
+
+E4-C — Barreira C5 de novos efeitos V1 Admin (prioridade alta).
+Escopo: updateProduct somente, após auth e replay conhecido; reconsultar CP
+transacionalmente, recusar domínio incompatível sem mudar comando/hash/receipt.
+Arquivos autorizáveis: functions/products/updateProduct.js; testes dirigidos
+em functions/tests/products; relatório. Contratos/helper COD ficam congelados.
+Compatibilidade: correção cadastral de preço inválido, estoque/fiscal legados,
+replay histórico e retenção E3-B preservados. V1 sem CAS não ganha CAS implícito.
+Testes: matriz pai/parciais/variante de topo/perfil/dinheiro; zero efeitos em
+P/R/A/updateTime; replay após tipo mudar; auth; simples; regressões V1/COD e
+E1/E2 pertinentes. Dependência: projeção fiel de marcadores (não JSON de SDK).
+Parada: necessidade de cortar V1, separar edição/estoque ou mudar protocolo
+de rejeições requer contrato separado, sem fazer migração F9 por conveniência.
+
+E4-D — Contenção do NOVO efeito de syncOfflineSale (prioridade alta).
+Escopo mínimo: contrato dirigido de elegibilidade histórica e duplicados;
+somente depois patch de novo efeito, mantendo replay/filas legadas.
+Arquivos autorizáveis: syncOfflineSale.js, testes sales dirigidos e relatório;
+contrato histórico específico antes de mudança comportamental. Não tocar fila
+Flutter automaticamente nem compartilhar namespace/receipt V2.
+Testes: existentes reexecutam após mudança de tipo sem baixa; novo pai/perfil
+recusado; simples backlog válido, arquivado por política antiga, preço histórico,
+duplicados/FIFO, atomicidade e autorização owner; nenhuma conversão de receipt.
+Dependência: decisão explícita se falta evidência de identidade no backlog.
+Parada: se único caminho for invalidar histórico/pending/replay, suspender
+esse caso para reconciliação; não apagar fila, reprificar ou bloquear tudo.
+
+E4-E — Integração F9 do checkout instantâneo, inicialmente local/desabilitada.
+Escopo: retomar B07-D usando núcleo/ledger já validados, com retomada de intenção
+e migração operacional definida. Não implementação V3 nem fiado nesta letra.
+Arquivos autorizáveis por contrato: payment_options_sheet.dart, sale_mutation_api/
+command/ledger, stores locais de vendas e testes específicos; backend somente
+se transporte local aprovado exigir adaptação separada. index/deploy não incluídos.
+Compatibilidade: identidade antes da rede; unknown preserva mesmo comando;
+sem trocar fallback antigo por novo ID, sem conversão automática PendingSales.
+Testes widget/ledger Native/Web: reinício, resposta perdida, retry/consulta,
+troca escopo, estoque concorrente, falha fiscal, sem duplo submit e sem rede
+remota; reusar E1-R2 como regressão do núcleo quando afetado.
+Dependência: plano F9 B07-D e reconciliação M05/M06, sem ampliar C4.
+Parada: transporte comercial/publicação ou protocolo offline novo não definido.
+
+E4-F — Fiado e recebimentos em blocos independentes, sem ativação inferida.
+F1: contrato e backend de fiado mantendo parcelas/datas/centavos e FIFO.
+Arquivos candidatos: confirm_fiado_dialog.dart, novo serviço/backend específico
+e testes sales/parcelas. Não inserir fiado no instantâneo por flag improvisada.
+F2: contrato de recebimento idempotente + adapter S07 histórico, mantendo CF.
+Arquivos candidatos: sales_provider.dart, cash_flow_provider.dart, serviço/
+backend financeiro específico e testes dirigidos. Sem alterar PDF/relatórios
+ou criar pagamentos retroativos. Cada subbloco exige autorização separada.
+Testes F1: identidade, pai/perfil, saldo/FIFO, cliente, parcelas/última diferença,
+datas civis e rollback. F2: parciais/cascata, concorrência, repetição, falha entre
+S/CF, legado sem parcelas, sem baixa adicional e sem caixa duplicado.
+Dependência: decisões financeiras B06/B07-A ainda propostas; não presumir
+enum/política de dívida/autoria offline aprovados. Parada nessas ambiguidades.
+
+E4-G — Corte coordenado de writes diretos e proteção do histórico.
+Escopo: após caminhos substitutos completos e backlog reconciliável, negar
+sales.create direto e restringir updates históricos; fechar writes de saldo/
+cadastro de P conforme transição F9 aprovada. M09 entra no gate mesmo latente.
+Arquivos autorizáveis: Rules e testes de segurança; adapters estritamente
+necessários previamente enumerados em contrato de corte, sem refatoração global.
+Compatibilidade: pagamentos legítimos e merge fiscal Admin preservados;
+receipt não alterável, itens/total/identidade histórica protegidos; sem travar
+pendências conhecidas silenciosamente. Testes autenticados de criação forjada,
+reescrita S, perfis/papéis, lotes e updates legítimos; integração local dos
+fluxos substitutos. Dependências: E4-E/F e tratamento E4-D/M05/M06.
+Parada: cliente distribuído/backlog não coberto ou ausência de alternativa;
+não publicar Rules de corte nem inferir primeira loja liberada.
+
+E4-H — Ciclo de vida e regressão de preservação (menor risco demonstrado).
+Escopo: contrato dirigido de archive/restore de pai e compatibilidade de
+taxonomia/create/import/fiscal, incluindo pendências; não conversão C09.
+Arquivos autorizáveis primeiro documentação/testes específicos; eventual
+patch somente após contrato por writer. C1/C2/C3 e COD não são reimplementados.
+Testes: pai inativo bloqueia operação V, estoque/COD/histórico intactos,
+retry antigo de operação inversa, import sem overwrite, fiscal sem nova baixa.
+Dependências: contratos F10 de ciclo/pendências; parar diante de cascade ou
+conversão não definida. Gates comerciais/carga são etapa própria posterior.
+
+8. BLOQUEADORES COMERCIAIS MANTIDOS
+
+- F10 integral antes da primeira loja; nenhuma ativação antecipada de pai/V.
+- F9 operacional ainda sem integração completa: checkout/fiado, recebimentos,
+  fila legada/escopo/recuperação e corte coordenado continuam pendentes.
+- Rules locais não fecham transições estruturais ou histórico S; Admin V1 e
+  sync precisam de guards próprios. Proteção E1/E2 isolada não fecha o sistema.
+- F10-D/V3 pendente: identidade de item e carrinho, preço efetivo, confirmação
+  e protocolos de variante não são antecipados por este plano E4.
+- C4 adiado pela alternativa D; não retomar transporte por esta entrega.
+- Restore de backup bloqueado; sem reconstrução de R apagadas anteriormente,
+  migração automática, exclusão ou reparação silenciosa de histórico.
+- Carga/limites/scans de COD, contenção e segurança remota/dispositivos ainda
+  sem certificação. Instrumentação traceCategoryReads sensível a retries
+  permanece pendência registrada E3-B-R2; teste ter passado não elimina defeito.
+- Scanner/barcode ambíguo, conversão C09 e demais políticas pendentes exigem
+  contratos próprios antes do uso comercial, sem inventar decisões nesta etapa.
+
+9. VALIDAÇÃO E PARADA
+
+Esta E4-A é inspeção estática e relatório. Resultados E1/E2/E3 citados são
+históricos, não execução nova. Nenhuma suíte global ou Emulator foi necessária.
+Revisão dirigida do texto e git diff --check aprovado (avisos LF/CRLF locais);
+comparação do manifesto confirmou todos os arquivos preexistentes idênticos.
+Branch/HEAD preservados; status confirma somente este relatório como entrega
+nova da sessão, além do trabalho anterior preservado.
+Sem alteração de código, testes, contratos, Rules, configuração ou fixtures.
+Sem commit/push. Próximo bloco PROPOSTO: E4-B, mediante etapa própria.
+Resumo exibido no terminal. PARADA OBRIGATÓRIA APÓS E4-A.

@@ -1,0 +1,156 @@
+STORE&CONNECT — F10-C5-D1
+CORREÇÃO DIRIGIDA DO CLASSIFICADOR DE ELEGIBILIDADE
+Data: 16/10/2026
+Branch: feat/f7-intelligent-catalog
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154
+Resultado: lacuna de classificação reproduzida em E1 corrigida no contrato puro.
+Nenhuma barreira operacional instalada. E1 NÃO retomada.
+
+1. CAUSA E INVESTIGAÇÃO DIRIGIDA
+Lidos resultados C5-D/E1, kindOf/evaluateProductEligibility, teste diagnóstico,
+DTOs F10-B, construção/comando C1/C2, allowlists cadastrais F9 e importação/
+modelo simples. Instruções/contexto/branch/status/HEAD conferidos.
+O ramo sem productKind e variantSchemaVersion recusava productId, attributes
+e variantId, mas esquecia attributeDefinitions. Assim um pai sem os dois
+discriminadores, com definições preservadas, preço e saldo válidos, era
+classificado como legacySimple e compatible para sale legacyV2.
+Além disso, simple v1 admitia indícios de pai/variante que seu DTO B estrito
+não permite, e variante podia conter definições de pai misturadas.
+
+Marcadores comprovados nas entidades:
+- productKind e variantSchemaVersion: discriminadores existentes;
+- attributeDefinitions: estrutura do pai, obrigatória no VariantParentDto;
+- attributes e productId: combinação/vínculo da variante no VariantDto;
+- variantId: identidade externa de variante, já recusada no dado de simples;
+  não é campo persistido normal da variante C1, cujo ID vem do caminho.
+C1/C2 persistem definitions no pai e attributes/productId na variante;
+SimpleProductDto versionado não aceita esses campos estruturais.
+combinationKey é comprovado no índice variantCombinations, não é campo de
+entidade pai/variante; schemaVersion também ocorre em outros envelopes.
+Não acrescentados como reconhecimento genérico de tipo neste patch.
+Rótulos/attributeId/valueId internos não viraram marcadores globais no topo.
+
+2. COLISÕES COM LEGADO E POLÍTICA CONSERVADORA
+createProductContract F9, patches productMutationContract e importação
+inspecionados não definem attributeDefinitions/attributes no cadastro simples.
+Não encontrado uso legítimo desses campos nas fontes simples dirigidas.
+Isso NÃO prova ausência em documentos históricos reais: SimpleProductDto
+legado deliberadamente preserva campos desconhecidos, inclusive nomes que
+podem colidir com estruturas novas. Nenhum banco real foi consultado.
+Quando houver colisão de nome, classificação simples fica blocked, sem
+afirmar que a entidade era um pai ou variante, sem remover campos ou migrar.
+Observação histórica/DTO B permanecem permissivos conforme seus contratos;
+ler dados antigos não autoriza novos efeitos comerciais.
+
+3. ALTERAÇÃO MÍNIMA EM kindOf
+- legacySimple só é reconhecido sem os dois discriminadores E sem presença
+  própria de productId, attributes, variantId ou attributeDefinitions.
+- simple v1 também recusa attributes/attributeDefinitions, além dos indícios
+  de identidade que já eram recusados.
+- variantParent v1 recusa attributes de variante misturados; mantém suas
+  próprias attributeDefinitions. Seu tipo nunca é vendável.
+- variante recusa attributeDefinitions de pai misturadas, além de productKind
+  e variantId redundante que já recusava.
+São verificações de presença Object.hasOwn, não truthiness: null, [], {},
+string vazia, zero, false ou valor malformado não significam ausência.
+Undefined explícito não é snapshot JSON-like válido e continua lançando
+TypeError na fronteira C5-B; não é descartado pelo classificador.
+Não foram acrescentados novos reason/status, APIs, formatos ou regras de
+preço/identidade. Falha de classificação usa invalid-kind-or-identity.
+kindOf continua classificador de domínio, não substituto de todos os
+validadores completos B/C1/C2 de definições/combinações/estoque/autorização.
+
+4. MATRIZ DOS CASOS CORRIGIDOS
+Snapshot/contexto                                      Resultado local
+Pai v1 explícito em protocolo legado                    blocked, como antes
+Sem discriminadores + attributeDefinitions válida       blocked, corrigido
+Sem discriminadores + definitions null/vazia/malformada blocked
+Sem discriminadores + attributes/productId/variantId    blocked, preservado
+Discriminador parcial/null/versão inválida              blocked, preservado
+Simple v1 + attributeDefinitions/attributes             blocked, corrigido
+Pai v1 + attributes de variante                        blocked, corrigido
+Variante + attributeDefinitions de pai                  blocked, corrigido
+Variante sem variantId no envelope de identidade       TypeError, sem inferir ID
+Variante com variantId=null/vínculo divergente          blocked, preservado
+Marcador próprio undefined explícito                   TypeError, sem apagá-lo
+Simples legado legítimo sem marcadores                  compatible só domínio
+Simples v1 legítimo sem marcadores incompatíveis        compatible só domínio
+Histórico com nome de campo colidente                  observação preservada
+Todos os indícios de tipo removidos                    origem não comprovável
+
+Nenhum compatible virou autorização operacional. Venda V3 continua bloqueada.
+Histórico não é revalidado pelo preço/tipo atual. Preço, custo, COD, hashes,
+normalizadores, receipts, baselines e protocolo V2 não foram alterados.
+
+5. TESTES E RESULTADOS
+Teste E1 functions/tests/sales/confirmSaleV2EligibilityBlocker.test.js passou
+de diagnóstico de deficiência para regressão da correção: agora só passa
+quando o pai sem discriminadores é blocked/invalid-kind-or-identity, sem kind
+legacySimple no resultado. Mantém verificações de imutabilidade do input.
+Não importa confirmSaleV2 nem inicializa Firebase; nome do arquivo histórico
+foi preservado, comentários e nome do teste atualizados para D1.
+
+Adicionados cinco testes em productEligibilityC5.test.js:
+- presença de cada marcador em legado/simple v1 com oito valores, em
+  legacyV1/legacyV2/inspection, sempre recusada sem mutação;
+- estruturas parciais/misturadas e identidade incompleta;
+- undefined explícito rejeitado sem remover a propriedade;
+- simples válidos com dados históricos/cadastrais e observação histórica
+  com colisões preservados, sem congelar ou reescrever entrada;
+- limite explícito de inferência quando não resta marcador algum.
+Os 22 testes anteriores C5-D permanecem, cobrindo preço/protocolo/arquivo,
+herança/override, mistura monetária, históricos e V3 bloqueado.
+
+Comando final em Node v22.23.2:
+node --test --test-reporter=spec
+ functions/tests/products/productEligibilityC5.test.js
+ functions/tests/sales/confirmSaleV2EligibilityBlocker.test.js
+ functions/tests/products/productCommercialPersistenceC5.test.js
+ functions/tests/products/productCommercialC5.test.js
+ functions/tests/products/productVariantsV1.test.js
+ functions/tests/products/productMutationContract.test.js
+ functions/tests/products/createProductContract.test.js
+ functions/tests/products/updateProductContract.test.js
+ functions/tests/sales/saleV2Contract.test.js
+ functions/tests/sales/saleV2ClientFixtures.test.js
+Resultado: 124/124 testes/subtestes aprovados, zero falhas/skips/cancelamentos.
+São 118 anteriores + cinco testes D1 + regressão E1 corrigida.
+createProductContract reportou 82 checks internos aprovados; contabilizado
+pelo runner como um subteste/arquivo, sem somar duplamente.
+Checks de sintaxe dos três JS alterados, revisão dos trechos/diff e
+git diff --check. Nenhum Firestore Emulator executado, conforme restrição.
+Sem teste de integração/Rules/autenticação ou execução de writer nesta D1.
+
+6. LIMITE DE SEGURANÇA E CONDIÇÕES PARA RETOMAR E1
+Se TODOS os discriminadores e marcadores forem removidos, o snapshot pode
+ficar indistinguível de simples legado verdadeiro. Não há campo de origem
+confiável inferível por este classificador; não foi inventado histórico,
+flag trusted, UID declarado ou identidade derivada para resolver isso.
+É necessária proteção de estado anterior/posterior em writers/Rules para
+impedir demover tipo em operação real; essas barreiras permanecem pendentes.
+
+A lacuna específica attributeDefinitions de E1 está corrigida puramente.
+Retomar E1 exige nova autorização e integração no confirmSaleV2 apenas,
+preservando TODOS os marcadores no adaptador de domínio (incluindo definitions),
+checagem bruta variantId, leitura real transacional do commercialProfiles,
+hash/receipt/replay originais e rejeições de domínio sem novo receipt terminal.
+Nenhum resultado puro substitui autenticação/loja/revogação/SDK real.
+Executar a matriz Emulator demo-* de E1 e regressões B07-B antes de declarar
+barreira instalada/validada. Se aparecer nova incompatibilidade, documentar
+e parar aquele trecho, sem duplicar regra, bypass ou cortar outros writers.
+Não se declara proteção contra demover tipo com remoção total de indícios.
+
+7. ARQUIVOS E PRESERVAÇÃO
+Modificados exclusivamente:
+- functions/contracts/productEligibilityC5.js
+- functions/tests/products/productEligibilityC5.test.js
+- functions/tests/sales/confirmSaleV2EligibilityBlocker.test.js
+Criado: docs/catalog/F10_C5_D1_RESULTADO.txt.
+Manifesto SHA256 inicial de 638 arquivos não ignorados em
+TEMP/f10-c5-d1-manifest.json; comparação final permite somente os três
+arquivos acima. Demais 635 preexistentes idênticos, incluindo confirmSaleV2.
+Nenhum writer, Rule/index, DTO anterior, serviço C1/C2/C3, Flutter, ledger,
+Auth ou transporte foi alterado. Relatórios D/E1 históricos preservados.
+Sem HML/PROD, instalação, commit, push, deploy, migração, reset, restore,
+stash ou clean. Restore de backup continua bloqueado.
+Parada após D1; E1 não retomada automaticamente. Alternativa D mantida.

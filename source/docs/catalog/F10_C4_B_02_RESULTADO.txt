@@ -1,0 +1,285 @@
+STORE&CONNECT — F10/C4-B/02 — LISTAGEM AUTORITATIVA LOCAL DE VARIANTES
+Data: 18/10/2026
+
+ESTADO FINAL: VALIDADO LOCALMENTE no núcleo Node/Firestore Emulator.
+AUTENTICAÇÃO/TRANSPORTE EXTERNOS, UI CONECTADA E SALVAR: BLOQUEADOS.
+Não se declara leitura autoritativa operacional ou ativação comercial.
+
+1. INSPEÇÃO E ESTADO INICIAL/FINAL
+
+Branch inicial/final: feat/f7-intelligent-catalog.
+HEAD inicial/final: 30f4f8db2a4a59d21696fde3d673144aded31154.
+24 arquivos rastreados já estavam modificados; o trabalho não rastreado F9/F10
+e as evidências anteriores também foram recebidos como baseline e preservados.
+Nenhuma mudança inesperada foi encontrada entre inspeção e validação.
+
+Consultados AGENTS.md, CURRENT_WORK.md, arquitetura/decisões F10, contratos
+efetivos C1/C2/C3, contrato B2-A, código/testes de leitura/autorização e o
+relatório F10_C4_B_01_RESULTADO.txt. CURRENT_WORK contém checkpoint histórico
+F7; não foi alterado nem usado para substituir o escopo atual.
+Não foi encontrada listagem paginada de variantes pronta para reutilização.
+Foram reutilizados os contratos e verificadores efetivamente existentes.
+
+Antes de editar: manifesto de 17.552 arquivos, incluindo 775 fontes rastreadas/
+não rastreadas não ignoradas, evidências ignoradas relevantes build/f9*, f10*,
+b4*, docs/scripts/test e metadados package_config/plugins. Nomes Unicode foram
+lidos com core.quotepath=false. Cópia integral do módulo original em .before.
+Evidências desta etapa: build/f10-c4b02. Nenhuma evidência histórica sobrescrita.
+
+2. IMPLEMENTAÇÃO EFETIVA E ARQUIVOS
+
+Modificado somente entre os arquivos preexistentes:
+functions/products/productVariantsReadB2A.js
+- Nova entrada local listProductVariantsB02(db, request), somente leitura.
+- Extraídos readParent/readVariant/snapshot da leitura B2-A existente para
+  reutilizar as mesmas verificações na leitura individual e na listagem.
+- Sem alteração dos writers C1/C2/C3 ou do leitor de receipts/protocolo de retry.
+
+Criados:
+- functions/tests/products/productVariantsListB02.emulator.test.js
+- docs/catalog/F10_C4_B_02_CONTRATO_LOCAL.md
+- docs/catalog/F10_C4_B_02_RESULTADO.txt
+
+Manifestos, logs completos, diff contra .before e verificador de preservação
+foram exportados separadamente em build/f10-c4b02, sem reutilizar diretórios
+de etapas anteriores. O contrato novo documenta entrada, resposta, cursores,
+conclusão, erros, fronteira de confiança e custo da leitura.
+
+Não há onCall, endpoint, export em functions/index.js, listener de aplicação,
+writer, token, assinatura ou receipt novo. Nenhum arquivo Flutter foi alterado.
+O formulário permanece no estado de leitura indisponível da etapa anterior.
+
+3. ARMAZENAMENTO, AUTORIZAÇÃO E PRESERVAÇÃO DOS DADOS
+
+Pai: stores/{storeId}/products/{productId}.
+Variantes: products/{productId}/variants/{variantId}, sob a mesma loja.
+Scope contém exatamente projectId/uid/storeId e é somente asserção contra
+db.projectId e o perfil atual. Caminhos são construídos pelo serviço, não
+recebidos do cliente. IDs são validados pelo núcleo e conservados literalmente.
+
+Reutiliza localMutationSupport.environment/authorize/scopeOf/stableId/hash/
+canonical/validate, DTOs productVariantsV1, firestoreValue/expectedTime e as
+checagens B2-A de COD, ownership, combinação e estoque C3/F9.
+Cada página reconsulta perfil, papel, revogação, vínculo e loja dentro da
+transação. Todos os cinco papéis C1 de leitura são conferidos no estado atual.
+Cursor nunca concede acesso ou substitui essa consulta.
+
+Mantida a premissa de C1/C3/B2-A: request.auth é contexto do chamador Node local
+confiável, NÃO conteúdo JSON de cliente nem prova criptográfica. A entrada data
+não admite uid/role/auth extras. Não se autentica cliente ou servidor externo.
+O teste usa identidades sintéticas fornecidas em processo ao núcleo e prova
+a política de autorização condicional a essa premissa, não autenticação real.
+Não foi inventado mecanismo de confiança para contornar os bloqueios B2-B2.
+
+Inclui variantes ativas e arquivadas, inclusive sob pai arquivado. Verifica
+vínculo productId, discriminação/versionamento, combinação completa/canônica,
+reserva de combinação, COD canônico e ownership, estoque/lotes/arquivamento.
+Pai permanece isSellable=false. Não soma ou grava estoque agregado.
+Preserva COD, atributos, quantidades, lotes/metadados desconhecidos, referências,
+bytes, geo e baselines separados conforme a serialização B2-A já existente.
+Segundos continuam string e nanos inteiros; não há conversão para Date/ISO.
+A precisão real armazenada pelo Emulator pode ser microssegundos e é conservada.
+
+Simples/legado não é convertido para pai nem anunciado como pai vazio. Tipo
+incompatível resulta inconsistent-state; documento original permanece intacto.
+Vazio comprovado refere-se a um variantParent válido sem folhas naquela transação.
+
+4. PAGINAÇÃO E CONCLUSÃO
+
+Entrada: data {scope, productId, pageSize?, cursor?}.
+pageSize inteiro 1..50, padrão 50; cursor omitido inicia a leitura. Null explícito,
+campos extras, tamanho inválido e cursor malformado rejeitam antes de I/O.
+Input e contexto UID do chamador local são copiados antes dos awaits.
+
+Ordem determinística por Firestore documentId crescente; sem filtro de campo
+que pudesse omitir variantes arquivadas ou documentos sem determinado atributo.
+Cada resposta contém scope, identity do pai, snapshot parent, variants com
+identity/data/updateTime e pagination:
+pageSize, offset, totalCount, fingerprint, complete, empty, nextCursor.
+
+Cada página verifica o conjunto completo e suas reservas em uma transação.
+A query usa orderBy(documentId) e limit(201); mais de 200 folhas resulta
+inconsistent-state. Não há conclusão silenciosamente truncada. O limite é a
+guarda local C1 existente, sem homologação como teto comercial.
+
+DECISÃO TÉCNICA DELIMITADA: paginação da resposta, não paginação eficiente das
+leituras de banco. Cada página custa a leitura do conjunto inteiro e reservas.
+Isso evita exigir alterações nos writers: C3 altera estoque/arquivamento da
+folha sem atualizar o baseline do pai. Usar somente o pai ou ler só a cauda
+poderia misturar estados diferentes sem detectar mudanças em páginas anteriores.
+Esta implementação local limitada não comprova estratégia de escala comercial.
+
+Fingerprint SHA256 de JSON canônico:
+[1, scope, productId, parent.updateTime, [[variantId, updateTime], ...]]
+O último array inclui todas as folhas na ordem do banco.
+Hash detecta versões/conjunto divergentes; NÃO autentica resposta ou usuário.
+Não é receipt nem assinatura. Não altera reservas, identidades ou baselines.
+
+Cursor versionado contém scope/produto/pageSize, offset, afterId e fingerprint.
+Identidade divergente retorna identity-conflict; posição incompatível também.
+Offset precisa corresponder a fronteira de página válida e afterId ao item
+anterior. Repetição sobre conjunto inalterado é determinística. Campos de
+scope em outra ordem não alteram a identidade nem o fingerprint.
+Mudança no pai ou em qualquer folha, incluindo fora da página atual, torna
+a continuação unknown/listing-changed. Deve-se descartar a travessia e reiniciar,
+sem concatenar páginas de fingerprints diferentes. Não há snapshot histórico.
+
+complete significa que ESSA página chegou ao final do conjunto conferido;
+nextCursor=null é coerente com esse final. Uma página final isolada não prova
+que um consumidor recebeu as anteriores: cursor não assinado é só uma asserção.
+Conclusão da lista exige começar sem cursor/offset=0, seguir nextCursor, conferir
+offsets contíguos, mesma identidade/pageSize/fingerprint/totalCount, IDs únicos
+ordenados e soma dos itens igual a totalCount no final. O fingerprint pode ser
+recalculado com todos os IDs/tokens e baseline do pai. Contrato detalha o protocolo.
+
+Vazio LOCAL comprovado: pai e autorização válidos, consulta concluída sem folhas,
+variants=[], offset=0, totalCount=0, empty=true, complete=true, nextCursor=null.
+Não é promessa de ausência futura. Página parcial com complete=false é distinta.
+Os outcomes de erro abaixo não contêm variants/pagination e nunca indicam vazio.
+
+5. RESULTADOS E LIMITES
+
+- available: página validada no snapshot transacional local; campos de paginação
+  dizem se há continuação e se o conjunto inteiro está vazio.
+- access-denied/authorization-failed: contexto/perfil/papel/revogação/loja/escopo.
+- identity-conflict: cursor de outra identidade ou posição incompatível.
+- unknown/listing-changed: conjunto ou baseline mudou desde o cursor.
+- unknown/entity-absent: pai ausente no caminho da própria loja autorizada.
+- unknown/read-unavailable: falha de leitura/timeout/transação ou loja ausente.
+- inconsistent-state/invalid-stored-state: dados/índice/reserva/teto inválidos.
+- invalid-argument lançado: entrada/cursor malformado antes da transação.
+- failed-precondition lançado: ambiente/SDK fora de demo/loopback antes de I/O.
+
+Folha inválida fora da página também bloqueia toda a resposta. Não há reparo,
+fallback, lista parcial após erro, receita de rejeição ou mutação de ledger.
+
+6. TESTES EXECUTADOS E EVIDÊNCIAS
+
+Emulator REAL já instalado: cloud-firestore-emulator-v1.22.0.jar.
+Java 25.0.3 do Android Studio/jbr existente; sem instalar ou alterar Java global.
+Usado diretamente o JAR para evitar descoberta/login/update do Firebase CLI:
+java -jar <cache>/cloud-firestore-emulator-v1.22.0.jar
+  --host 127.0.0.1 --port 8080
+  --project_id demo-store-connect-f10-c4b02
+  --single_project_mode true --single_project_mode_error true
+  --rules firestore.rules
+Rules apenas lidas para iniciar o Emulator; Admin SDK não comprova Rules cliente.
+API e WebSocket do Emulator foram vinculados a loopback, conforme emulator.log.
+Nenhum Emulator Auth/Functions/Storage iniciado, nenhum export/import executado.
+
+Variáveis apenas do processo de teste:
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+GCLOUD_PROJECT=demo-store-connect-f10-c4b02
+METADATA_SERVER_DETECTION=none (rodada final).
+
+Comando final:
+node --test --test-reporter=spec --test-concurrency=1
+  functions/tests/products/productVariantsListB02.emulator.test.js
+  functions/tests/products/productVariantsReadB2A.emulator.test.js
+  functions/tests/products/productVariantsC1.emulator.test.js
+  functions/tests/products/productVariantsC2.emulator.test.js
+  functions/tests/products/productVariantsC3.emulator.test.js
+  functions/tests/products/productVariantsV1.test.js
+
+PASS: 117/117, zero falhas/cancelados/skips/todo, exit 0, duração 155,001s.
+Distribuição: listagem nova 19; B2-A 26; C1 14; C2 22; C3 18; DTOs puros 18.
+Log completo com todos os resultados: build/f10-c4b02/tests-final.log.
+Primeira rodada somente listagem: 19/19 PASS, exit 0, 24,686s; não somada de novo.
+Log preservado: tests-list-first.log.
+
+Os 19 novos testes cobrem:
+1. Pai válido sem folhas: vazio comprovado e baseline correto.
+2. Cinco variantes fora de ordem de criação, três páginas, contagem/fingerprint
+   recomputado, repetição, ordem das chaves de scope e final exato em página única.
+3. Arquivadas/pai arquivado, COD, atributos, saldo/lotes, metadados e tokens exatos.
+4. Dezoito entradas/cursor inválidos recusados antes de transação.
+5. Cursores de outra identidade, posição e fingerprint, sem divulgação de página.
+6. Autorização por página, revogação/papel/vínculo e os cinco papéis permitidos.
+7. Loja/projeto/UID incorretos e cursor de outro pai/loja.
+8–11. Estoque C3, archive C3, inserção C2 e alteração do pai entre páginas.
+12. Ajuste concorrente e consultas retornam snapshots/versionamentos coerentes.
+13. Revogação concorrente serializável e recusa depois do commit de revogação.
+14. Pai/loja ausentes e simples/legado não viram lista vazia de pai de variantes.
+15. Corrupções de folha/reserva/índice fora da página bloqueiam tudo.
+16. Coleção com 201 documentos sintéticos não informa conclusão truncada.
+17. Falha/timeout/transação/query não produzem vazio nem resultado parcial.
+18. Superfície de transação só com get; documentos, receipts, reservas e tokens
+    de perfil/loja/produto/variantes/índices/COD/auditoria idênticos antes/depois.
+19. Snapshot do input antes de await e guardas SDK/projeto/SSL/host antes de I/O.
+
+DISTINÇÃO DAS PROVAS: criação C2, leitura/paginação/ordenação/transações e
+concorrências foram exercitadas contra Admin SDK + Emulator real, dados sintéticos.
+Os testes negativos de timeout/query falhando/superfície read-only usam wrappers
+explicitamente locais; não simulam autenticidade de transporte nem falha real
+de infraestrutura. Os 18 testes DTO são puros, sem Emulator. Não há mocks como
+fundamento exclusivo para declarar a leitura do núcleo local validada.
+
+Ocorrências ambientais preservadas:
+- Na primeira rodada, o SDK tentou detectar metadados GCE em 169.254.169.254;
+  o sandbox recusou a conexão com EACCES, sem resposta remota. Não era HML/PROD.
+  Inspecionado gcp-metadata instalado; METADATA_SERVER_DETECTION=none desativa
+  essa sondagem. A rodada final não contém MetadataLookupWarning.
+- Java/Netty emitiram advertência de API Unsafe depreciada, registrada no log;
+  o Emulator iniciou e os testes passaram. Nenhuma dependência foi atualizada.
+- O processo do Emulator desta execução foi encerrado após a suíte. O comando
+  de interrupção retorna exit 1; não é falha de teste nem shutdown por deploy.
+
+node --check dos dois JS desta entrega: PASS.
+git diff --check e revisão do diff contra o .before: PASS.
+Não houve teste reprovado ocultado ou expectativa histórica enfraquecida.
+
+NÃO EXECUTADO: Flutter/análise Dart (nenhuma mudança Flutter), navegador ou
+dispositivo físico, autenticação real de transporte, HML/PROD, build/deploy,
+homologação operacional, testes de carga ou Rules cliente. Não se recontam
+resultados de etapas anteriores como validação atual.
+
+7. PRESERVAÇÃO
+
+Conferência de hashes: 17.551/17.552 arquivos preexistentes idênticos, zero
+ausentes; exatamente o módulo de leitura listado recebeu delta intencional.
+Das 775 fontes não ignoradas recebidas, somente esse arquivo mudou.
+Evidências: baseline.json, preservation.json, .before e read-module.diff em
+build/f10-c4b02; a conferência final após este relatório é registrada à parte.
+
+F9, checkout/carrinho/fiado/offline, F10 Flutter, documentos/evidências anteriores,
+createProductC2/createVariantC2, C3, writers comerciais, functions/index.js,
+backend fora do leitor F10, Rules, FirebaseOptions e dependências preservados.
+Os 24 rastreados modificados recebidos continuam sem descarte ou novas alterações.
+
+Recibo SHA256 inicial/final obrigatório:
+lib/services/pdf_receipt_service.dart
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9
+
+Sem instalação/download, reset/restore/stash/clean/commit/push/deploy, alteração
+de reservas/estoque/baselines/identidades/retry ou acesso HML/PROD. Escritas dos
+testes são exclusivamente fixtures e comandos existentes no banco demo local.
+
+8. BLOQUEIOS E REQUISITOS RESTANTES
+
+VALIDADO LOCALMENTE: enumeração/paginação/conclusão do núcleo confiável Node
+limitado, política de autorização transacional e recusas, preservação de dados.
+BLOQUEADO: fronteira autenticada entre Flutter e o serviço, proveniência da
+resposta e exposição operacional. JSON/cursor/hash/contexto demo não autenticam.
+O contrato novo não transforma o decoder/interface Flutter antigo em adaptador
+de listagem; a UI continua desconectada e não afirma vazio autoritativo.
+
+Para conectar a UI: revisar este contrato local, estabelecer o canal/contexto
+autenticado aprovado, implementar/validar o DTO e a travessia completa com
+cancelamento por sessão/escopo, tratar listing-changed sem misturar páginas e
+manter os estados negado/erro/unknown distintos. Sem aceitar trust de JSON.
+
+Para Salvar: permanece necessário aprovar a ponte Flutter→C2 no ambiente-alvo,
+mapear somente campos permitidos, persistir intenção/IDs/requestId/comando antes
+de envio, reconsultar baselines após cada criação, validar receipts equivalentes
+e recuperar sequência parcial pai+variantes sem identidade substituta/fallback.
+Listagem não libera escrita, não altera autorização somente demo de C2 nem resolve
+campos comerciais fora de sua allowlist. C3 não serve para edição cadastral.
+
+Riscos residuais: custo integral e reservas por página, volume de metadados,
+contenção de transações, necessidade de reinício sob alterações frequentes,
+premissa de banco/writers locais confiáveis e ausência de prova criptográfica.
+Não há certificação global de retenção COD, Rules ou segurança comercial.
+
+Recomendação: revisar o contrato e resolver a fronteira autenticada antes da
+integração UI; manter Salvar bloqueado até os gates de escrita/recuperação.
+Parada após C4-B/02. C4-B/03, criação comercial, checkout e F9 não iniciados.

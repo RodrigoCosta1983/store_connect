@@ -1,0 +1,320 @@
+STORE&CONNECT — F10/C5-A/01 — PROTEÇÕES DE COMPATIBILIDADE COM VARIANTES
+Data: 18/10/2026
+
+ESTADO FINAL: BLOQUEADO para proteção integral dos fluxos legados.
+PROTEÇÕES NOVAS DELIMITADAS: IMPLEMENTADAS E VALIDADAS LOCALMENTE.
+Não se declara proteção global, liberação comercial ou fechamento de F9.
+
+1. BASELINE E ESCOPO
+
+Branch inicial/final: feat/f7-intelligent-catalog.
+HEAD inicial/final: 30f4f8db2a4a59d21696fde3d673144aded31154.
+Recebidos 24 rastreados modificados, além dos arquivos não rastreados F9/F10.
+Esse trabalho foi preservado. Nenhum reset/restore/stash/clean/commit/push.
+
+Consultados AGENTS.md, CURRENT_WORK.md, documentação/decisões/contratos F10,
+relatórios C4-A UI/01, C4-B/01, C4-B/02, código C1/C2/C3, DTOs e barreiras C5
+existentes. CURRENT_WORK permanece histórico F7; pedido atual define o escopo.
+O relatório F10_C5_A_RESULTADO.txt anterior, sobre contratos comerciais puros,
+não foi sobrescrito nem refeito. Esta entrega trata de compatibilidade.
+
+Antes de editar, registrado baseline com 17.569 arquivos, sendo 778 fontes
+rastreadas/não rastreadas não ignoradas, evidências ignoradas relevantes F9/F10/
+b4*, docs/scripts/test e metadados de plugins/package_config. core.quotepath=false
+preserva nomes acentuados. Manifesto, status e cópias .before em build/f10-c5a01.
+O diretório é novo e não substitui evidências de nenhuma etapa anterior.
+
+Não foi interpretada a autorização para F10 como permissão para modificar
+implementações F9. As alterações funcionais ficaram em dois módulos F10.
+
+2. WRITERS E CAMINHOS EFETIVAMENTE EXAMINADOS
+
+- functions/products/createProduct.js e createProductContract.js:
+  criação simples anterior, normalização/allowlist estritas, autorização,
+  categorias, COD e receipt existentes. Campos estruturais de variantes não
+  fazem parte do payload permitido. Não foi alterado esse writer F9.
+- functions/products/updateProduct.js e updateProductContract.js:
+  atualização V1 em products/{productId}; já consulta perfil comercial e chama
+  evaluateProductEligibility legacyV1/cadastral antes de COD/update.
+- functions/products/productMutationV2.js e productMutationContract.js:
+  updateProductV2 e adjustProductStockV1 já têm guardas C5 transacionais,
+  identidade bruta de variante recusada e contratos de patch/estoque separados.
+  Os wrappers e o protocolo de receipts/replay F9 foram preservados.
+- functions/contracts/productEligibilityC5.js e productVariantsV1.js:
+  classificação conservadora de presença de marcadores, DTOs de simples/pai/
+  variante, bloqueio legacyV1/V2 de pai/variante e de identidade inconsistente.
+  O classificador puro não prova existência de subcoleções nem autenticação.
+- functions/products/productVariantsC1.js:
+  criação local C1/C2 de simple/variantParent e variantes; guards de ambiente,
+  autorização, IDs/baselines, combinações, COD, criação sem sobrescrita e replay.
+  Aqui foi encontrada e corrigida a lacuna de criação com raiz ausente.
+- functions/products/productVariantsC3.js e productVariantStockC3.js:
+  ajuste/arquivo da folha sob pai válido, sem edição cadastral ou estoque do pai.
+- functions/products/productVariantsReadB2A.js:
+  leitura individual/listagem local validam tipo/vínculo/combinações/reservas;
+  não tornam os writers legados capazes de perceber subcoleções não consultadas.
+- functions/products/productEditState.js:
+  leitura/projeção cadastral anterior, sem autoridade para converter tipos.
+  Sua projeção não é prova de ausência de estrutura F10; permaneceu intacta.
+- functions/products/archiveProduct.js e restoreProduct.js:
+  inspeção dirigida dos caminhos de update/COD/auditoria, sem instalar barreiras
+  de ciclo de vida F10 nesses writers F9. Não foram testados como protegidos
+  nesta execução nem modificados.
+- lib/services/product_variants_form_draft.dart e diálogo real em
+  lib/screens/management/manage_products_screen.dart:
+  predicado de metadados, seleção de editor, blocksLegacySave, callback de Salvar
+  e recusa no handler anteriores. Não é nova tela ou protótipo paralelo.
+
+3. PROTEÇÕES EXISTENTES REUTILIZADAS
+
+No servidor, V1/V2 já recusam pais explícitos, variantes em envelope legado,
+tipos parciais/mistos e presença de marcadores estruturais incompatíveis,
+inclusive null. Consultam o perfil comercial real; presença/inconsistência
+não vira ausência. Atualização V1 preserva a capacidade de corrigir certos
+dados comerciais legados sem liberar tipos incompatíveis.
+
+Normalizadores/allowlists não admitem productKind, versão, identidade ou
+atributos de variante como patch cadastral simples. C1/C2 não sobrescrevem
+raízes existentes; createVariant exige pai ativo e baseline exato. C3 só altera
+estoque/arquivo da variante vinculada, preservando reservas e histórico.
+
+Replay confirmado precede validação do domínio mutável conforme cada contrato
+existente. Não foi mudado para recusar/reescrever uma intenção histórica já
+confirmada, nem criada identidade substituta ou receipt de rejeição adicional.
+
+Essas proteções não foram duplicadas. Regressões reais abaixo revalidaram os
+caminhos cobertos, incluindo simples, legado, pai, variante e inconsistências.
+
+4. PROTEÇÃO NOVA NO SERVIDOR LOCAL F10
+
+Lacuna: Firestore permite subcoleções sob um documento pai inexistente.
+Antes, createProductC1/createProductC2 verificavam somente snapshot.exists da
+raiz. Um caminho com variantes ou reservas de combinação órfãs era aceito para
+criar simple ou variantParent, adotando implicitamente uma identidade histórica.
+Isso não era impedido por COD quando o novo código era outro ou estava ausente.
+
+Correção mínima em productVariantsC1.js, após autenticação/autorização e replay:
+- documento raiz existente continua product-id-conflict, como anteriormente;
+- raiz ausente exige consultas transacionais limit(1) às subcoleções variants
+  e variantCombinations do MESMO produto/loja;
+- presença de qualquer documento, inclusive arquivado ou malformado, recusa
+  com failed-precondition/orphan-variant-structure;
+- erro de leitura não é convertido em vazio e impede a criação;
+- recusa acontece antes de preparar/gravar COD, entidade, índice ou receipt.
+
+Não foi necessário apagar dados para reproduzir a lacuna: os testes criam
+somente subdocumentos sintéticos sem materializar a raiz. Não houve reparo,
+migração, adoção de reserva ou conversão automática.
+Os novos reads verificam inexistência de estrutura, não redefinem identidade.
+Comando, normalização/hash, schemaVersion, operation persistida, namespace,
+COD e algoritmo de reserva, baselines e resultado normal não foram alterados.
+Replay/conflicting requestId mantém a precedência histórica antes da guarda.
+createVariantC1/C2 e C3 mantêm suas validações anteriores.
+
+Limite: a guarda nova cobre criação C1/C2 sob raiz ausente; não impede um writer
+externo de introduzir subcoleções inconsistentes depois do commit, nem é uma
+barreira de update de raiz existente. Dois reads adicionais no caminho de
+criação normal; nenhuma alegação nova de escala ou carga comercial.
+
+5. PROTEÇÃO NOVA NO FORMULÁRIO REAL
+
+hasVariantProductMetadata só reconhecia productKind/variantSchemaVersion.
+Um registro com apenas attributeDefinitions, attributes ou campos de identidade
+de variante podia ser encaminhado ao editor simples, embora o servidor já
+recusasse esses marcadores nos caminhos cobertos.
+
+O predicado F10 agora também recusa a presença de productId, variantId,
+attributes ou attributeDefinitions no dado raiz, inclusive null/vazio/false/zero.
+Aplica a política conservadora estrutural C5-D1 existente, sem inventar regra.
+Não declara que um registro ambíguo seja comprovadamente um pai ou variante;
+recusa o fallback enquanto o tipo está inconsistente/não demonstrado.
+
+O MESMO diálogo real reutiliza esse predicado para selecionar editor e construir
+o draft. blocksLegacySave mantém Salvar desabilitado e a guarda no handler antes
+de upload, precheck COD ou chamada ao writer legado. Conversão segue bloqueada.
+Nenhum writer novo ou conexão Firebase de variantes foi acrescentado ao Flutter.
+Simples legítimo sem marcadores e simple v1 coerente continuam no fluxo anterior.
+
+Proteção de interface reduz encaminhamento indevido; não substitui recusa no
+servidor. Ausência TOTAL dos marcadores não é corrigida pelo predicado visual.
+Colisão histórica de nome de campo não é reparada ou migrada: o servidor C5 já
+tratava esses marcadores como ambíguos, e agora a interface acompanha essa recusa.
+
+6. BLOQUEIO REAL COMPROVADO FORA DO ESCOPO AUTORIZADO
+
+Executado diagnóstico local contra handlers REAIS .run e Firestore Emulator:
+raiz existente com nome/preço/saldo legados e sem TODOS os marcadores F10,
+mas conservando variants/v abaixo dela. Trata-se de estado inconsistente
+sintético, não prova de que o documento tenha determinada origem histórica.
+
+Resultado requerido: recusa antes de modificar a raiz por tipo não comprovado.
+Resultado atual observado:
+- updateProduct aceitou: quantidade raiz 4 -> 9 e COD raiz passou a NEW;
+- adjustProductStockV1 aceitou: quantidade raiz 4 -> 9;
+- a folha de variante permaneceu inalterada nos dois casos.
+
+O diagnóstico terminou com exit 2/BLOQUEADO; NÃO é teste aprovado nem protegido
+por asserção enfraquecida. Evidências completas:
+build/f10-c5a01/legacy-boundary.json
+build/f10-c5a01/legacy-boundary.log
+build/f10-c5a01/check-legacy-boundary.cjs
+
+Esses writers consultam marcadores/projeções e perfil comercial, mas não
+consultam variants/variantCombinations. Sem essa evidência, o classificador
+puro não distingue um simples legítimo de uma raiz danificada com descendentes.
+Bloquear TODOS os simples sem discriminadores quebraria legado legítimo.
+
+Corrigir esse caminho exigiria alterar pontos de leitura/validação de writers
+F9 e analisar sua concorrência, precedência de replay e custo. A restrição
+expressa do pedido proíbe alterar implementações F9 e manda registrar o bloqueio.
+Portanto esses writers NÃO foram modificados, nem foram contornados por writer
+alternativo, flag, endpoint ou mudança de Rules. Não se declara proteção global.
+O teste da guarda C1 não é apresentado como solução dessa lacuna de update.
+
+7. ARQUIVOS CRIADOS/ALTERADOS
+
+Alterados minimamente:
+- functions/products/productVariantsC1.js: guarda transacional de raiz ausente.
+- lib/services/product_variants_form_draft.dart: presença estrutural no predicado.
+- test/product_variants_form_draft_test.dart: classificação e controles simples.
+- test/product_registration_variants_test.dart: seis casos no diálogo real.
+
+Criados:
+- functions/tests/products/productVariantsCompatibilityC5A01.emulator.test.js
+- docs/catalog/F10_C5_A_01_RESULTADO.txt
+
+Evidências/diagnóstico auxiliares somente no novo build/f10-c5a01.
+Não alterados classificadores/DTOs/contratos/gates F9, Rules ou writers comerciais.
+Não alterada a tela inteira ou sua arquitetura; o predicado F10 já consumido
+pelo diálogo recebeu a correção. Sem formatação ampla dos arquivos anteriores.
+
+8. TESTES E RESULTADOS
+
+Ambiente: JAR Firestore Emulator v1.22.0 e Java do Android Studio existentes,
+sem download/instalação. Inicialização direta em loopback, sem Firebase CLI:
+java -jar <cache>/cloud-firestore-emulator-v1.22.0.jar
+ --host 127.0.0.1 --port 8080 --project_id demo-store-connect-f10-c5a01
+ --single_project_mode true --single_project_mode_error true --rules firestore.rules
+Rules apenas lidas para iniciar; Admin SDK não certifica permissões cliente.
+Variáveis somente do processo: FIRESTORE_EMULATOR_HOST=127.0.0.1:8080,
+GCLOUD_PROJECT=demo-store-connect-f10-c5a01, METADATA_SERVER_DETECTION=none.
+Sem Auth/Functions Emulator, endpoint HTTP operacional ou acesso HML/PROD.
+Emulator encerrado ao final, zero listeners restantes em 8080.
+
+PROVA ANTES DO PATCH: executado teste direcionado da criação C2 simples sobre
+variantes órfãs. 0 PASS / 1 FAIL, exit 1: Missing expected rejection.
+Log before-guard.log mantido. Mesma expectativa foi preservada após a correção.
+
+PASS — novos testes do servidor: 12/12 em tests-new.log.
+Oito combinações C1/C2 x simple/parent x variants/variantCombinations recusadas
+sem alterar qualquer entidade/reserva/receipt/token; quatro testes adicionais
+cobrem criação normal, proibição de conversão de raízes existentes, replay/
+conflito de intenção, revogação e falha de leitura sem efeito parcial.
+
+PASS — suíte final Emulator, 276/276, zero falhas/cancelados/skips, exit 0:
+node --test --test-reporter=spec --test-concurrency=1
+ functions/tests/products/productVariantsCompatibilityC5A01.emulator.test.js
+ functions/tests/products/productVariantsC1.emulator.test.js
+ functions/tests/products/productVariantsC2.emulator.test.js
+ functions/tests/products/productVariantsC3.emulator.test.js
+ functions/tests/products/productVariantsReadB2A.emulator.test.js
+ functions/tests/products/productVariantsListB02.emulator.test.js
+ functions/tests/products/updateProductV1EligibilityC5.emulator.test.js
+ functions/tests/products/updateProductEligibilityC5.emulator.test.js
+ functions/tests/products/adjustProductStockEligibilityC5.emulator.test.js
+ functions/tests/products/productMutationV2.emulator.test.js
+Log completo: build/f10-c5a01/tests-emulator-final.log, duração 254,064s.
+Os 12 novos estão incluídos nos 276; não são somados novamente.
+
+As regressões revalidam recusas reais de estoque do pai, campos de identidade/
+COD/atributos indevidos, variantes nos protocolos legados, estados parciais/
+inconsistentes, perfis comerciais, arquivo, estoque/lotes, concorrência,
+rollback, autorização, isolamento de loja e replay confirmado/rejeitado antigo.
+Revalidam simples/legados legítimos, edição de dados históricos inválidos,
+metadados SDK, baselines e receipts preservados nos caminhos cobertos.
+
+PASS — Node puro, 65/65, zero falhas/skips, exit 0:
+node --test --test-reporter=spec
+ functions/tests/products/productEligibilityC5.test.js
+ functions/tests/products/productVariantsV1.test.js
+ functions/tests/products/createProductContract.test.js
+ functions/tests/products/updateProductContract.test.js
+ functions/tests/products/productMutationContract.test.js
+Log completo: tests-pure.log. Os 82 checks internos do runner createProduct
+não foram somados como 82 casos adicionais ao total Node.
+
+PASS — Flutter 3.32.6, sempre flutter test --no-pub, 46/46, exit 0:
+ test/product_variants_form_draft_test.dart (6)
+ test/product_variants_form_test.dart (3)
+ test/product_registration_variants_test.dart (10)
+ test/product_dialog_retry_test.dart (8)
+ test/product_variants_read_state_test.dart (19)
+Log completo: tests-flutter.log.
+Novos: um teste com 48 combinações de marcadores/presenças e dois controles
+simples; seis widgets do diálogo real com definições sem versão, null, attrs,
+identidade parcial e simple misturado. Salvar/conversão bloqueados, nome retido,
+nenhuma chamada ao writer. As regressões preservam o fluxo/payload simples,
+drafts, erros, layout e retry legado. Não houve instalação/pub get.
+
+DISTINÇÃO: testes backend de dados/transações usam Admin SDK + Emulator REAL,
+dados sintéticos e handlers .run locais. Falha de leitura injetada e certos
+cenários históricos de falha usam wrappers, não falhas remotas reais.
+Widgets usam canais Firebase/fake Firestore preexistentes; não provam persistência
+real ou autenticação. Os casos de leitura C4-B continuam sem transporte confiável.
+
+TOTAL das três suítes finais aprovadas: 387 casos distintos (276+65+46).
+Não inclui a falha antes do patch nem o diagnóstico BLOQUEADO de dois writers.
+Não significa que o objetivo de proteção integral esteja validado.
+
+flutter analyze --no-pub dos três Dart alterados: sem issues, exit 0.
+Log analyze-flutter.log. Cache do SDK externo acessado com autorização da
+ferramenta, como nas etapas anteriores; nenhuma dependência alterada.
+node --check dos dois JS de código/teste: PASS.
+git diff --check e revisão dos deltas contra .before: PASS.
+Advertência Java/Netty sobre Unsafe consta de emulator.log; não é falha funcional.
+Interromper o processo próprio do Emulator retorna exit 1, sem teste reprovado.
+
+BLOQUEADO: diagnóstico de update/estoque com raiz existente sem marcadores e
+com descendentes: duas recusas desejadas NÃO obtidas, exit 2, evidência preservada.
+NÃO EXECUTADO: testes HML/PROD, Rules cliente, navegador/dispositivo físico,
+build/deploy, segurança global de archive/restore, fluxos de venda/fiado/offline,
+carga ou transporte autenticado. Nenhum resultado histórico foi recontado.
+
+9. PRESERVAÇÃO
+
+Conferência: 17.565/17.569 arquivos preexistentes idênticos, zero ausentes;
+somente os quatro arquivos listados receberam alterações deliberadas, com
+cópias .before e deltas revisados. Das 778 fontes iniciais, 774 byte a byte iguais.
+baseline.json e preservation-final.json em build/f10-c5a01 registram os hashes.
+A conferência posterior à criação deste relatório recebe artefato separado.
+Todas as evidências anteriores F9/F10 foram preservadas, inclusive ignoradas
+pertinentes cobertas pelo manifesto; não se afirma cobertura de caches globais.
+
+Writers F9, gates/políticas, classificadores/contratos anteriores, backend fora
+do módulo F10 C1, Rules, FirebaseOptions, index, checkout/carrinho/fiado/offline,
+dependências e relatórios anteriores mantêm os hashes. Os 24 rastreados já
+modificados recebidos permaneceram byte a byte como estavam nesta entrada.
+
+Recibo SHA256 inicial/final obrigatório:
+lib/services/pdf_receipt_service.dart
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9
+
+Sem instalação, reset/restore/stash/clean/commit/push/deploy, migração ou acesso
+HML/PROD. As únicas mutações em banco foram fixtures e operações locais de
+teste, incluindo o diagnóstico explícito de risco em dados sintéticos.
+
+10. PRÓXIMA IMPLEMENTAÇÃO FUNCIONAL RECOMENDADA — NÃO INICIADA
+
+Resolver a autorização delimitada para recusar estrutura de variantes nos
+writers legados quando o dado raiz perdeu seus marcadores, com consultas
+transacionais confiáveis e regressões que preservem replay, COD e legado.
+Não substituir essa prova por bloquear indiscriminadamente todos os simples.
+Isso requer decisão/escopo explícito para os pontos F9 identificados; não foi
+inferido nem iniciado nesta entrega. Operação comercial de variantes segue bloqueada.
+
+Permanecem também os gates de autenticação/listagem Flutter e persistência C2,
+sem writer alternativo, edição cadastral de variante ou uso de C3 para cadastro.
+Interface não é barreira de servidor. Não há proteção global anunciada.
+
+ENTREGA DELIMITADA CONCLUÍDA COM BLOQUEIO EXPLÍCITO DE COBERTURA INTEGRAL.
+Parada após F10/C5-A/01, sem iniciar outra etapa ou retomar F9.

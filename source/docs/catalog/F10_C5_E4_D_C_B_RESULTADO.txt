@@ -1,0 +1,67 @@
+STORE&CONNECT — F10-C5-E4-D-C-B
+PERSISTÊNCIA SEGURA, IDENTIDADE E ESTADOS DA FILA OFFLINE FLUTTER/SQLITE
+Data: 17/10/2026
+DECISÃO FINAL: BLOQUEADO
+
+1. PRIMEIRO GATE OBRIGATÓRIO
+
+Branch conferida: feat/f7-intelligent-catalog.
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154.
+git status --short revelou, antes de qualquer edição, 22 arquivos rastreados
+modificados e 217 arquivos não rastreados. Incluem firestore.rules,
+functions/index.js, functions/sales/syncOfflineSale.js, pubspec.yaml,
+pubspec.lock, telas e implementações/testes de etapas anteriores.
+Não foi fornecido manifesto que identifique essas diferenças como base
+esperada desta execução. Não se presume que sejam descartáveis ou incorretas.
+
+AGENTS.md exige, antes de alterar: "abortar se existirem alterações inesperadas".
+O pedido desta etapa exige: "PARAR no primeiro gate obrigatório que falhar".
+Por isso a implementação foi interrompida no gate inicial de Git.
+Nenhum arquivo preexistente foi editado, descartado ou restaurado.
+Único acréscimo desta execução: este relatório obrigatório.
+
+2. INSPEÇÃO E IMPLEMENTAÇÃO
+
+Executadas leituras iniciais de AGENTS.md, CURRENT_WORK.md e do relatório C-A;
+a saída agregada sofreu truncamento. A leitura integral e a inspeção dirigida
+da etapa 1 não foram concluídas. Nenhuma conclusão técnica nova sobre o código
+SQLite ou a compatibilidade dos callers é apresentada como validada.
+
+Arquivos Dart e gerado Drift: não modificados.
+Schema: nenhuma versão promovida; nenhuma migração criada ou executada.
+A versão 1 citada em C-A é informação histórica, não revalidada nesta execução.
+Identidade/estados/evidências: nenhum campo adicionado.
+CAS/claims: nenhuma API criada.
+Conflitos: nenhuma regra nova implementada.
+Reservas e pendências ambíguas: comportamento existente preservado, sem nova
+garantia de isolamento, disponibilidade ou proteção operacional.
+Caller legado: compatibilidade não validada; nenhum gate operacional alterado.
+Nenhum registro de banco foi lido, migrado ou alterado, sintético ou real.
+Nenhum receipt, status, origem, confirmação ou evidência foi fabricado.
+Ledgers B07-C/produtos e demais arquivos existentes não foram modificados.
+
+3. VALIDAÇÕES E LIMITES
+
+Executados: git branch --show-current, git status --short, git rev-parse HEAD,
+git diff --stat, contagem de arquivos não rastreados e verificação de ausência
+prévia deste relatório. A revisão final e a checagem do relatório são realizadas
+após sua criação e informadas no resumo da execução.
+Nenhum teste Flutter/SQLite/Drift, análise Dart ou geração foi executado:
+o gate inicial impediu prosseguir. Os 20 casos obrigatórios não foram validados.
+Não houve instalação, rede operacional, migração real/remota, deploy, commit,
+push, reset, restore, stash, clean ou alteração HML/PROD.
+
+4. CONDIÇÃO PARA RETOMADA
+
+Necessária confirmação de Rodrigo de que o working tree preexistente é a base
+esperada e deve ser utilizado integralmente, ou identificação das diferenças
+inesperadas e orientação sobre elas, sem descarte automático.
+Essa confirmação resolve apenas o gate de base; não autoriza arquivos proibidos,
+P04/P07/P08, implantação, produção ou integração operacional.
+P01/P02/P03/P05/P06 permanecem expressamente aprovadas conforme o pedido atual.
+
+Dependências e bloqueadores para C-C ainda precisam da inspeção técnica dirigida;
+os riscos históricos de caller legado, candidato conflitante, reservas incertas
+e coexistência de binários não foram resolvidos por esta execução.
+Não há validação local da infraestrutura nem aprovação ponta a ponta.
+PARADA APÓS F10-C5-E4-D-C-B. C-C/C-D não iniciadas.
