@@ -1,0 +1,272 @@
+STORE&CONNECT — F9/B07-D-C-C-C/B4-B/R4-B — SUBETAPA 03
+Functions: revisão dirigida e provas negativas locais
+Data: 18/10/2026
+ESTADO FINAL: BLOQUEADO para admissão Firebase.
+VALIDADO LOCALMENTE: revisão delimitada e validador puro, sem transporte.
+Não iniciada R4-B/04 ou B4-C/B4-D/B5/B6/F10.
+
+1. ESTADO GIT INICIAL/FINAL E PREPARAÇÃO
+
+Branch: feat/f7-intelligent-catalog.
+HEAD inicial/final: 30f4f8db2a4a59d21696fde3d673144aded31154.
+Recebidos 24 rastreados modificados, não rastreados F9/F10 e evidências anteriores
+ignoradas. Todo esse conteúdo foi preservado como trabalho preexistente.
+Lidos AGENTS.md, CURRENT_WORK.md, relatórios 01/02 e matriz JSON 02; examinados
+teste histórico, protótipos, ensaio R2 de URL explícita e fontes instaladas.
+CURRENT_WORK é histórico F7.8; o pedido atual delimita exclusivamente esta etapa.
+
+Antes das edições: build/b4br4b03/baseline.json protegeu 1.861 entradas de hash,
+incluindo todos os arquivos do repositório rastreados/não rastreados não ignorados,
+evidências pertinentes build/b4b*, metadados Flutter, 221 fontes da coleta 01,
+pubspecs resolvidos e ESM local de Functions. Não é inventário de todo o disco.
+Estados Git completos: build/b4br4b03/status-initial.txt e status-final.txt.
+Diff rastreado inicial/final idêntico; nenhum arquivo anterior foi editado.
+
+2. K14/K15 — PROVENIÊNCIA RECUPERADA
+
+Fonte: mensagem do usuário que autoriza esta Subetapa 03, informando decisões
+aprovadas em conversa anterior de 18/10/2026. Conteúdo fornecido nessa mensagem:
+
+K14 — Arquitetura Firebase baseada em código confiável, fábrica proprietária,
+contexto verificado e URLs explícitas em operações críticas, sem promessa de
+proteção contra código arbitrário no mesmo processo.
+
+K15 — Implementação isolada de verificadores de ownership, dependências e recusa
+de reconfiguração indevida, começando pelo harness demonstrativo, sem modificar
+checkout ativo.
+
+Registro técnico em functions-review-notes.json e no JSON exportado. A fonte é
+proveniência de conversa anterior INFORMADA PELO USUÁRIO, não uma citação obtida
+de documento normativo local. Não foram fornecidos transcript original ou prova
+documental independente de aprovação; nenhum deles foi fabricado.
+Os resultados históricos NÃO LOCALIZADO de 01/02 foram preservados, pois descrevem
+a busca documental então executada. A informação recuperada agora orienta esta
+subetapa autorizada sem reescrever a história ou a política vigente.
+policy.json/review.json e todos os gates R3/R4-A permanecem byte a byte iguais.
+
+3. SELEÇÃO E FRONTEIRAS EFETIVAMENTE EXAMINADAS
+
+Usados exatamente os 20 IDs de priorityByService/Functions da matriz 02, cujo
+SHA256 permaneceu 33AF377E23032B6B77CA4A091869A3C09FBAE0EE5FADBC8650D444516C39C16F.
+Coleta 01 vinculada por hash; sourceEvidence/textEvidence anteriores reutilizados.
+Não gerada nova matriz geral nem repetido o coletor AST.
+
+Vinte trechos de origem revisados manualmente e conferidos por hash/AST/anchor.
+As linhas abaixo identificam o trecho do efeito, não apenas a linha do import.
+Caminhos completos, linhas, trechos, hashes, análise e pendências por ID estão
+em docs/catalog/F9_B07_D_C_C_C_B4_B_R4_B_03_FUNCTIONS.json.
+
+B006 cloud_functions.dart:26 — partes da API; async não confere identidade/lock.
+B024 cloud_functions_web.dart:46 — registerWith substitui plataforma global.
+B060 https_callable_web.dart:26 — call/stream e aplicação tardia de origin.
+B061 https_callable_web.dart:51 — jsify/Promise.toDart não provam procedência.
+B062 https_callable_web.dart:81 — AbortSignal/timeout não certificam destino.
+B063 interop/functions.dart:27 — Expando/cache JS e encaminhamento por URL.
+B139 platform_interface_firebase_functions.dart:51 — setter global/token.
+B140 platform_interface_https_callable.dart:67 — Future/Stream e options mutável.
+B141 platform_interface_https_callable.dart:35 — token de tipo, não de owner.
+B157 interop/functions_interop.dart:34 — external httpsCallableFromURL global.
+B158 interop/functions_interop.dart:97 — acesso dinâmico next/Promise no stream.
+B159 interop/functions_interop.dart:90 — window/Symbol e objeto JS global.
+B160 utils.dart:12 — conversão de erro JS, sem validação de contexto/destino.
+B161 utils.dart:15 — propriedades dinâmicas code/message/details.
+B171 method_channel_firebase_functions.dart:37 — canal/Pigeon e fallback nativo.
+B190 messages.pigeon.dart:87 — envio e espera de reply, sem manifesto/owner.
+B192 messages.pigeon.dart:96 — BasicMessageChannel e messenger default/injetado.
+B194 method_channel_https_callable.dart:41 — appName/URI/origin/região no mapa.
+B195 method_channel_https_callable.dart:65 — EventChannel/contador de stream.
+B197 method_channel/utils/exception.dart:14 — conversão/relançamento de erro.
+
+Contagem: 20 REVISADO NO TRECHO; 20 closures completas PENDENTE;
+zero runtime/isolamento real demonstrado; zero admissão.
+Essas dimensões não se somam: ler um trecho não aprova a dependência inteira.
+Os seis IDs B171/B190/B192/B194/B195/B197 têm caminho de canal/host nativo
+explicitamente pendente. Os outros 14 têm transitivos, JS/interop, runtime,
+registro gerado ou contexto ainda pendentes conforme sua análise individual.
+
+Revisões suplementares delimitadas:
+- plugin_registry.dart: Registrar pode substituir o handler global;
+  isso não cria proprietário exclusivo de Firebase.
+- plugin_platform_interface.dart: verify checa construção/extends/token;
+  não valida projeto, perfil, endpoint ou autorização de configuração.
+- cloud_functions/src/firebase_functions.dart: cache app/região e setter _origin.
+- ESM de @firebase/functions instalado: URL nominal/absoluta, headers, fetch e
+  cancelamento. Somente lido, nunca importado/executado como SDK.
+
+Não há alegação de revisão integral do Dart SDK, web/DOM, Flutter services,
+binary messenger, host Android/iOS, Auth/App Check ou módulos JS transitivos.
+A disponibilidade dos destinos na matriz 02 não era demonstrada; os dois trechos
+suplementares de registro foram localizados individualmente, sem alterar 02.
+O ESM examinado não certifica equivalência integral com bundle servido/distribuído
+ou compatibilidade com o conjunto JS suportado.
+
+4. FALHA HISTÓRICA R2 — CAUSA E IMPLICAÇÕES
+
+Teste original: test/checkout_sdk_bundle_web_test.dart:126–141.
+Histórico preservado: esperado null, observado CheckoutContextBinding; R2 8/9,
+uma falha obrigatória, exit 1. O log histórico foi lido e confirma Expected/Actual.
+Teste, expectativa, helpers e logs antigos não foram editados ou enfraquecidos.
+
+Cadeia causal observada no código:
+1) instanceFor usa cache pela chave app.name/região e devolve o mesmo objeto.
+2) Outro módulo recupera esse objeto e muda _origin para 127.0.0.1:5002.
+3) O setter não modifica app/opções, tenant Auth, database Firestore, UID,
+   geração Auth ou conjunto/nome de Firebase.apps.
+4) _coherent do protótipo verifica esses campos e a origem da página Web.
+   O campo _origin do BUNDLE guarda origem da página; não é o _origin privado
+   de FirebaseFunctions. Ele não observa a nova configuração de Functions.
+5) capture mantém o binding porque _coherent, UID e geração ainda coincidem.
+
+O teste histórico não invoca callable e não mede tráfego para 5002. Ele demonstra
+que o receipt imutável e as observações usadas pelo protótipo não detectam a
+configuração divergente que orientaria chamadas. A aplicação Web de origin no
+serviço JS ocorre em call/stream, não nesse simples setter Dart.
+Não se atribui essa falha à divergência de versão JS: a causa de observabilidade
+e ownership é separada de K16.
+
+URL explícita: no caminho examinado, httpsCallableFromURL entrega a URL recebida
+a callAtURL; não a deriva por _url(name)/emulatorOrigin. Isso sustenta controle
+do endereço inicial pelo código confiável que constrói a literal permitida.
+O ensaio real HISTÓRICO R2 de URL explícita já observou esse roteamento; não foi
+reexecutado nem ampliado para certificar a nova implementação.
+
+Limites: URL explícita não congela provider Auth/App Check, credenciais, sessão,
+registros globais, serviço JS recuperável, política de redirects ou runtime.
+O postJSON ESM examinado não configura redirect:error. Não inferir ausência de
+redirect por passar uma URL fixa. Headers são obtidos de forma assíncrona.
+callAtURL aguarda headers e só depois disputa postJSON com cancelAllRequests;
+por essa ordem, _delete não demonstra ausência de envio após delete durante
+aquele await. É inferência estática delimitada, NÃO teste de corrida.
+Captura de token Auth pode falhar e o código JS pode prosseguir sem esse header;
+autorização real continua exigindo contexto e validação do servidor.
+
+Conclusão limitada: recusar pedidos controlados de reconfiguração e fixar URL
+no código revisado são propriedades possíveis. Detectar toda mutação externa
+oculta usando o receipt e as observações atuais não foi demonstrado, nem é
+garantido pelo validador puro entregue. Não existe lock público de ownership
+demonstrado para congelar esses caches/configurações. Sob K14, código arbitrário
+no mesmo processo está fora da promessa; mistura acidental continua defeito.
+
+5. CÓDIGO E PROVAS NEGATIVAS IMPLEMENTADOS
+
+functions-validator.cjs é código puro demonstrativo fora de lib. Reutiliza o
+perfil declarativo R3 sem alterar policy. Confere campos exatos, valores e origin,
+e somente a URL diagnóstica já usada no experimento R2:
+http://127.0.0.1:4471/diagnosticOnly.
+Isso não inclui a porta 4471 no manifesto Firebase nem libera chamada real.
+
+WeakMap local reconhece apenas planos emitidos pela própria fixture; cópia,
+serialização, objeto externo ou plano de outra fixture são recusados.
+Um descritor de perfil/origin/destino divergente, pedido controlado de
+reconfiguração ou retire torna o plano observado obsoleto, sem reset.
+Campos extras, getters e entrada ilegível falham fechados. Comparação da URL é
+literal: rejeita aliases, query/fragment, userinfo, normalização e paths comerciais.
+
+Há controle positivo de correspondência local, para não testar apenas um
+validador que sempre retorna false. Mesmo nesse controle: runtimeAuthorization
+permanece false e sdkAdmission BLOCKED. O plano não é CheckoutContextBinding,
+não autentica FirebaseApp ou usuário e não é receipt de admissão do SDK.
+
+Não existe send/call/capture/sdk/configure/httpsCallable nessa API. Nenhum SDK
+é simulado para declarar isolamento. A identidade é da fixture de validação;
+ausência de identidade SDK nunca permite autorização de runtime.
+Mudança oculta com os mesmos descritores é indistinguível para esse código,
+e o teste explicita o limite. Reprovação R2 não está corrigida nem substituída.
+retire trata apenas o plano local: sem listeners, sessão Auth, geração, fan-out
+ou autoridade B4-C. Não foi reimplementado o owner inerte R4-A.
+
+review-functions.cjs exporta apenas essa revisão Functions, reaproveitando
+hashes, AST e locators, com notas de revisão manual e recusa de sobrescrita wx.
+Não modifica política, não promove classificação e não executa os mains antigos.
+
+6. ARQUIVOS CRIADOS E EVIDÊNCIAS
+
+scripts/b4br4b03/functions-validator.cjs
+scripts/b4br4b03/functions-validator.test.cjs
+scripts/b4br4b03/functions-review-notes.json
+scripts/b4br4b03/review-functions.cjs
+scripts/b4br4b03/review-functions.test.cjs
+scripts/b4br4b03/README.md
+docs/catalog/F9_B07_D_C_C_C_B4_B_R4_B_03_FUNCTIONS.json
+docs/catalog/F9_B07_D_C_C_C_B4_B_R4_B_03_RESULTADO.txt
+
+JSON Functions SHA256:
+1BBF50933EB9237FF3D921C5E503C9EF9819228C9C60B0B6034A15EFEAC578E5.
+Reprodução em build/b4br4b03/functions-review-reproduced.json: mesmo hash / PASS.
+Artefatos ignorados novos: build/b4br4b03 com baseline, logs, prévia, reprodução,
+status, diff, preservação e fixtures. Regressões também criam novas fixtures em
+diretórios habituais anteriores, sem reescrever evidências existentes.
+
+7. VALIDAÇÃO E RESULTADOS
+
+PASS / VALIDADO LOCALMENTE:
+- node --check nos quatro .cjs novos: exit 0.
+- functions-validator.test.cjs: 11/11 PASS, exit 0.
+  Perfil divergente/ausente/extra; origin divergente; troca de perfil; mudança de
+  URL/aliases/paths; identidade ausente/copiada/cruzada; reconfiguração recusada;
+  plano obsoleto/retire idempotente; dados incompletos/getters; resultados e plano
+  imutáveis; controle positivo sem autoridade; mutação SDK não observável limitada.
+- review-functions.test.cjs: 2/2 PASS, exit 0: 20 IDs/hashes/trechos, estados,
+  proveniência, determinismo e recusa de sobrescrita sem admissão.
+  Log conjunto final: build/b4br4b03/new-tests.log, 13/13, zero skips/falhas.
+- R3: 30/30 PASS, exit 0. Log build/b4br4b03/r3-tests.log.
+- R4-A: 12/12 PASS, exit 0. Log build/b4br4b03/r4a-tests.log.
+- R4-B/01: 2/2 PASS, exit 0. Log build/b4br4b03/r4b01-tests.log.
+- R4-B/02: 9/9 PASS, exit 0. Log build/b4br4b03/r4b02-tests.log.
+  Esta regressão gera apenas fixtures, não entrega outra matriz geral.
+- Conferência de fontes selecionadas, reprodução JSON, preservação, JSON/sintaxe,
+  whitespace de arquivos novos e git diff --check: PASS.
+
+REPROVADO HISTÓRICO:
+- R2 externally reconfigured Functions must invalidate binding: 8/9 na suíte
+  histórica, expected null / actual binding, exit 1. NÃO REEXECUTADO aqui.
+  Não incluído em qualquer contagem de aprovação desta subetapa.
+
+BLOQUEADO / NÃO DEMONSTRADO:
+- Admissão Functions, Auth e Firestore; closures das 20 fronteiras e artefato
+  distribuído; identidade SDK/contexto, freeze de configuração e isolamento real.
+- K16: Firebase JS 12.15.0 declarado versus 12.19.0 disponível historicamente.
+  Nenhum download/alinhamento ou revisão positiva de dependência foi realizado.
+- Política R3 continua roots/files vazios; autorização R3-only preservada.
+- Exportação da revisão retorna 1/BLOQUEADO por contrato; não é falha de teste.
+  Erro de infraestrutura/sobrescrita retorna 2; EEXIST foi testado deliberadamente.
+
+NÃO EXECUTADO:
+- SDK Firebase real, emuladores, Chrome, callable/HTTP, Auth/Firestore/Functions
+  de runtime, Rules, redirects, credenciais em voo e corrida de delete.
+- Testes Flutter, pois nenhum Dart foi alterado; regressões de parser usam
+  diretamente Dart do Flutter 3.32.6 já instalado, sem pub get.
+- HML/PROD, serviços externos, checkout comercial ou outros fluxos funcionais.
+
+8. PRESERVAÇÃO E RISCOS RESIDUAIS
+
+Conferência final: 1.861/1.861 entradas de hash idênticas; zero alteradas/ausentes.
+Evidências de preservação/diff em build/b4br4b03; matriz 02 e relatórios anteriores
+permanecem intactos. Nenhuma dependência, fonte operacional ou gate antigo editado.
+SHA256 inicial/final de lib/services/pdf_receipt_service.dart:
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9.
+
+Sem instalação/download/update, reset/restore/stash/clean, commit/push/deploy,
+migração, backend/Rules, bootstraps, F10, checkout, cobrança, fiado ou offline.
+Nenhum token/secret/credencial real utilizado ou exposto.
+
+Riscos: revisão dirigida não fecha transitivos; JS/DOM/compiler e registros
+continuam pendentes; estado global e caches recuperáveis; configuração externa
+oculta sem observação; sessão/credenciais e redirects não ensaiados; lifecycle
+cancelamento não equivale a ausência de efeito; revisão humana e integridade do
+artefato; código arbitrário/runtime comprometido fora K14. Um plano puro válido
+não pode ser usado como autorização de venda ou de acesso ao SDK.
+
+9. PRÓXIMA IMPLEMENTAÇÃO FUNCIONAL VIÁVEL — NÃO INICIADA
+
+Uma porta diagnóstica restrita do harness, construída por owner revisado que
+derive a URL explícita do contrato fechado e recuse setters/SDKs externos, sem
+expor serviços aos consumidores. Antes de executá-la com SDK: fechar dependências
+e registro/artefato, definir/revisar nome e lifecycle do app, resolver K16 com
+autorização própria e preparar provas reais equivalentes de procedência/destino.
+Provas negativas puras não substituem esses pré-requisitos. Não prometer detectar
+reconfigurador oculto pelo receipt; impedir caminhos acidentais no código confiável
+e preservar a falha histórica como gate independente.
+
+ESTADO FINAL: BLOQUEADO para admissão Firebase; revisão e provas puras VALIDADO
+LOCALMENTE. Subetapa 03 encerrada. PARAR; R4-B/04 NÃO INICIADA.

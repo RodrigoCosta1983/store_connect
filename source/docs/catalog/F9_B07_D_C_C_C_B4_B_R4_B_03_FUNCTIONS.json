@@ -1,0 +1,870 @@
+{
+  "scope": "Revisão manual dirigida dos efeitos nos trechos de origem, sem aprovação de closure, SDK ou artefato",
+  "status": "BLOQUEADO",
+  "admitted": [],
+  "provenance": {
+    "source": "Mensagem do usuário que autoriza a Subetapa 03",
+    "type": "PROVENIÊNCIA DE CONVERSA ANTERIOR INFORMADA PELO USUÁRIO",
+    "reportedPriorApprovalDate": "2026-10-18",
+    "originalTranscriptAvailable": false,
+    "localNormativeApprovalDocumentAvailable": false,
+    "policyChanged": false,
+    "K14": "Arquitetura Firebase baseada em código confiável, fábrica proprietária, contexto verificado e URLs explícitas em operações críticas, sem promessa de proteção contra código arbitrário no mesmo processo.",
+    "K15": "Implementação isolada de verificadores de ownership, dependências e recusa de reconfiguração indevida, começando pelo harness demonstrativo, sem modificar checkout ativo."
+  },
+  "matrix": {
+    "file": "docs/catalog/F9_B07_D_C_C_C_B4_B_R4_B_02_MATRIZ.json",
+    "sha256": "33af377e23032b6b77ca4a091869a3c09fbae0ee5fadbc8650d444516c39c16f"
+  },
+  "input": {
+    "file": "build/b4br4b/inspection-1792358982334.json",
+    "sha256": "04757f2212165e98c4ff8c3648780fe2db00e9a16c0300e9f3b74b9b3645411e"
+  },
+  "toolHashes": [
+    {
+      "file": "scripts/b4br4b03/functions-validator.cjs",
+      "sha256": "f57479de329e663b82827167bf2b51e86e1d13b0406ae82937fe819a5948a614"
+    },
+    {
+      "file": "scripts/b4br4b03/functions-review-notes.json",
+      "sha256": "8e0bd948019464d5dd7f6d189c167ad7c1c822b295bdcc25e567b71b7ebb5168"
+    },
+    {
+      "file": "scripts/b4br4b03/review-functions.cjs",
+      "sha256": "22a34bd956f710a7d9a6c916ed1d8968b9bdf96c71626085473e934dfe3df744"
+    }
+  ],
+  "summary": {
+    "selected": 20,
+    "directedReviewed": 20,
+    "pendingClosures": 20,
+    "runtimeDemonstrated": 0
+  },
+  "boundaries": [
+    {
+      "id": "B006",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions-6.3.5\\lib\\cloud_functions.dart",
+        "uri": "dart:async",
+        "line": 6,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "Dart SDK capability; not reviewed"
+      },
+      "category": "ASSINCRONIA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "45a921e9be33bf40f6227dfb616aff209d303db60494b2eb9ecee853a51fb8bf",
+        "actualSha256": "45a921e9be33bf40f6227dfb616aff209d303db60494b2eb9ecee853a51fb8bf",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'dart:async';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions-6.3.5\\lib\\cloud_functions.dart",
+        "line": 26,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "part 'src/firebase_functions.dart';",
+        "sha256": "45a921e9be33bf40f6227dfb616aff209d303db60494b2eb9ecee853a51fb8bf",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "A API agrupa partes e wrappers Future/Stream; cache app/região e _origin são tratados na parte firebase_functions.dart. dart:async não dá identidade ou lock.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Sem revisão completa do runtime dart:async ou de todas as partes.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B024",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\cloud_functions_web.dart",
+        "uri": "package:flutter_web_plugins/flutter_web_plugins.dart",
+        "line": 11,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "External package outside directed source scope"
+      },
+      "category": "REGISTRO_PLATAFORMA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "ab26c733deadeaac3a28a18678b0d4eaef26bdd651e765cd9df0e0e3e409db18",
+        "actualSha256": "ab26c733deadeaac3a28a18678b0d4eaef26bdd651e765cd9df0e0e3e409db18",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'package:flutter_web_plugins/flutter_web_plugins.dart';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\cloud_functions_web.dart",
+        "line": 46,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "    FirebaseFunctionsPlatform.instance = FirebaseFunctionsWeb.instance;",
+        "sha256": "ab26c733deadeaac3a28a18678b0d4eaef26bdd651e765cd9df0e0e3e409db18",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "registerWith registra serviço functions e substitui singleton global; argumento Registrar não é dono exclusivo da instância JS.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Registro gerado/artefato e outros componentes que podem substituir a plataforma não admitidos.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B060",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\https_callable_web.dart",
+        "uri": "dart:async",
+        "line": 6,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "Dart SDK capability; not reviewed"
+      },
+      "category": "ASSINCRONIA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "840895a8ac6d5a77b5a182f31ff1c83ec6cbd5be5a411eef80487acfd6950701",
+        "actualSha256": "840895a8ac6d5a77b5a182f31ff1c83ec6cbd5be5a411eef80487acfd6950701",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'dart:async';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\https_callable_web.dart",
+        "line": 26,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "  Future<dynamic> call([Object? parameters]) async {",
+        "sha256": "840895a8ac6d5a77b5a182f31ff1c83ec6cbd5be5a411eef80487acfd6950701",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "call e stream aplicam origin ao mesmo serviço JS antes de criar callable; await e callbacks não tornam sessão/destino atômicos.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Sem prova de sessão, credenciais em voo ou ordenação real.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B061",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\https_callable_web.dart",
+        "uri": "dart:js_interop",
+        "line": 7,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "Dart SDK capability; not reviewed"
+      },
+      "category": "INTEROP",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "840895a8ac6d5a77b5a182f31ff1c83ec6cbd5be5a411eef80487acfd6950701",
+        "actualSha256": "840895a8ac6d5a77b5a182f31ff1c83ec6cbd5be5a411eef80487acfd6950701",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'dart:js_interop';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\https_callable_web.dart",
+        "line": 51,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "    final JSAny? parametersJS = parameters?.jsify();",
+        "sha256": "840895a8ac6d5a77b5a182f31ff1c83ec6cbd5be5a411eef80487acfd6950701",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "Conversão JS e Promise.toDart entram na chamada. A ponte não verifica procedência de SDK nem congela configuração.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Interop/compiler e dependências JS não revisados integralmente.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B062",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\https_callable_web.dart",
+        "uri": "package:web/web.dart",
+        "line": 14,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "External package outside directed source scope"
+      },
+      "category": "INTEROP",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "840895a8ac6d5a77b5a182f31ff1c83ec6cbd5be5a411eef80487acfd6950701",
+        "actualSha256": "840895a8ac6d5a77b5a182f31ff1c83ec6cbd5be5a411eef80487acfd6950701",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'package:web/web.dart' as web;",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\https_callable_web.dart",
+        "line": 81,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "    web.AbortSignal? signal;",
+        "sha256": "840895a8ac6d5a77b5a182f31ff1c83ec6cbd5be5a411eef80487acfd6950701",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "web.AbortSignal participa apenas do stream/opções; timeout/abort não são atestado de destino ou rollback.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Implementação DOM/abort/browser e stream real não demonstrados.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B063",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\interop\\functions.dart",
+        "uri": "dart:js_interop",
+        "line": 8,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "Dart SDK capability; not reviewed"
+      },
+      "category": "INTEROP",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "1aa9fc4f17351fe32e64db3613d1d154700f38fd6d68f4c3871a125a6fa60b7b",
+        "actualSha256": "1aa9fc4f17351fe32e64db3613d1d154700f38fd6d68f4c3871a125a6fa60b7b",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'dart:js_interop';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\interop\\functions.dart",
+        "line": 27,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "  static final _expando = Expando<Functions>();",
+        "sha256": "1aa9fc4f17351fe32e64db3613d1d154700f38fd6d68f4c3871a125a6fa60b7b",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "Wrapper Functions reutilizado por objeto JS; getFunctions usa app/região e httpsCallableUri chama httpsCallableFromURL.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Identidade JS recuperável e provider/caches externos não isolados.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B139",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\platform_interface\\platform_interface_firebase_functions.dart",
+        "uri": "package:plugin_platform_interface/plugin_platform_interface.dart",
+        "line": 8,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "External package outside directed source scope"
+      },
+      "category": "REGISTRO_PLATAFORMA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "c4a3a10f902b893afaa1d70cf301b21894c9f5fa2644e9b903949665211e8e6e",
+        "actualSha256": "c4a3a10f902b893afaa1d70cf301b21894c9f5fa2644e9b903949665211e8e6e",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'package:plugin_platform_interface/plugin_platform_interface.dart';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\platform_interface\\platform_interface_firebase_functions.dart",
+        "line": 51,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "  static set instance(FirebaseFunctionsPlatform instance) {",
+        "sha256": "c4a3a10f902b893afaa1d70cf301b21894c9f5fa2644e9b903949665211e8e6e",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "Setter de plataforma usa PlatformInterface.verify; token verifica construção por extensão, não projeto, origem, tenant ou owner.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Substituições por outros componentes e artefato final sem revisão completa.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B140",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\platform_interface\\platform_interface_https_callable.dart",
+        "uri": "dart:async",
+        "line": 6,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "Dart SDK capability; not reviewed"
+      },
+      "category": "ASSINCRONIA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "764bf1e0398161d9626064c8fc01c1c908fd97832353a340f2d1f67e98fe7a5a",
+        "actualSha256": "764bf1e0398161d9626064c8fc01c1c908fd97832353a340f2d1f67e98fe7a5a",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'dart:async';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\platform_interface\\platform_interface_https_callable.dart",
+        "line": 67,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "  Future<dynamic> call([dynamic parameters]) {",
+        "sha256": "764bf1e0398161d9626064c8fc01c1c908fd97832353a340f2d1f67e98fe7a5a",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "Interface expõe Future/Stream e guarda origem/URI; options é mutável. Contrato de tipos não prova autorização ou estado atual.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Operações concretas e ciclo de vida SDK não demonstrados.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B141",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\platform_interface\\platform_interface_https_callable.dart",
+        "uri": "package:plugin_platform_interface/plugin_platform_interface.dart",
+        "line": 8,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "External package outside directed source scope"
+      },
+      "category": "REGISTRO_PLATAFORMA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "764bf1e0398161d9626064c8fc01c1c908fd97832353a340f2d1f67e98fe7a5a",
+        "actualSha256": "764bf1e0398161d9626064c8fc01c1c908fd97832353a340f2d1f67e98fe7a5a",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'package:plugin_platform_interface/plugin_platform_interface.dart';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\platform_interface\\platform_interface_https_callable.dart",
+        "line": 35,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "    PlatformInterface.verify(instance, _token);",
+        "sha256": "764bf1e0398161d9626064c8fc01c1c908fd97832353a340f2d1f67e98fe7a5a",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "Verificação de HttpsCallablePlatform não autentica endpoint nem revisão do código que forneceu o delegate.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Identidade semântica do app/delegate e distribuição confiável pendentes.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B157",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\interop\\functions_interop.dart",
+        "uri": "dart:js_interop",
+        "line": 11,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "Dart SDK capability; not reviewed"
+      },
+      "category": "INTEROP",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "214a212ef810abc20a4c667117fa1986049f50e12bda0ceecbfafa5b2b2a9937",
+        "actualSha256": "214a212ef810abc20a4c667117fa1986049f50e12bda0ceecbfafa5b2b2a9937",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'dart:js_interop';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\interop\\functions_interop.dart",
+        "line": 34,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "external JSFunction httpsCallableFromURL(",
+        "sha256": "214a212ef810abc20a4c667117fa1986049f50e12bda0ceecbfafa5b2b2a9937",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "External do namespace global firebase_functions delega destino/credenciais ao módulo JS; declarações não implementam lock.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Conjunto JS suportado e estado global do runtime não admitidos.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B158",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\interop\\functions_interop.dart",
+        "uri": "dart:js_interop_unsafe",
+        "line": 12,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "Dart SDK capability; not reviewed"
+      },
+      "category": "INTEROP",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "214a212ef810abc20a4c667117fa1986049f50e12bda0ceecbfafa5b2b2a9937",
+        "actualSha256": "214a212ef810abc20a4c667117fa1986049f50e12bda0ceecbfafa5b2b2a9937",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'dart:js_interop_unsafe';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\interop\\functions_interop.dart",
+        "line": 97,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "      final result = await ((object.getProperty('next'.toJS)! as JSFunction)",
+        "sha256": "214a212ef810abc20a4c667117fa1986049f50e12bda0ceecbfafa5b2b2a9937",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "Iteração stream usa acesso dinâmico a Symbol/next e invocação de Promise JS; não há fronteira de autorização nessa leitura.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Propriedades/objetos JS e engine não revisados integralmente.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B159",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\interop\\functions_interop.dart",
+        "uri": "package:web/web.dart",
+        "line": 13,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "External package outside directed source scope"
+      },
+      "category": "INTEROP",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "214a212ef810abc20a4c667117fa1986049f50e12bda0ceecbfafa5b2b2a9937",
+        "actualSha256": "214a212ef810abc20a4c667117fa1986049f50e12bda0ceecbfafa5b2b2a9937",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'package:web/web.dart' as web;",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\interop\\functions_interop.dart",
+        "line": 90,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "    final symbolJS = web.window.getProperty('Symbol'.toJS)! as JSFunction;",
+        "sha256": "214a212ef810abc20a4c667117fa1986049f50e12bda0ceecbfafa5b2b2a9937",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "window e Symbol globais participam da iteração assíncrona; runtime arbitrário no mesmo contexto fica fora K14.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "DOM/global e implementação de browser continuam não demonstrados.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B160",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\utils.dart",
+        "uri": "dart:js_interop",
+        "line": 6,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "Dart SDK capability; not reviewed"
+      },
+      "category": "INTEROP",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "92b683e9defd4b7ff994185efcaef8f4b1f1f2b992dfe2eff1d7f4d4e542fc70",
+        "actualSha256": "92b683e9defd4b7ff994185efcaef8f4b1f1f2b992dfe2eff1d7f4d4e542fc70",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'dart:js_interop';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\utils.dart",
+        "line": 12,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "FirebaseFunctionsException convertFirebaseFunctionsException(JSObject exception,",
+        "sha256": "92b683e9defd4b7ff994185efcaef8f4b1f1f2b992dfe2eff1d7f4d4e542fc70",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "utils converte erro JS após captura; não revalida app, sessão ou destino e não deve promover erro a sucesso.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Formatos de erro e todos os ramos JS não ensaiados em runtime.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B161",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\utils.dart",
+        "uri": "dart:js_interop_unsafe",
+        "line": 7,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "Dart SDK capability; not reviewed"
+      },
+      "category": "INTEROP",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "92b683e9defd4b7ff994185efcaef8f4b1f1f2b992dfe2eff1d7f4d4e542fc70",
+        "actualSha256": "92b683e9defd4b7ff994185efcaef8f4b1f1f2b992dfe2eff1d7f4d4e542fc70",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'dart:js_interop_unsafe';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_web-5.1.11\\lib\\utils.dart",
+        "line": 15,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "      (exception.getProperty('code'.toJS)! as JSString).toDart;",
+        "sha256": "92b683e9defd4b7ff994185efcaef8f4b1f1f2b992dfe2eff1d7f4d4e542fc70",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "Leituras dinâmicas code/message/details dependem do objeto JS; formato inesperado pode lançar, sem criar procedência confiável.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Objeto JS/interop e tratamento completo do consumidor não revisados.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B171",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\method_channel\\method_channel_firebase_functions.dart",
+        "uri": "package:flutter/services.dart",
+        "line": 8,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "External package outside directed source scope"
+      },
+      "category": "CANAIS_PLATAFORMA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "3d7534b299d5025c360e84d637293b866126de9243a71b98cde0be5ce464362a",
+        "actualSha256": "3d7534b299d5025c360e84d637293b866126de9243a71b98cde0be5ce464362a",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'package:flutter/services.dart';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\method_channel\\method_channel_firebase_functions.dart",
+        "line": 37,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "  static final pigeonChannel = CloudFunctionsHostApi();",
+        "sha256": "3d7534b299d5025c360e84d637293b866126de9243a71b98cde0be5ce464362a",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "Fallback MethodChannel cria canal global/Pigeon e delegates; precisa ser distinguido do registro Web.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Código nativo/binary messenger e plataforma Android/iOS fora desta revisão dirigida.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B190",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\pigeon\\messages.pigeon.dart",
+        "uri": "dart:async",
+        "line": 9,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "Dart SDK capability; not reviewed"
+      },
+      "category": "ASSINCRONIA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "bca24604deb54a1770b9dc4ced6aa31991da8404b1ce2827854b86565c74255f",
+        "actualSha256": "bca24604deb54a1770b9dc4ced6aa31991da8404b1ce2827854b86565c74255f",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'dart:async';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\pigeon\\messages.pigeon.dart",
+        "line": 87,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "  Future<Object?> call(Map<String, Object?> arguments) async {",
+        "sha256": "bca24604deb54a1770b9dc4ced6aa31991da8404b1ce2827854b86565c74255f",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "Pigeon envia mapa e aguarda reply; não valida manifesto nem owner antes da serialização.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Execução nativa, entrega de mensagem e lifecycle não demonstrados.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B192",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\pigeon\\messages.pigeon.dart",
+        "uri": "package:flutter/services.dart",
+        "line": 12,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "External package outside directed source scope"
+      },
+      "category": "CANAIS_PLATAFORMA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "bca24604deb54a1770b9dc4ced6aa31991da8404b1ce2827854b86565c74255f",
+        "actualSha256": "bca24604deb54a1770b9dc4ced6aa31991da8404b1ce2827854b86565c74255f",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'package:flutter/services.dart';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\pigeon\\messages.pigeon.dart",
+        "line": 96,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "        pigeonVar_channel.send(<Object?>[arguments]);",
+        "sha256": "bca24604deb54a1770b9dc4ced6aa31991da8404b1ce2827854b86565c74255f",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "BasicMessageChannel usa messenger injetado ou default; tipo/canal não são identidade de destino Firebase.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Messenger/codec/host nativo completos não revisados.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B194",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\method_channel\\method_channel_https_callable.dart",
+        "uri": "dart:async",
+        "line": 6,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "Dart SDK capability; not reviewed"
+      },
+      "category": "ASSINCRONIA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "8aeef229b57c8980b9965c04de5fdce69ac83eb5e1a63863a523190b88bc6f85",
+        "actualSha256": "8aeef229b57c8980b9965c04de5fdce69ac83eb5e1a63863a523190b88bc6f85",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'dart:async';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\method_channel\\method_channel_https_callable.dart",
+        "line": 41,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "      Object? result = await MethodChannelFirebaseFunctions.pigeonChannel",
+        "sha256": "8aeef229b57c8980b9965c04de5fdce69ac83eb5e1a63863a523190b88bc6f85",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "MethodChannelHttpsCallable encaminha appName/functionUri/origin/region e espera resultado. Await não revalida contexto confiável.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Host nativo e concorrência real fora do escopo.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B195",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\method_channel\\method_channel_https_callable.dart",
+        "uri": "package:flutter/services.dart",
+        "line": 8,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "External package outside directed source scope"
+      },
+      "category": "CANAIS_PLATAFORMA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "8aeef229b57c8980b9965c04de5fdce69ac83eb5e1a63863a523190b88bc6f85",
+        "actualSha256": "8aeef229b57c8980b9965c04de5fdce69ac83eb5e1a63863a523190b88bc6f85",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'package:flutter/services.dart';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\method_channel\\method_channel_https_callable.dart",
+        "line": 65,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "        EventChannel('plugins.flutter.io/firebase_functions/$eventChannelId');",
+        "sha256": "8aeef229b57c8980b9965c04de5fdce69ac83eb5e1a63863a523190b88bc6f85",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "Stream cria EventChannel com contador local e repassa parâmetros; contador evita colisão de canal, não certifica sessão/destino.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Lifecycle de stream/messenger e cancelamento nativo não demonstrados.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "id": "B197",
+      "original": {
+        "from": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\method_channel\\utils\\exception.dart",
+        "uri": "package:flutter/services.dart",
+        "line": 7,
+        "kind": "ImportDirectiveImpl",
+        "boundary": "External package outside directed source scope"
+      },
+      "category": "CANAIS_PLATAFORMA",
+      "integrity": {
+        "status": "CONFERIDO",
+        "expectedSha256": "93b248df26e91080583d7c1a1b2851c9875ca496d0c618f73d3b0295e587f4bc",
+        "actualSha256": "93b248df26e91080583d7c1a1b2851c9875ca496d0c618f73d3b0295e587f4bc",
+        "astDirectiveMatches": true,
+        "excerpt": "import 'package:flutter/services.dart';",
+        "scope": "Integridade e correspondência AST, não revisão de segurança"
+      },
+      "excerpt": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions_platform_interface-6.0.5\\lib\\src\\method_channel\\utils\\exception.dart",
+        "line": 14,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "Never convertPlatformException(Object exception, StackTrace stackTrace) {",
+        "sha256": "93b248df26e91080583d7c1a1b2851c9875ca496d0c618f73d3b0295e587f4bc",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "directedReview": "REVISADO NO TRECHO",
+      "finding": "Conversor relança PlatformException/FirebaseFunctionsException; não observa nem altera a configuração de Functions.",
+      "dependencyClosure": "PENDENTE",
+      "pending": "Sem revisão de todos os produtores de erro e consumidores nativos.",
+      "runtimeIsolation": "NÃO DEMONSTRADO",
+      "admission": "NOT_ADMITTED"
+    }
+  ],
+  "additionalEvidence": [
+    {
+      "file": "C:\\Users\\rodri\\Projetos\\store_connect\\test\\checkout_sdk_bundle_web_test.dart",
+      "line": 126,
+      "section": "Sem cabeçalho identificado",
+      "excerpt": "  test('externally reconfigured Functions must invalidate binding', () async {",
+      "sha256": "d07fa9c77c1d09dfe85a90b764ed5bc7954c34627879b4c4396d72970d564a94",
+      "status": "LOCALIZADO",
+      "authority": "Evidência local; não é aprovação automática nem nova regra K"
+    },
+    {
+      "file": "C:\\Users\\rodri\\Projetos\\store_connect\\test\\support\\checkout_sdk_probe_bundle.dart",
+      "line": 169,
+      "section": "Sem cabeçalho identificado",
+      "excerpt": "  bool get _coherent =>",
+      "sha256": "9acfa6045a6a3b85f7d64a12d6ec7ce818ab53ddcc710561024785f57a94f530",
+      "status": "LOCALIZADO",
+      "authority": "Evidência local; não é aprovação automática nem nova regra K"
+    },
+    {
+      "file": "C:\\Users\\rodri\\Projetos\\store_connect\\test\\support\\checkout_sdk_probe_context_port.dart",
+      "line": 12,
+      "section": "Sem cabeçalho identificado",
+      "excerpt": "  CheckoutContextBinding? capture() =>",
+      "sha256": "b66b14ce6c3625c522542709376590b535f3c0265d0f4bc2ada9dcb5bd3de2a6",
+      "status": "LOCALIZADO",
+      "authority": "Evidência local; não é aprovação automática nem nova regra K"
+    },
+    {
+      "file": "C:\\Users\\rodri\\Projetos\\store_connect\\test\\checkout_sdk_explicit_url_r2_web_test.dart",
+      "line": 44,
+      "section": "Sem cabeçalho identificado",
+      "excerpt": "      // Also create the explicit callable AFTER reconfiguration.",
+      "sha256": "00d9575dfea9ce66126a594808281f50ae07c799774978599c4e49a6637a2496",
+      "status": "LOCALIZADO",
+      "authority": "Evidência local; não é aprovação automática nem nova regra K"
+    },
+    {
+      "file": "C:\\Users\\rodri\\Projetos\\store_connect\\functions\\node_modules\\@firebase\\functions\\dist\\esm\\index.esm.js",
+      "line": 500,
+      "section": "Sem cabeçalho identificado",
+      "excerpt": "function connectFunctionsEmulator$1(functionsInstance, host, port) {",
+      "sha256": "4e8740ecd019ab8a0dbb277061ea1c2c16fbf0667261bf62ab23d73be8901cf8",
+      "status": "LOCALIZADO",
+      "authority": "Evidência local; não é aprovação automática nem nova regra K"
+    },
+    {
+      "file": "C:\\Users\\rodri\\Projetos\\store_connect\\functions\\node_modules\\@firebase\\functions\\dist\\esm\\index.esm.js",
+      "line": 527,
+      "section": "Sem cabeçalho identificado",
+      "excerpt": "function httpsCallableFromURL$1(functionsInstance, url, options) {",
+      "sha256": "4e8740ecd019ab8a0dbb277061ea1c2c16fbf0667261bf62ab23d73be8901cf8",
+      "status": "LOCALIZADO",
+      "authority": "Evidência local; não é aprovação automática nem nova regra K"
+    },
+    {
+      "file": "C:\\Users\\rodri\\Projetos\\store_connect\\functions\\node_modules\\@firebase\\functions\\dist\\esm\\index.esm.js",
+      "line": 622,
+      "section": "Sem cabeçalho identificado",
+      "excerpt": "    const headers = await makeAuthHeaders(functionsInstance, options);",
+      "sha256": "4e8740ecd019ab8a0dbb277061ea1c2c16fbf0667261bf62ab23d73be8901cf8",
+      "status": "LOCALIZADO",
+      "authority": "Evidência local; não é aprovação automática nem nova regra K"
+    },
+    {
+      "file": "C:\\Users\\rodri\\Projetos\\store_connect\\functions\\node_modules\\@firebase\\functions\\dist\\esm\\index.esm.js",
+      "line": 471,
+      "section": "Sem cabeçalho identificado",
+      "excerpt": "    _delete() {",
+      "sha256": "4e8740ecd019ab8a0dbb277061ea1c2c16fbf0667261bf62ab23d73be8901cf8",
+      "status": "LOCALIZADO",
+      "authority": "Evidência local; não é aprovação automática nem nova regra K"
+    },
+    {
+      "file": "C:\\Users\\rodri\\Projetos\\store_connect\\functions\\node_modules\\@firebase\\functions\\dist\\esm\\index.esm.js",
+      "line": 554,
+      "section": "Sem cabeçalho identificado",
+      "excerpt": "        response = await fetchImpl(url, {",
+      "sha256": "4e8740ecd019ab8a0dbb277061ea1c2c16fbf0667261bf62ab23d73be8901cf8",
+      "status": "LOCALIZADO",
+      "authority": "Evidência local; não é aprovação automática nem nova regra K"
+    },
+    {
+      "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions-6.3.5\\lib\\src\\firebase_functions.dart",
+      "line": 32,
+      "section": "Sem cabeçalho identificado",
+      "excerpt": "  static final Map<String, FirebaseFunctions> _cachedInstances = {};",
+      "sha256": "a2a216cb07da79b350e60aa83c0b883fc437ca2b01861d280c2123134a415bd5",
+      "status": "LOCALIZADO",
+      "authority": "Evidência local; não é aprovação automática nem nova regra K"
+    },
+    {
+      "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\cloud_functions-6.3.5\\lib\\src\\firebase_functions.dart",
+      "line": 116,
+      "section": "Sem cabeçalho identificado",
+      "excerpt": "    _origin = 'http://$mappedHost:$port';",
+      "sha256": "a2a216cb07da79b350e60aa83c0b883fc437ca2b01861d280c2123134a415bd5",
+      "status": "LOCALIZADO",
+      "authority": "Evidência local; não é aprovação automática nem nova regra K"
+    }
+  ],
+  "supplementary": [
+    {
+      "package": "flutter_web_plugins",
+      "evidence": {
+        "file": "C:\\Users\\rodri\\develop\\flutter_3.32.6\\packages\\flutter_web_plugins\\lib\\src\\plugin_registry.dart",
+        "line": 75,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "  void registerMessageHandler() {",
+        "sha256": "31abc8138bf08d8f86de6e307301ca5372284c43d239ab2f26e9593a6839d320",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "finding": "Registrar substitui handler global; não certifica owner Firebase nem congela plataforma.",
+      "closure": "PENDENTE; somente trecho delimitado revisado",
+      "admission": "NOT_ADMITTED"
+    },
+    {
+      "package": "plugin_platform_interface",
+      "evidence": {
+        "file": "C:\\Users\\rodri\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\plugin_platform_interface-2.1.8\\lib\\plugin_platform_interface.dart",
+        "line": 71,
+        "section": "Sem cabeçalho identificado",
+        "excerpt": "  static void verify(PlatformInterface instance, Object token) {",
+        "sha256": "a9851092be0475b876b3c1de3d882084ae01cda19c1bf99b1567771e9d991307",
+        "status": "LOCALIZADO",
+        "authority": "Evidência local; não é aprovação automática nem nova regra K"
+      },
+      "finding": "Token verifica construção/extends; não atesta destino, perfil ou procedência SDK.",
+      "closure": "PENDENTE; somente trecho delimitado revisado",
+      "admission": "NOT_ADMITTED"
+    }
+  ],
+  "historicalFailure": {
+    "result": "REPROVADO HISTÓRICO R2; NÃO REEXECUTADO",
+    "expected": "null",
+    "observed": "CheckoutContextBinding",
+    "cause": "Cache retorna a mesma instância; setter _origin não altera campos observados por _coherent/capture nem a geração Auth",
+    "explicitUrl": "Fixa argumento URL da callable, não origem Auth/Firestore, credenciais, redirects ou integridade de runtime"
+  },
+  "lifecycleLimit": "No módulo ESM local, callAtURL aguarda headers antes de iniciar postJSON; Promise.race com cancelAllRequests não demonstra ausência de envio após delete durante esse await. Inferência estática, sem ensaio runtime.",
+  "jsReviewScope": "ESM local instalado, somente leitura; equivalência completa com bundle servido/distribuído e versão suportada não certificada",
+  "localProofScope": "Validador puro de descritores e planos locais; não é CheckoutContextBinding nem prova de SDK",
+  "compatibility": "K16 BLOQUEADO; nenhum JS baixado ou alinhado",
+  "policy": "R3/R4-A preservados, sem promoção ou nova autorização fabricada"
+}

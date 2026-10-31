@@ -1,0 +1,430 @@
+STORE&CONNECT — F9/B07-D-C-C-C/B4-A
+Contrato verificável de SDKs Firebase e contexto de checkout
+Data: 17/10/2026
+DECISÃO FINAL: CONTRATO PROPOSTO
+
+1. ESCOPO, MÉTODO E PRESERVAÇÃO
+
+Etapa exclusivamente documental. Não foi implementado adaptador nem iniciado
+B4-B/B4-C/B4-D. T01–T10, U01–U05 e K01–K06 são base aprovada; os detalhes de
+implementação abaixo são proposta para revisão, não ativação operacional.
+Branch: feat/f7-intelligent-catalog.
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154.
+Único arquivo criado: docs/catalog/F9_B07_D_C_C_C_B4_A_RESULTADO.txt.
+
+Inspeção dirigida de AGENTS.md, CURRENT_WORK.md histórico, contrato C-C-B,
+relatórios B1/B2/B3 e observações B2-R1, bootstrap, entrypoints, AuthGate,
+UserRoleProvider, portas/coordenador/apresentação B3, contexto/store, pontos
+de mutação do draft e metadados de configuração Android/Web/emuladores.
+Nas configurações Firebase foram selecionados somente campos de identidade
+não secretos (projeto/appId/package); não foram coletadas chaves, tokens,
+senhas ou credenciais comerciais. Nenhuma configuração completa será registrada
+no binding, logs ou UI. Não foram consultados ambientes remotos.
+
+As capacidades de API foram conferidas no código-fonte dos pacotes já resolvidos
+em .dart_tool/package_config.json e no cache Pub local, sem instalação ou rede:
+firebase_core 4.12.1; firebase_auth 6.5.6; cloud_firestore 6.7.1;
+cloud_functions 6.3.5. Não é afirmação sobre outras versões ou SDKs nativos.
+
+2. DIAGNÓSTICO DO ESTADO ATUAL
+
+2.1 lib/main.dart rejeita execução implícita. main_hml.dart e main_prod.dart
+chamam bootstrap com AppEnvironment explícito. AppEnvironment identifica
+store-connect-hml e store-connect-app, valida projectId/appId esperados para
+Android/Web, valida flavor e impede mudança de ambiente no mesmo processo.
+Isso é proteção de configuração, não prova de destino efetivo de cada SDK.
+
+2.2 firebase_bootstrap.dart inicializa o app padrão se Firebase.apps estiver
+vazio e valida Firebase.app().options. No Android, consulta canal nativo que
+lê project_id/google_app_id e BuildConfig.FLAVOR. A validação não cria bundle
+imutável de Auth/Firestore/Functions nem atesta todos os apps adicionais.
+Não se deve adotar qualquer app já existente por conveniência no futuro harness.
+
+2.3 app_bootstrap.dart configura emuladores sob USE_FIREBASE_EMULATORS, após
+inicialização de ambiente, em instâncias padrão separadas: Auth 9099,
+Firestore 8080, Functions 5001 e Storage 9199 no host solicitado 127.0.0.1.
+Sem a flag, os SDKs seguem o ambiente remoto do entrypoint. A flag não troca
+as opções para projeto demo: não reutilizar esse bootstrap como harness seguro.
+firebase.json contém essas portas, UI habilitada e singleProjectMode=true,
+sem host explícito nesses blocos. Futuro runner deve fixar loopback, projeto
+demo e verificar conectividade local; não assumir que configuração é execução.
+
+2.4 O bootstrap ativa provedores App Check de debug e captura falhas de ativação.
+Isso não é prova de atestação nem autorização para o novo fluxo. B4 não alterará
+esse comportamento nem o usará para contornar App Check ou autenticação.
+MyApp inicia providers e navegação ativos; AuthGate também registra login/versão.
+Portanto, o harness B4 deve ser separado de bootstrap/MyApp/AuthGate operacionais.
+
+2.5 AuthGate aceita Auth/Firestore injetados em parte do fluxo, mas a leitura
+de stores ainda usa FirebaseFirestore.instance. Não é uma fronteira de origem
+coerente para B4. Roteia usando users/{uid}.storeId e assinatura; não certifica
+por si autorização comercial ou frescor de um perfil cacheado.
+UserRoleProvider usa singletons padrão, aguarda cancelamento do listener anterior
+antes de resetar usuário/loja, aplica fallback visual de role e filtra listener
+antigo por uid. Essa comparação não resolve ABA; onError também precisa geração.
+Nenhum desses arquivos foi alterado. Não ampliar fallback visual em autorização.
+
+2.6 CheckoutContextBinding atual contém contexto e origin:Object opaco.
+CheckoutSaleContext contém scope(projectId, uid, storeId) e target canônico com
+somente environment/firestoreEndpoint/functionsEndpoint. O target não contém
+Auth endpoint, appId, tenant, databaseId, região separada ou origem Web.
+ContextualAtomicSaleStore prefixa target e scope; não autentica a procedência
+dos SDKs. B1 exige porta confiável; B2 e B3 compartilham a mesma porta e invalidam
+tokens antes de publicar mudanças. Isso foi validado com portas sintéticas,
+não com SDK/Auth reais. Strings fornecidas pela UI não preenchem essa lacuna.
+
+2.7 Storage atual: SQLite sale_mutations_v1.sqlite no diretório de suporte do
+aplicativo; Web IndexedDB store_connect_sale_mutations_v1 e object store attempts.
+Namespaces separam target/scope, mas o nome físico não atesta app/projeto/ambiente.
+SDKs do mesmo projectId com destinos diferentes não podem compartilhar binding
+por esse motivo. PendingSales não participa do envelope nem ganha novo dono.
+
+3. OBSERVABILIDADE REAL DOS SDKs
+
+FirebaseApp: nome e options.projectId/appId são observáveis. Verificar os valores
+contra manifesto confiável do harness, além de identidade da instância. Não basta
+dois apps terem o mesmo texto de projeto. Não registrar options completas.
+
+Auth: FirebaseAuth.instanceFor(app: app), app, currentUser, tenantId e streams
+authStateChanges/idTokenChanges/userChanges são públicos. useAuthEmulator deve
+ser aplicado antes de uso de Auth. Nesta API não há getter público completo de
+endpoint de emulação. A configuração precisa de fábrica proprietária e registro
+imutável do que foi aplicado, sem aceitar instância externa sem procedência.
+Tokens/refresh tokens não fazem parte do registro; não os decodificar para log.
+
+Firestore: instanceFor(app: app, databaseId: '(default)'), app, databaseId e
+settings são observáveis. Native useFirestoreEmulator ajusta host/TLS, podendo
+mapear localhost/127.0.0.1 para 10.0.2.2. No Web, usa delegate.useEmulator;
+não presumir que settings.host seja atestação independente do endpoint aplicado.
+O código Web tolera failed-precondition em reconfiguração: sucesso aparente dessa
+chamada não prova que um app já usado foi reconfigurado. Harness exige instância
+fresca, sem hot restart reutilizado, registro de fábrica e teste de destino.
+
+Functions: instanceFor(app: app, region: região explícita), app público.
+A implementação guarda _region e _origin privados; default de região é
+us-central1, mas o contrato não deve depender do default. useFunctionsEmulator
+define origem HTTP, também com mapeamento Android opcional. Não há getters
+públicos completos para reconstituir região/origem; delegate é exposto para
+testes e não será autoridade de produção. Factory/configuration receipt é
+necessário. Não criar callable para descobrir destino; zero invocação comercial.
+
+As propriedades app de Auth/Firestore são mutáveis nesta camada Dart; referências
+não tornam o SDK imutável. Comparar referências e atributos capturados em cada
+fronteira e impedir reconfiguradores concorrentes. Objeto SDK arbitrário externo
+ou mutação posterior sem controle resulta em binding indisponível.
+
+4. ARQUITETURA PROPOSTA: FÁBRICA FECHADA E CAPTURA READ-ONLY
+
+Nomes conceituais, ainda sem APIs implementadas:
+- CheckoutSdkManifest: perfil fixo permitido do harness, projectId demo, appId
+  sintético de teste, nome explícito do app, região, database padrão, endpoints
+  Auth/Firestore/Functions, TLS e política de host/origem/plataforma/storage.
+- CheckoutSdkBundle: referências exatas app/auth/firestore/functions e store
+  emprestado, configuração aplicada, identidade de inicialização e modo fechado.
+- CheckoutSdkContextPort: implementa capture/isCurrent, publica um binding
+  estável somente após observações coerentes de Auth e autorização de loja.
+- CheckoutSessionAuthority: dono da geração e da publicação de projeções; não é
+  ledger, não guarda comando, não é writer e não confirma operações comerciais.
+
+Sequência de fábrica:
+F1 Em harness separado, exigir projeto com prefixo demo-, nome de app explícito
+e manifesto local não fornecido por rota/carrinho. Nunca usar defaults, opções
+PROD/HML reais, conta Google comercial ou fallback para Firebase.app().
+F2 Criar/selecionar somente app pertencente à fábrica e manifesto. Instância já
+usada ou com procedência desconhecida é recusada, não reconfigurada em silêncio.
+F3 Obter os três SDKs explicitamente com instanceFor para esse mesmo app;
+database='(default)' e região fixada no manifesto. Aplicar os três emuladores
+antes de qualquer uso de Auth/Firestore/Functions. Configuração parcial falha
+fechada: não publicar bundle nem continuar com destino remoto.
+F4 Registrar host efetivo após mapeamento, porta/TLS e região aplicados. Preferir
+endereços explícitos e automaticHostMapping:false no harness para evitar
+ambiguidade, quando suportado. Em Web, 127.0.0.1; em Android virtual, alias do
+host apenas sob contrato explícito; físico via adb reverse em teste isolado.
+F5 Validar appId/projectId/nome/referências de cada serviço e atributos públicos;
+cruzar campos não observáveis com receipt da única fábrica autorizada. O receipt
+é evidência de construção local, não atestação criptográfica contra outro código
+que reconfigure os SDKs. Se esse outro código não puder ser excluído, bloquear.
+F6 Abrir somente store de teste isolado e associá-lo explicitamente ao bundle,
+à origem Web ou sandbox Android e ao token da instância. Não abrir banco real,
+não migrar histórico e não usar PendingSales. Falha local não permite fallback
+em memória nem criação de nova identidade. A fábrica não chama writer.
+
+Captura/publicação:
+C1 Estado indisponível até Auth inicial resolvido e sem transição em andamento.
+Capturar geração e referências antes de awaits; suspender publicação primeiro.
+C2 Exigir usuário atual do Auth daquele app; conferir uid e tenant suportado.
+Observar users/{uid} e vínculo de loja nessa mesma instância Firestore. Para
+este harness online, exigir evidência de servidor, sem pending writes, e acesso
+não revogado, campos válidos e política de role já contratada. Perfil de cache,
+storeId de rota, relógio/trial da UI ou UserRoleProvider sozinhos não bastam.
+C3 Escolha de loja limita-se ao vínculo comprovado. Parâmetro solicitado só pode
+ser expectativa comparada; divergência bloqueia. Multiloja requer contrato
+próprio. Não inventar autorização a partir do fallback visual para operador.
+C4 Após cada await verificar geração monotônica por evento, identidade do app,
+serviços, store, uid, revisão do vínculo e destino. Em erro/perda de conexão,
+revogação observada, perfil ausente ou origem incerta: capture=null.
+C5 Só então produzir CheckoutContextBinding com CheckoutSaleContext existente
+e origin opaco apontando envelope imutável e geração. capture retorna o MESMO
+binding enquanto a sessão permanece válida; não fabricar binding novo em cada
+getter. isCurrent verifica propriedade da fábrica, identidade e geração.
+C6 Nenhum binding ou COMMIT local confirma venda. Não há consulta comercial,
+envio, limpeza, fiscal, impressão ou alteração de UNKNOWN nesta proposta.
+
+5. TARGET PERSISTIDO E LIMITES DE REPRESENTAÇÃO
+
+Não alterar commandHash, recordHash ou SaleMutationCommand para incluir ambiente.
+Não acrescentar campos incidentalmente ao target canônico existente. O envelope
+de origem pode conter metadados efêmeros adicionais sem serializá-los no comando.
+
+Primeiro subconjunto suportado: um appId permitido por perfil/projeto/plataforma,
+tenant=null, database=(default), região explícita fixa, um único Auth endpoint
+por target e um único store/origem autorizados. Manifesto deve tornar unívoco o
+mapeamento dos atributos ausentes no target. Se dois perfis distintos puderem
+produzir o mesmo target/scope com Auth/app/database/região diferentes, RECUSAR
+ambos como ambíguos para retomada até novo contrato de representação.
+
+Definir antes de gravar fixtures B4 a grafia exata e estável dos endpoints no
+manifesto (esquema, host, porta, região pertinente ao destino Functions). O target
+é calculado apenas pelo construtor/serializador existente. Não tratar localhost,
+127.0.0.1, 10.0.2.2 ou uma região diferente como equivalentes por conveniência.
+Referência anterior exige igualdade EXATA de contexto/target e origem admitida.
+Não reescrever target persistido nem inferir destino a partir do projeto.
+Metadados sintéticos anteriores sem essa prova permanecem isolados/bloqueados;
+não convertê-los para o novo perfil de SDK ou migrá-los automaticamente.
+
+Tenant não nulo, database nomeado, múltiplas regiões/destinos não discrimináveis
+ou apps distintos com colisão de target exigem contrato adicional e aprovação
+antes da implementação dependente. O DTO origin não resolve sozinho colisão
+persistida após reinício. Não esconder esse problema em uma string arbitrária.
+
+6. MATRIZ DE COMPATIBILIDADE
+
+Cenário | Prova possível | Disposição proposta
+Web demo + emuladores locais | Factory, mesmo app, manifesto, tráfego local e
+Auth/Firestore Emulator reais | Primeiro caminho de B4-B, sem envio.
+Android virtual demo | Mesmas provas, host efetivo mapeado e app/sandbox isolados |
+Condicional a APK/test harness próprio; não usar instalação comercial existente.
+Android físico demo | SDK real, adb reverse ou rede de teste explicitamente
+aprovada, pacote/perfil isolado e verificação de endpoints | Ensaio específico;
+não demonstrado por widget tests ou Chrome.
+HML futuro | Identidades locais distintas já existem; não prova configuração
+remota, Rules/Functions/credenciais ou isolamento físico | Bloqueado no B4 local;
+depende U05 e autorização específica para eventual acesso/implantação.
+PROD futuro | Identidade esperada local conhecida | Inadmissível para testes;
+promoção futura separada, T09/T10, sem ativação automática.
+Auth app A + Firestore app B | app e identidade das instâncias observáveis |
+Recusar mesmo com projectId igual; nenhum acesso local/ledger antes da recusa.
+Functions remotas + Firestore emulador | Receipt da factory e modo de cada SDK |
+Recusar mistura; não usar callable como sonda para tentar comprovar a recusa.
+Mesmo projectId, endpoints diferentes | Destinos e perfil de configuração |
+Bindings/targets distintos; se a representação colidir, bloquear.
+Origem Web alterada (esquema/host/porta) | Origem efetiva e vínculo do handle IDB |
+Não procurar registros da origem antiga nem criar identidade para substituí-los.
+Reinstalação/IDB ausente/SQLite ausente | Handle/marcadores locais não provam
+continuidade histórica ou inexistência remota | Bloqueio conservador da recuperação
+ausente; sem migração, restore ou nova venda como solução automática.
+Tenant/database/região não representável | Parte observável por SDK, restante
+por manifesto controlado | Bloquear até contrato adicional de namespace/target.
+Mesmo app reconfigurado fora da factory | Parte não é observável independentemente |
+Recusar procedência; não afirmar destino com base só em strings.
+
+Origem Web e sandbox são fronteiras adicionais, não provas de autorização nem
+causa para modificar registros históricos. Reinício cria nova geração; evidência
+antiga não é reatribuída a ela, apenas lida sob sua referência e origem originais.
+
+7. EVENTOS, BEFORE-MUTATION E ABA
+
+Autoridade única de sessão com operação invalidateThenPublish(reason, mutation):
+fechar admissão/capture primeiro; rotacionar revisão; emitir evento síncrono;
+invalidar apresentação/B2/B1; só então publicar mudança de contexto/draft.
+Não aguardar cancelamento de listener para invalidar. Cada callback captura
+geração, uid, bundle e inscrição; compara TODOS antes de processar ou publicar.
+Mesmo uid que reaparece após B não reutiliza o token de A.
+
+Pontos candidatos futuros, SEM EDIÇÃO AGORA:
+- Login/logout/Google login: antes de chamar signIn*/signOut nos comandos do
+  harness. No app ativo há login_screen, google_sign_in_configuration, home_screen
+  e outros pontos de saída; não conectá-los incidentalmente no B4.
+- Auth streams, token refresh/reload, erros: invalidar no início do callback,
+  antes de await/cancelamento e antes de expor a projeção de usuário.
+- Perfil/loja/role/accessStatus: invalidar ao observar mudança relevante antes de
+  publicar vínculo novo. Evento idêntico sem mudança não deve criar intenção.
+- Tela/lifecycle: antes de fechar/trocar/reabrir a apresentação; ao perder foco/
+  visibilidade ou retomar, suspender até revalidar conforme política do harness.
+- Carrinho: addItem/removeSingleItem/removeItem, selectCustomer e clear, inclusive
+  clear já vazio, antes da mutação comercial. ChangeNotifier pós-mudança não basta.
+- Quantidade/preço: antes de aceitar nova revisão do draft; preservar centavos/C5,
+  sem aproveitar esta etapa para refatorar o preço double do checkout legado.
+- Notas: hoje TextEditingController de CartScreen; pagamento: escolha/abertura
+  da PaymentOptionsSheet; cliente: seleção no carrinho. Todos precisam revisão
+  conjunta do draft, não apenas escuta de CartProvider.
+- Ambiente/SDK/store: fechar geração antes de substituir qualquer dependência.
+  Não reconfigurar o bundle vivo; substituir de forma controlada em harness.
+
+Limite essencial: SDK pode alterar currentUser ANTES de emitir listener;
+outra aba/servidor não pode ser interceptado previamente por um callback local.
+BEFORE-mutation significa antes da publicação da projeção controlada de checkout,
+e antes da mutação iniciada pelos comandos próprios, NÃO antes de toda alteração
+interna ou remota do SDK. Conferências de atributos atuais bloqueiam divergência
+observável; ABA integralmente não observado não é magicamente detectável.
+Para essa fronteira, harness deve restringir proprietários da sessão e provar
+ordenação/cross-tab; se não for demonstrável, manter indisponível o trecho
+dependente. Mensagem entre abas e lease não são prova de exclusão comercial.
+
+Revogação administrativa pode não gerar evento imediato no cliente; renovar ou
+recarregar também não prova ausência futura de revogação. Erro de autorização,
+perfil revogado/cacheado e perda de prova suspendem. Rules/backend permanecem
+autoridade em cada acesso/operação futura, sem promessa de revogação instantânea.
+
+Fan-out: usar UMA porta de eventos por sessão. Na composição B3, seu wrapper
+distribui a invalidação ao B2 e à transition do B1. Não instalar segundo handler
+por fora nem emitir novamente o mesmo comando de mutação. B1/B3 já possuem
+rotações internas conservadoras de tokens: não exigir números iguais; exigir
+invalidação de todos os tickets antigos e publicação externa única. Deduplicar
+notificação semanticamente idêntica só sem perder transições reais A-B-A.
+Um callback de erro antigo também não pode invalidar a sessão nova.
+
+8. ISOLAMENTO HML/PROD E U05
+
+Fato local: android/app/build.gradle.kts define namespace/applicationId base
+com.storeeconnect.app e AMBOS os flavors prod e hml usam esse applicationId.
+Os source sets Google Services pertencem a projetos Firebase diferentes, mas
+o pacote Android continua compartilhado. Projeto distinto não separa sandbox,
+instalação, auth cache, SQLite ou caminhos de dados do pacote no dispositivo.
+
+Plano U05 futuro, em etapa própria:
+1) Manter applicationId PROD estável. Definir applicationId HML próprio (candidato
+   com.storeeconnect.app.hml) sob aprovação específica de configuração.
+2) Registrar app Android HML para o novo package e obter configuração HML própria;
+   appId Firebase também precisa corresponder ao novo registro. Não copiar o
+   registro atual do package PROD e apenas trocar string no Gradle.
+3) Revisar Google Sign-In, fingerprints de assinatura, App Check, links/authorities,
+   armazenamento local e política de backup da identidade HML sem alterar PROD.
+   Nenhuma chave ou credencial será copiada para o relatório.
+4) Atualizar/verificar somente artefatos HML autorizados em revisão própria,
+   incluindo testes de ambiente; comparar metadados do APK e recursos nativos.
+5) Demonstrar em dispositivo/perfil descartável coexistência e sandboxes separados.
+   Não instalar APK HML sobre PROD com dados, desinstalar PROD, limpar dados ou
+   migrar bancos. Sem restore de backup. HML novo não herda intenções de PROD.
+
+B4-B começa no Web demo. Android só entra com harness de teste/pacote ou perfil
+isolado explicitamente demonstrável e autorizado, sem tocar instalação comercial.
+Não implementar U05 automaticamente nem usar identidade comercial para demo.
+T10 abrange ainda projetos, Auth/contas, Rules, Functions, bancos Firestore,
+Storage, recursos/segredos e armazenamento local separados. Nenhuma dessas
+separações remotas foi consultada ou certificada nesta inspeção local.
+T09: futura manutenção programada preferencialmente fora do horário comercial;
+T10: promoção controlada e autorização específica, nunca consequência de teste.
+
+9. BLOCOS FUTUROS INDEPENDENTES
+
+B4-B — fábrica/adaptador SDK isolado:
+Arquivos candidatos novos: lib/firebase/checkout_sdk_manifest.dart,
+checkout_sdk_bundle.dart, checkout_sdk_context_port.dart; harness de integração
+demo em integration_test e fixtures locais. Nomes são proposta.
+Dependências: manifesto demo fechado, esquema de endpoints sem colisões,
+portas de emulador fixas e autorização de leitura demonstrada com Rules existentes.
+Provas: app único, configuração aplicada antes de uso, recusa de misturas,
+contexto indisponível até usuário/vínculo válidos, store temporário isolado,
+nenhuma callable comercial ou mutação de ledger. Inicialmente Web.
+Parar: endpoint sem procedência, SDK reusado/reconfigurado, colisão de target,
+necessidade de credencial real, Rules permissivas ad hoc ou alteração de B07-C.
+
+B4-C — eventos e geração em harness:
+Arquivos candidatos novos de autoridade de sessão/eventos, observadores Auth/
+perfil/lifecycle e testes SDK. Sem alterar mutation points do checkout ativo.
+Depende B4-B e contrato de ownership dos comandos de autenticação.
+Provas: invalidação antes da projeção, listeners atrasados de sucesso/erro,
+cancelamento pendente, todas as revisões, ABA, dispose, múltiplas abas reais
+quando suportadas. Auth remoto/revogação não observada não ganha falsa garantia.
+Parar se before-mutation exigido não puder ser demonstrado no harness, ou se
+dependência de código ativo for necessária. Registrar fronteira e manter gate.
+
+B4-D — composição isolada B1/B2/B3:
+Arquivos candidatos novos de harness/preview não roteado e testes integrados.
+Depende B4-B/B4-C aprovados. Injetar UMA context port e cadeia de eventos nos
+componentes existentes; store de fixture e target exatos, sem segundo ledger.
+Provas: enumeração autorizada, seleção revalidada e mesma identidade, dados
+antigos desaparecem na invalidação, UNKNOWN sem envio, bytes intactos, regressões.
+Não adicionar botão de enviar/preparar comercial, abrir rota ativa ou iniciar S03.
+Parar se composição exigir mudar writer, Rules, contrato de confirmação ou
+desbloquear transporte; essa autorização pertence a B5/gates próprios.
+
+Esses blocos não autorizam conexão ao checkout real, deploy, HML/PROD ou U05.
+Harness poderá semear Auth/perfis sintéticos por ferramentas exclusivamente
+locais de teste, separadas das ações do checkout; nenhum fixture real de cliente.
+Não flexibilizar App Check/Auth/Rules/transportes para viabilizar a aprovação.
+
+10. MATRIZ DE TESTES A CONTRATAR E ACEITAÇÃO
+
+Tipo P: unitário de manifesto/porta/ordenação; S: SDK real no Chrome;
+A: Auth Emulator; R: Firestore/Rules Emulator; N: Android real/virtual isolado;
+L: SQLite/IndexedDB reais temporários. Nenhum foi executado nesta etapa documental.
+
+Caso | Prova necessária | Critério de aceitação
+App A/Auth A/Firestore B, appId ou projeto divergente | P + S | Binding recusado
+antes de ledger/listagem; nenhuma resolução por instância default.
+Endpoint misto, Functions remoto ou configuração parcial | P + S + logs locais
+sanitizados de configuração/tráfego | Recusa, zero callable e zero fallback.
+Mesmo projeto, destino/TLS/porta/região distintos | P + S | Target distinto ou
+bloqueio por colisão; sem releitura de namespace alheio.
+Tenant/database não suportados | P + S | Recusa explícita, sem codificação oculta.
+Auth A-B-A e troca durante awaits | P + S + A | Tickets antigos inválidos e
+nenhuma publicação/seleção com sessão antiga, inclusive uid que reaparece.
+Perfil/loja alterados, revogados, ausentes ou cacheados | S + A + R | Suspensão
+até prova vigente; Rules existentes negam acesso indevido. Falha nas Rules é
+bloqueio e tarefa separada, não relaxamento de regra neste bloco.
+Listener anterior de sucesso/erro após nova autenticação | P + S + A + R |
+Callback antigo não publica nem invalida sessão nova; cancelamento não é barreira.
+Loja/projeto/target trocados e origem Web distinta | S + A + R + L | Sem dados
+alheios, sem equivalência por conteúdo e retomada só na referência autorizada.
+Reinício, IndexedDB removido/fechado ou SQLite ausente | S/N + L | Ausência
+conservadora, sem reconstruir ID, reparar ou abrir catálogo de outra origem.
+Várias abas completas | Duas páginas Chrome reais + A/R + IDB | Propagação de
+Auth, perda/atraso de mensagens e ABA; bloqueio do cenário não demonstrável.
+Duas conexões isoladas não substituem essa prova.
+SQLite Android e endpoints efetivos | N + A/R + L | Sandbox/pacote de teste
+comprovados, host efetivo conforme manifesto; sem banco comercial.
+Retomada V1/gap/V2/unknown/corrupção | P + S/N + L | Sem migração, mesmo ID,
+sem reenvio e sem alteração de estados/leases/receipts/timestamps.
+Zero efeito comercial | Call graph + guards de store + inspeção de tráfego local |
+Zero send/S01/S02/S03, pagamento/estoque/clear/fiscal/recibo; sem Functions
+comerciais mesmo em emulador. Criar instância Functions não é invocá-la.
+Configuração indisponível/erro App Check/autorização | S/N + A/R quando aplicável |
+Falha fechada, mensagem sanitizada; sem desabilitar verificação para teste.
+Regressões | Flutter 3.32.6 --no-pub | Preservar B1/B2/B3 e correção B2-R1;
+repetir testes afetados e suíte Web conjunta se alterar fixtures compartilhadas.
+
+Credenciais de Auth Emulator são somente fixtures descartáveis, jamais contas
+comerciais. Teste real não implica rede remota. Nenhum ensaio é prova de queda
+elétrica, revogação instantânea, exclusividade de writer ou readiness de PROD.
+
+11. RISCOS, DEPENDÊNCIAS E ENCERRAMENTO
+
+Riscos abertos: campos de destino não observáveis publicamente; mutabilidade
+dos SDKs; cache/perfil atrasado; ABA não observado; origem/storage perdido;
+colisões possíveis do target atual fora do subconjunto restrito; package HML
+compartilhado; ausência de corte/drain dos writers antigos. Contrato proposto
+mantém esses cenários bloqueados, sem alegar que receipt local, ausência remota,
+hash ou lease vencida provem cancelamento de operação remota.
+Não há bloqueio para entregar a análise; há gates obrigatórios antes de B4-B/C/D
+e qualquer autorização de integração operacional. Decisões adicionais serão
+necessárias se o subconjunto estrito não representar a configuração requerida.
+
+Nenhum teste funcional, Flutter, Emulator ou SDK foi iniciado: trabalho somente
+de inspeção/documentação. Validações desta etapa: manifesto SHA256, diff/status,
+branch/HEAD e whitespace. Resultados históricos B1/B2/B3 não foram recontados
+como execução nova.
+
+Manifesto inicial: %TEMP%\store_connect_B4_A_baseline.json.
+Preservação final: 714/714 arquivos anteriores idênticos, zero alterados/ausentes;
+único acréscimo este relatório. pdf_receipt_service.dart não foi editado,
+formatado ou sobrescrito; recibo térmico 80 mm preservado. SHA256:
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9.
+Sem alteração funcional, configuração, Rules, backend, applicationId, dependência,
+fiscal/fiado/V3/offline Web; Windows nativo fora do escopo. Sem deploy, commit,
+push, reset, restore, stash, clean, migração, instalação ou acesso HML/PROD.
+Restore de backup bloqueado; F10-C4 adiado.
+
+Resumo exibido no terminal. CONTRATO PROPOSTO.
+PARAR APÓS B4-A. Não implementar B4-B automaticamente.

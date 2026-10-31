@@ -1,0 +1,476 @@
+STORE&CONNECT — F9/B07-D-C-C-B
+CONTRATO DO COORDENADOR V2, SDK E INTERFACE DE RETOMADA
+Data: 17/10/2026
+DECISÃO FINAL: CONTRATO PROPOSTO
+
+1. NATUREZA DA ENTREGA E BASE AUTORIZADA
+
+Somente análise e documentação. Nenhuma implementação funcional, ativação,
+alteração de configuração, consulta remota ou teste comercial nesta etapa.
+T01–T10 e U01–U05 permanecem aprovadas; este documento detalha uma proposta
+posterior, não transforma aquelas aprovações em autorização de corte/deploy.
+Branch: feat/f7-intelligent-catalog.
+HEAD mantido: 30f4f8db2a4a59d21696fde3d673144aded31154.
+Working tree F9/F10 integralmente reconhecido como base local autorizada.
+
+Inspeção dirigida: AGENTS.md, CURRENT_WORK.md histórico; relatórios F9/B07-D-B,
+D-C-B e D-C-C-A e F10/C5-E4-D-C-C-B; preparação histórica e associada, request
+associado, wrapper contextual, interface de store e pontos pertinentes do ledger;
+PaymentOptionsSheet, NewSaleScreen, CartProvider, passagem pelo CartScreen;
+app_bootstrap, entrypoints, firebase_bootstrap/AppEnvironment, AuthGate e
+UserRoleProvider; SaleMutationApi e testes de preparação/associação, ambiente
+Firebase e AuthGate. Não houve auditoria global nem leitura de secrets.
+
+216/216 de C-C-A (119 SQLite/VM e 97 Chrome/IndexedDB) é evidência histórica
+documentada, NÃO uma suíte executada nesta etapa documental.
+
+2. DIAGNÓSTICO LOCAL E LIMITES ATUAIS
+
+2.1 A preparação associada já congela o draft, reserva candidato/binding/registro
+    canônico atomicamente e oferece retomada sem escrita/reparo. Seus tipos são
+    separados dos históricos. Não observa Firebase/Auth/rotas/carrinho real;
+    recebe CheckoutSaleContext e depende de CheckoutSaleSession.change/attach.
+    O handle associado não fornece gate comercial de confirmação ou UI.
+2.2 listIntentions existente é V1. SaleMutationLedger.reopen transforma sending
+    em unknown: portanto NÃO serve para uma nova enumeração read-only.
+    O store oferece keys(prefix) e readSnapshot sobre chaves declaradas, não uma
+    operação de enumeração global com snapshot único e paginação estável.
+2.3 CartProvider é global sob MultiProvider. items copia o mapa, sem estabelecer
+    versão comercial; totalAmount é double. add/remove/selectCustomer/clear
+    notificam listeners, mas não carregam geração ABA, dono de contexto ou
+    vínculo durável de intenção. Notas vivem no controller de CartScreen e
+    pagamento na sheet: observar somente CartProvider não captura o draft todo.
+2.4 PaymentOptionsSheet recebe storeId e usa SDKs globais. S01 acessa cart.items
+    e totalAmount dentro da callback da transação, inclusive após awaits. Ao
+    concluir, chama cart.clear antes dos últimos testes de mounted; mounted não
+    prova que conta, carrinho ou intenção continuam os mesmos. Há fiscal legado
+    e fallback Android. Não existe .timeout explícito envolvendo S01 nesse trecho;
+    resposta perdida/erro incerto continua não provando cancelamento remoto.
+2.5 NewSaleScreen abre o serviço legado não-Web e dispara sync ao iniciar online
+    e na transição offline->online. Bloquear só o botão de pagamento não contém
+    S03 nem execuções anteriores. Navegação transmite storeId por widgets.
+2.6 AuthGate observa Auth e users/{uid}.storeId, encaminhando sem loja para
+    criação e propagando loja para SalesProvider. UserRoleProvider observa o
+    mesmo perfil para role/store/revogação. Suas comparações de uid e estados
+    de carregamento não constituem um ticket ABA do checkout; há cancelamento
+    assíncrono de listener antes de substituir o usuário naquele provider.
+    Não foi encontrado seletor multiloja autoritativo para o novo fluxo: loja
+    vem do vínculo de perfil; parâmetro da rota não é prova de autorização.
+2.7 Bootstrap valida projeto/AppId/flavor e mantém ambiente imutável no processo.
+    SDKs operacionais usam default instances; emulação é aplicada separadamente
+    por USE_FIREBASE_EMULATORS. Label de ambiente não certifica destino efetivo.
+    SaleMutationApi continua demo/loopback e não oferece transporte operacional
+    HML/PROD. Não remover gates ou alterar App Check para fazer a proposta caber.
+
+Todos esses pontos são dependências futuras. Nenhum arquivo citado foi corrigido
+ou refatorado incidentalmente. A atomicidade local não elimina os riscos S01.
+
+3. ABORDAGENS COMPARADAS E RECOMENDAÇÃO
+
+Integração direta na tela:
+- Menor edição inicial, porém espalha captura, persistência, Auth, estados e
+  invalidação entre initState/build/dispose/sheet/providers.
+- Rebuild, mounted e loading não protegem ABA, carrinho substituído ou outra
+  aba. Flags de tela tendem a recriar intenção após erro e misturar V1/V2.
+- Enumeração, storage perdido, conflito e evolução de variantes exigiriam
+  lógica duplicada; aumentam risco de fallback comercial herdado do catch S01.
+
+Coordenador isolado, injetável e testável — RECOMENDADO:
+- Uma máquina de estados por sessão de checkout; recebe portas explícitas de
+  contexto, revisão de draft, lifecycle, preparação atômica e leitura de evidência.
+- Tela apresenta estados/comandos; não lê singletons para completar uma operação
+  iniciada antes. Eventos de invalidação são centralizados e testáveis.
+- Intenção/comando/resultado continuam sendo do ledger existente. Coordenador
+  guarda referências e estado transitório; não vira segundo ledger nem writer.
+- Adaptador SDK é separado do núcleo e exige provas de binding. Falhas suspendem;
+  não tenta outro banco, projeto, usuário ou writer para obter sucesso.
+- Custo: portas, observação ordenada de eventos, modelos de apresentação e provas
+  reais de integração. Locks de UI/aba melhoram UX, sem provar unicidade comercial.
+
+Separar, na implementação futura, núcleo puro, adaptador SDK, catálogo read-only
+de intenções e apresentação. Variantes futuras podem ter política de elegibilidade
+própria, sem alterar incidentalmente comando/hash V2, preço ou adicionar V3 agora.
+
+4. CONTRATO DO COORDENADOR DE CONTEXTO E SDK
+
+Nomes abaixo são conceituais, sem API implementada nesta etapa.
+CheckoutContextBinding será um envelope imutável produzido por fábrica confiável
+do bootstrap/adapter, nunca pelo carrinho ou por parâmetros soltos de uma tela.
+Deverá reunir:
+- Referência de FirebaseApp, nome/AppId/projectId observados e ambiente esperado.
+- Instâncias Auth, Firestore e Functions explicitamente ligadas ao MESMO app.
+- UID atual e, se houver suporte contratado, tenant de Auth; revisão do vínculo
+  autorizado de loja/role/acesso e identidade da seleção de loja.
+- Destinos reais configurados: Auth remoto/emulador, Firestore host/porta/TLS e
+  databaseId, Functions região/host/porta, modo emulador/remoto. Não registrar
+  tokens, senhas, credenciais ou opções completas na UI/log.
+- Identidade da instância de armazenamento/contexto e geração capturada.
+
+Procedimento de captura:
+C1 Invalidar a geração e entrar em contexto indisponível ANTES de esperar
+   cancelamento de listener, renovação de perfil ou troca de dependências.
+C2 Fábrica constrói o conjunto SDK para app explícito, valida projeto/AppId/flavor
+   contra configuração esperada e registra configuração efetivamente aplicada.
+   Se o plugin não expuser leitura confiável do endpoint, a fábrica deve ser o
+   único configurador e manter descritor imutável correspondente às instâncias.
+   Sem essa garantia, rejeitar o binding; não deduzir destino de string 'hml'.
+C3 Ler autenticação e vínculo users/{uid}/loja nessa origem, por eventos com
+   ticket próprio. Retorno antigo de perfil não pode publicar binding novo.
+   Perfil/role cacheado ou rota sozinhos não autorizam operação comercial;
+   admissão online futura exige autorização vigente e revalidação pelo backend.
+C4 Após cada await, verificar geração, app/SDKs, uid e revisão do vínculo. Só
+   publicar contexto pronto se todo o conjunto ainda coincidir. Rebuild ou nova
+   emissão idêntica de snapshot não é, por si, nova intenção.
+C5 Captura de intenção ocorre SOMENTE sobre binding pronto. Congelar o draft
+   completo sincronicamente e persistir antes de qualquer tentativa comercial
+   remota. Se falta verificação de contexto, permanecer em carregamento sem
+   admitir intenção; ao retornar não ler automaticamente um carrinho que mudou.
+C6 Em cada fronteira local/consulta e antes de publicar resultado, verificar
+   ticket e atributos atuais observáveis dos SDKs, não só igualdade de scope.
+   Revogação remota ainda não observada não pode ser 'provada ausente' no cliente;
+   backend/Rules continuam autoridade. Erro de acesso invalida a admissão local.
+
+Loja recebida por rota pode ser comparada como expectativa; divergência bloqueia.
+Futura seleção multiloja deve selecionar vínculo explicitamente autorizado nessa
+origem, invalidando primeiro; não reatribuir pendências ao novo storeId.
+
+TARGET E COMPATIBILIDADE:
+O formato existente usa environment/firestoreEndpoint/functionsEndpoint. Projeto,
+loja e uid ficam no scope. Ele não descreve, isoladamente, database, tenant, região
+e origem Auth, nem autentica uma instância de FirebaseApp.
+Inicialmente permitir apenas mapeamento canônico e inequívoco, explicitamente
+testado, para database padrão, tenant não customizado, região suportada e destinos
+Auth/Firestore/Functions emparelhados. Valores exatos dependem do bloco SDK.
+Qualquer combinação não representável/ambígua é recusada. Estender target requer
+contrato de metadados/mapeamento versionado separado, nunca acrescentar campos
+ao hash comercial nem renomear/reinterpretar namespaces já persistidos.
+Mesmo projectId com emuladores/remotos diferentes não é contexto equivalente.
+Nome do app/AppId é evidência de origem e objeto SDK, não novo saleId comercial.
+
+5. GERAÇÃO, ABA, LIFECYCLE E CARRINHO
+
+Ticket = geração de autenticação/contexto + instância de tela + revisão de draft
+e referência de intenção explicitamente associada. Usar token monotônico/objeto
+novo por evento; nunca derivar geração de uid/store/hash que podem voltar a A.
+Geração não é persistida como dona da venda. Reinício reconstrói nova geração
+e retoma referência selecionada, conservando comando/ID do ledger.
+
+Invalidação OBRIGATÓRIA antes de notificar ou executar efeitos dependentes:
+- Login/logout, troca de usuário, nulidade/erro de Auth e retorno A->B->A.
+- Mudança/revogação/perda de verificação do vínculo, loja, role ou autorização.
+- Mudança de app/projeto/target, emulador/database/região/tenant ou store efetivo.
+- Fechamento, substituição, reabertura da tela/sheet e dispose. Reabertura não
+  recicla token. Nova apresentação não cria intenção automaticamente.
+- Adição/remoção/quantidade/preço/cliente, notas e pagamento; clear inclusive
+  carrinho já vazio e reset de sessão. Nenhuma mudança de draft fica invisível.
+- Adoção explícita de outra referência, perda/fechamento de storage e suspensão
+  que torne impossível validar a origem. Retorno de background/foco revalida
+  antes de liberar ações; eventos perdidos não são cobertos por mounted.
+
+Listeners de ChangeNotifier sozinhos recebem mudança APÓS a mutação. O futuro
+adaptador deve fornecer fronteira síncrona de revisão/invalidação que antecede
+publicação do draft e efeitos, incluindo controllers de notas/pagamento. Enquanto
+essa garantia não existir, não ligar gate de confirmação ao carrinho ativo.
+Não exigir refatoração global: mudanças mínimas nos pontos de mutação devem ter
+etapa/autorização própria e testes de ordenação. Evento sem mudança comercial
+pode só revalidar; não invalidar por todo rebuild/tick de conectividade.
+
+Revisar carrinho depois de preparar invalida o ticket e destaca a intenção
+antiga como pendente; não altera seu comando. Não executar nova compra em um
+listener da edição. O usuário revisa a referência/diagnóstico explicitamente.
+Retomar por leitura não anexa intenção nem substitui carrinho atual. A ação
+explícita de apresentar/adotar snapshot é separada e cria ticket novo; divergência
+é conflito, não merge nem confirmação automática. UNKNOWN não oferece recriação.
+
+Callbacks de geração antiga não navegam, notificam sucesso, confirmam outra
+intenção, chamam fiscal ou limpam carrinho. Se COMMIT local já ocorreu, conservar
+origem; invalidar ticket não desfaz COMMIT e não cancela operação remota em voo.
+
+6. API READ-ONLY DE ENUMERAÇÃO V2 E RETOMADA
+
+Proposta conceitual: listAssociatedIntentions(binding, limite/cursorOpcional)
+-> resultado tipado com referências, versão, classificação e diagnóstico, ticket
+da leitura e indicação explícita de varredura parcial/erro. Nenhum handle dessa
+lista autoriza envio ou alteração do carrinho. API ainda NÃO existe.
+
+Regras:
+E1 Capturar contexto autorizado e usar somente seu namespace físico e prefixo
+   scope. Não enumerar outras contas/lojas para comparar conteúdo ou mostrar
+   quantidades. Contexto incompatível não expõe nomes, valores, itens ou IDs de
+   outra origem. Invalidar/ocultar projeções anteriores ao trocar sessão.
+E2 Descobrir chaves de binding, candidatos e registros canônicos apenas nesse
+   namespace. Inspecionar versão/contexto/integridade antes de expor payload.
+   Candidato órfão/canônico sem binding deve aparecer como diagnóstico local
+   bloqueado quando detectável, não como intenção recuperável ou nova venda.
+E3 Encaminhar V1 ao leitor/histórico próprio e apresentar seção separada, sem
+   converter, completar gaps ou chamar reserve antigo. Versão desconhecida ou
+   corrupção gera classificação bloqueada; não impede mostrar entradas íntegras
+   autorizadas, nem faz um resultado parcial parecer uma lista completa/vazia.
+E4 Para V2, descobrir originalCandidateId e reler binding/candidato/canônico em
+   readSnapshot consistente do mesmo store. Revalidar ponteiros/bytes da
+   descoberta, hashes, scope/target e comando com helpers B07-C existentes.
+   Não criar um segundo decoder comercial/serializer para a listagem. Se acesso
+   read-only à validação privada do ledger for necessário, propor extensão mínima
+   em bloco próprio, preservando formato/hash/consumidores históricos.
+E5 Não usar reopen, recover, reserveAssociated/persist, CAS, touch de timestamp,
+   alteração de sending/unknown, claim/lease ou reparo. A enumeração exige somente
+   keys/readSnapshot; o modelo pode rotular sending como 'em processamento ou
+   resultado incerto' sem persistir uma transição comercial.
+E6 keys + snapshots posteriores NÃO formam catálogo global em um único instante.
+   Contratar descoberta conservadora e consistência por entrada/lote; se houver
+   mudança, descartar aquela projeção e oferecer atualizar, com limite de trabalho.
+   Novas chaves concorrentes podem aparecer na próxima varredura. Cursor é de
+   descoberta, não garantia de snapshot; inicialmente dispensável. Snapshot
+   global/paginação exata exigiria capability read-only adicional autorizada,
+   nunca simulação por vários reads e promessa de completude.
+E7 Lista vazia/incompleta não prova ausência histórica ou remota. Falha de quota,
+   abertura, origin/perfil trocado, store perdido ou referência ausente é erro
+   distinto de 'nenhuma pendência'; não inicializar nova identidade por isso.
+
+Selecionar item significa fornecer CheckoutSaleReference durável, não encontrar
+equivalência por produtos/valores/hash. Ao selecionar, revalidar autorização e
+resumeAssociated nessa referência; se mudou estado, exibir snapshot atual validado.
+Retomada continua sem escrita e sem recriar candidato perdido entre leituras.
+Listagem não fornece autorização para limpar, reenviar, descartar ou forçar status.
+
+DUAS ABAS/PROCESSOS:
+Mesma referência no mesmo store adota uma identidade; referências novas realmente
+distintas continuam distintas, mesmo com conteúdo igual. Avisos BroadcastChannel
+e locks de UI, se futuramente usados, só notificam; mensagem entre abas é entrada
+não confiável e deve levar a releitura autorizada. Perda de mensagem/lease expirada
+não permite outro writer. Shared Auth e foco de aba exigem revalidação e ABA local.
+Perfis/origens/dispositivos/arquivos copiados não compartilham atomicidade local;
+não prometer deduplicação humana global nem usar comparação de carrinhos para tal.
+
+7. ESTADOS E AÇÕES DA INTERFACE PROPOSTA
+
+Estado                         | Ação permitida / bloqueio
+Contexto carregando/invalidado  | Esperar/reautenticar/validar loja. Sem payload
+                               | alheio, preparação ou ação comercial.
+Preparando venda               | Indicar progresso e referência em processamento;
+                               | coalescer repetição do mesmo candidato. Fechar
+                               | tela invalida callback; não promete cancelamento.
+Preparada, ainda não enviada    | Mostrar 'Venda preparada, ainda não enviada'.
+                               | Ver snapshot/retomar. Nesta fase sem botão enviar,
+                               | sucesso comercial, limpeza, fiscal ou liberação.
+Intenção existente recuperável | Mostrar referência/data/estado autorizados;
+                               | selecionar e retomar explicitamente. Não anexar
+                               | ou sobrescrever carrinho só por listar/carregar.
+Sending / resultado desconhecido| Mostrar 'Resultado ainda não confirmado'.
+                               | Consultar evidência quando houver porta read-only
+                               | homologada; antes disso, apenas leitura local.
+                               | Sem botão 'vender novamente', novo ID ou S01/S03.
+Conflito com candidato          | Mostrar original e diferença só no contexto
+                               | autorizado. Informar salvo/não salvo. Reabrir
+                               | original ou diagnóstico; sem substituir/mesclar.
+Identidade incompleta/corrompida| Suspender fechamento e preservar evidências.
+                               | Diagnóstico autorizado; sem reconstruir IDs,
+                               | migrar, descartar ou confirmar manualmente.
+Armazenamento indisponível      | 'Não foi possível salvar com segurança'. Manter
+                               | draft possível em RAM e tentar ler novamente o
+                               | mesmo contexto; sem vender em memória ou fallback.
+Outra conta/loja/target         | Mensagem neutra sem dados da origem anterior;
+                               | voltar ao contexto correto e retomar por seleção.
+Confirmada duravelmente         | Estado futuro, só após evidência remota válida
+                               | persistida. UI tardia não altera carrinho atual.
+Rejeitada/conflito de identidade| Mostrar resultado durável autorizado; não editar
+                               | comando original nem inventar receipt/segunda venda.
+
+Mensagens não dizem que venda preparada está paga/finalizada. Não oferecer no
+painel UNKNOWN ação que crie nova identidade. Uma compra humana distinta nunca
+é inferida do erro; eventual início independente requer ação própria e política
+aprovada fora da resolução da pendência. Não habilitar descarte/forçar confirmação.
+Leitores de tela, foco e estado ocupado devem representar os mesmos bloqueios;
+ocultar botão sem bloquear o comando do coordenador não é proteção suficiente.
+
+8. CONFIRMAÇÃO, CONSULTA E PROTEÇÃO COMERCIAL
+
+Separar gates: (a) contexto pronto, (b) persistência local, (c) apresentação,
+(d) consulta read-only autorizada, (e) envio futuro após corte. Aprovar um não
+habilita os seguintes. COMMIT local não significa commit ou confirmação remota.
+Nenhum caminho de erro/timeout/unknown encaminha intenção V2 para S01/S03,
+PendingSales ou outro ID. Histórico e backlog legado continuam isolados.
+
+Futuro protocolo de resultado precisa provar autenticidade/origem, projeto/loja/
+ator autorizados, mesma identidade/comando e resultado compatível B07-C. Usar
+endpoint read-only contratado, nunca syncOfflineSale. Ausência, not-recorded,
+permission-denied, timeout, hash local ou lease vencida não provam rollback.
+Consulta negada não divulga resultado nem promove papel/permissão do operador.
+
+Sequência futura de confirmação: validar evidência -> persistir com contrato
+existente e contexto original -> confirmar gravação -> revalidar ticket e anexação
+da referência -> gate síncrono de efeito na revisão exata do carrinho. Nenhum
+await entre a última validação e a mutação de UI/cart. Mutação consome o gate e
+invalida a revisão antes de notificar listeners. Depois de reiniciar, confirmação
+antiga não se aplica automaticamente ao carrinho novo nem reapresenta efeitos.
+Gate exatamente uma vez em RAM não prova exatamente uma emissão fiscal remota.
+Fiscal continua fora da implementação e exige contrato próprio além desse gate;
+não ligar o pedido fiscal legado da sheet ao novo handle por conveniência.
+
+Se a sessão mudar com resultado remoto já conhecido, nunca reatribuir a outra
+conta. Persistência tardia na origem só por porta específica que conserve origem
+e autorização, sem usar credenciais atuais de outra sessão; sem esse contrato,
+suprimir efeitos e reconciliar após retorno autorizado. Não burlar guards locais.
+UNKNOWN sem reenvio automático continua T06, inclusive quando lease vence.
+
+9. PLATAFORMAS, AMBIENTES E WRITERS ANTIGOS
+
+Web, inclusive Windows pelo navegador: IndexedDB dá persistência da intenção
+ONLINE, não licença para nova venda offline. Sem rede, nova preparação comercial
+fica suspensa; referência existente pode ser lida apenas sob contexto autorizado.
+Conectividade é sinal de UX, não prova de autorização ou entrega. Quota/eviction/
+perfil/origem privada exigem bloqueio conservador; não reconstruir identidade.
+
+Android: SQLite no sandbox do app é o store V2; PendingSales continua proprietário
+do legado. Escopo inicial V2 também é instantâneo ONLINE de produto simples.
+Não converter fallback/offline Android em origin online nem ativar sincronização
+V2 como consequência deste contrato. Host SQLite não certifica Android físico.
+Windows nativo segue fora do escopo; bootstrap local o rejeita.
+
+T09: manutenção programada, preferencialmente fora do horário comercial. T10:
+PROD estável, HML separado; promoção de artefato revisado sob autorização própria,
+sem copiar dados/receipts/credenciais entre projetos. Identidades Firebase, Auth,
+Rules, Functions, bancos, origem Web e armazenamento local devem ser coerentes.
+Configuração local não certifica estado publicado. U05/applicationId HML separado
+permanece etapa independente; não alterar PROD ou instalar HML sobre seu sandbox.
+Primeiros adaptadores reais devem usar fixtures demo e emuladores locais, com
+projeto/destinos explícitos; bootstrap operacional não deve ser contornado.
+
+CORTE É DEPENDÊNCIA INDEPENDENTE E OBRIGATÓRIA:
+S01 cliente, S02/fiado/recebimentos e S03/Admin não podem compartilhar efeitos
+novos no domínio liberado a V2 sem a exclusividade T03 comprovada. Incluir demais
+writers de produtos/estoque, cadastro, ajustes, restore/ferramentas e versões de
+clientes/Functions ainda em execução, conforme inventário F9/F10. Rules não
+contêm Admin e atualizar Function não cancela invocação antiga. UI loading,
+manutenção, esperar prazo, ausência remota ou claim não provam drenagem.
+Exigir modo/epoch/fence servidor, matriz Rules completa, gates dos handlers,
+negação de commits tardios e drenagem/contenção verificável antes de abrir V2.
+Se uma dependência não estiver pronta, suspender seu domínio; não criar exceção
+que reabra dupla escrita. Rollback fecha novas escritas V2 e mantém leitura/
+reconciliação; não reabre automaticamente writers antigos. Replay histórico
+preserva semântica/autorização própria e nunca converte pendência para V2.
+
+10. PLANO FUTURO EM BLOCOS E CONDIÇÕES DE PARADA
+
+B1 Coordenador isolado e testes, sem SDK real nem UI ativa.
+   Entradas: aprovar contrato de binding/ticket/estados/portas deste documento.
+   Saída: máquina testável, criação explícita vs retomada, ordem de invalidação,
+   coalescência, guards e nenhum transporte alcançável. Testar ABA em cada await,
+   erro antes/depois de COMMIT, mutação do draft e resultado atrasado.
+   PARAR se API exigir alteração de comando/hash, inferir criação de ausência,
+   contornar store/capability ou invadir checkout ativo para passar o teste.
+
+B2 Enumeração e retomada, com SQLite temporário e Chrome/IndexedDB reais.
+   Depende B1 e aprovação de consistência por entrada, versões e privacidade.
+   Implementar leitor sem escrita e reuso mínimo de validação B07-C se necessário.
+   Saída: V1/V2 separados, órfãos/erro/parcial distintos de vazio; resume conserva
+   identidade/estado, inclusive se dados desaparecem entre descoberta e leitura.
+   PARAR se precisar mutar sending/lease, reparar, migrar ou prometer snapshot
+   global com capacidade inexistente; contratar capacidade adicional antes.
+
+B3 Apresentação ainda sem envio, com fixtures/preview e portas injetadas.
+   Depende B1/B2; aprovar mensagens, seleção de referência e revisão de draft.
+   Saída: estados da seção 7, acessibilidade, zero envio/clear/fiscal; intenção
+   carregada não é automaticamente anexada ao carrinho operacional.
+   PARAR se exigir tocar fluxo ativo ou usar callbacks reais sem contrato de
+   revisão. Não adicionar botão comercial oculto atrás de flag de desenvolvimento.
+
+B4 Adaptador SDK/Auth real EM AMBIENTE DE TESTE.
+   Depende B1–B3, mapeamento target aprovado e fixtures de sessão/perfil.
+   Primeiro emuladores locais/demo explícitos, sem HML/PROD e sem desabilitar
+   gates do transporte; prova de observação, listeners atrasados e múltiplas abas.
+   Saída: app/Auth/Firestore/Functions coerentes, stores segregados, revogação e
+   ABA; configuração não observável/ambígua é recusa. Android físico/HML só com
+   plano próprio, isolamento U05 ou dispositivo/perfil de teste sem dados PROD.
+   PARAR diante de SDKs de apps distintos, falta de origem confiável, cache
+   indevidamente autorizador, dependência de credencial remota ou HML não isolado.
+
+B5 Integração do checkout sob CORTE E GATES ESPECÍFICOS.
+   Depende revisão de B1–B4, alterações mínimas autorizadas nos pontos de lifecycle/
+   draft e comprovação do corte/drenagem de TODOS os escritores relevantes,
+   políticas de autorização/privacidade/preço/C5 e plano de rollout/rollback.
+   Construir e revisar artefato com admissão comercial fechada; futura abertura
+   nunca é consequência automática de teste local. S01/S03 não são fallback.
+   PARAR se qualquer writer antigo ainda puder produzir efeito não contido,
+   pendência incerta for reatribuída ou contrato operacional não for demonstrável.
+
+B6 Testes integrados, Rules/Emulator e recuperação; liberação separada.
+   Ensaios de SDK/Rules/corte que condicionam B5 são executados ANTES de ativar
+   qualquer operação real; a numeração não permite testar exclusividade depois
+   de abrir V2. Repetir recuperação do artefato integrado sob falhas controladas.
+   Saída: matriz E2E sintética, revisão de dados/persistência/contexto e pacote
+   concreto de promoção; ação remota posterior exige autorização específica.
+   PARAR no primeiro gate obrigatório falho; manter admissão fechada e evidências.
+
+Arquivos candidatos FUTUROS: novos serviços de coordenador/binding/leitor/modelo
+de apresentação e seus testes; preparação somente para adaptação mínima;
+bootstrap/AuthGate/UserRoleProvider e pontos de revisão CartProvider/CartScreen/
+PaymentOptionsSheet/NewSaleScreen só nos blocos explicitamente autorizados.
+Ledger/store só se extensão read-only realmente necessária em B2. Backend/Rules/
+writer gates e U05 permanecem trabalhos separados, sem edição nesta entrega.
+
+11. CRITÉRIOS DE TESTE, REVISÃO E AUTORIZAÇÃO
+
+Matriz futura dirigida, Flutter 3.32.6 --no-pub quando aplicável:
+- Captura de instâncias SDK incoerentes, projeto igual com target diferente,
+  app/tenant/database/região incompatíveis, perfil de outra origem e cache antigo.
+- Auth A->B->A durante await cancel/profile/result; tela fecha/reabre; mudanças
+  de loja/projeto; notas/pagamento/cliente/quantidade/preço/clear, inclusive vazio.
+- Confirmado durável com ticket antigo: zero clear/fiscal/navegação de sucesso;
+  gate síncrono único para referência E revisão corretas, quando contratado.
+- Lista read-only: comparar todas as linhas antes/depois, incluindo sending,
+  leases, resultados e timestamps; V1/V2/versão desconhecida/corrupção/órfãos;
+  chaves mudando durante scan; lista parcial/erro não equivalem a vazio definitivo.
+- Reabertura, storage fechado/cheio/indisponível/perdido, quota/abort; nenhuma
+  nova identidade na retomada. Dados removidos entre leituras não são reparados.
+- Duas conexões e DUAS ABAS reais com Auth compartilhado, mensagens perdidas e
+  callbacks fora de ordem; same ref mantém ID, compras legítimas distintas não
+  são mescladas por hash. SQLite/IndexedDB reais, não apenas mocks.
+- UNKNOWN: confirmed posterior, ausência, denied, timeout e resposta perdida;
+  apenas consulta homologada quando disponível, zero writer/fallback/novo ID.
+- Regressões C-C-A/B07-C, PendingSales sintético, centavos/C5 e recibos intocados.
+- Rules/Emulator: negar writes diretos/antigos em todos os matches pertinentes,
+  fence Admin, old invocation em voo, modos/epochs, replay histórico e rollback
+  fechado. Testes unitários de coordenador não substituem essas provas.
+- Transporte/resultado com Auth real de teste e matriz de roles/revogação/loja;
+  privacidade de receipt/auditoria em todos os caminhos, não só na callable.
+
+Nenhum teste novo foi executado nesta etapa, pois não houve mudança funcional.
+Não declarar dois sockets, duas conexões ou browser headless como prova de
+queda elétrica, dois dispositivos, Android físico ou exclusividade em produção.
+
+Decisões novas propostas para revisão, não declaradas aprovadas:
+K01 Coordenador injetável e binding SDK verificável, com mapeamento suportado
+    de target; contextos não representáveis ficam bloqueados.
+K02 Invalidação anterior às mutações e ticket de tela/draft/referência; contrato
+    mínimo de observação/mutação antes de conectar carrinho real.
+K03 Enumeração read-only por contexto e entrada, classificação de versões/órfãos,
+    resultado parcial explícito e sem promessa de snapshot global.
+K04 Modelo de UI e seleção explícita, UNKNOWN sem botão de recriação, distinção
+    entre candidato salvo e apenas em memória, sem ações de descarte/força.
+K05 Porta de consulta privada e gate futuro de confirmação durável/contextual;
+    fiscal e retries comerciais continuam fora, com autorização própria.
+K06 Ordem B1–B6, condições de parada, gates independentes de corte, HML/U05 e
+    promoção; nenhuma aprovação deste relatório equivale a deploy ou ativação.
+T01–T10/U01–U05 não precisam ser reaprovadas; K01–K06 detalham lacunas novas.
+
+12. PRESERVAÇÃO E ENCERRAMENTO
+
+Único arquivo criado: docs/catalog/F9_B07_D_C_C_B_RESULTADO.txt.
+Manifesto inicial: %TEMP%\store_connect_B07_D_C_C_B_baseline.json, 694 arquivos
+Git rastreados/não rastreados não ignorados. Conferência final de SHA256:
+694 idênticos, zero alterados/ausentes; único acréscimo este relatório.
+Build/cache ignorados não integram essa comparação. Status/branch/HEAD e
+git diff --check/whitespace do relatório conferidos; resumo exibido no terminal.
+Recibo 80 mm preservado: pdf_receipt_service.dart não foi editado, formatado,
+restaurado ou sobrescrito. SHA256 inicial/final:
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9.
+
+Sem código funcional, testes globais, instalação, acesso HML/PROD, migração,
+deploy, commit, push, reset, restore, stash ou clean. Sem alterar checkout,
+providers, ledger/stores, Rules/Functions, Firebase/applicationId, recibos,
+fiscal, fiado ou V3. Restore de backup bloqueado; F10-C4 continua adiado.
+
+CONTRATO PROPOSTO — coordenador injetável, leitura conservadora e gates separados.
+Não é validação operacional, implementação ou ativação comercial.
+PARADA APÓS F9/B07-D-C-C-B. Não implementar automaticamente.

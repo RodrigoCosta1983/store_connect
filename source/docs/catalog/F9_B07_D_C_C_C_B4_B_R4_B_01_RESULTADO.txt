@@ -1,0 +1,215 @@
+STORE&CONNECT — F9/B07-D-C-C-C/B4-B/R4-B — SUBETAPA 01
+Coleta dirigida das fontes SDK resolvidas e requisitos de admissão
+Data: 18/10/2026
+ESTADO FINAL: BLOQUEADO
+Ferramenta de coleta e recusas: VALIDADO LOCALMENTE.
+Admissão do owner/fábrica Firebase: BLOQUEADO. SDK real: NÃO EXECUTADO.
+
+1. ESTADO INICIAL DO REPOSITÓRIO
+
+Branch: feat/f7-intelligent-catalog.
+HEAD inicial/final: 30f4f8db2a4a59d21696fde3d673144aded31154.
+24 arquivos rastreados já modificados, inclusive pdf_receipt_service.dart,
+pubspec.yaml/lock, backend/Rules, telas e testes; muitos não rastreados F9/F10.
+Todo esse conteúdo foi recebido como baseline, sem descarte ou sobrescrita.
+Baseline antes das edições: 748 arquivos do repositório rastreados/não rastreados
+não ignorados; mais 527 arquivos preexistentes em build/b4br3 e build/b4br4a.
+Total protegido: 1.275 arquivos. Evidência: build/b4br4b/baseline.json.
+
+Lidos AGENTS.md e CURRENT_WORK.md (histórico F7.8, sem autoridade para ampliar
+esta etapa); relatório R4-A integralmente; R3 e contrato de revisão, seções de
+K11/K12/K13 do R2 e matriz de evidências; diagnóstico SDK do R1; estrutura inerte,
+política/revisão R3, verificadores e fontes instaladas dirigidas.
+R4-A continua validado somente estruturalmente; não foi reimplementado.
+Não foi encontrado texto individual identificado como K14/K15 na busca dirigida
+dos documentos F9 locais. review.json referencia K11-K16/R3 sem definir esses
+dois itens. Não foram inventadas definições nem alteradas regras. Essa lacuna
+de rastreabilidade precisa ser resolvida antes de qualquer admissão futura.
+
+2. SUBETAPA ESCOLHIDA E JUSTIFICATIVA
+
+Implementada coleta reproduzível de import/export/part e capacidades textuais
+nas fontes Firebase resolvidas, complementando os 43 pacotes/159 arestas de
+METADADOS registrados pelo R4-A. A coleta nova é de fontes Dart dirigidas,
+não substitui nem duplica o inventário aprovado ou o grafo de metadados anterior.
+
+É uma subetapa independente do download JS, da escolha do nome do app e da
+aprovação dos papéis do owner. Não inicializa SDK, não chama transporte e não
+conecta portas B1/B2/B3. Mantém o bloqueio real e produz evidência revisável.
+Nenhum arquivo operacional ou anterior foi modificado.
+
+3. ARQUIVOS CRIADOS
+
+scripts/b4br4b/inspect.cjs
+scripts/b4br4b/inspect.test.cjs
+scripts/b4br4b/README.md
+docs/catalog/F9_B07_D_C_C_C_B4_B_R4_B_01_RESULTADO.txt
+
+Artefatos ignorados novos ficam exclusivamente em build/b4br4b: baseline,
+duas coletas inspection-*.json com nomes únicos, logs dos testes, preservação,
+status e fixtures. Os testes R3/R4-A também criaram novas pastas de fixtures
+nos seus diretórios habituais, sem alterar as fontes ou evidências anteriores.
+Nenhum relatório anterior, política, revisão ou snapshot aprovado sobrescrito.
+
+4. IMPLEMENTAÇÕES CONCLUÍDAS
+
+inspect.cjs reutiliza scan/digest/compatibility/gate do R3 e scan/evaluate do R4-A.
+Não executa seus mains que sobrescreveriam evidências históricas.
+Resolve package_config, canonicaliza fontes por realpath e coleta AST usando
+o Dart 3.8.1 do Flutter 3.32.6 já instalado; não requer nova dependência.
+
+Oito raízes: APIs core/auth/firestore/functions e os quatro entrypoints Web.
+Recorte: 13 pacotes Firebase, suas interfaces e _flutterfire_internals.
+Resultado real: 221 fontes alcançadas, 714 arestas e 197 fronteiras pendentes.
+As fronteiras são 108 arestas para pacotes fora do recorte e 89 dart: capacidades.
+Não foram detectados arquivos ausentes ou diagnósticos de parsing nessa closure.
+Cada fonte alcançada contém SHA256, AST e NOT_ADMITTED; arestas contêm origem,
+URI, linha e espécie de diretiva. Todos os ramos condicionais são percorridos;
+ciclos terminam. Locators registram linha/trecho textual para revisão manual.
+
+Exemplos de fronteiras: Flutter foundation/services/material/cupertino,
+flutter_web_plugins, web, meta, collection, plugin_platform_interface,
+http_parser e http. Não são classificados como seguros por terem nome conhecido.
+Não foi feita revisão completa dessas fontes externas, SDK Dart, JS ou binários.
+
+Hashes de pubspecs resolvidos e de dois artefatos operacionais de registro
+(.flutter-plugins-dependencies e dart_plugin_registrant.dart) também coletados.
+Isso não revisa um registro Web isolado nem prova o artefato distribuído.
+O grafo reúne ramos de plataforma; não é uma closure tree-shaken de build Web.
+O módulo inerte não recebeu nenhum desses imports; são raízes de inspeção futura.
+
+Coleta final: build/b4br4b/inspection-1792358982334.json.
+Coleta inicial preservada: build/b4br4b/inspection-1792358912887.json.
+Ambas retornaram exit 1/BLOCKED, sem erro de infraestrutura ou execução de SDK.
+
+5. OWNERSHIP E CAMINHOS INSPECIONADOS
+
+Functions:
+cloud_functions/lib/cloud_functions.dart -> part src/firebase_functions.dart.
+instanceFor recupera cache por app.name/região; useFunctionsEmulator altera
+_origin. O wrapper por URL/URI ainda recebe esse origin na construção.
+cloud_functions_web/lib/cloud_functions_web.dart -> https_callable_web.dart
+e interop/functions.dart -> interop/functions_interop.dart.
+call/stream aplicam origin no serviço JS antes de construir a callable.
+httpsCallableUri chega a httpsCallableFromURL; getFunctions usa app/região.
+registerWith registra serviço functions e substitui a plataforma global.
+Logo, nome privado/app nomeado não isola caches públicos ou registro global.
+
+Auth:
+firebase_auth/lib/src/firebase_auth.dart: cache por app.name, app público mutável,
+tenant configurável, currentUser snapshot, configuração do emulador antes do uso.
+firebase_auth_web/lib/firebase_auth_web.dart: useAuthEmulator consulta
+sessionStorage, delega ao interop e guarda origem em debug; trata determinados
+erros emulator-config-failed. interop/auth.dart chega a connectAuthEmulator.
+Isso não demonstra aceitação universal de reconfiguração tardia ou isolamento
+de sessão; não foi usado como prova positiva de endpoint atual.
+
+Firestore:
+cloud_firestore/lib/src/firestore.dart: cache por app.name/databaseId, app e
+databaseId públicos mutáveis, configuração antes do uso e tratamento Web próprio.
+cloud_firestore_web/lib/cloud_firestore_web.dart -> src/interop/firestore.dart
+-> src/interop/firestore_interop.dart, chegando a connectFirestoreEmulator.
+Delegate é criado sob demanda com app, settings e databaseId. A leitura local
+dessas fontes não comprova destino vivo, Source.server ou autorização de Rules.
+
+Os caminhos/linhas/hashes completos constam na coleta; não são prova temporal,
+de exclusividade ou de invocação. Locators são texto, AST é sintaxe sem dataflow.
+
+6. COMPATIBILIDADE E REQUISITOS DE ADMISSÃO
+
+Nome correto resolvido: cloud_functions_web 5.1.11 (não firebase_functions_web).
+Seu pubspec requer firebase_core ^4.12.1, firebase_core_web ^3.9.0 e interface
+Functions ^6.0.5; estão resolvidos 4.12.1, 3.9.1 e 6.0.5 respectivamente.
+Os dois plugins Web examinados requerem Dart ^3.6.0 e Flutter >=3.22.0;
+ferramentas locais 3.8.1/3.32.6 atendem esses limites declarados. Isso não revisa
+a cadeia nem garante suporte JS ou funcionamento geral no runtime.
+
+firebase_core_web declara JS 12.15.0. Código _initializeCore injeta módulos e
+seleciona firebase-firestore-pipelines.js para Firestore; lê override global e
+compara SDK_VERSION num warning sob assert. Warning/override não são gate de
+admissão. Firebase JS disponível continua 12.19.0 pelo verificador R3.
+K16: BLOQUEADO. A observação runtime 12.19.0 é HISTÓRICA R2; nenhuma nova aqui.
+Não foi baixado 12.15.0 nem transplantado loader ou alterado lock/helper.
+
+Para admissão ainda é necessário: revisão separada de papéis/hashes/política;
+nome e exclusividade de app/lifecycle; recusa de app default, externo ou perfil
+misto; configuração dos três serviços antes do uso; nenhum setter pós-admissão;
+UI recebendo só portas; closure externa/registro/interop/JS e artefato revisados;
+alinhamento K16 autorizado; URLs/paths exatos diagnósticos e política de
+redirects/credenciais/App Check; provas reais do mesmo app e destinos locais.
+Não foram escolhidos silenciosamente nome de app ou autoridade de sessão B4-C.
+
+7. TESTES E RESULTADOS
+
+VALIDADO LOCALMENTE:
+- node --check nos dois .cjs novos: exit 0.
+- node --test scripts/b4br4b/inspect.test.cjs: 2/2 PASS, exit 0.
+  Casos cobrem ciclos, ambos ramos de diretiva, fonte ausente, diagnóstico,
+  AST ausente, pacote externo, dart: capacidade, escape de pacote, URI remota,
+  URI não literal e grafo fechado que permanece sem admissão. Fixtures inertes.
+  Log: build/b4br4b/collector-tests.log.
+- node --test scripts/b4br3/gate.test.cjs: 30/30 PASS, exit 0.
+  Log: build/b4br4b/r3-tests.log.
+- node --test scripts/b4br4a/verify.test.cjs: 12/12 PASS, exit 0.
+  Log: build/b4br4b/r4a-tests.log.
+- Avaliação real da raiz inerte usando funções R4-A: estrutural PASS.
+  Fontes da raiz e ausência de mudanças em todas as fontes anteriores conferidas;
+  não foi repetida a coleta global de imports operacionais do R4-A.
+- git diff --check: PASS, exit 0. Novos arquivos sem diagnóstico whitespace
+  no diff --no-index --check e na conferência textual local. No-index retorna
+  exit 1 pela adição/diferença de arquivos, não como aprovação de teste.
+
+BLOQUEADO:
+- Política R3 vigente: NO_HARNESS (roots aprovadas vazias).
+- Raiz R4-A avaliada contra revisão original: POLICY_REVIEW, UNCLASSIFIED,
+  OWNERSHIP. Nenhuma classificação/política foi promovida para obter PASS.
+- Compatibilidade K16 e 197 fronteiras de código ainda sem revisão.
+- Admissão final: BLOQUEADO, exit 1 deliberado; erro de infraestrutura seria 2.
+
+NÃO EXECUTADO:
+- Testes Flutter, pois nenhum Dart/produto foi alterado. Parser é executado
+  diretamente com Dart do Flutter 3.32.6 e package_config existente, sem pub get.
+- Emuladores, Chrome, SDK real, rede, Auth login/logout, Firestore server/Rules,
+  callable diagnóstica, redirects, credenciais em voo, geração/ABA/cross-tab.
+- Teste histórico externally reconfigured Functions must invalidate binding.
+  Continua REPROVADO historicamente: R2 8/9, esperado null, observado binding.
+  Não foi corrigido, ocultado, recontado como PASS ou substituído pela coleta.
+
+8. PRESERVAÇÃO, REVISÃO E LIMITES
+
+Conferência final: 1.275/1.275 hashes idênticos; zero alterados/ausentes.
+Evidência: build/b4br4b/preservation-final.json.
+Uma leitura auxiliar inicial do JSON sem -Encoding UTF8 produziu dois nomes
+acentuados ilegíveis e contagem vetorial do PowerShell; não era alteração real.
+O arquivo auxiliar preservation.json foi mantido e a leitura UTF8 corrigida
+gerou preservation-final.json, com contagem escalar e comparação integral limpa.
+
+SHA256 inicial/final de lib/services/pdf_receipt_service.dart:
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9.
+Todos os rastreados modificados e não rastreados preexistentes preservados.
+Diff rastreado continua somente o trabalho recebido; quatro arquivos novos
+desta entrega foram revisados separadamente, sem git add ou commit.
+
+Sem reset, restore, stash, clean, commit, push, instalação/atualização, deploy,
+migração, HML/PROD, cobrança, fiado, checkout comercial ou ativação offline.
+Sem alteração do escopo F10, backend, Rules, ledger, FirebaseOptions, flavors,
+bootstraps, protótipos SDK, política/revisão R3, owner R4-A ou secrets.
+
+Riscos residuais: revisão humana insuficiente; alteração conjunta de fonte/hash;
+aliases/dynamic/interop e binding sem resolução semântica; fronteiras externas;
+artefato distribuído/registros não revisados; SDK/caches públicos mutáveis;
+sessão/credenciais/ABA e revogação não observada; runtime comprometido fora K11.
+Nem a coleta nem os gates estáticos certificam isolamento real ou admitem SDKs.
+
+9. PRÓXIMA SUBETAPA RECOMENDADA — NÃO INICIADA
+
+Revisar esta evidência e localizar as definições aprovadas K14/K15; fechar a
+revisão dos papéis/lifecycle/exclusividade e das fronteiras transitivas. Resolver
+a autorização de obtenção do conjunto oficial JS 12.15.0 necessário (incluindo
+Pipelines e imports) ou outro alinhamento expressamente aprovado. Só depois
+preparar provas SDK locais isoladas Auth/Firestore/Functions com destinos
+diagnósticos fechados e sem transporte comercial. Não admitir a cadeia apenas
+porque uma prova SDK passou. Não avançar B4-C/B4-D/B5/B6 ou outras fases.
+
+ESTADO FINAL: BLOQUEADO — primeira subetapa de ferramentas executada e validada
+localmente; owner/fábrica funcional continuam sem admissão. PARAR NESTA ENTREGA.

@@ -1,0 +1,482 @@
+STORE&CONNECT — F9/B07-D-B
+CONTRATO DE RECUPERAÇÃO ATÔMICA DA IDENTIDADE E RETOMADA DO CHECKOUT V2
+Data: 17/10/2026
+DECISÃO FINAL: CONTRATO PROPOSTO. Somente arquitetura/documentação.
+
+1. BASE, ESCOPO E EVIDÊNCIA
+
+Branch feat/f7-intelligent-catalog.
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154.
+Working tree integralmente autorizado, incluindo recibo térmico 80 mm.
+T01–T10 aprovadas conforme pedido atual. T09 determina manutenção programada,
+preferencialmente fora do horário comercial; T10 separa HML/PROD, preserva PROD
+estável e exige testes/promoção controlada sem implantação automática.
+Essas decisões não autorizam implementar este contrato, cortar writers, migrar
+armazenamento ou executar ação remota nesta etapa.
+
+Inspeção dirigida: AGENTS/CURRENT_WORK histórico, F9/B07-D-A, F10/C-C-B,
+contratos/resultados F9/B07-B/C; checkout_sale_preparation.dart, ledger/command/
+store e adapters SQLite/IndexedDB/factory; testes de gap, pós-COMMIT, reabertura,
+conflito, storage perdido, ABA, concorrência e isolamento, incluindo helpers
+B07-C. Inspecionados somente configurações locais de ambiente necessárias:
+entrypoints, bootstrap/opções Firebase, build.gradle.kts, .firebaserc,
+firebase.json e gates locais do transporte/backend V2.
+118/118 de D-A é evidência histórica informada e documentada; não repetida aqui.
+Nenhum teste funcional/global, abertura de banco de cliente ou consulta remota.
+
+Fontes técnicas públicas primárias consultadas, sem acesso HML/PROD:
+- https://www.sqlite.org/lang_transaction.html
+  SQLite permite agrupar leituras/escritas sob BEGIN/COMMIT; BEGIN IMMEDIATE
+  disputa a escrita desde o início. BEGINs independentes não se aninham.
+- https://www.w3.org/TR/IndexedDB/#transaction-lifecycle
+  IndexedDB define commit atômico de alterações da transação e fases ativa/inativa;
+  requests adicionais precisam respeitar esse ciclo. Fonte 3.0 é Working Draft.
+- https://www.w3.org/TR/IndexedDB/#transaction-durability-hint
+  strict é uma indicação de durabilidade ao navegador, não imunidade a perda.
+As escolhas abaixo são propostas derivadas desses mecanismos e do código local;
+não foram implementadas ou certificadas por novos testes nesta etapa.
+
+2. DIAGNÓSTICO DO GAP — QUESTÃO 1
+
+CheckoutSalePreparation.persist atualmente faz, em sequência:
+P1 CAS da evidência checkout-candidate:candidateId;
+P2 CAS do checkout-binding:intentKey;
+P3 SaleMutationLedger.reserve, que lê/normaliza e faz OUTRO CAS do registro B07-C;
+P4 carga/checagem de contexto e devolução do handle.
+Todos usam a mesma tabela/object store attempts, através de namespace por target,
+mas CADA CAS abre e conclui sua própria transação. Mesmo arquivo não significa
+mesma unidade atômica. SaleMutationStore só expõe read/keys/CAS de UMA chave.
+
+O ID saleId=requestId nasce DENTRO de reserve, não está no binding/candidato D-A.
+O binding contém draft/escopo/target/intentKey, mas não a identidade escolhida.
+Crash após P2 e antes do commit P3 deixa associação sem registro comercial local.
+_started existe só em RAM; não é journal durável nem evidência após reinício.
+Load-only bloqueia nesse caso, preservando candidato e evitando outro ID.
+Esse bloqueio é comportamento correto do contrato D-A, não teste que deve ser
+afrouxado para fazer uma retomada aparente passar.
+
+Crash após COMMIT P3 e antes do retorno é caso diferente: registro completo já
+existe e pode ser carregado com identidade/comando originais. Novo ID é proibido.
+Candidato isolado após P1 também não contém identidade V2 recuperável.
+Ausência de registro pode ser gap legítimo, corrupção/perda parcial, arquivo
+errado, namespace errado ou perda posterior de uma operação já enviada.
+Não distinguir esses casos pelo relógio, lease, _started ou simples ausência.
+O código D-A é isolado e não enviou vendas; isso não transforma seu formato em
+prova persistida universal sobre a história de um arquivo que reapareça depois.
+
+3. ALTERNATIVAS COMPARADAS
+
+A — Criação atômica de candidato + binding + reserva B07-C no mesmo store.
+Recomendação para NOVAS intenções de um produtor futuro versionado.
+Uma transação lê o conjunto de chaves e comita o conjunto completo ou nenhuma
+nova reserva. Não basta agrupar binding e ledger deixando candidato obrigatório
+em commit independente; incluir sua evidência na unidade inicial elimina também
+o gap candidato-sem-reserva no fluxo novo que termina com sucesso.
+Na colisão com intenção existente, o mesmo mecanismo pode comitar SOMENTE o
+candidato diagnóstico, sem alterar o comando/ID comercial anterior.
+Vantagens: remove a janela estrutural, conserva uma única autoridade comercial,
+permite retomada por leitura após perda do retorno, usa estruturas já existentes.
+Custo: capacidade transacional multichave no store e método local novo no ledger;
+nenhuma mudança do payload/hash remoto, backend, Rules ou schema SQL é inerente.
+Limitação: não recupera ID nunca persistido nos gaps antigos; corrupção/perda
+total continua demandando bloqueio e reconciliação. Não é transação com Firebase.
+
+B — Journal durável com proposta de identidade fixa e promoção determinística.
+Exigiria gravar uma única proposta imutável contendo intentKey, ID já escolhido,
+comando COMPLETO normalizado, escopo/target, versão e integridade local, antes
+de materializar a tentativa canônica. Todos adotariam a proposta vencedora via
+CAS, sem gerar outro ID nem normalizar de novo o preço a partir do carrinho.
+Journal não teria sending/confirmed nem transporte próprio; somente o ledger
+B07-C seria dono dos efeitos/resultado após promoção. Cópia de identidade não
+criaria uma segunda autoridade ou segundo canal comercial.
+Vantagem: se a proposta existe, há comando/ID exatos para diagnóstico/consulta
+mesmo se a promoção for interrompida. Pode ajudar quando associação precisa
+atravessar recursos diferentes, algo não necessário no store atual.
+Limitações: reserve atual gera seu ID internamente; não aceita promover ID
+fixado pelo journal. Exige contrato novo de promoção validada e recuperação,
+mais estados, retenção e critérios contra desaparecimento parcial de dados.
+Journal só com ID, hash de produtos, draft sem ID ou flag 'preparing' não basta.
+Se ledger desaparecer após possível envio, journal não autoriza recriar tentativa
+como persisted/pronta: conservar unknown/diagnóstico, apenas consulta adequada.
+Uma flag allocated/materialized em commit separado também tem seu próprio gap;
+nenhuma fase local prova que transação remota foi cancelada. Promover e marcar
+materializado atomicamente reduz parte desse problema, aproximando-se de A.
+Mais custo e provas do que A; não recomendado para o armazenamento atual.
+Não converter binding/candidato D-A em journal atribuindo ID retrospectivo.
+
+C — Ledger primeiro, binding como projeção reconstruível do próprio ledger.
+É possível usar o registro B07-C (já contém intentKey, scope, comando e ID) como
+origem da associação e reconstruir só a projeção de UI quando ele estiver íntegro.
+Isso não cria outro ID nem mexe no hash; reduz necessidade de binding obrigatório.
+Mas candidato gravado antes de reserve ainda pode ficar sem identidade; conflito
+diagnóstico e target fora do registro também exigem tratamento. Não resolve
+todos os requisitos de captura/conflito atômicos sem ajustes complementares.
+Pode ser técnica futura de projeção para registros NOVOS contratados, mas não
+autoriza consertar automaticamente históricos parcialmente ausentes.
+Manter D-A em modo conservador é a contenção válida até implementar A.
+
+4. RECOMENDAÇÃO E INVARIANTES — QUESTÕES 2, 5 E 6
+
+Escolher A. Unidade de identidade: target real + projeto + loja + uid + intentKey.
+Unicidade remota continua conforme B07-B por projeto/loja/saleId, com verificação
+de ator/comando; namespace local por usuário não altera essa unicidade.
+Uma intenção tem apenas um comando/ID autoritativo no ledger, nunca um em cada
+store, aba, PendingSales ou retry. CandidateId e tokens de sessão não são saleIds.
+
+Para nova compra, a captura explícita gera intentKey uma vez, congela snapshot
+e contexto e prepara uma proposta inicial de registro. Uma identidade sorteada
+em RAM é provisória, NÃO publicada como identidade de venda antes do COMMIT.
+Se dois produtores propuserem IDs distintos para a MESMA intentKey, a transação
+vencedora fixa o único ID autoritativo; o perdedor descarta apenas sua proposta
+não publicada e adota o comando/ID vencedor se o conteúdo for exatamente igual.
+Não existem dois IDs comerciais persistidos. Não confundir sorteios provisórios
+sem efeitos com duas identidades de venda. Repetição dentro da mesma operação
+em RAM reutiliza sua proposta, sem gerar outra por exceção de armazenamento.
+
+Retomada usa referência existente, nunca API de nova compra. Duas ações humanas
+de compra legitimamente novas geram intentKeys distintas, mesmo com JSON igual.
+Conteúdo/hash não decide se é retomada. Duas abas que não compartilham referência
+durável são duas intenções distintas para o sistema; não há deduplicação humana
+global. A futura UI deve selecionar/retomar a intenção, não copiar carrinho e
+criar chave nova como reação a loading/erro/reabertura.
+
+O plano novo NÃO exige mudar SaleMutationCommand, seus campos, serialização,
+centavos, elegibilidade C5 ou hash do receipt. Registro B07-C mantém ledgerVersion,
+commandHash/recordHash e estados atuais; novos metadados são externos ao comando.
+Binding novo, versão local própria, aponta para chave do ledger, requestId,
+scope/target/intentKey e integridade dos campos imutáveis. Não possui outcome,
+preço alternativo, ready-to-send ou autoridade comercial própria. Hash local
+é verificação de integridade, nunca autenticação nem cancelamento remoto.
+
+5. CAPACIDADE TRANSACIONAL PROPOSTA — QUESTÕES 2 E 10
+
+Não envolver reserve atual num BEGIN externo nem chamá-lo dentro de uma callback
+IndexedDB arbitrária: ele faz awaits e CAS que abre outra transação.
+Sequência de CAS não é substituto da capacidade atômica.
+
+Proposta de extensão ADITIVA, nome ilustrativo:
+AtomicSaleMutationStore, capacidade explícita além de SaleMutationStore, com
+operação multichave de snapshot/decisão síncrona/escrita atômica e leitura de
+snapshot consistente. A interface antiga e seu CAS permanecem disponíveis para
+callers B07-C existentes; stores sem a capacidade nova recusam o fluxo novo.
+É proibido um fallback que emule atomicidade com chamadas CAS em sequência.
+
+Modelo da operação, sem código implementado:
+1) Receber lista limitada de chaves e proposta imutável já validada, do mesmo
+   store/namespace; resolver sessão/SDK ANTES de abrir transação local.
+2) Ler todas essas chaves dentro da mesma transação.
+3) Executar decisão local PURA e síncrona sobre esse snapshot (sem rede/Future).
+4) Aplicar plano de escrita e retornar snapshot/resultado tipado só após COMMIT.
+   Decisão pode ser criação completa, adoção do existente ou diagnóstico-only.
+5) Erro de IO/quota/abort aborta o conjunto; sucesso de request individual não é
+   sucesso da operação. Se confirmação de commit se perder, retomar por leitura
+   do conjunto, sem gerar ID nem supor rollback.
+
+SaleMutationLedger ganharia método local de reserva associada, distinto de send,
+que constrói/valida o registro com as mesmas rotinas B07-C de normalização/seal/
+decode e coordena essa capacidade. Extrair apenas helpers necessários, evitando
+duplicar serialização no checkout. reserve antigo mantém contrato e regressões;
+o caminho novo NÃO o chama depois de comitar binding. Não oferecer API pública
+genérica para o checkout reescrever requestId/comando de tentativa existente.
+Um construtor de proposta pode separar cálculo puro de persistência, mas somente
+commit atômico valida que a proposta venceu. Nenhum send é acrescentado nesta fase.
+
+SQLite: mesma conexão/arquivo/tabela attempts; BEGIN IMMEDIATE, ler conjunto,
+decidir e escrever com parâmetros, COMMIT; erro faz rollback controlado. Tratar
+busy/IO/full sem publicar sucesso ou abrir segunda conexão para a outra metade.
+Preservar WAL/synchronous=FULL existentes; não enfraquecer por desempenho.
+Não usar transação entre PendingSales e ledger, ATTACH ou banco de journal novo.
+
+IndexedDB: uma única transação readwrite no MESMO database e object store attempts,
+incluindo todas as chaves. Encadear requests/decisão enquanto a transação estiver
+ativa; nenhum await de Firebase, rede, storage externo ou callback arbitrária.
+Concluir só em oncomplete e tratar abort/error sem sucesso parcial. Preservar
+durability:strict quando suportado; validar comportamento no browser alvo, sem
+atribuir garantia de hardware ou contra eviction ao hint. Dois databases, ainda
+que na mesma origem, não formam esta unidade atômica.
+
+Wrapper de target deve encaminhar a operação inteira com chaves mapeadas uma
+única vez; não a decompor em CAS. Verificar geração antes/depois e na decisão
+síncrona quando aplicável. Mudança após commit não permite desfazê-lo: conservar
+origem e suprimir callback/UI/envio posterior do contexto inválido.
+Nenhuma transação local permanece aberta esperando resposta remota.
+
+6. CONTRATO DE RECUPERAÇÃO E CONFLITOS — QUESTÕES 1, 3, 4 E 7
+
+R1 NOVA criação sem sucesso anterior conhecido: operação atômica grava candidato,
+   binding novo e tentativa B07-C juntos, com prepared=false, attempts=0 e sem
+   claim/outcome. Snapshot comercial é o capturado, não o carrinho atual.
+R2 Conjunto completo e íntegro: load da identidade/comando existentes; não
+   regravar datas/estado/resultado ou devolver persisted sobre unknown/terminal.
+R3 Mesmo intentKey e conteúdo exatamente equivalente após normalização B07-C:
+   adotar resultado existente, sem outro ID ou overwrite. Se houver concorrência
+   com atualização de estado, retornar snapshot consistente e respeitar CAS.
+R4 Mesmo intentKey com draft/ator/target divergente: preservar intenção original;
+   contexto incompatível é suspenso antes de carregar payload da outra origem;
+   não procurar outra conta/loja para comparar ou expor seu conteúdo.
+   salvar candidato imutável separado de diagnóstico no mesmo store quando isso
+   for possível. Devolver conflito somente depois do commit desse diagnóstico.
+   Não lançar exceção de conflito DENTRO da transação após enfileirar diagnóstico,
+   pois isso poderia abortá-lo. Primeiro plano diagnóstico-only, depois resultado
+   tipado. Colisão no próprio candidateId com bytes distintos é integridade
+   bloqueada, nunca substituição silenciosa. Sem espaço/IO, anunciar que o
+   candidato NÃO foi duravelmente salvo; sem envio ou limpeza de carrinho.
+R5 Só uma parte do conjunto presente (inclusive binding sem ledger): classificar
+   gap/integrityBlocked e preservar os bytes. Não completar com ID sorteado,
+   derivar saleId de intentKey, copiar comando de carrinho, promover draft ou
+   tratar 'prepared=false' remanescente como prova global de ausência de envio.
+R6 Comando/ID já conhecidos, mas resultado incerto: apenas consulta read-only
+   autenticada do mesmo comando. not-recorded/definitive:false continua unknown;
+   falha, denied e timeout também. Sem reenvio automático nesta fase.
+R7 Nenhuma evidência encontrada para uma referência conhecida ou falha ao abrir:
+   storage indisponível/perdido, não 'nova venda'. Não chamar inicialização de
+   primeira instalação nem reserve em reação à falta de dados.
+R8 Resultado remoto conhecido exige persistência local antes de anunciar sucesso
+   durável. Evidência é vinculada à origem; falha local não repete writer, não
+   fabrica receipt, não libera reserva e não usa S03 como consulta.
+
+Atomicidade elimina novos conjuntos parciais POR CRASH de transação bem formada;
+não elimina corrupção/remoção posterior ou binário que ignore o contrato.
+Se commit foi abortado antes de produzir qualquer dado, não existe ID comercial
+durável para recuperar. Isso NÃO autoriza criar uma compra substituta automática:
+se o caller não consegue comprovar que é primeira captura, fica bloqueado.
+Não prometemos recuperar memória que nunca foi gravada ou detectar toda perda
+do arquivo só observando um arquivo vazio recém-criado.
+
+Gaps D-A versão 1 NÃO são migrados/convertidos. Ficam conservadoramente bloqueados,
+com candidato preservado e diagnóstico; eventual recuperação especial exige
+evidência/decisão própria, sem alterar a identidade ou inventar receipt retroativo.
+Proposta A vale para produtor novo identificado por versão de metadados, não por
+reinterpretar ausência em registros anteriores. Novos leitores reconhecem versões;
+binário incompatível deve recusar versão nova, não degradar para sequência antiga.
+Não mudar a expectativa do teste D-A para gaps versão 1 só para obter aprovação.
+
+Detectar JSON/hash/ID/pointer/versão/target incompatíveis e chaves faltantes em
+snapshot consistente; erros de abertura/quota são explícitos. Um marcador de
+store/instalação pode detectar arquivo trocado se houver referência independente,
+mas sua ausência ou presença não prova resultado remoto. Hash local recalculável
+não detecta todo ataque/corrupção coerente. Perda TOTAL sem referência externa
+pode ser indistinguível de primeira instalação. Contrato de onboarding/retomada
+e consulta externa apropriada é dependência, nunca inferência de rollback.
+Não abrir/criar silenciosamente outro arquivo, namespace ou origin para 'resolver'
+falha de storage. Não instalar outro ledger comercial, limpar ou usar restore.
+
+7. CONCORRÊNCIA, SESSÃO E INTERFACE — QUESTÕES 5, 6, 8 E 9
+
+Chaves compartilham exatamente target/projeto/loja/uid/intentKey. Mesma intenção
+em duas abas/processos usa o mesmo store físico e referência. A transação
+vencedora estabelece associação/ID; a outra lê/adota ou registra conflito.
+Flags em RAM, BroadcastChannel ou lock de UI podem melhorar UX, mas não são
+autoridade de unicidade. SQLite em arquivos copiados/dispositivos diferentes e
+IndexedDB em origens/perfis diferentes não compartilham lock; não alegar que
+atomicidade local sozinha deduplica nesses domínios. Idempotência remota segue
+contrato V2, e duas identidades humanas distintas continuam distintas.
+
+Futuro adaptador SDK obtém FirebaseApp explícito validado pelo entrypoint/flavor,
+Firestore/Auth/Functions desse MESMO app e projeto; registra target real incluindo
+destino Emulator/remoto. UID e loja vêm de sessão/vínculo validados, não do draft.
+Antes de exibir payload ou consultar resultado, revalidar contexto e autorização;
+não completar origem antiga com login atual, nem pesquisar outros projetos por ID.
+Futuro target deve explicitar databaseId e região/destino Functions suportados;
+backend atual usa database padrão, não aceitar custom database só por metadata.
+AppId/nome do app são evidência auxiliar, não autorização ou nova chave de estoque.
+Qualquer extensão de target local é versionada, fora do hash canônico V2 e sem
+renomear automaticamente namespaces existentes.
+
+Geração de sessão/aba/tela/carrinho é rotacionada em TODA transição, inclusive ABA.
+Não persisti-la como substituta da identidade comercial; depois de reiniciar,
+restaurar explicitamente a referência e reconstruir aquele checkout em geração
+nova. Comparar scope igual após um await não basta. Gate síncrono de confirmação
+exige intenção associada, geração atual e estado confirmado durável; limpar
+carrinho deve invalidar a geração. Consulta/carga não são 'attach' implícito.
+Resposta de geração antiga não limpa outro carrinho, navega ou inicia fiscal.
+Suprimir UI tardia não cancela transação remota; unknown mantém sua evidência.
+
+Comportamento de interface proposto (sem UI implementada):
+- Captura/preparação: 'Preparando venda'; ações comerciais duplicadas bloqueadas;
+  não mostrar 'venda confirmada' ou aceitar offline pelo simples commit local.
+- Intenção existente: oferecer retomada identificada, sem recriar/mesclar por
+  produtos. Mudanças no carrinho não reescrevem comando já reservado.
+- Conflito: 'A intenção original foi preservada. O novo conteúdo precisa de
+  revisão'; indicar se candidato foi salvo ou apenas permanece em memória.
+  Sem botão de substituir/descartar silenciosamente ou gerar ID por conveniência.
+- Gap/integridade: 'Não foi possível recuperar a identidade desta intenção';
+  suspender fechamento, preservar dados e encaminhar diagnóstico autorizado.
+- Unknown: 'Resultado ainda não confirmado'; permitir verificar resultado no
+  contexto original, não 'Tentar vender novamente', forçar confirmação ou liberar.
+- Storage indisponível: 'Não foi possível salvar com segurança'; impedir rede,
+  preservar carrinho/candidato possível, oferecer diagnóstico/retomada de storage,
+  sem fallback em memória para vender.
+- Contexto incompatível: bloquear exposição de detalhes da outra conta/loja;
+  após autenticação/contexto correto, retomada explícita, nunca reatribuição.
+Definir apresentação final/acessibilidade e autorização de diagnóstico em bloco
+próprio; não expor nomes/itens/valores de outra loja por indicadores globais.
+
+8. ISOLAMENTO DE AMBIENTES — T09/T10, SOMENTE INSPEÇÃO LOCAL
+
+Configuração encontrada, sem afirmar estado publicado:
+- main_hml.dart e main_prod.dart invocam bootstrap explícito; main.dart bloqueia
+  execução ambígua. AppConfiguration rejeita troca de ambiente no processo.
+- AppEnvironment associa HML a store-connect-hml e PROD a store-connect-app,
+  com AppIds/opções e hosts públicos distintos. Bootstrap Android valida flavor,
+  configuração nativa e app/projeto; Web valida a identidade configurada.
+- .firebaserc tem default PROD (store-connect-app), não alias HML neste arquivo.
+  Operações futuras precisam alvo explícito validado; nenhum CLI remoto foi usado.
+- firebase.json aponta Rules comuns locais e codebases default/bootstrap.
+  Arquivo comum não comprova Rules/Functions idênticas ou implantadas nos projetos.
+- Transporte SaleMutationApi e handlers confirmSaleV2 continuam restritos a
+  demo/loopback/Emulator; endpoints V2 ausentes do index. HML NÃO está habilitado
+  para eles. Não remover gate ou exportar incidentalmente para obter teste.
+- USE_FIREBASE_EMULATORS é configuração local explícita; não basta usar label
+  'hml' para garantir destino de Auth/Firestore/Functions/Storage.
+
+DEPENDÊNCIA RELEVANTE: hml e prod em android/app/build.gradle.kts declaram o
+MESMO applicationId com.storeeconnect.app. Portanto não garantem coinstalação
+ou sandbox local separado no mesmo perfil do aparelho. Um flavor HML pode
+substituir binário e reutilizar diretórios de PROD, conforme instalação/assinatura;
+não afirmar que isso foi testado ou executar instalação para verificar.
+O nome SQLite sale_mutations_v1.sqlite é fixo no application support, e o store
+Web tem nome default fixo por origem. Namespace lógico não prova isolamento
+físico, sobretudo diante de writers antigos ou banco PendingSales sem origem.
+
+Requisitos antes de ensaio/integração futura:
+E1 Manter identificador PROD estável. Aprovar identidade de app HML separada e
+   configuração Firebase Android correspondente, ou usar aparelho/emulador/perfil
+   fisicamente separado sem dados PROD até essa decisão. Não alterar applicationId
+   ou registrar novo app automaticamente; impactos Auth/OAuth/AppCheck/assinatura
+   e distribuição exigem plano próprio. Sem reinstalar/migrar banco real aqui.
+E2 No Web, origens HML/PROD separadas e bootstrap verificado. Localhost com dois
+   entrypoints pode ser a MESMA origem; namespace por target/projeto obrigatório.
+   Não copiar IndexedDB, dados, sessão Auth ou pendências de um destino a outro.
+E3 Banco físico/store, namespace, caminho, projeto/database e target devem ser
+   consistentes; não abrir arquivo de PROD a partir do build HML para teste.
+   Separação física futura de nomes/caminhos não autoriza mover dados existentes.
+E4 SDKs e serviços usam projeto/destino explícitos. Credenciais Admin/service
+   accounts, permissões/IAM, secrets, AppCheck e sessão Auth devem ser distintos
+   por ambiente e de privilégio adequado. Não ler/imprimir/copiar credenciais
+   para documentar ou promover; configuração pública não prova IAM remoto seguro.
+E5 Testar Rules/Functions/contratos em fixtures sintéticas locais, depois HML
+   somente sob autorização específica; promover artefato revisado e configuração
+   adequada, nunca dados, receipts ou chaves de HML para PROD. PROD estável sem
+   publicação automática; cada ação remota exige autorização imediata própria.
+E6 Planejar corte/contenção/drenagem com T09 em manutenção programada fora do
+   horário comercial preferencialmente. Janela no calendário não prova fim de
+   transações em voo. T03/corte S01/S02/S03 e rollback fechado seguem necessários.
+Nada disso foi executado. Windows nativo continua fora do escopo; Web continua
+sem vendas offline. Não habilitar plataformas/gates como efeito colateral de A.
+
+9. ARQUIVOS CANDIDATOS A ALTERAÇÃO FUTURA — NENHUM ALTERADO AQUI
+
+Implementação local mínima de A, após nova autorização:
+- lib/data/local/sale_mutation_store.dart: capacidade transacional multichave
+  aditiva e resultados/planos tipados; single-CAS antigo preservado.
+- lib/data/local/sale_mutation_store_native.dart e sale_mutation_store_web.dart:
+  uma unidade real por operação, sem transação aninhada ou simulação sequencial.
+- lib/services/sale_mutation_ledger.dart: reserva associada/proposta local,
+  reutilização de serializer/validação, sem alteração do comando/estados remotos.
+- lib/services/checkout_sale_preparation.dart: substituir sequência inicial por
+  operação atômica; binding/candidato com versão local própria, leitura consistente
+  e conflito diagnóstico. Fluxo D-A versão 1 preservado/bloqueado conforme contrato.
+- test/support/checkout_sale_preparation_cases.dart, testes native/web e helpers
+  B07-C: ampliar matrizes, manter expectativas históricas e doubles compatíveis;
+  novos arquivos de teste de store atômico se isso separar melhor a prova.
+Factories só se capability/target exigir injeção explícita, sem mudar destino
+operacional ou migrar armazenamento. Não é necessário novo banco/tabela/journal
+comercial nem alteração de schema do comando SaleMutationCommand.
+
+Etapas posteriores separadas, NÃO incluídas na implementação local de A:
+PaymentOptionsSheet/CartProvider/AuthGate/bootstrap para associação real e ABA;
+SaleMutationApi/contratos de ambiente para transporte controlado; configurações
+HML Android e plano de identidades/caminhos; Rules/backend para corte segundo T03,
+Auth/privacidade de resultado e homologação. Não alterar esses arquivos apenas
+porque constam neste planejamento. Recibos/fiscal/fiado/V3 excluídos.
+
+10. PLANO DE TESTES E GATES FUTUROS
+
+Nenhum teste executado nesta etapa documental. Plano dirigido, sem suíte global:
+01 Injetar falha/crash antes de cada escrita, entre as três escritas e no COMMIT:
+   novo conjunto é completo ou ausente, nunca binding novo sem ledger.
+02 Perder retorno após COMMIT: reabrir/carregar devolve MESMO ID/comando/associação;
+   nenhum reserve ou writer adicional, nem regressão de estado terminal/unknown.
+03 Erro IO/full/busy SQLite, abort/quota IndexedDB e falha de última request:
+   zero reserva parcial/sucesso antecipado; error não convertido em 'não existe'.
+04 Mesmo intentKey/comando em duas conexões, processos SQLite e duas abas Web:
+   um ID autoritativo; adotantes recebem o vencedor. Não basta dois mocks de RAM.
+05 Mesmo intentKey com conteúdo distinto: original íntegro, candidato divergente
+   durável após crash/reabertura. Resultado conflito só depois do diagnóstico
+   comitado. Falha do diagnóstico anuncia indisponibilidade, sem mascarar perda.
+06 Nova compra igual -> outra intentKey/ID; retomada conhecida -> mesmo comando;
+   geração de ID não é invocada por load ausente, timeout ou erro de consulta.
+07 Gaps D-A versão 1 permanecem bloqueados; novos snapshots parciais deliberados
+   (remoção/corrupção sintética) também. Sem reparo por ausência ou receipt local.
+08 Integridade: binding apontando outro ID/key/target, comando/draft divergente,
+   versão desconhecida, JSON corrompido, store errado/perdido. Nenhum overwrite,
+   migração ou fallback a arquivo/memória alternativos para vender.
+09 ABA/contexto muda em cada fronteira local e antes/depois do COMMIT: preservar
+   origem e impedir callback/UI do contexto antigo; restauro explícito de geração
+   nova não cria intenção e não expõe outra conta/loja. Invalidar após cart.clear.
+10 Unknown/sending com query que confirma tarde, not-recorded, denied ou falha de
+   persistência: somente lookup, zero send/S01/S03. Lease expirada não muda isso.
+11 Validar Web transaction lifecycle sem await externo; completar apenas após
+   oncomplete, nenhum success de request prematuro. Versionchange/blocked/fechamento
+   de aba em teste dedicado; durabilidade não declarada certificação de hardware.
+12 Reabrir arquivo SQLite/IndexedDB e enumerar snapshot consistente; trocar perfis/
+   origens não adota identidade por conteúdo. Referência ausente não inicia compra.
+13 Preservar bytes/IDs/namespace B07-C antigo e PendingSales sintético; não duplicar
+   proprietário nem alterar receipts/hashes. Fixtures Dart/JS e centavos B07-B/C
+   permanecem aprovadas. Elegibilidade C5 não é removida para liberar teste.
+14 Regressões diretamente afetadas de store/ledger/checkout D-A, gates de ambiente
+   com configs sintéticas trocadas e targets distintos; nenhum dado/credencial real.
+
+Executar no bloco futuro Flutter 3.32.6 --no-pub, SQLite temporário e Chrome/
+IndexedDB real. Native host não certifica Android físico; duas conexões não são
+prova automática de dois processos/abas inteiras. Ensaios físicos necessários
+devem ser contratados depois, sem acessar clientes reais. Backend/Emulator só
+quando dependência nova justificar; JDK21 conforme AGENTS.
+Parar no gate obrigatório falho. Atualizar expectativas apenas para comportamento
+NOVO aprovado, nunca apagar evidência de gap legado para aparentar recuperação.
+
+11. APROVAÇÕES ADICIONAIS E SEQUÊNCIA
+
+U01 Aprovar A e a capacidade transacional aditiva, método de reserva associada,
+    resultados tipados e proibição de fallback sequencial. É alteração do contrato
+    local B07-C, embora payload/hash/receipt remotos permaneçam intactos.
+U02 Aprovar unidade candidato/binding/ledger, versão de metadados e plano de
+    diagnóstico-only que conserva conflito; nenhum segundo ledger ou journal
+    comercial. Novos campos locais não são autorização de resultado remoto.
+U03 Aprovar tabela de retomada R1–R8 e bloqueio de gaps D-A/armazenamento perdido;
+    UX de associação/restauração, diagnóstico/candidato e primeira instalação.
+    Recuperação especial de históricos exige proposta/evidência própria, não U01.
+U04 Aprovar compatibilidade de versões, target/mapping e preservação dos registros
+    existentes, sem migração automática. Capacidades ausentes falham fechado.
+U05 Decidir isolamento físico HML Android e ensaios T10, sem alterar ID estável
+    PROD ou instalar HML sobre dados reais. Se necessário novo appId/configuração
+    ou nome de banco, tratar impactos e dados em etapa própria.
+T01–T10 não substituem autorização dessas mudanças técnicas ou implementação.
+
+Sequência recomendada: aprovar U01–U05 pertinentes -> testes/contrato puro da
+capacidade -> store SQLite sintético -> store IndexedDB real -> reserva associada
+isolada + retomada/UX modelada -> regressões dirigidas -> relatório/parada.
+Checkout ativo/transporte/corte ficam em novos blocos autorizados. Corte só após
+provas locais/E2E, dependências F9/F10 e plano de manutenção/drenagem/rollback;
+nenhum novo writer ou deploy é consequência automática de validar atomicidade.
+Se mudar comando canônico, preço, elegibilidade, hash remoto, modo unknown ou
+exigir migração real, parar esse trecho e apresentar contrato adicional.
+
+12. PRESERVAÇÃO E ENCERRAMENTO
+
+Único arquivo criado: docs/catalog/F9_B07_D_B_RESULTADO.txt.
+Manifesto anterior: %TEMP%\store_connect_B07_D_B_baseline.json, 678 arquivos
+rastreados/não rastreados não ignorados. Conferência final: 678 idênticos, zero
+alterações/remoções; único acréscimo este relatório. Status/HEAD preservados,
+git diff --check aprovado (avisos LF/CRLF locais), zero whitespace final no novo
+arquivo e resumo exibido no terminal. Nenhum código funcional foi escrito.
+Recibo 80 mm protegido, SHA256 inicial/final confirmado:
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9.
+Sem instalação de dependências, banco real, migração, teste global, HML/PROD,
+deploy, commit, push, reset, restore, stash ou clean. Restore de backup permanece
+bloqueado; C4 adiado; nenhuma implementação automática ou checkout conectado.
+
+CONTRATO PROPOSTO — A para eliminar gaps novos, bloqueio conservador dos antigos.
+Não é liberação operacional nem prova de resultado comercial remoto.
+PARADA APÓS F9/B07-D-B.

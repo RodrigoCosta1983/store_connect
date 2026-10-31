@@ -1,0 +1,281 @@
+F9/A5 — RESULTADO LOCAL B01–B03
+=============================
+
+Branch: feat/f7-intelligent-catalog
+HEAD inicial/final: 30f4f8db2a4a59d21696fde3d673144aded31154
+Escopo: infraestrutura B01, B02 e B03; nenhuma transição de writer ativo.
+Status: implementação e validação locais concluídas. F9/A5 global NÃO encerrado.
+
+A) ARQUIVOS CRIADOS/ALTERADOS
+
+Criados (17, incluindo este relatório):
+1. functions/products/productEditState.js
+2. functions/products/productMutationResult.js
+3. functions/products/productMutationScope.js
+4. functions/tests/products/productEditState.emulator.test.js
+5. lib/data/local/product_mutation_store.dart
+6. lib/data/local/product_mutation_store_factory.dart
+7. lib/data/local/product_mutation_store_native.dart
+8. lib/data/local/product_mutation_store_web.dart
+9. lib/data/local/product_mutation_store_unsupported.dart
+10. lib/services/product_mutation_command.dart
+11. lib/services/product_mutation_ledger.dart
+12. lib/services/product_mutation_api.dart
+13. test/product_edit_state_test.dart
+14. test/product_mutation_ledger_test.dart
+15. test/product_mutation_store_native_test.dart
+16. test/product_mutation_store_web_test.dart
+17. docs/catalog/F9_A5_B01_B03_RESULTADO.txt
+
+Alterados nesta etapa (6):
+1. functions/index.js: somente dois novos exports locais de leitura/resultado.
+2. functions/products/productMutationContract.js: asserção scope opcional.
+3. functions/products/productMutationV2.js: validação transacional de scope e
+   receipt de rejeição terminal apenas para comandos novos com scope.
+4. functions/tests/products/runProductV2Tests.js: inclui a nova suíte de APIs.
+5. pubspec.yaml: crypto, sqlite3 e web como dependências diretas.
+6. pubspec.lock: somente a classificação desses três pacotes como diretos;
+   nenhuma versão de dependência foi atualizada.
+
+Os arquivos 2–4 acima já existiam localmente como não rastreados. O index já
+continha outras alterações locais anteriores, preservadas. O diff total contra
+HEAD não deve ser atribuído integralmente a esta etapa.
+
+Artefatos locais ignorados em build:
+- f9-b01-b03-before.json: hashes de preservação dos arquivos preexistentes.
+- f9-b01-b03-contracts.log, f9-b01-b03-regression-final.log,
+  f9-b01-b03-flutter-final.log, f9-b01-b03-web-final.log,
+  f9-b01-b03-analyze.log: evidências finais.
+- Logs intermediários e helpers diagnósticos f9-web-diagnose.cjs e
+  f9-canvaskit-server.cjs; servidor diagnóstico encerrado.
+- f9-tools-jdk21.zip e f9-tools-jdk21/: JDK 21 temporário para o Emulator.
+  Nenhuma instalação ou alteração permanente do Java do Windows.
+
+B) CONTRATOS IMPLEMENTADOS
+
+B01 — getProductEditState({productId})
+
+- Autenticação obrigatória. Perfil, revogação, role, loja e produto são lidos
+  server-side, dentro de uma transação Firestore Admin.
+- Roles operacionais existentes: admin, gerente, operador, caixa e vendedor.
+  Nenhum gate de assinatura novo para a edição.
+- Loja deriva do perfil autenticado; não é aceita como autoridade do cliente.
+- Resposta: schemaVersion=1, productId, storeId, uid, expectedUpdateTime,
+  product e unavailable.
+- product e expectedUpdateTime são produzidos a partir do MESMO snapshot.
+- Token: {seconds: string decimal canônica, nanoseconds: inteiro exato}.
+  Nenhum fallback para updatedAt, horário local, cache ou milissegundos.
+- Projeção explícita dos campos cadastrais, taxonômicos e fiscais editáveis,
+  estado de arquivamento, saldo e lotes necessários ao editor futuro.
+- Ausente permanece ausente; null permanece null. Dados legados de tipo
+  incompatível são sinalizados em unavailable, sem defaults/reparação.
+- Lotes mantêm índice original e validade com segundos/nanos. Campos internos
+  e desconhecidos não são expostos; continuam preservados no servidor.
+- ProductEditState, no cliente, valida o token e devolve cópias independentes
+  do baseline. Alterar um getter ou o mapa original não muda o snapshot guardado.
+
+B02 — getProductMutationResult({operation, command, expectedStoreId})
+
+- Operações desta infraestrutura: updateProductV2 e adjustProductStockV1.
+  Não converte V1/create/vendas nem seus IDs para o protocolo novo.
+- command é o comando lógico completo congelado, incluindo requestId,
+  productId, versão/baseline e alteração. ID sozinho não comprova identidade.
+- O servidor normaliza command com o MESMO validador do writer e calcula
+  independentemente o hash. Não confia em hash declarado pelo cliente.
+- Revalida autenticação, perfil, revogação, role e loja na transação.
+  expectedStoreId é uma asserção comparada à loja derivada, não autoridade.
+- Receipt é restrito ao namespace operação/loja/uid/requestId.
+- Estados retornados:
+  confirmed: receipt correspondente; resultado explícito; definitive=true.
+  rejected: rejeição terminal persistida correspondente; definitive=true.
+  not-recorded: nenhum receipt observado; definitive=false.
+  identity-conflict: ID já vinculado a outra identidade/comando; definitive=true.
+- not-recorded NÃO significa falha definitiva ou ausência de chamada em voo.
+- A resposta não expõe requestHash, payload persistido, auditoria completa,
+  metadados fiscais internos ou mensagem interna de erro.
+- Confirmação/rejeição persistidas são recuperáveis depois de alterações do
+  produto. Autorização continua sendo revalidada inclusive no replay.
+
+Compatibilidade e rejeições terminais:
+
+- Novo envelope scope: {projectId, uid, storeId}, opcional para contratos
+  existentes e obrigatório nos comandos criados pelo novo ledger.
+- scope é validado dentro da transação que deriva o perfil/loja, antes do
+  receipt. Fecha a corrida entre checagem cliente e mudança de loja do perfil.
+- O hash dos comandos novos inclui scope. Comandos antigos sem scope mantêm
+  normalização, hash, namespace e comportamento de rejeição anteriores.
+- Somente comandos novos com scope persistem rejeições de domínio reconhecidas
+  após autorização e busca do receipt: conflito de versão, produto inexistente,
+  precondição de estoque/COD/categoria e outros HttpsError de domínio permitidos.
+- Essa rejeição cria apenas receipt em auditLogs. Produto, lotes, saldo,
+  categorias e reservas não são escritos; prepare ainda está na fase de leitura.
+- Rejeição e concorrência pelo mesmo ID são serializadas no mesmo receipt.
+  Retry correspondente repete a rejeição; hash diferente continua rejeitado.
+- Erros de autorização, scope, transporte, indisponibilidade, falhas internas
+  e validação estrutural anterior à transação não viram rejeição terminal.
+- A exceção de rejeição persistida mantém código/reason e sinaliza
+  persistedRejection=true. O ledger a trata conservadoramente como unknown
+  até recuperar o receipt pelo endpoint autenticado.
+- Não há expiração, exclusão ou migração de receipts.
+- A dúvida inicial sobre persistência foi resolvida preservando o protocolo
+  antigo e aplicando o novo comportamento somente aos comandos do ledger.
+  Nenhuma confirmação pendente é necessária para concluir esta etapa local.
+
+B03 — ledger durável e comando congelado
+
+- ProductMutationStore define leitura, listagem e compare-and-set atômico.
+- Android/native: SQLite separado em applicationSupportDirectory, arquivo
+  product_mutations_v1.sqlite, WAL, synchronous=FULL e BEGIN IMMEDIATE.
+- Web: IndexedDB separado, transação readwrite com durability=strict;
+  compare-and-set só confirma depois do commit. Sem fallback para memória.
+- Nenhuma tabela/migração/consulta de PendingSales foi alterada ou reutilizada.
+- Escopo: projeto/ambiente, uid e loja; chave por operação e requestId;
+  productId e versão do comando ficam no registro imutável validado.
+- Registro inclui ledgerVersion=1, scope, operação, comando normalizado,
+  requestId, baseline/token, hash SHA-256, estado, datas de diagnóstico e
+  resultado conhecido quando disponível. Não armazena credenciais/secrets.
+- O hash local possui protocolo próprio de integridade do JSON canônico;
+  NÃO é apresentado como hash Admin. A consulta envia o comando completo e
+  o servidor aplica a normalização/hash autoritativos existentes.
+- newRequestId() gera identidade aleatória de 192 bits. prepare persiste
+  comando/ID antes de qualquer envio; não aceita substituir o conteúdo do ID.
+- Estados locais: persisted, sending, unknown, confirmed, rejected,
+  identityConflict. Estados terminais não regridem por resposta tardia.
+- Crash/encerramento em sending é recuperado como unknown. O retry usa apenas
+  o registro persistido, com o MESMO ID/payload/baseline, nunca valores da UI.
+- Alteração posterior do mapa original ou de cópias dos getters não muda o
+  comando congelado. Hash/estrutura divergentes bloqueiam envio sem apagar dados.
+- Falha de persistência antes de prepare/sending bloqueia chamada de rede.
+  Falha ao gravar confirmação preserva o registro anterior para recovery.
+- Troca de projeto/uid/loja suspende leitura/envio/recovery daquele escopo.
+- ProductMutationApi oferece transporte Functions e leitura do DTO. Nenhuma
+  tela foi conectada a ele; integração futura deve chamar o ledger.
+
+C) TESTES EXECUTADOS E RESULTADOS
+
+Resultados finais, sem testes falhando/ignorados nessas execuções:
+
+1. Contratos puros create/V1/V2/stock: 20/20 aprovados.
+   node --test functions/tests/products/productMutationContract.test.js
+     functions/tests/products/updateProductContract.test.js
+     functions/tests/products/createProductContract.test.js
+
+2. Firestore Emulator, projeto demo-store-connect-restore, JDK 21:
+   Nova suíte productEditState.emulator.test.js: 14/14.
+   Regressão productMutationV2.emulator.test.js: 32/32.
+   Integridade updateProduct V1: 5/5.
+   createProduct: 64 verificações aprovadas.
+   COD/reservas: 37 cenários aprovados, incluindo 15 pares de corrida.
+   Rules COD existentes: 6/6, sem alterar Rules.
+   Contenção restore: 6/6; materialização continua bloqueada.
+   Comando executado via firebase emulators:exec, --project demo- explícito,
+   --only firestore; novo teste e runProductV2Tests.js. Runner agora inclui
+   também a nova suíte para execuções futuras.
+
+3. Flutter 3.32.6, host/VM, sem pub/rede Firebase: 25/25.
+   product_mutation_ledger_test.dart: 11.
+   product_mutation_store_native_test.dart: 1, SQLite real.
+   product_edit_state_test.dart: 2.
+   product_update_service_test.dart: 3, regressão V1.
+   product_dialog_retry_test.dart: 8, Firebase/callables simulados.
+
+4. Flutter 3.32.6, Chrome headless, IndexedDB real: 13/13.
+   product_mutation_store_web_test.dart: 2.
+   product_mutation_ledger_test.dart: 11, executados também como JavaScript.
+
+5. flutter analyze --no-pub: 12 novos arquivos Dart/testes, sem issues.
+6. node --check: 8/8 arquivos JS criados/alterados nesta etapa.
+7. git diff --check e whitespace dos novos arquivos: aprovados.
+8. Hashes dos arquivos preexistentes: preservados, exceto os quatro arquivos
+   explicitamente alterados para infraestrutura/runner listados em A.
+   Branch e HEAD preservados. Diff revisado; nenhum staging/commit/push.
+
+Cobertura dos requisitos obrigatórios:
+- Mesmo snapshot/token consistente e token diferente após alteração: Emulator.
+- Token ausente/null inválido, sem substituto updatedAt/cache: Node e Dart.
+- Autorização, cinco roles, revogação e isolamento de loja/uid: Emulator.
+- Resultado confirmado, rejeitado REAL, ID desconhecido e hash conflitante:
+  Emulator; rejeições V2/stock efetivamente produzidas pelos handlers.
+- Rejeição concorrente/replay posterior sem alteração de produto/estoque:
+  Emulator; erro transitório injetado não produz receipt terminal.
+- Crash entre envio/resposta e fechamento/reabertura: ledger, SQLite e
+  IndexedDB; reconstrução do coordenador e reabertura da conexão de storage.
+- Falha de persistência antes do envio e após confirmação: testes locais.
+- Mesmo requestId/payload/hash no retry; UI posterior não altera comando:
+  testes em VM e Chrome.
+- Concorrência entre conexões/abas: compare-and-set real SQLite/IndexedDB.
+- Conta/projeto/loja diferentes e corrupção local: envio/leitura bloqueados.
+
+Problemas de ambiente diagnosticados e corrigidos:
+- O helper do sandbox não iniciou; comandos locais foram executados com as
+  aprovações de execução fornecidas pela ferramenta, sem acesso Firebase remoto.
+- JDK 21 documentado no AGENTS não existia nesta máquina; Java disponível era
+  17. Baixado JDK 21 oficial Adoptium somente para build e ajustado JAVA_HOME/PATH
+  apenas nos processos de teste. Não alterado o Java permanente do Windows.
+- O Flutter global resolveria versões diferentes. Mudanças incidentais foram
+  retiradas; usada a instalação local Flutter 3.32.6 e pub get --offline.
+  Diff final de lock contém somente três classificações transitive→direct.
+- API IndexedDB/lints foram ajustados nos arquivos novos; analyze final limpo.
+- Runner Web Windows devolvia 404 para CanvasKit local. Assets já instalados
+  foram copiados temporariamente para test/canvaskit, servidos em localhost e
+  removidos ao final. Nenhum SDK foi alterado; testes finais passaram.
+- PERMISSION_DENIED nos logs Rules são negações esperadas dos testes de segurança.
+  Todas as suítes finais terminaram com exit code 0.
+- A suíte global legada Flutter/restore não foi declarada aprovada nem alterada;
+  foram executadas somente as regressões pertinentes acima.
+
+D) BLOQUEADORES B01–B03 RESTANTES E LIMITES
+
+- Nenhum bloqueador funcional local restante para os contratos implementados
+  de leitura/resultado e ledger das duas operações V2/stock.
+- B01/B02 foram testados com handlers reais e Firestore Emulator; não publicados.
+- Android possui adapter nativo compatível com dependências já existentes;
+  persistência foi testada com SQLite real no host. Não houve certificação em
+  dispositivo Android físico, build APK, kill do processo Android ou teste de
+  perda de energia. Os testes simulam encerramento entre envio e resposta e
+  reabrem o banco. Chrome usa IndexedDB real, sem certificar todos os navegadores.
+- Storage removido pelo usuário, eviction/limpeza de navegador ou perda do
+  aparelho não permitem prometer recuperação do ID local nem deduplicação de
+  uma NOVA identidade. Falha/corrupção detectada bloqueia o envio.
+- O ledger é local por instalação/origem, não uma fila compartilhada entre
+  dispositivos. Replays no servidor continuam protegidos quando o ID/comando
+  original é reutilizado.
+- Integração de ciclo de vida/UI, prevenção de criação de nova intenção durante
+  pendência, revisão de conflitos e sinalização de unknown ficam em B04/B05.
+- Recovery de comandos antigos create/V1, importação e upload em andamento
+  permanecem nos seus blocos próprios. Não há conversão automática de IDs antigos.
+- Nenhuma promessa de atomicidade Storage+Firestore ou de reparação de legado.
+- As APIs só poderão ser usadas em ambiente publicado após etapa/autorização
+  própria; esta validação local não libera HML nem o corte.
+
+E) IMPACTO ESPERADO SOBRE B04/B05
+
+B04 poderá consumir ProductEditState e construir dirty fields sobre baseline
+imutável; persistir via ledger e consultar resultado sem regenerar identidade.
+Cadastro/fiscal/categorias poderão usar updateProductV2 já existente.
+
+B05 poderá usar o mesmo DTO/token e ledger para ajustes explícitos, com IDs
+próprios, motivo e confirmação de conversão. Não juntar cadastro e estoque
+em uma operação com sucesso global; cada intenção tem seu resultado.
+
+manage_products_screen.dart e ProductUpdateService V1 NÃO foram migrados nem
+alterados nesta etapa. Cadastro/estoque da UI continuam como estavam. As vendas
+diretas, demais writers, barreira, gate V1 e Rules finais continuam pendentes.
+Portanto B01–B03 locais concluídos não representam integridade A5 global.
+
+Próxima etapa proposta: integrar B04/B05 em subetapa específica, com testes de
+formulário/stream, conflitos, dirty fields e ações separadas. Não iniciada agora.
+
+F) CONFIRMAÇÃO EXPLÍCITA DE SEGURANÇA
+
+NENHUM AMBIENTE REMOTO FOI ALTERADO.
+Não houve leitura nem escrita Firebase HML/PROD. Todos os writes de teste foram
+sintéticos no Firestore Emulator demo; frontend usou transporte falso ou apenas
+SQLite/IndexedDB locais. Download de JDK oficial não acessou ambientes Firebase.
+
+Não houve deploy, corte, alteração de Rules, migração do editor, alteração de
+vendas, execução de restore com dados reais, mudança de secrets/IAM/cobrança,
+git add, commit, push, reset, stash ou clean. Nenhum trabalho preexistente foi
+descartado. Nenhum commit foi criado e não houve push.
+
+Fim do relatório completo, também exibido no terminal.

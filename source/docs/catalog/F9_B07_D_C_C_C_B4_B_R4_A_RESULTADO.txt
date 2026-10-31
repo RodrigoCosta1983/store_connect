@@ -1,0 +1,329 @@
+STORE&CONNECT — F9/B07-D-C-C-C/B4-B-R4-A
+Estrutura isolada e inerte da nova fábrica Firebase
+Data: 18/10/2026
+DECISÃO FINAL: VALIDADO LOCALMENTE NO ESCOPO ESTRUTURAL
+
+1. RESULTADO E LIMITES
+
+Criada estrutura mínima, isolada e inerte. Contrato local: 10/10 testes PASS;
+gates/parser associados: 12/12 PASS; regressão R3 preservada: 30/30 PASS.
+O grafo estrutural tem três arquivos e duas arestas locais, sem dependências
+externas explícitas, SDKs, writers, ledger, bootstrap ou transporte comercial.
+Nenhuma fonte operacional importa a nova estrutura na coleta dirigida atual.
+
+Admissão real continua BLOCKED. A política/revisão/inventário versionado R3
+NÃO foram atualizados para aprovar a implementação. A proposta está separada,
+identificada como NÃO APROVADA. Firebase JS continua divergente: suportada pelo
+plugin 12.15.0; disponível localmente 12.19.0. Nenhum SDK foi inicializado.
+Não existe CheckoutContextBinding funcional ou adaptador B1/B2/B3 entregue.
+
+B4-B original continua BLOQUEADO. Não iniciados R4-B, B4-C, B4-D, B5 ou B6.
+Restore continua bloqueado; F10-C4 adiado. A validação deste relatório limita-se
+à estrutura inerte, aos contratos/testes executados e à ausência atual de caminhos
+no grafo examinado. Não valida a fábrica funcional futura.
+
+Branch inicial/final: feat/f7-intelligent-catalog.
+HEAD: 30f4f8db2a4a59d21696fde3d673144aded31154, preservado.
+Working tree F9/F10 recebido, inclusive não rastreados, protegido como baseline.
+CURRENT_WORK.md é histórico; o pedido R4-A delimita esta execução.
+
+2. ARQUIVOS CRIADOS E MODIFICADOS
+
+Criados, sem modificar nenhum arquivo anterior:
+lib/firebase/isolated_checkout/demo_profile.dart
+lib/firebase/isolated_checkout/structure_port.dart
+lib/firebase/isolated_checkout/inert_owner.dart
+test/checkout_sdk_r4a_structure_test.dart
+scripts/b4br4a/verify.cjs
+scripts/b4br4a/verify.test.cjs
+scripts/b4br4a/declarations.dart
+scripts/b4br4a/dependencies.dart
+scripts/b4br4a/check-local-cache.cjs
+scripts/b4br4a/graph-proposal.json
+scripts/b4br4a/README.md
+docs/catalog/F9_B07_D_C_C_C_B4_B_R4_A_RESULTADO.txt
+
+Artefatos locais ignorados novos: build/b4br4a/baseline.json, preservation.json,
+gates.json, inventory.json, resolved-dependencies.json, local-cache.json, logs,
+helpers de coleta/preservação e diretórios sintéticos gate-fixtures-*.
+R3 tests cria novas pastas fixtures-* em build/b4br3; fontes/política/revisão e
+os gates.json/inventory.json históricos recebidos foram preservados integralmente.
+Nenhum relatório histórico foi reescrito.
+
+3. INSPEÇÃO E ESTRUTURA DO OWNER
+
+Revisados AGENTS/CURRENT_WORK, relatórios B4-A/B4-B/R1/R2/R3, manifesto demo,
+portas B1/B2/B3, SaleMutationApi e arquivos scripts/b4br3. Os registros R3 de
+inventário/gates e código efetivamente instalado embasaram o resultado atual.
+Não realizada auditoria global do aplicativo ou acesso a ambientes remotos.
+
+InertCheckoutOwner é final e define a fronteira proposta do único módulo futuro
+de criação/configuração/admissão. Hoje não importa FlutterFire nem recebe SDKs.
+fromExternal recusa qualquer componente, inclusive outro owner ou projeção.
+Nenhum receipt, instância ou proprietário desconhecido é adotado.
+
+CheckoutDemoProfile é final, com construtor privado const, instância canônica
+e getters fixos. checked aceita apenas expectativas iguais ao contrato demo;
+não armazena argumentos de UI nem converte strings livres em destino autorizado.
+Os testes comparam seus valores com CheckoutSdkManifest existente, sem alterar
+o manifesto anterior ou promover os protótipos reprovados.
+
+Perfil: demo-store-connect-checkout; appId sintético do manifesto anterior;
+tenant null; database (default); região us-central1; endpoints absolutos:
+Auth http://127.0.0.1:9099, Firestore http://127.0.0.1:8080,
+Functions http://127.0.0.1:5001, hub http://127.0.0.1:4400.
+Não há fallback remoto, aliases de host ou alteração por setter.
+Nome do futuro FirebaseApp/exclusividade de runtime serão fechados na revisão
+R4-B; nenhum app nomeado foi criado ou ficticiamente admitido nesta etapa.
+
+CheckoutStructurePort contém apenas phase e available, sem setters. A
+implementação privada observa o owner e mantém available=false em TODAS as fases.
+Consumidor não recebe SDK, factory, admissão, close, capture, ledger ou envio.
+Não implementa CheckoutContextPort funcional; a futura ponte exige outra etapa.
+
+Fases: created -> initializationPlanned -> configurationPlanned -> admissionBlocked.
+São etapas de PLANEJAMENTO, não execução SDK. requestAdmission retorna false.
+Não existe fase admitted nem caminho que retorne binding funcional.
+close é terminal/idempotente e observado pela mesma projeção já entregue.
+Após bloqueio/close, novas tentativas de planejamento/admissão lançam StateError.
+Não há recursos SDK/listeners/storage a liberar; não se antecipou autoridade B4-C.
+Múltiplos owners inertes podem existir: exclusividade de SDK global ainda não é
+implementada nem demonstrada, porque não há nenhum SDK nesse módulo.
+
+4. GRAFO REAL E AUSÊNCIA DE TRANSPORTE COMERCIAL
+
+Raiz real: lib/firebase/isolated_checkout/inert_owner.dart.
+Dependências diretas:
+  inert_owner.dart -> demo_profile.dart
+  inert_owner.dart -> structure_port.dart
+Ambas as folhas não têm imports/exports/parts. Não existem dependências
+transitivas adicionais, importações condicionais, arquivos gerados ou interop
+nesse grafo. Dart core implícito é a única biblioteca base utilizada.
+
+A coleta AST percorreu todos os Dart dirigidos de lib, excluindo FirebaseOptions
+como no R3, mais os quatro Dart SDK históricos. Resultado atual: 144 arquivos,
+572 ocorrências sintáticas; o acréscimo são três arquivos estruturais.
+O inventário versionado R3 permanece com 141 arquivos/563 ocorrências.
+Contadores são sintaxe/referências/configuração declarativa, não chamadas.
+
+Resultado do grafo novo: três fontes, duas arestas, zero dependências
+indeterminadas alcançáveis, zero superfície de operações SDK reconhecida,
+zero arquivos proibidos alcançados e zero imports operacionais de entrada.
+Não há import de portas B1/B2/B3: elas foram inspecionadas, mas não conectadas.
+
+Portanto, neste grafo completo e local não há caminho direto/indireto para:
+PaymentOptionsSheet/confirm_fiado/NewSaleScreen, offline_sales_sync_service,
+SalesProvider/offline repository, SaleMutationApi._call, ProductMutationApi,
+bootstraps Firebase/aplicativo, protótipos ou ledger B07-C.
+Esses caminhos estão explicitamente bloqueados na proposta e em testes.
+Não há callable comercial, criação de venda, leitura/escrita de ledger ou SDK
+comercial executável a partir do módulo. Métodos inexistentes de consumidor são
+testados como recusa, sem substituir SDK ou transporte por mock operacional.
+
+A ausência atual de dependências explícitas torna a revisão local delimitada;
+ela NÃO é prova de um futuro artefato Flutter com plugins/JS ou da inexistência
+de código arbitrário sob runtime comprometido. Qualquer nova aresta exige revisão.
+
+5. RESULTADOS DOS GATES R3 E PROPOSTA SEPARADA
+
+verify.cjs reutiliza as funções scan/gate/compareInventory/compatibility R3.
+Complementa declarações AST apenas no grafo R4-A. Não chama o main R3 que
+sobrescreveria os artefatos históricos build/b4br3; grava tudo em build/b4br4a.
+
+Política vigente original: BLOCKED/NO_HARNESS, pois roots ainda está vazio na
+política aprovada. Não significa que os arquivos estruturais não existam.
+Projeção das raízes reais usando a revisão R3 ORIGINAL:
+BLOCKED/POLICY_REVIEW — as novas raízes/regras não correspondem à autorização R3.
+BLOCKED/UNCLASSIFIED — owner, perfil e porta ainda não estão admitidos.
+BLOCKED/OWNERSHIP — perfil tem nomes de configuração sem classificação autorizada.
+Inventário R3: BLOCKED, detecta exatamente os três novos arquivos.
+Compatibilidade K16: BLOCKED pela divergência 12.15.0/12.19.0.
+Gate agregado: BLOCKED, exit 1; erro de infraestrutura retorna 2.
+Gate interno estritamente estrutural: PASS, sem conferir permissão de admissão.
+
+Não há atualização de review.json, nova assinatura/digest de aprovação, papéis
+autorizados fabricados ou whitelist de serviços perigosos. graph-proposal.json
+é uma PROPOSTA: raiz, hashes, papéis sugeridos e motivo, fontes proibidas, regras
+de não reconfigurar/não publicar e dependências futuras NÃO ADMITIDAS.
+Não é incorporado à política vigente e não contém revisão positiva de owner.
+Papéis/dados de configuração precisam de tradução/revisão explícita antes de
+qualquer futura alteração de policy/review. Não basta copiar os hashes propostos.
+
+O gate estrutural compara fonte/grafo com o snapshot proposto, recusa qualquer
+novo membro, hash alterado, caminho indeterminado, operação SDK/configuração
+ou caminho proibido. O snapshot é evidência revisável local, não autorização
+independente nem atestado criptográfico. As limitações semânticas do R3 continuam.
+
+6. DEPENDÊNCIAS ATUAIS E FUTURAS
+
+Módulo estrutural: somente Dart core implícito; não foi necessária admissão
+de pacote/plugin externo para seu funcionamento inerte. Ferramentas de teste
+usam Flutter 3.32.6, analyzer 8.1.1 e yaml 3.1.3 já instalados, sem instalação.
+
+Inventário FUTURO por metadados pubspec/package_config das quatro raízes SDK:
+43 pacotes e 159 arestas dependencies; nenhum pacote ausente na resolução local.
+Não inclui dev_dependencies, não executa código dos pacotes e não os admite.
+Todos INDETERMINADO/NOT_ADMITTED para a futura fábrica funcional.
+Evidência completa: build/b4br4a/resolved-dependencies.json.
+
+FlutterFire resolvido, mantendo os locks:
+firebase_core 4.12.1; firebase_auth 6.5.6; cloud_firestore 6.7.1;
+cloud_functions 6.3.5.
+Interfaces: core 8.0.0; auth 9.0.5; firestore 8.0.5; functions 6.0.5.
+Web: firebase_core_web 3.9.1; firebase_auth_web 6.2.5;
+cloud_firestore_web 5.7.1; cloud_functions_web 5.1.11.
+pubspec declarado/lock/cache dos cinco pacotes conferidos pelo verificador R3
+continuam consistentes; isso não é revisão de segurança do código transitivo.
+
+Não foram arbitrariamente admitidos Flutter, crypto, plugins ou módulos JS.
+Esses pacotes não integram o grafo estrutural novo. Para R4-B, devem ser
+examinadas as fontes realmente alcançadas, plataforma, registro de plugins,
+interop, código gerado e artefatos distribuídos; metadados não bastam.
+
+7. K16 — FIREBASE JS 12.15.0
+
+Busca exclusivamente local e dirigida, reproduzida por check-local-cache.cjs:
+- functions/node_modules/firebase: pacote/asset app 12.19.0.
+- build/b4b-harness/functions/node_modules/firebase: mesmo diretório canônico
+  por junction, também 12.19.0; não é segunda instalação independente.
+- índice conhecido %LOCALAPPDATA%/npm-cache/_cacache/index-v5: nenhuma chave
+  exata do tarball firebase-12.15.0.tgz ou assets públicos Firebase JS 12.15.0.
+- cache Pub conhecido: firebase_core_web 3.9.1 declara 12.15.0 em
+  lib/src/firebase_sdk_version.dart; a declaração não contém o conjunto JS.
+- build/b4b-canvaskit-20261018 contém assets CanvasKit, não fornece esse SDK.
+
+Não encontrado conjunto de arquivos Firebase JS 12.15.0 comprovadamente
+disponível nesses caches. Não se afirma inexistência em todo o disco ou perfis
+de navegador, que não foram varridos. Cache check: BLOCKED, exit 1, zero erros
+de leitura do índice examinado. Evidência: build/b4br4a/local-cache.json.
+
+O helper e loader históricos continuam carregando os assets 12.19.0 existentes.
+A observação 12.19.0 do verificador é HISTÓRICA, obtida do warning R2 com hash
+do log. Nenhuma nova versão foi servida/carregada/observada em runtime R4-A.
+12.15.0 é a versão explicitamente declarada como testada por firebase_core_web;
+12.19.0 é experimental apenas nos cenários R2 anteriormente executados.
+Não considerar esse teste como resolução da divergência, nem atribuir a ela
+a vulnerabilidade histórica de reconfiguração externa.
+
+Autorização separada necessária: obter os artefatos oficiais JS 12.15.0 e seus
+módulos/imports transitivos para um NOVO harness isolado, mantendo FlutterFire
+resolvido atual, ou aprovar expressamente outro alinhamento FlutterFire/JS com
+suporte declarado verificável. Nada foi baixado, instalado ou substituído.
+Não atualizar automaticamente pubspec, package.json, locks ou helper histórico.
+
+Procedimento futuro condicionado: validar versões/hashes/imports de todos os
+assets; preparar loader separado, sem transplantar automaticamente o loader
+firestore-pipelines 12.19.0; registrar versão declarada, arquivo servido e
+SDK_VERSION observado; testar loopback/demo com FlutterFire aprovado e falhas
+delimitadas, sem executar callable comercial. Não executado nesta etapa.
+
+8. TESTES E CHECKS REAIS
+
+CONTRATO INERTE — Flutter 3.32.6, --no-pub:
+checkout_sdk_r4a_structure_test.dart: 10/10 PASS, exit 0.
+Casos: perfil canônico igual ao manifesto; projetos real/demo diferente recusados;
+app/tenant/database/região/endpoints divergentes recusados; componente/owner
+desconhecido recusado; etapas nunca admitem contexto; ordem inválida recusada;
+tentativa após bloqueio recusada; close terminal/idempotente em todas as fases;
+consumidor sem setters/controle; consumidor sem venda/ledger/callable/contexto/SDK.
+Log: build/b4br4a/structure-tests.log.
+
+PARSER/GATES R4-A — Node + AST Dart, sem executar as fontes das fixtures:
+verify.test.cjs: 12/12 PASS finais, exit 0.
+Um caso positivo de isolamento estrutural mantém a admissão BLOCKED.
+Dez negativos: import legado direto; indireto por export; novo módulo transitivo;
+pacote não classificado; app default; app não autorizado; configuração após
+admissão hipotética; setter em consumidor; callable comercial; import de writer.
+Caso adicional confere proibição pós-admissão e ausência de autorização falsa
+no snapshot/pacotes propostos. Cada negativo exige recusa e motivo específico.
+Log: build/b4br4a/gate-tests.log.
+
+Falha inicial preservada: 11 PASS/1 FAIL em gate-tests-initial.log. A declaração
+de método useAuthEmulator não era marcada pelo visitor R3; o hash já bloqueava
+a mudança, mas faltava a evidência de capacidade declarada exigida pelo teste.
+Correção mínima apenas nova: declarations.dart usa AST de MethodDeclaration e
+FunctionDeclaration/setters, distinguindo declaração de invocação. verify.cjs
+combina essa coleta com o R3 preservado no módulo R4-A. O teste não foi removido
+ou enfraquecido; a execução final passou 12/12. Não alegar que R3 virou análise
+semântica completa: aliases/dynamic/binding e lifecycle ainda exigem revisão.
+
+REGRESSÃO R3 — node --test scripts/b4br3/gate.test.cjs:
+30/30 PASS, exit 0, fontes/testes/fixtures originais intactos.
+Log novo: build/b4br4a/r3-tests.log. Não recontado como prova de fábrica SDK.
+
+ANÁLISE/SINTAXE:
+flutter analyze --no-pub no módulo/teste novos: PASS, sem issues.
+dart analyze em declarations.dart e dependencies.dart: PASS, sem issues.
+node --check nos três novos .cjs: PASS.
+Extração AST, metadados e execução do gate sobre grafo real: concluídas;
+gate agregado exit 1 esperado, resultado BLOCKED explicitamente registrado.
+git diff --check: exit 0; checks no-index dos arquivos novos também aprovados.
+Avisos CRLF do Git não alteraram arquivos existentes.
+
+A primeira chamada flutter.bat no sandbox aguardava o lock externo do cache
+do SDK; foi interrompida sem resultados de análise/teste. O launcher precisa
+escrever nesse cache fora do workspace. Os checks foram reexecutados com
+escalonamento autorizado, --no-pub, sem alterar configuração global/dependências.
+Uma consulta auxiliar de processos via CIM foi negada pelo ambiente; não houve
+encerramento de processos preexistentes. Apenas a própria chamada foi cancelada.
+
+PROVAS SDK REAIS: nenhuma executada. Sem emuladores, Auth/Firestore/Functions
+reais, rede HML/PROD, callable, sessão SDK ou prova de destino em runtime.
+Teste histórico externally reconfigured Functions must invalidate binding:
+intacto, não reexecutado. Continua a falha conhecida B4-B/R2; não foi corrigido
+ou substituído pelos testes da estrutura. Protótipos não foram reutilizados.
+
+9. PRESERVAÇÃO E SEGURANÇA
+
+Baseline inicial: 736 arquivos rastreados/não rastreados não ignorados.
+Também protegidos por hash dois artefatos históricos recebidos:
+build/b4br3/gates.json e build/b4br3/inventory.json.
+Resultado final: 738/738 hashes idênticos, zero alterados/ausentes; somente
+os 12 acréscimos R4-A listados. build/b4br4a/preservation.json é a evidência.
+Cache/build ignorados restantes não integram essa comparação; logs novos
+foram isolados e ferramentas Flutter podem usar seus próprios caches locais.
+
+Checkout operacional, CartProvider, PaymentOptionsSheet, NewSaleScreen,
+AuthGate/UserRoleProvider, S01/S02/S03, backend/Rules, B07-C/ledger,
+comandos/hashes/receipts, produtos/variantes/estoque, flavors/applicationId e
+FirebaseOptions preservados. Nenhum serviço legado modificado para obter PASS.
+
+Recibo térmico de 80 mm preservado byte a byte:
+lib/services/pdf_receipt_service.dart
+SHA256 inicial/final:
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9.
+
+Sem commit, push, deploy, reset, restore, stash, clean, migração ou instalação.
+Sem alteração global Windows, arquivo de secret, .npmrc ou credencial acessado.
+Não houve acesso a HML/PROD, transporte comercial, confirmação, pagamento,
+emissão fiscal ou alteração de ledger. Não houve compra/reserva/decremento.
+
+10. CONDIÇÕES PARA R4-B E RISCOS RESIDUAIS
+
+Antes de uma implementação funcional/admissão:
+1. Revisar e aprovar separadamente a proposta de owner, raízes e papéis dos
+   arquivos, hashes, política e tratamento dos dados de configuração. Não
+   copiar a proposta como autorização automática. Manter defaults/legado proibidos.
+2. Definir nome/exclusividade do app e lifecycle SDK real, configuração antes
+   de uso e recusa de instância externa, fechamento e substituição controlada,
+   sem reconfiguração após admissão. R4-A não prova exclusão global no runtime.
+3. Revisar a cadeia efetivamente alcançável FlutterFire/Web/plataforma/JS e
+   artefato distribuído; os 43 pacotes são metadados, não código aprovado.
+4. Autorizar/resolver o alinhamento K16 e executar testes isolados com o conjunto
+   aprovado, sem usar o sucesso histórico R2 como prova de compatibilidade geral.
+5. Implementar e testar a fábrica funcional em nova etapa, com recusa de app
+   errado/default, procedência desconhecida, perfil misto, configuração parcial
+   e parâmetros UI; somente depois considerar binding/contexto válido.
+6. Definir URLs/paths exatos permitidos, credenciais/App Check/CORS/redirects e
+   geração/revalidação conforme contrato; nenhum callable comercial autorizado.
+7. Preservar a reprodução histórica e os gates independentes B4-C/B4-D/B5/B6.
+
+Riscos residuais: revisão humana inadequada, alteração conjunta de snapshot e
+fonte, aliases/dynamic/interop não resolvidos, código futuro de dependências,
+caches públicos SDK mutáveis, corridas/ABA/cross-tab/revogação não observada,
+runtime comprometido e futura composição que acrescente capacidades. A porta
+inerte não é fronteira criptográfica. K11 exige código controlado/revisado e
+distribuição do artefato aprovado; hashes locais não substituem essa revisão.
+
+VALIDADO LOCALMENTE NO ESCOPO ESTRUTURAL — admissão/fábrica funcional permanece
+BLOCKED. Resumo exibido no terminal. PARAR APÓS R4-A; R4-B não iniciado.

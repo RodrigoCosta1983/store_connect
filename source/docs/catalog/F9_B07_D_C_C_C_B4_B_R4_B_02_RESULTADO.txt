@@ -1,0 +1,257 @@
+STORE&CONNECT — F9/B07-D-C-C-C/B4-B/R4-B — SUBETAPA 02
+Matriz reproduzível de revisão e rastreabilidade
+Data: 18/10/2026
+ESTADO FINAL: BLOQUEADO para admissão de owner/SDK.
+Ferramentas, classificação e rastreabilidade: VALIDADO LOCALMENTE / PASS.
+Isolamento real e SDK: NÃO EXECUTADO / NÃO DEMONSTRADO.
+
+1. BASELINE INICIAL E FINAL
+
+Branch inicial/final: feat/f7-intelligent-catalog.
+HEAD inicial/final: 30f4f8db2a4a59d21696fde3d673144aded31154.
+Recebidos 24 rastreados modificados e todos os não rastreados F9/F10, incluindo
+os quatro arquivos criados na Subetapa 01. Nenhum trabalho anterior descartado.
+AGENTS.md e CURRENT_WORK.md lidos; relatório R4-B/01 lido integralmente antes
+das edições. CURRENT_WORK é histórico F7.8; o pedido atual delimita a execução.
+
+Snapshot antes das edições: build/b4br4b02/baseline.json, com 1.682 entradas de
+hash: 752 arquivos do repositório não ignorados, três metadados Flutter ignorados
+e 927 caminhos de evidências build/b4b*, fontes SDK e pubspecs resolvidos.
+Inclui não rastreados, evidências anteriores ignoradas pertinentes, a coleta 01,
+221 fontes Dart alcançadas e metadados de resolução. Não pretende hashear todo
+o disco, node_modules, caches binários globais ou arquivos ignorados sem relação.
+
+Resultado final da comparação: 1.682/1.682 hashes iguais, zero alterados/ausentes.
+Evidência: build/b4br4b02/preservation.json. Diff rastreado inicial/final idêntico.
+Somente seis arquivos novos desta subetapa, listados abaixo. Sem git add/commit.
+
+2. ARQUIVOS CRIADOS
+
+scripts/b4br4b/matrix.cjs
+scripts/b4br4b/matrix.test.cjs
+scripts/b4br4b/owner-review.json
+scripts/b4br4b/matrix-README.md
+docs/catalog/F9_B07_D_C_C_C_B4_B_R4_B_02_MATRIZ.json
+docs/catalog/F9_B07_D_C_C_C_B4_B_R4_B_02_RESULTADO.txt
+
+Nenhum arquivo preexistente modificado, inclusive inspect.cjs, inspect.test.cjs,
+README anterior e todos os gates/políticas/revisões R3/R4-A.
+Artefatos novos ignorados: build/b4br4b02 (baseline, matriz de prévia, reprodução,
+logs dos testes/exportações/diff, fixtures, status e preservação). Testes anteriores
+criaram novas pastas de fixtures nos diretórios habituais R3/R4-A/01, sem alterar
+as pastas/evidências existentes. Nenhuma evidência histórica sobrescrita.
+
+3. IMPLEMENTAÇÃO E REPRODUTIBILIDADE
+
+Consumido diretamente build/b4br4b/inspection-1792358982334.json. Não repetida
+a coleta AST/SDK da Subetapa 01 nem a implementação R4-A.
+Reutilizados within/resolve de inspect.cjs e hash/digest R3; nenhum parser novo,
+instalação, dependência adicional ou execução do SDK Firebase.
+
+Cada fronteira mantém seu índice original e ID B001–B197; duplicatas de URI são
+arestas distintas. O gerador confere hash atual da origem contra a coleta, linha,
+tipo e URI da diretiva AST recebida. Não recompila AST nem resolve dataflow.
+Destinos externos são localizados pelo package_config e resolver anterior;
+disponibilidade/canonicalização não equivale a revisar seu código ou transitivos.
+APIs dart: continuam capacidades sem prova do código/runtime do SDK Dart.
+
+Campos por fronteira: origem, pacote de origem/destino, URI, tipo, categoria,
+serviço, contexto interop/method-channel, capacidade potencial, prioridade,
+hash/trecho da origem, evidência AST, disponibilidade do destino, revisão,
+prova real e bloqueio. Nenhuma classificação automática aprova segurança.
+Fonte ausente, hash alterado, AST ausente/divergente ou dados incompletos ficam
+NÃO DEMONSTRADO; listas ausentes produzem erros explícitos, sem aprovação vazia.
+
+Exportação técnica versionável: docs/catalog/F9_B07_D_C_C_C_B4_B_R4_B_02_MATRIZ.json.
+SHA256: 33AF377E23032B6B77CA4A091869A3C09FBAE0EE5FADBC8650D444516C39C16F.
+Segunda geração em build/b4br4b02/reproduced.json: SHA256 idêntico / PASS.
+Não há timestamp no conteúdo. Mesmos input/fontes/ferramentas/corpus geram os
+mesmos bytes. Corpus, input e ferramentas têm hashes registrados no JSON.
+Escrita exclusiva wx recusa sobrescrita. Geração retorna exit 1/BLOQUEADO;
+erro de infraestrutura/destino existente retorna 2; testes aprovados retornam 0.
+
+Comando de reprodução (escolher saída nova em diretório existente):
+node scripts/b4br4b/matrix.cjs build/b4br4b/inspection-1792358982334.json build/b4br4b02/nova-matriz.json
+
+4. RASTREABILIDADE K14/K15
+
+K14: NÃO LOCALIZADO — texto normativo aprovado não encontrado.
+K15: NÃO LOCALIZADO — texto normativo aprovado não encontrado.
+Não foram inventadas definições nem convertidas referências em regras.
+
+Corpus reproduzível: 172 arquivos locais; seis ocorrências indiretas; zero erros
+de leitura. Caminhos/hashes e referências com linha/seção/trecho estão em
+traceability.searched/references no JSON. Inclui documentos .txt/.md, contratos
+dos gates, testes/helpers SDK e evidências textuais pertinentes build/b4b*.
+Exclui outputs desta subetapa, node_modules, fixtures e inventários/baselines
+volumosos. Não cobre conversas externas, documentos DOCX/PDF ou todo o disco.
+Busca complementar no histórico Git de docs/scripts não encontrou K14/K15.
+A tentativa inicial de histórico acionou textconv DOCX indisponível; foi repetida
+com --no-textconv, concluída sem correspondências. Nada foi alterado por isso.
+
+Referências indiretas encontradas (NÃO são definições):
+- scripts/b4br3/review.json:2, sem seção: "decision": "K11-K16/R3".
+- build/b4br3/create-review.cjs:3, sem seção: decision:'K11-K16/R3'.
+  Helper histórico foi somente lido como evidência; não foi executado.
+- docs/catalog/F9_B07_D_C_C_C_B4_B_R4_B_01_RESULTADO.txt:24 e :25,
+  seção 1: "Não foi encontrado texto individual identificado como K14/K15"
+  e referência à decisão K11-K16/R3 sem definição dos dois itens.
+- Mesmo relatório:206, seção 9: "localizar as definições aprovadas K14/K15".
+- scripts/b4br4b/README.md:54, seção Provas delimitadas:
+  "Não foi encontrado texto individual identificado como K14/K15".
+
+Não há fundamento local suficiente para registrar uma definição original.
+Ausência no corpus não prova inexistência universal. Aprovação normativa
+independente permanece não demonstrada; a lacuna continua bloqueante.
+O relatório R2 identifica seu próprio contrato como PROPOSTO. O gerador
+preserva essa autoridade; não o promove a aprovação independente.
+
+5. MATRIZ DAS 197 FRONTEIRAS
+
+Todas as 197 arestas da coleta 01 foram classificadas, sem exclusão/deduplicação:
+DEPENDÊNCIA_EXTERNA: 108. API_DART: 89.
+
+Categorias primárias exclusivas (soma 197):
+INTEROP: 44.
+REGISTRO_PLATAFORMA: 29.
+CANAIS_PLATAFORMA: 19.
+REDE_IO: 4.
+ASSINCRONIA: 38.
+FRAMEWORK: 22.
+ANOTAÇÕES: 20.
+DADOS_UTILITÁRIOS: 21.
+
+Por pacote/API (soma 197): flutter 41; meta 20; collection 8;
+plugin_platform_interface 25; flutter_web_plugins 4; web 7;
+http 1; http_parser 2; dart:async 38; dart:typed_data 8;
+dart:js_interop 30; dart:js_interop_unsafe 7; dart:io 1;
+dart:convert 1; dart:core 3; dart:math 1.
+
+Estado de revisão das dependências: PENDENTE 197; REVISADO 0;
+NÃO DEMONSTRADO 0 nesta dimensão, pois todas as origens atuais foram conferidas.
+Estado de isolamento real/runtime: NÃO DEMONSTRADO 197; execução NÃO EXECUTADA.
+Essas dimensões não se somam: uma origem conferida não demonstra seu destino.
+Todos os itens e requisitos permanecem NOT_ADMITTED.
+
+Prioridades de revisão: P0 134; P1 22; P2 41. Triagem lexical, sem concluir
+vulnerabilidade ou invocação. P0 cobre interop, registro, canais, rede/I/O e
+assincronia; P1 framework; P2 anotações e utilitários.
+Por serviço de origem: Auth 57, Firestore 83, Functions 26, Core/compartilhado 31.
+Prioridade P0: Auth 37, Firestore 54, Functions 20, Core/compartilhado 23.
+IDs exatos por serviço estão em priorityByService, apontando as linhas Bxxx.
+
+Priorizar interop JS/estado global, registro e substituição da plataforma,
+canais e transporte, e ordenação de callbacks/Futures/streams nos três serviços.
+As tags indicam contexto de origem; não afirmam que todo código importado será
+executado no Web. A coleta contém ramos de outras plataformas, sem tree-shaking.
+
+6. REQUISITOS DO OWNER E BLOQUEIOS
+
+Doze requisitos rastreáveis em owner-review.json e requirements do JSON:
+O01 Papéis/revisão independente — PENDENTE; POLICY_REVIEW/UNCLASSIFIED/OWNERSHIP.
+O02 App nomeado/exclusividade — NÃO DEMONSTRADO; nome e runtime não definidos.
+O03 Lifecycle/fechamento — NÃO DEMONSTRADO; recursos SDK reais não implementados.
+O04 Caches públicos — PENDENTE; closure e recuperação dos serviços sem revisão.
+O05 Setters/reconfiguração — PENDENTE; falha histórica R2 ainda reprovada.
+O06 Registro global — PENDENTE; registrant isolado/artefato não revisados.
+O07 Destinos de rede — NÃO DEMONSTRADO; allowlist/provas diagnósticas pendentes.
+O08 Configuração antes do uso — NÃO DEMONSTRADO; sequência SDK não validada.
+O09 Mesmo app/perfil — NÃO DEMONSTRADO; só há perfil estrutural inerte.
+O10 Porta restrita — PENDENTE; porta estrutural existe, binding funcional não.
+O11 JS/FlutterFire — NÃO DEMONSTRADO; K16 12.15.0 declarado / 12.19.0 disponível.
+O12 Auth/Firestore/sessão — NÃO DEMONSTRADO; Source.server/Rules/sessão sem prova.
+
+Contagem de requisitos: cinco PENDENTE, sete NÃO DEMONSTRADO.
+evidenceReview=REVISADO nos 12 significa SOMENTE rastreabilidade dos trechos
+delimitados e sua integridade; não significa requisito satisfeito ou aprovação
+de arquivo/dependência/owner. Cada linha traz arquivo, seção, linha e trecho
+documental, locator de código, nível ESTRUTURAL/ESTÁTICO/REAL, prova necessária
+e bloqueio. As sete referências a fontes SDK têm hash atual igual ao da coleta.
+Os arquivos estruturais anteriores foram protegidos pela baseline integral.
+
+Exemplos: O05 liga R2, seção 4, proibição de reconfiguração depois da publicação,
+ao setter _origin em cloud_functions/lib/src/firebase_functions.dart:116.
+O06 liga o procedimento R3 de revisão do código gerado ao registro global em
+cloud_functions_web. O11 liga K16 à constante supportedFirebaseJsSdkVersion.
+O02/O03/O10 distinguem expressamente owner/close/porta inertes de lifecycle,
+exclusividade e isolamento SDK reais ainda não demonstrados.
+
+Gates exibidos na matriz são recebidos da coleta 01, identificados como históricos
+daquela coleta: estrutural PASS, admissão BLOCKED, compatibilidade BLOCKED.
+Não houve nova execução dos mains que sobrescreveriam inventários/gates antigos.
+Os testes pertinentes foram reexecutados separadamente, conforme abaixo.
+
+7. TESTES E RESULTADOS COMPLETOS
+
+PASS / VALIDADO LOCALMENTE:
+- node --check scripts/b4br4b/matrix.cjs: exit 0.
+- node --check scripts/b4br4b/matrix.test.cjs: exit 0.
+- node --test scripts/b4br4b/matrix.test.cjs: 9/9 PASS, exit 0, zero skips/falhas.
+  1 classificação de capacidades potenciais;
+  2 preservação de duplicatas/índices/arestas/estados;
+  3 fonte ausente real e erro de leitura;
+  4 bytes alterados, AST/hash/diagnósticos insuficientes;
+  5 linhas incompletas e listas malformadas/ausentes;
+  6 referências/intervalos não geram definição K14/K15 e ausência documental;
+  7 seção/linha/trecho e anchors/documentos ausentes;
+  8 input real com 197 itens, integridade e geração determinística;
+  9 CLI exit 1/BLOQUEADO e recusa exit 2/EEXIST sem alterar saída existente.
+  Log final: build/b4br4b02/matrix-tests-delivery.log.
+- R3: node --test scripts/b4br3/gate.test.cjs: 30/30 PASS, exit 0, zero skips.
+  Log: build/b4br4b02/r3-tests.log.
+- R4-A: node --test scripts/b4br4a/verify.test.cjs: 12/12 PASS, exit 0, zero skips.
+  Log: build/b4br4b02/r4a-tests.log.
+- R4-B/01: node --test scripts/b4br4b/inspect.test.cjs: 2/2 PASS, exit 0, zero skips.
+  Log: build/b4br4b02/r4b01-tests.log.
+- Exportação e reprodução: mesmo SHA256, sem sobrescrita. Geração exit 1 esperado.
+- git diff --check: exit 0; novos arquivos sem erros de whitespace/JSON.
+- Preservação de hashes e diff rastreado inicial/final: PASS.
+
+Os logs matrix-tests-initial/final também foram preservados; todas as execuções
+dos testes novos passaram. Não houve falha de teste escondida ou expectativa
+enfraquecida. As rodadas adicionais validaram refinamentos de evidência e testes.
+
+BLOQUEADO:
+- Admissão do owner/dependências/SDK em todos os resultados.
+- K14/K15 NÃO LOCALIZADO, 197 revisões pendentes, requisitos reais não demonstrados.
+- K16 e revisão independente de política/closure/registro/artefato.
+
+NÃO EXECUTADO:
+- SDK Firebase real, emuladores, Chrome, rede, HML/PROD ou serviços externos.
+- Testes Flutter: nenhum Dart foi alterado; os testes Node R3/R4-A utilizam
+  diretamente o parser Dart já instalado do Flutter 3.32.6, sem pub get.
+- Auth login/logout, Firestore Source.server/Rules, callable, redirects,
+  App Check, credenciais em voo, ABA/cross-tab e autoridade B4-C.
+- Teste histórico externally reconfigured Functions must invalidate binding.
+  Continua REPROVADO no histórico R2: suíte 8/9, esperado null, observado
+  CheckoutContextBinding, exit 1. Não contado como PASS ou corrigido pela matriz.
+
+8. PRESERVAÇÃO E RISCOS RESIDUAIS
+
+SHA256 inicial/final de lib/services/pdf_receipt_service.dart:
+9C4B8E14B03C0E58F7B50BBBCFA64D406C154FCCB03E090138009150F319EBC9.
+Todos os hashes protegidos foram preservados, inclusive R3/R4-A/01, fontes SDK,
+metadados Flutter e trabalho operacional F9/F10 já existente.
+Nenhuma política K11–K16, F10, backend/Rules, bootstraps ou secret alterado.
+Sem reset/restore/stash/clean/commit/push/deploy, instalação/download/upgrade,
+migração, checkout comercial, cobrança, fiado ou ativação offline.
+
+Riscos: corpus local limitado e ausência de confirmação normativa externa;
+classificação lexical não resolve binding, símbolos, aliases ou efeitos;
+dependências disponíveis/transitivas continuam sem revisão; registros, módulos
+JS e artefato distribuído não são cobertos pela existência de arquivos; caches
+públicos e reconfiguração continuam possíveis; sessão/ABA/revogação/redirects
+não demonstrados; runtime comprometido permanece fora da garantia K11.
+REVISADO na rastreabilidade não se transfere à segurança da cadeia.
+
+9. PRÓXIMA SUBETAPA RECOMENDADA — NÃO INICIADA
+
+Após revisão desta entrega, localizar a fonte original aprovada de K14/K15 ou
+registrar decisão explícita sobre sua rastreabilidade. Definir um lote delimitado
+de revisão das fronteiras P0 de interop/registro/plataforma de Auth/Firestore/
+Functions, verificando código transitivo e efeitos, sem admissão automática.
+Lifecycle/nome/exclusividade e alinhamento K16 ainda precisam de revisão e das
+autorizações pertinentes. Não obter SDK JS ou iniciar prova real nesta entrega.
+
+ESTADO FINAL: BLOQUEADO para admissão; matriz e ferramentas VALIDADO LOCALMENTE.
+Subetapa 02 concluída no escopo autorizado. PARAR; R4-B/03 NÃO INICIADA.
