@@ -1,0 +1,15 @@
+.env*
+**/.env*
+node_modules/
+build/
+.dart_tool/
+.gradle/
+*.apk
+*.aab
+*.zip
+*.sqlite*
+*.db
+*.log
+*.pem
+*.jks
+*.keystore
