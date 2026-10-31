@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "domain": "android_preview",
+  "branch": "preserve/android-f10-preview-20261031",
+  "status": "local-only-awaiting-selection-and-push-review",
+  "independentHistory": true,
+  "sourceInventoryCount": 894,
+  "sourceFiles": [
+    {
+      "source": "android/app/src/preview/kotlin/com/storeeconnect/app/preview/PreviewActivity.kt",
+      "destination": "source/android/app/src/preview/kotlin/com/storeeconnect/app/preview/PreviewActivity.kt",
+      "sha256": "e85db40923f997ba282472cb294def485b302b9229b12f3ca13adfc8ef95c980",
+      "bytes": 693,
+      "role": "source-and-config"
+    },
+    {
+      "source": "android/app/src/preview/res/drawable/ic_f10_preview.xml",
+      "destination": "source/android/app/src/preview/res/drawable/ic_f10_preview.xml",
+      "sha256": "7e801022b6a2872ac9d9f339444bc079e2f1d6292a220c1a5241af37aa510ea3",
+      "bytes": 388,
+      "role": "source-and-config"
+    },
+    {
+      "source": "android/app/src/preview/res/values/unconfigured.xml",
+      "destination": "source/android/app/src/preview/res/values/unconfigured.xml",
+      "sha256": "185174745e3732f39b41fda6b14e7421b7289f3e2510ea59a60e9a11cbd10c5d",
+      "bytes": 251,
+      "role": "source-and-config"
+    },
+    {
+      "source": "android/app/src/previewDebug/AndroidManifest.xml",
+      "destination": "source/android/app/src/previewDebug/AndroidManifest.xml",
+      "sha256": "3daed254cf5e20efa1c485c5805ed11fa4a61e3d122405eac27d2a19f73486ce",
+      "bytes": 3349,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/fixtures/variant_preview_fixture.dart",
+      "destination": "source/lib/fixtures/variant_preview_fixture.dart",
+      "sha256": "270f97dd9d1aa4a0797fca3810ab22123efd75fd5e9c988d9c82459ad14b443a",
+      "bytes": 1940,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/previews/f10_feedback_main.dart",
+      "destination": "source/lib/previews/f10_feedback_main.dart",
+      "sha256": "9e4feddf01bd8aa134c296751ac4634d8c7f55585a3787194f0a404c468b7e13",
+      "bytes": 20603,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/previews/f10_local_backend.dart",
+      "destination": "source/lib/previews/f10_local_backend.dart",
+      "sha256": "f4549a48d86b561820279490b6ebfaa4842b32d657101ee2467b116511b68765",
+      "bytes": 22143,
+      "role": "source-and-config"
+    },
+    {
+      "source": "lib/previews/variant_preview_main.dart",
+      "destination": "source/lib/previews/variant_preview_main.dart",
+      "sha256": "d9c0380dd29fc6c2a9b15a7baf9225de96c3a7d5768d60b6cf79ed4f5f6f37bc",
+      "bytes": 1024,
+      "role": "source-and-config"
+    }
+  ],
+  "sharedOwnerBranch": "preserve/shared-integration-contracts-20261031",
+  "notes": "Experimental preview activities and F10 fixtures only. Gradle definition is owned by android_release; do not build/activate preview or change Firebase from this archive.",
+  "originalRootSourceUnchanged": true,
+  "noDeployAuthorization": true,
+  "pushAllowed": false,
+  "knownWhitespace": []
+}
