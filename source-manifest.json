@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "domain": "android_release",
+  "branch": "release/android-play-1.0.6-50",
+  "status": "local-only-awaiting-selection-and-push-review",
+  "independentHistory": true,
+  "sourceInventoryCount": 894,
+  "sourceFiles": [
+    {
+      "source": "android/app/build.gradle.kts",
+      "destination": "source/android/app/build.gradle.kts",
+      "sha256": "9ff2080e17f1d6cd0c6c9fd5afde7539fdd8e752758058b5fd0f171cd5b8692e",
+      "bytes": 3494,
+      "role": "source-and-config"
+    },
+    {
+      "source": "android/app/src/main/kotlin/com/storeeconnect/app/MainActivity.kt",
+      "destination": "source/android/app/src/main/kotlin/com/storeeconnect/app/MainActivity.kt",
+      "sha256": "0b5131d1f1fe56f7bbf62969a25c3af4a09a63274cd0dc1b10d2e286006fc0aa",
+      "bytes": 1434,
+      "role": "source-and-config"
+    },
+    {
+      "source": "test/firebase_environment_test.dart",
+      "destination": "source/test/firebase_environment_test.dart",
+      "sha256": "4d410599b4a0b4f83f457d95863222885f613cc0877c3eace39c1e1b54d70246",
+      "bytes": 11458,
+      "role": "tests"
+    },
+    {
+      "source": "lib/firebase/app_check_policy.dart",
+      "destination": "source/lib/firebase/app_check_policy.dart",
+      "sha256": "1bd30107aa120a9c6059a076c9ba79d9d6325226a36b79f69e653b43d0484a4e",
+      "bytes": 308,
+      "role": "source-and-config"
+    },
+    {
+      "source": "test/app_check_policy_test.dart",
+      "destination": "source/test/app_check_policy_test.dart",
+      "sha256": "8882e542b0407a1e9877442d8851908c2554e8d15b31339abe6d100f48d7303b",
+      "bytes": 502,
+      "role": "tests"
+    }
+  ],
+  "sharedOwnerBranch": "preserve/shared-integration-contracts-20261031",
+  "notes": "Configuration snapshot only; not a complete new Android build. Gradle contains mutually scoped prod/hml/preview definitions and denies PreviewRelease. The exact shared Gradle file is owned here; experimental activities/fixtures are in android_preview, not copied here. No signing key, key.properties or AAB is included.",
+  "originalRootSourceUnchanged": true,
+  "noDeployAuthorization": true,
+  "pushAllowed": false,
+  "knownWhitespace": []
+}
