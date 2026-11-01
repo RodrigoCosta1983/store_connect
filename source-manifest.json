@@ -169,7 +169,13 @@
       "adaptation": "Two path declarations only; financial assertions unchanged; suite not rerun"
     }
   ],
-  "sharedOwnerBranch": "preserve/shared-integration-contracts-20261031",
+  "sharedOwnerBranch": null,
+  "sharedIntegrationContext": {
+    "branch": "preserve/shared-integration-contracts-20261031",
+    "appliesTo": "Other domains in development only",
+    "requiredByOperationalPackage": false,
+    "verifiedScope": "Relative local module dependencies only; external npm packages and configured runtime services remain required"
+  },
   "notes": "Canonical operational package; root financial development modules are intentionally separate. Source digests match the published manifest. The existing 40-case emulator fixture has only two import roots relocated; Node syntax check passed; tests were not rerun.",
   "originalRootSourceUnchanged": true,
   "noDeployAuthorization": true,
