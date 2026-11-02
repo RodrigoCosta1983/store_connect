@@ -517,8 +517,10 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          if (!_isSearching)
-            StreamBuilder<int>(
+          // Keep the subscription mounted: the Web counter is single-subscription.
+          Offstage(
+            offstage: _isSearching,
+            child: StreamBuilder<int>(
               stream: _waitingSalesCountStream,
               initialData: 0,
               builder: (context, snapshot) {
@@ -537,6 +539,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 );
               },
             ),
+          ),
 
           // --- ÍCONE DA LUPA OU DO X ---
           if (_isSearching)
